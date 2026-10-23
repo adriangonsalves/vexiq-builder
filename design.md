@@ -78,6 +78,8 @@ flowchart LR
 | [`src/utils/geometryCache.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/geometryCache.js) | Singleton `.glb` loader and inward-eroded (`0.38 mm`) `MeshBVH` builder shared across viewport instances and thumbnails. |
 | [`src/components/PartThumbnail.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/PartThumbnail.jsx) | Shared offscreen WebGL renderer that rasterizes and caches 2D data-URL thumbnails for catalog cards. |
 | [`src/utils/webMcpTools.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/webMcpTools.js) | W3C WebMCP (`navigator.modelContext`) tool registration for in-browser AI agents. |
+| [`openspec/`](file:///Users/adriangonsalves/projects/vexiq_builder/openspec) | Spec-Driven Development (SDD) workspace containing living specs (`openspec/specs/`), active change proposals (`openspec/changes/`), and workflow configuration (`openspec/config.yaml`). |
+| [`.agents/`](file:///Users/adriangonsalves/projects/vexiq_builder/.agents) | Antigravity AI workflow definitions (`.agents/workflows/opsx-*.md`), agent skills (`.agents/skills/`), MCP configuration, and repository rules. |
 
 ---
 

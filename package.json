@@ -9,7 +9,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "mcp": "node mcp/vexiq-mcp-server.mjs"
+    "mcp": "node mcp/vexiq-mcp-server.mjs",
+    "openspec": "openspec"
   },
   "dependencies": {
     "lucide-react": "^1.16.0",

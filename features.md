@@ -121,3 +121,23 @@ Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP 
   - Registers in-page tools for browser-hosted AI assistants.
 - **Import / Export & Auto-Save:**
   - Saves valid assemblies to `localStorage` (`vexiq_builder_assembly_v2`) and `.vexiq-assembly-state.json`, plus supports `.vexiq.json` file export (`Save`) and import (`Load`).
+
+---
+
+## 6. OpenSpec Spec-Driven Development (SDD) Framework
+
+- **AI-Native Spec-Driven Development (`openspec/`):**
+  - Integrated via `@fission-ai/openspec` with multi-agent workflows configured in `.agents/`, `.claude/`, and `.cursor/`.
+  - Directory structure:
+    - `openspec/specs/`: Source-of-truth living project specifications.
+    - `openspec/changes/`: Proposed change sets, delta specifications, designs, and task checklists.
+    - `openspec/config.yaml`: Workflow schema configuration (`schema: spec-driven`).
+  - Available slash workflows:
+    - `/opsx-propose`: Create and align on structured proposals, delta specs, and tasks before writing code.
+    - `/opsx-apply`: Apply and implement an approved change proposal.
+    - `/opsx-archive`: Verify and archive completed changes into living project specs.
+    - `/opsx-explore`: Explore ideas and codebase capabilities.
+    - `/opsx-onboard`: Interactive onboarding for understanding existing specs.
+    - `/opsx-sync`: Synchronize delta specs with main specs.
+    - `/opsx-update`: Update and maintain existing change proposals.
+
