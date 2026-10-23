@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "vexiq-builder": {
+      "command": "node",
+      "args": [
+        "/Users/adriangonsalves/projects/vexiq_builder/mcp/vexiq-mcp-server.mjs"
+      ],
+      "env": {
+        "VEXIQ_APP_PORT": "5173"
+      }
+    }
+  }
+}

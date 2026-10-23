@@ -1,0 +1,132 @@
+{
+  "version": "1.0",
+  "selectedId": "inst-starter-pin",
+  "viewport": {
+    "transformMode": "translate",
+    "snapPitchFactor": 0.5,
+    "rotationSnapDeg": 15,
+    "showGrid": true,
+    "showConnectors": false,
+    "explodeMode": "off",
+    "focusTrigger": 0
+  },
+  "instances": [
+    {
+      "instanceId": "inst-starter-beam",
+      "partId": "2x10-beam-228-2500-025-166",
+      "label": "2x10 Beam #1",
+      "position": [
+        0,
+        12.7,
+        -25.4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        0,
+        12.7,
+        -25.4
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#64748b",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-starter-pin",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #1",
+      "position": [
+        31.75,
+        6.35,
+        -34.925
+      ],
+      "rotation": [
+        0,
+        180,
+        0
+      ],
+      "lastValidPosition": [
+        31.75,
+        6.35,
+        -34.925
+      ],
+      "lastValidRotation": [
+        0,
+        180,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-starter-shaft",
+      "partId": "4x-pitch-shaft-228-2500-120-234",
+      "label": "4x Pitch Shaft #1",
+      "position": [
+        -19.05,
+        6.35,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        -19.05,
+        6.35,
+        0
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#cbd5e1",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-starter-gear",
+      "partId": "60-tooth-gear-228-2500-215-338",
+      "label": "60 Tooth Gear #1",
+      "position": [
+        -19.05,
+        6.35,
+        12.7
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        -19.05,
+        6.35,
+        12.7
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#dc2626",
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "updatedAt": "2026-10-23T14:08:43.126Z"
+}

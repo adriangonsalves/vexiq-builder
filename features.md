@@ -1,0 +1,116 @@
+# VEX IQ 3D Robot Modeler — Features & Capabilities (`features.md`)
+
+> **Last Updated:** 2026-10-23  
+> **Scope:** Complete user-facing, manual CAD, automated assembly, validation, and AI/MCP capabilities of the VEX IQ 3D Robot Modeler.
+
+---
+
+## 1. 478-Part VEX IQ CAD Library & Semantic Catalog
+
+- **Complete Official Part Coverage (`478` Parts):**
+  - Converted from STEP CAD models (`VEX-IQ-All-Parts` & `VEX-IQ-All-Control`) into centered, millimeter-accurate `.glb` meshes (`public/models/`) and indexed in [`public/catalog.json`](file:///Users/adriangonsalves/projects/vexiq_builder/public/catalog.json) + [`public/part-metadata.json`](file:///Users/adriangonsalves/projects/vexiq_builder/public/part-metadata.json).
+  - **Categories:**
+    - `Beams & Plates` (1x/2x/4x Beams, Specialty Beams, Corner Connectors, Plates)
+    - `Pins & Standoffs` (0x2, 0x3, 1x1, 1x2, 2x2 Capped/Uncapped Connector Pins, Standoffs)
+    - `Shafts & Collars` (Pitch Shafts, Capped Shafts, Motor Shafts, Rubber/Set-Screw Collars, Bushings)
+    - `Gears & Sprockets` (12T, 24T, 36T, 48T, 60T Spur, Crown, Bevel, Differential, Worm Gears, Sprockets)
+    - `Wheels &Hubs` (200mm Omni-Directional, Traction, Balloon Tires, Hubs)
+    - `Control & Electronics` (Gen 1 & Gen 2 Robot Brain, Smart Motors, Battery, Optical/Distance/Bumper/Touch LED/Gyro Sensors, Controller)
+    - `Pneumatics & Linear Motion` (Pneumatic Cylinders, Solenoids, Air Tanks, Fittings, Linear Racks/Sliders)
+- **Live 3D Part Thumbnails & Search:**
+  - Interactive category filter pills with part counts.
+  - Instant search by part name, VEX part number (`228-2500-...`), or category.
+  - On-demand WebGL thumbnail rendering ([`src/components/PartThumbnail.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/PartThumbnail.jsx)) with viewport visibility deferral (`content-visibility: auto`).
+- **4,137 BVH-Verified Semantic Connection Ports:**
+  - Every part is indexed with typed, raycast-verified local connection ports:
+    - `pin_hole` (Cyan) — $\varnothing 4.8\text{ mm}$ round pin holes with through/blind classification and axial span `spanMm`.
+    - `shaft_bore` (Pink) — Square shaft through-bores on gears, wheels, pulleys, and lock plates.
+    - `shaft_socket` (Purple) — Blind square shaft sockets inside Smart Motors and Brains.
+    - `pin_peg` (Yellow) — Insertable cylindrical pegs on Connector Pins and Standoffs with shoulder/cap geometry (`fastenerSpecs`).
+
+---
+
+## 2. Interactive 3D Viewport & Physical Contact Snapping
+
+- **VEX Pitch Grid (`1x Pitch = 12.7 mm = 0.5"`):**
+  - Dual-resolution floor grid (`12.7 mm` major lines in blue, `6.35 mm` half-pitch minor lines in slate).
+  - Selectable pitch snap increments in the top toolbar: **`1P` (`12.7 mm`)**, **`0.5P` (`6.35 mm`)**, **`0.25P` (`3.175 mm`)**, and **`Free`**.
+  - Selectable rotation snap increments (`15°`, `45°`, `90°`, or `Free`).
+- **BVH Physical Flush Contact Boundary Snapping (Contact Detent):**
+  - When moving parts with the **3D Move Gizmo** (`W`) or **Inspector Nudge Buttons** (`-X/+X`, `-Y/+Y`, `-Z/+Z`), the translation solver automatically detects physical contact boundaries using a **10-step BVH binary search** + **`0.25P` (`3.175 mm`) sub-pitch flush seat detection**.
+  - Pushing a connector pin into a beam or plate stops **flush** when the pin's flat cap/shoulder contacts the plate surface (`z = ±3.175 mm`) instead of stepping into the solid wall of the beam.
+  - Continuing to drag past the contact detent releases the part so it can pass through to the other side when desired.
+- **Real-Time Concave Mesh Collision Detection (`three-mesh-bvh`):**
+  - Uses inward-eroded (`0.38 mm` clearance) concave triangle meshes so pins and shafts pass cleanly through `4.8 mm` holes without false-positive bounding-box collisions, while true solid-body intersections are flagged immediately.
+  - Intersecting parts render in **transparent grey** (`opacity: 0.42`) with a top HUD warning and a one-click **Revert Pose / Cancel Placement** button.
+  - Selecting another part automatically reverts any unplaced intersecting part to its `lastValidPosition` / `lastValidRotation`.
+- **Multi-Axis Exploded View (`Off`, `X`, `Y`, `Z`, `All`):**
+  - Non-destructively separates all visible parts radially or along a single axis (`X`, `Y`, or `Z`) with dashed cyan trace lines back to their true assembled coordinates.
+  - Co-planar parts fan out symmetrically in single-axis explode mode so internal pins, shafts, and gears are clearly visible.
+- **Semantic Port & Axis Overlay (`Axes` Toggle):**
+  - Renders color-coded 3D axis lines and origin markers (`pin_hole`, `shaft_bore`, `shaft_socket`, `pin_peg`) directly over each part in the viewport.
+- **Keyboard Shortcuts:**
+  - `W`: Move Tool (`translate`)
+  - `E`: Rotate Tool (`rotate`)
+  - `X`: Cycle Explode View (`off` → `x` → `y` → `z` → `all`)
+  - `D` / `Cmd+D`: Duplicate selected part
+  - `F`: Focus camera on selected part (or full assembly)
+  - `Del` / `Backspace`: Delete selected part
+  - `Esc`: Exit Explode mode / revert intersecting part & deselect
+
+---
+
+## 3. Manual CAD Inspector & Smart Assembly Tools
+
+Located in the right-hand **Part Inspector** ([`src/App.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/App.jsx)) whenever a part is selected:
+
+1. **Precision Transform & Nudge Controls:**
+   - Direct numeric `X`, `Y`, `Z` inputs in millimeters with live VEX Pitch (`P`) readout.
+   - Contact-aware `-X`, `+X`, `-Y`, `+Y`, `-Z`, `+Z` Nudge buttons that step by the active Pitch setting and automatically stop flush at physical contact boundaries.
+   - Direct `X`, `Y`, `Z` Euler degree inputs plus one-click **Rotate X/Y/Z +90°** flip buttons.
+   - 10 official VEX IQ color swatches plus a custom hex color picker.
+2. **⚡ Auto-Fasten Joint (Pins):**
+   - Automatically scans all verified `pin_hole` ports between the selected part and either a specific partner part or **`ALL` touching parts**.
+   - Finds coaxial overlapping holes (`collinearDist <= 1.2 mm`), measures total stack thickness (`2P` vs `3P+`), selects the appropriate VEX Connector Pin (`1x1`, `0x2`, or `1x2`), computes the exact shoulder seating depth, and verifies zero BVH collisions before inserting up to `maxPins` pins.
+3. **🎯 Snap & Mate to Port (`mate_parts`):**
+   - Declaratively snaps any source port on the selected part (or `Auto` primary bore/socket/hole) to any target port on another placed part.
+   - Supports one-click **Flip Axis (`180°`)**, **Roll Angle** (`0°`, `5°` for 36T gear meshing, `45°`, `90°`, `180°`), and **Axial Offset** (`0 mm`, `±3.18 mm` / `±0.25P`, `±6.35 mm` / `±0.5P`, `±12.7 mm` / `±1P`).
+4. **⚙️ Mesh Gear Train Builder (`mesh_gear_train`):**
+   - Builds a complete, phase-synchronized gear train along any selected structural beam starting at a chosen `pin_hole` port.
+   - Presets include `3 × 36T (1:1)`, `5 × 36T (Full Side)`, `2 × 36T`, `12T → 36T (1:3 Torque)`, and `60T → 36T (1.67:1 Speed)`.
+   - Automatically alternates gear roll angles (`180° / teeth`) to prevent tooth-on-tooth clashes, centers gears between inner and outer rails, and optionally inserts `3x Pitch Shafts` (`228-2500-2221`).
+5. **🪞 Symmetry Mirror (`mirror_subassembly`):**
+   - Mirrors the selected part (or the entire half-assembly) across `Z = 0` (`Left ↔ Right`) or `X = 0` (`Front ↔ Rear`).
+   - Automatically applies BVH collision compensation (`±180°` roll / yaw search) for asymmetric parts such as Smart Motors, capped pins, and corner brackets.
+6. **CAD & Semantic Metadata Readout:**
+   - Displays live placement status (`Placed (Clear)` vs `Intersecting`), Part Number, Category, Origin Type (`centered`, `offset_flange`, `asymmetric`), bounding box in `mm` and VEX Pitch (`P`), port breakdown (`pinHoles`, `shaftBores`, `pinPegs`), Gear Specs (`teeth`, `pitchRadiusMm`), Fastener Specs, and Heavy-Part Mounting Rules.
+
+---
+
+## 4. 6-Stage Mechanical & Kinematic Audit + 3-View Blueprint Modal
+
+Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP tools `audit_assembly` / `capture_viewport_views`):
+
+- **6-Stage Engineering Verification (`isMechanicallySound`):**
+  1. **Solid Collisions (`collisionCount`):** Pairwise concave BVH mesh intersection check across all visible parts.
+  2. **Floating Fasteners (`floatingFastenerCount`):** Verifies every Connector Pin engages $\ge 2$ distinct structural parts and every Shaft engages $\ge 1$ bore/hole.
+  3. **Unsecured & Heavy Parts (`unsecuredPartCount`, `underSecuredHeavyPartCount`):** Checks that every non-fastener part has $\ge 1$ fastener engagement and heavy components (Brain, Smart Motors, Battery) meet their `minFastenersRequired` threshold ($\ge 2$ pins).
+  4. **Connectivity Graph (`connectedComponentCount`, `disconnectedIslandCount`):** Builds a full multi-part fastener & mated-surface adjacency graph to verify the robot forms a single unified assembly (`0` disconnected islands).
+  5. **Shaft Protrusions (`protrudingShaftCount`):** Flags shafts overhanging $> 8\text{ mm}$ beyond their outermost wheel/frame without an outboard bearing support.
+  6. **Kinematic Drivetrain Trace (`kinematics`):** Traces torque transmission from each `Smart Motor` $\rightarrow$ `Motor Shaft` $\rightarrow$ `Driver Gear` $\rightarrow$ `Meshed Idler/Driven Gears` $\rightarrow$ `Driven Shafts` $\rightarrow$ `Driven Wheels`.
+- **Interactive Issue Callouts:**
+  - Any flagged part appears as a clickable pill in the Audit dialog; clicking it selects the part, closes the modal, and focuses the 3D camera directly on the offending component.
+- **3-View Orthographic Engineering Blueprint (`/assembly-blueprint.svg`):**
+  - Generates and embeds a high-resolution `1600×1050` SVG engineering drawing showing **TOP (`X–Z`)**, **SIDE (`X–Y`)**, and **FRONT (`Z–Y`)** true-scale orthographic projections with part outlines, holes, pitch grids, and callout badges.
+
+---
+
+## 5. Dual MCP Integration (Node Stdio MCP + Browser WebMCP) & Persistence
+
+- **Node Stdio MCP Server ([`mcp/vexiq-mcp-server.mjs`](file:///Users/adriangonsalves/projects/vexiq_builder/mcp/vexiq-mcp-server.mjs)):**
+  - Exposes 16 tools to external AI agents (`search_parts`, `get_part_details`, `get_assembly`, `place_part`, `update_part`, `align_part_to_hole`, `mate_parts`, `auto_fasten_joint`, `mesh_gear_train`, `mirror_subassembly`, `audit_assembly`, `capture_viewport_views`, `find_coaxial_holes`, `remove_part`, `clear_assembly`, `configure_viewport`).
+  - Synchronizes live with the browser UI in real time over Server-Sent Events (`/api/assembly/events`) and REST (`/api/assembly`).
+- **Browser W3C WebMCP (`navigator.modelContext` in [`src/utils/webMcpTools.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/webMcpTools.js)):**
+  - Registers in-page tools for browser-hosted AI assistants.
+- **Import / Export & Auto-Save:**
+  - Saves valid assemblies to `localStorage` (`vexiq_builder_assembly_v2`) and `.vexiq-assembly-state.json`, plus supports `.vexiq.json` file export (`Save`) and import (`Load`).
