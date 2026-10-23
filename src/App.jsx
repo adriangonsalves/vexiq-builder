@@ -1033,6 +1033,9 @@ export default function App() {
               <span>
                 <kbd className="kbd">W</kbd> Move
               </span>
+              <span title="Drag a colored square on the Move gizmo to slide the part within that plane">
+                <kbd className="kbd">▢</kbd> Plane Drag
+              </span>
               <span>
                 <kbd className="kbd">E</kbd> Rotate
               </span>

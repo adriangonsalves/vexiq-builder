@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "selectedId": "inst-starter-pin",
+  "selectedId": "inst-1792764596947-q9d5",
   "viewport": {
     "transformMode": "translate",
     "snapPitchFactor": 0.5,
@@ -76,7 +76,7 @@
       "position": [
         -19.05,
         6.35,
-        0
+        -12.7
       ],
       "rotation": [
         0,
@@ -86,7 +86,7 @@
       "lastValidPosition": [
         -19.05,
         6.35,
-        0
+        -12.7
       ],
       "lastValidRotation": [
         0,
@@ -105,7 +105,7 @@
       "position": [
         -19.05,
         6.35,
-        12.7
+        -12.7
       ],
       "rotation": [
         0,
@@ -115,7 +115,7 @@
       "lastValidPosition": [
         -19.05,
         6.35,
-        12.7
+        -12.7
       ],
       "lastValidRotation": [
         0,
@@ -126,7 +126,65 @@
       "color": "#dc2626",
       "visible": true,
       "locked": false
+    },
+    {
+      "instanceId": "inst-1792764596947-q9d5",
+      "partId": "1x-wide-1x1-offset-corner-connector-228-2500-130-28",
+      "label": "1x Wide, 1x1 Offset Corner Connector #1",
+      "position": [
+        57.15,
+        6.35,
+        -57.15
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        57.15,
+        6.35,
+        -57.15
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#475569",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792764604347-96xi",
+      "partId": "1x2-right-chassis-corner-connector-228-2500-1255-42",
+      "label": "1x2 Right Chassis Corner Connector #1",
+      "position": [
+        19.05,
+        19.05,
+        -28.575
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        19.05,
+        19.05,
+        -28.575
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#475569",
+      "visible": true,
+      "locked": false
     }
   ],
-  "updatedAt": "2026-10-23T14:08:43.126Z"
+  "updatedAt": "2026-10-23T14:18:24.480Z"
 }

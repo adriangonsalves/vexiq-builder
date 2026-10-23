@@ -140,6 +140,14 @@ When moving a part via the 3D Move Gizmo or Inspector Nudge buttons:
      - If a clean `0.25P` (`3.175 mm`) grid plane lies on the safe side within $0.95\text{ mm}$ of $\mathbf{p}_{\text{lo}}$ and is collision-free, it snaps to that exact `0.25P` coordinate; otherwise it clamps to $\mathbf{p}_{\text{lo}}$.
      - Pulling the cursor further than $1.35\text{P}$ (or out the other side into clear space) releases the detent so parts can pass through when intended.
 
+### 5.3 Move Gizmo Plane-Drag Handles (`enhanceTranslatePlaneHandles` in [`Viewport3D.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/Viewport3D.jsx))
+- Three.js `TransformControls` natively supports planar translation (`axis = 'XY' | 'YZ' | 'XZ'`): on pointer-down it orients its internal `TransformControlsPlane` with normal $\hat{\mathbf{z}}$, $\hat{\mathbf{x}}$, or $\hat{\mathbf{y}}$ respectively and projects the cursor ray onto that plane, so the offset only has components in the two plane axes.
+- The stock plane squares are tiny ($0.15$ gizmo units) and faint. Because `setupGizmo()` bakes each handle's transform into its geometry, `enhanceTranslatePlaneHandles(transform)` replaces the `XY` / `YZ` / `XZ` handle geometries in both `_gizmo.gizmo.translate` (visible) and `_gizmo.picker.translate` (invisible hit area):
+  - Visible squares: $0.26$ units, centered $0.27$ units out along both plane axes, `opacity 0.32`, `depthTest: false`.
+  - Outline: a `LineSegments` square added with the **same handle name**, so `TransformControlsGizmo.updateMatrixWorld()` positions, scales, hides it edge-on (`PLANE_HIDE_THRESHOLD = 0.2`), and highlights it yellow alongside its fill.
+  - Picker squares: enlarged to $0.32$ units for easier grabbing.
+- Plane drags flow through the same `objectChange` handler as axis drags: the per-axis snap leaves the locked (normal) axis at its drag-start value, while in-plane axes get world-grid / `0.25P` flush-seat snapping and BVH bisection clamping.
+
 ---
 
 ## 6. Declarative Mechanical Mating Solvers ([`mcp/assembly-engine.mjs`](file:///Users/adriangonsalves/projects/vexiq_builder/mcp/assembly-engine.mjs))

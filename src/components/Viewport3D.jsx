@@ -208,6 +208,98 @@ function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) 
   });
 }
 
+/**
+ * Upgrades the stock TransformControls translate gizmo's tiny (0.15) plane squares into large,
+ * clearly visible, outlined plane-drag handles. Dragging a plane handle moves the selected part
+ * freely within that plane (XY = Front plane, YZ = Side plane, XZ = Ground plane), while the
+ * custom VEX pitch snapping + BVH flush-contact solver in `objectChange` still applies.
+ *
+ * TransformControls bakes handle transforms into geometry (see setupGizmo), so we replace the
+ * geometry of the existing `XY` / `YZ` / `XZ` handles in both the visible gizmo and invisible picker.
+ */
+function enhanceTranslatePlaneHandles(transform) {
+  const gizmoRoot = transform?._gizmo;
+  const visibleGroup = gizmoRoot?.gizmo?.translate;
+  const pickerGroup = gizmoRoot?.picker?.translate;
+  if (!visibleGroup || !pickerGroup) return;
+
+  const OFFSET = 0.27; // center of plane square from gizmo origin (gizmo units)
+  const SIZE = 0.26; // visible square edge length
+  const PICK_SIZE = 0.32; // larger invisible hit area for easier grabbing
+  const THICK = 0.004;
+
+  const planeDefs = {
+    XY: { color: 0x3b82f6, box: (s) => [s, s, THICK], center: [OFFSET, OFFSET, 0] },
+    YZ: { color: 0xef4444, box: (s) => [THICK, s, s], center: [0, OFFSET, OFFSET] },
+    XZ: { color: 0x22c55e, box: (s) => [s, THICK, s], center: [OFFSET, 0, OFFSET] }
+  };
+
+  const outlinePoints = (name, s) => {
+    const h = s / 2;
+    const [cx, cy, cz] = planeDefs[name].center;
+    const corners2d = [
+      [-h, -h],
+      [h, -h],
+      [h, h],
+      [-h, h]
+    ];
+    const pts = corners2d.map(([a, b]) => {
+      if (name === 'XY') return new THREE.Vector3(cx + a, cy + b, cz);
+      if (name === 'YZ') return new THREE.Vector3(cx, cy + a, cz + b);
+      return new THREE.Vector3(cx + a, cy, cz + b);
+    });
+    const segs = [];
+    for (let i = 0; i < 4; i++) segs.push(pts[i], pts[(i + 1) % 4]);
+    return segs;
+  };
+
+  for (const [name, def] of Object.entries(planeDefs)) {
+    // Visible filled square
+    for (const handle of visibleGroup.children.filter((c) => c.name === name && c.isMesh)) {
+      const geo = new THREE.BoxGeometry(...def.box(SIZE));
+      geo.translate(...def.center);
+      handle.geometry.dispose();
+      handle.geometry = geo;
+      handle.material = new THREE.MeshBasicMaterial({
+        color: def.color,
+        transparent: true,
+        opacity: 0.32,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+        fog: false,
+        toneMapped: false
+      });
+    }
+
+    // Bright outline so the plane handle reads clearly against parts and the grid
+    const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePoints(name, SIZE));
+    const outline = new THREE.LineSegments(
+      outlineGeo,
+      new THREE.LineBasicMaterial({
+        color: def.color,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: false,
+        depthWrite: false,
+        fog: false,
+        toneMapped: false
+      })
+    );
+    outline.name = name; // same name => positioned, scaled, hidden edge-on & highlighted with its plane
+    outline.renderOrder = Infinity;
+    visibleGroup.add(outline);
+
+    // Larger invisible picker hit area
+    for (const picker of pickerGroup.children.filter((c) => c.name === name)) {
+      const geo = new THREE.BoxGeometry(...def.box(PICK_SIZE).map((v) => (v === THICK ? 0.02 : v)));
+      geo.translate(...def.center);
+      picker.geometry.dispose();
+      picker.geometry = geo;
+    }
+  }
+}
+
 export default function Viewport3D({
   instances,
   catalogMap,
@@ -545,6 +637,7 @@ export default function Viewport3D({
     // TransformControls
     const transform = new TransformControls(camera, renderer.domElement);
     transform.setSize(0.95);
+    enhanceTranslatePlaneHandles(transform);
 
     transform.addEventListener('objectChange', () => {
       const obj = transform.object;

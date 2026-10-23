@@ -36,6 +36,13 @@
   - Dual-resolution floor grid (`12.7 mm` major lines in blue, `6.35 mm` half-pitch minor lines in slate).
   - Selectable pitch snap increments in the top toolbar: **`1P` (`12.7 mm`)**, **`0.5P` (`6.35 mm`)**, **`0.25P` (`3.175 mm`)**, and **`Free`**.
   - Selectable rotation snap increments (`15°`, `45°`, `90°`, or `Free`).
+- **Move Gizmo: Axis Arrows + Plane-Drag Handles:**
+  - Selecting a part in Move mode (`W`) shows red/green/blue **axis arrows** (drag along `X`, `Y`, or `Z`) plus three large, outlined, color-coded **plane squares**:
+    - **Blue `XY` square** — drag within the front/back (vertical) plane; `Z` stays fixed.
+    - **Red `YZ` square** — drag within the side (vertical) plane; `X` stays fixed.
+    - **Green `XZ` square** — drag along the ground plane; height `Y` stays fixed.
+  - The hovered/active plane highlights yellow. Plane handles auto-hide when viewed edge-on (where in-plane dragging would be unstable).
+  - Plane drags use the same VEX pitch snapping and BVH flush-contact detent as axis drags.
 - **BVH Physical Flush Contact Boundary Snapping (Contact Detent):**
   - When moving parts with the **3D Move Gizmo** (`W`) or **Inspector Nudge Buttons** (`-X/+X`, `-Y/+Y`, `-Z/+Z`), the translation solver automatically detects physical contact boundaries using a **10-step BVH binary search** + **`0.25P` (`3.175 mm`) sub-pitch flush seat detection**.
   - Pushing a connector pin into a beam or plate stops **flush** when the pin's flat cap/shoulder contacts the plate surface (`z = ±3.175 mm`) instead of stepping into the solid wall of the beam.
