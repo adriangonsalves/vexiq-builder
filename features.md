@@ -44,6 +44,20 @@
     - **Green `XZ` square** — drag along the ground plane; height `Y` stays fixed.
   - The hovered/active plane highlights yellow. Plane handles auto-hide when viewed edge-on (where in-plane dragging would be unstable).
   - Plane drags use the same VEX pitch snapping and BVH flush-contact detent as axis drags.
+  - **Pitch steps count from where the drag started**, not from the world origin. A part that starts lined up with holes, even holes off the world grid like axles at wheel-radius height (`y = 23.87 mm`), moves in whole steps and stays on the hole pattern.
+  - **Hole snapping:**
+    - While dragging, a pin, shaft or hole of the moving part that comes within `3.5 mm` of a matching hole, pin or shaft on another part is pulled onto that part's axis line. The two must be parallel within `2°` and within 2 pitch (`25.4 mm`) of each other along the line.
+    - A small sideways miss of up to `1 mm`, on axes not being dragged or when dragging along the hole's line, is settled too. A part that drifted slightly off a hole pattern then clicks back into its hole, for example after snapping into a gear's pin hole that's turned for meshing.
+    - Apart from that settle, the pull only moves the part along the axes being dragged.
+    - It works at any angle, because it uses the real hole lines, not the grid. Plates turned in their own plane or tilted on another axis snap the same way.
+    - Dragged axes that run along the hole's line stay on the pitch grid, so a shaft can still be slid in and out in steps.
+    - Hold **`Alt`** while dragging to move without hole snapping.
+  - **Shaft caps don't pass through holes:**
+    - Collision meshes are shrunk `0.38 mm` per part so pins and shafts fit their holes. That hid small overlaps, such as a capped shaft's cap (radius about `2.37 mm`) in a beam hole (about `2.10 mm`).
+    - Each shaft part's width along its length and each hole's widest pass-through are now measured on the real mesh. A shaft lined up with a hole (within `1 mm`) collides when a section of it inside the hole is wider than the hole lets through.
+    - This applies to drags, nudges, MCP placement and the audit.
+    - Square shafts in square gear bores and shafts in rubber collars are not affected.
+    - Drags and nudges also check the path, so a whole grid step can't carry a cap past a hole's lip: the shaft stops with the cap resting on the lip.
 - **Rotate Mode: Rings Around the Part:**
   - **Right-click the selected part** (it can be behind another part) to switch between Move and Rotate; `E` and the toolbar **Rotate** button open the same mode, `W` / **Move** leave it. Right-drag still pans the camera, and the browser menu never opens over the viewport.
   - A part that isn't held by anything gets three flat rings, **red `X`**, **green `Y`** and **blue `Z`**, centered on the middle of the part. Dragging a ring turns the part around that world axis through its center, so any orientation can be reached.

@@ -3,12 +3,14 @@
  * Run: node scripts/check-pin-hole-alignment.mjs   (exits 1 on any failure)
  */
 import * as THREE from 'three';
-import { buildWorldMatrix, findPart, getPartCollisionBvh } from '../mcp/assembly-engine.mjs';
+import { auditAssembly, buildWorldMatrix, checkCandidateCollision, findPart, getPartCollisionBvh } from '../mcp/assembly-engine.mjs';
+import fs from 'node:fs';
 import {
   EXCLUDED_PART_NAMES,
   collectWorldFeatures,
   findAlignedOpenings,
   findEngagedJoints,
+  findHoleSnap,
   getLocalFeatures,
   measureOpeningDepths,
   measureOpeningSurfaces,
@@ -612,6 +614,107 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   }
   const { ok, detail } = collarHoleIsReal(name);
   check(`${name} chosen cylinder is a real ~1.5 mm hole (radial walls at 1.2–2.4 mm)`, ok, detail);
+}
+
+// ---------------------------------------------------------------------------
+// Hole snapping while dragging (findHoleSnap)
+// ---------------------------------------------------------------------------
+{
+  const X = new THREE.Vector3(1, 0, 0);
+  const Y = new THREE.Vector3(0, 1, 0);
+  const Z = new THREE.Vector3(0, 0, 1);
+  const deg = THREE.MathUtils.degToRad;
+  // How far the moved feature's line ends up from the target line
+  const missAfter = (snap) => {
+    const { insert, opening, offset } = snap;
+    const moved = insert.instanceId === opening.instanceId ? null : insert;
+    const from = moved.origin.clone().add(selectedMovesInsert(snap) ? offset : new THREE.Vector3());
+    const to = opening.origin.clone().add(selectedMovesInsert(snap) ? new THREE.Vector3() : offset);
+    const d = to.sub(from);
+    return Math.sqrt(Math.max(0, d.lengthSq() - d.dot(opening.axis) ** 2));
+  };
+  let selectedId = null;
+  const selectedMovesInsert = (snap) => snap.insert.instanceId === selectedId;
+  const snapFor = (selected, others, dirs) => {
+    selectedId = selected.instanceId;
+    return findHoleSnap(selected.features, others.flatMap((o) => o.features), dirs);
+  };
+
+  // Rail like the drivetrain's: axles at wheel-radius height (y = 23.87, off the world grid)
+  const rail = place('2x12 Beam', [0, 23.87, 72.65]);
+  const hole = featureById(rail, 'hole_22'); // center row, x = 25.4
+  const shaftAt = (x, y, z = 90) => place('4x Pitch Shaft', [x, y, z]);
+
+  let snap = snapFor(shaftAt(25.4 + 2, 23.87), [rail], [X]);
+  check('drag along X: shaft 2 mm off a hole is pulled onto it', snap && near(snap.offset.x, -2, 0.01) && near(snap.offset.y, 0) && missAfter(snap) < 0.01, JSON.stringify(snap?.offset));
+  snap = snapFor(shaftAt(25.4, 23.87 + 1.5), [rail], [Y]);
+  check('drag along Y: lands on y = 23.87 (off the world grid)', snap && near(23.87 + 1.5 + snap.offset.y, hole.origin.y, 0.01), JSON.stringify(snap?.offset));
+  snap = snapFor(shaftAt(25.4 + 1, 23.87 + 1.5), [rail], [X]);
+  check('drag along X only, 1.5 mm Y miss (over the 1 mm settle): no snap', !snap, JSON.stringify(snap?.offset));
+  snap = snapFor(shaftAt(25.4 + 0.578, 23.87 - 0.529), [rail], [X]);
+  check('drag along X only, 0.53 mm Y miss: settles onto the hole (both axes)', snap && near(snap.offset.x, -0.578) && near(snap.offset.y, 0.529) && missAfter(snap) < 0.01, JSON.stringify(snap?.offset));
+  snap = snapFor(shaftAt(25.4 + 1, 23.87 + 1.5), [rail], [X, Y]);
+  check('plane drag (X and Y): both misses closed', snap && near(snap.offset.x, -1) && near(snap.offset.y, -1.5) && missAfter(snap) < 0.01, JSON.stringify(snap?.offset));
+  snap = snapFor(shaftAt(25.4 + 5, 23.87), [rail], [X]);
+  check('5 mm from a hole (holes are 6.35 mm apart): pulled only to a hole within 3.5 mm', !snap || (Math.abs(snap.offset.x) <= 3.5 && missAfter(snap) < 0.01), JSON.stringify(snap?.offset));
+  snap = snapFor(shaftAt(25.4 + 2, 23.87, 72.65 + 60), [rail], [X]); // near end ~32 mm from the rail
+  check('a shaft over 2 pitch along the hole line from the rail is not pulled', !snap, JSON.stringify(snap?.offset));
+  snap = snapFor(shaftAt(25.4 + 2, 23.87, 72.65 + 45), [rail], [X]); // near end ~17 mm from the rail
+  check('a shaft 17 mm along the hole line from the rail is pulled', snap && near(snap.offset.x, -2), JSON.stringify(snap?.offset));
+  snap = snapFor(shaftAt(25.4 + 2, 23.87), [rail], [Z]);
+  check('dragging along the hole line (Z), 2 mm off: not pulled across', !snap, JSON.stringify(snap?.offset));
+  snap = snapFor(shaftAt(25.4 + 0.578, 23.87 - 0.529), [rail], [Z]);
+  check('dragging along the hole line (Z), 0.78 mm off: settles onto it', snap && near(snap.offset.x, -0.578) && near(snap.offset.y, 0.529) && near(snap.offset.z, 0), JSON.stringify(snap?.offset));
+
+  // Angled plate: rail turned 30° about Y, so its holes point 30° off Z; shaft turned the same way
+  const tilted = place('2x12 Beam', [10, 30, 50], [0, 30, 0]);
+  const tHole = featureById(tilted, 'hole_22');
+  const sideways = new THREE.Vector3(1, 0, 0).applyAxisAngle(Y, deg(30)); // across the hole, in XZ
+  const tShaftPos = tHole.origin.clone().addScaledVector(tHole.axis, 20).addScaledVector(sideways, 2.2);
+  const tShaft = place('4x Pitch Shaft', tShaftPos.toArray(), [0, 30, 0]);
+  snap = snapFor(tShaft, [tilted], [X]);
+  check('angled plate (30°): dragging along world X still lands the shaft on the hole line', snap && missAfter(snap) < 0.01, JSON.stringify(snap?.offset));
+  snap = snapFor(tShaft, [tilted], [X, Y, Z]);
+  check('angled plate, free drag: moved straight across onto the hole line', snap && missAfter(snap) < 0.01 && near(snap.offset.dot(tHole.axis), 0, 0.01), JSON.stringify(snap?.offset));
+  const turned = place('2x12 Beam', [0, 0, 0], [0, 0, 37]); // turned in its own plane: holes still along Z
+  const tHole2 = featureById(turned, 'hole_22');
+  snap = snapFor(place('4x Pitch Shaft', [tHole2.origin.x + 1.2, tHole2.origin.y - 0.8, 20]), [turned], [X, Y]);
+  check('plate turned 37° in its plane: plane drag lands on an off-grid hole', snap && missAfter(snap) < 0.01, JSON.stringify(snap?.offset));
+
+  // Dragging a part with holes onto a pin that is already placed
+  const pin = place('0x2 Connector Pin', [25.4, 23.87, 70]);
+  const beam = place('2x12 Beam', [1.6, 23.87, 72.65]);
+  snap = snapFor(beam, [pin], [X]);
+  check('dragging a beam: its hole is pulled onto a placed pin', snap && near(snap.offset.x, -1.6, 0.01) && snap.opening.instanceId === beam.instanceId, JSON.stringify(snap?.offset));
+}
+
+// ---------------------------------------------------------------------------
+// Parts too wide for a hole: a capped shaft's cap must not pass a beam hole
+// ---------------------------------------------------------------------------
+{
+  const inst = (id, name, position, rotation = [0, 0, 0]) => ({ instanceId: id, label: id, partId: part(name).id, position, rotation });
+  const beam = inst('beam', '2x16 Beam', [0, 0, 0]); // holes along Z, faces at z = ±3.05, lip at |z| <= 2.25
+  const capped = (z) => inst('shaft', '2x Pitch Capped Shaft', [25.4, 0, z]); // cap from z to z + 0.8
+  const collides = (a, list) => checkCandidateCollision(a, list).isIntersecting;
+  check('capped shaft through a beam hole, cap on the outside face: clear', !collides(capped(3.05), [beam]));
+  check('  cap sunk into the shallow counterbore at the face: clear', !collides(capped(2.4), [beam]));
+  for (const z of [1.5, 0, -1.5, -2.6]) {
+    check(`  cap inside the hole's narrow section (shoulder at z = ${z}): collides`, collides(capped(z), [beam]));
+  }
+  check('  cap all the way through and past the far face: clear (only the path is blocked)', !collides(capped(-3.9), [beam]));
+
+  const gear = inst('gear', '36 Tooth Gear', [25.4, 0, 0]);
+  check('cap inside a 36T gear\'s square bore: collides', collides(capped(0), [gear]));
+  check('cap resting on the gear face: clear', !collides(capped(3.3), [gear]));
+
+  const plain = (z) => inst('plain', '4x Pitch Shaft', [25.4, 0, z]);
+  check('plain 4x shaft through a beam hole and a gear bore: never flagged', [-20, -5, 0, 5, 20].every((z) => !collides(plain(z), [beam, inst('gear2', '36 Tooth Gear', [25.4, 0, 8])])));
+  const collar = inst('collar', 'Rubber Shaft Collar', [25.4 - 4.09, 8.1, -3.09 + 10], [90, 0, 0]);
+  check('plain shaft through a rubber collar (made to grip): not flagged', !collides(plain(0), [collar]));
+
+  const state = JSON.parse(fs.readFileSync(new URL('./fixtures/drivetrain.json', import.meta.url), 'utf8'));
+  const audit = auditAssembly(state);
+  check('drivetrain fixture (shafts through holes, gears and the motor) still has no collisions', audit.collisionCount === 0 && audit.isMechanicallySound, JSON.stringify(audit.collisions).slice(0, 200));
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);

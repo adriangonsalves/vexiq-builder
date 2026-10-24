@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { MeshBVH } from 'three-mesh-bvh';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { loadPartAsset } from '../utils/geometryCache.js';
@@ -8,8 +9,12 @@ import {
   collectWorldFeatures,
   findAlignedOpenings,
   findEngagedJoints,
+  findHoleSnap,
+  findTooWideInserts,
+  measureOpeningPassRadii,
   measureOpeningSurfaces,
   measurePinEnds,
+  measureShaftProfiles,
   planMates,
   worldPartBox
 } from '../utils/pinHoleAlignment.js';
@@ -20,6 +25,29 @@ const COLLISION_EROSION_MM = 0.38; // collision meshes are eroded inward by this
 
 const openingSurfaceCache = new Map(); // partId -> Map(featureId -> { lo, hi }) measured on the mesh
 const pinEndCache = new Map(); // partId -> Map(featureId -> { lo, hi }) which pin ends stick out
+const passRadiusCache = new Map(); // partId -> Map(featureId -> widest a part may be to pass through)
+const shaftProfileCache = new Map(); // partId -> Map(featureId -> [{ t, r }]) shaft width along its length
+const rawBvhs = new WeakMap(); // render geometry -> BVH over the real (unshrunk) mesh
+
+/** Distance to the nearest real (unshrunk) surface along a part-local ray, or null on a miss. */
+function createRawRaycaster(geos) {
+  const ray = new THREE.Ray();
+  const origin = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  const trees = geos.map((geo) => {
+    if (!rawBvhs.has(geo)) rawBvhs.set(geo, new MeshBVH(geo));
+    return rawBvhs.get(geo);
+  });
+  return (originArr, dirArr) => {
+    ray.set(origin.fromArray(originArr), dir.fromArray(dirArr));
+    let best = null;
+    for (const tree of trees) {
+      const hit = tree.raycastFirst(ray, THREE.DoubleSide);
+      if (hit && (best == null || hit.distance < best)) best = hit.distance;
+    }
+    return best;
+  };
+}
 
 /**
  * Returns a part-local raycaster over a group's (eroded) collision meshes that reports the nearest
@@ -62,7 +90,19 @@ function getMeshMeasurements(group, partMeta) {
   if (!pinEndCache.has(partMeta.id)) {
     pinEndCache.set(partMeta.id, measurePinEnds(partMeta, (o, d) => hitFn()(o, d)));
   }
-  return { surfaces: openingSurfaceCache.get(partMeta.id), pinEnds: pinEndCache.get(partMeta.id) };
+  // Hole and shaft widths come from the real mesh: shrinking leaves a 0.8 mm shaft cap a sliver
+  const renderGeos = group.userData.renderGeometries;
+  if (renderGeos?.length && !passRadiusCache.has(partMeta.id)) {
+    const raw = createRawRaycaster(renderGeos);
+    passRadiusCache.set(partMeta.id, measureOpeningPassRadii(partMeta, raw));
+    shaftProfileCache.set(partMeta.id, measureShaftProfiles(partMeta, raw));
+  }
+  return {
+    surfaces: openingSurfaceCache.get(partMeta.id),
+    pinEnds: pinEndCache.get(partMeta.id),
+    passRadii: passRadiusCache.get(partMeta.id),
+    profiles: shaftProfileCache.get(partMeta.id)
+  };
 }
 
 /**
@@ -886,6 +926,7 @@ export default function Viewport3D({
   const dragStartPosRef = useRef(new THREE.Vector3());
   const lastClearDragPosRef = useRef(new THREE.Vector3());
   const hasClearDragPosRef = useRef(false);
+  const altKeyRef = useRef(false); // Alt held: drag without snapping onto holes
   const holeOverlayRef = useRef(null);
   const otherFeaturesRef = useRef([]); // [{ instanceId, box, features }] for visible non-selected parts
   const lastAlignedRef = useRef([]); // latest findAlignedOpenings result for the selected part
@@ -938,6 +979,41 @@ export default function Viewport3D({
    * Exact concave mesh-to-mesh intersection check using three-mesh-bvh on inward-eroded
    * collision geometries. Evaluates at true assembled positions even when exploded.
    */
+  /** World pins/shafts/openings of a part's group, with mesh measurements. */
+  const worldFeaturesOfGroup = (group) => {
+    const partMeta = catalogMapRef.current.get(group.userData.partId);
+    if (!partMeta) return [];
+    group.updateMatrixWorld(true);
+    return collectWorldFeatures(partMeta, group.matrixWorld, group.userData.instanceId, getMeshMeasurements(group, partMeta));
+  };
+
+  /** A shaft part (straight or capped), whose width along its length is measured. */
+  const isShaftGroup = (group) => {
+    const partMeta = catalogMapRef.current.get(group.userData.partId);
+    return Boolean(partMeta && getMeshMeasurements(group, partMeta)?.profiles?.size);
+  };
+
+  /**
+   * Moving `group` straight from `fromPos` to its current position: the first position on the way
+   * where a shaft section is inside a hole too narrow for it (e.g. a cap jumping past a beam's lip in
+   * one grid step, where both ends of the move are clear), or null. Leaves the group where it was.
+   */
+  const firstTooNarrowCrossing = (group, fromPos) => {
+    const toPos = group.position.clone();
+    const distance = toPos.distanceTo(fromPos);
+    const neighbours = otherFeaturesRef.current.flatMap((o) => o.features);
+    if (distance < 0.2 || (!isShaftGroup(group) && !neighbours.some((f) => f.profile))) return null;
+    const steps = Math.ceil(distance / 0.25);
+    let crossing = null;
+    for (let i = 1; i < steps && !crossing; i++) {
+      group.position.lerpVectors(fromPos, toPos, i / steps);
+      if (findTooWideInserts(worldFeaturesOfGroup(group), neighbours).length > 0) crossing = group.position.clone();
+    }
+    group.position.copy(toPos);
+    group.updateMatrixWorld(true);
+    return crossing;
+  };
+
   const checkGroupCollision = (targetGroup, useAssembledPositions = false) => {
     if (!targetGroup || !targetGroup.visible) return false;
     const colGeosA = targetGroup.userData.collisionGeometries;
@@ -963,6 +1039,7 @@ export default function Viewport3D({
     const matrixBtoA = new THREE.Matrix4();
 
     let collided = false;
+    let featuresA; // worked out only when a shaft and a hole meet
     for (const [otherId, otherGroup] of meshMapRef.current.entries()) {
       if (otherId === targetGroup.userData.instanceId) continue;
       if (!otherGroup.visible) continue;
@@ -987,6 +1064,11 @@ export default function Viewport3D({
           }
         }
         if (collided) break;
+      }
+      // The shrunk meshes miss small overlaps, like a shaft's cap inside a hole it can't pass
+      if (!collided && (isShaftGroup(targetGroup) || isShaftGroup(otherGroup))) {
+        if (featuresA === undefined) featuresA = worldFeaturesOfGroup(targetGroup);
+        collided = findTooWideInserts(featuresA, worldFeaturesOfGroup(otherGroup)).length > 0;
       }
       if (collided) break;
     }
@@ -1041,11 +1123,13 @@ export default function Viewport3D({
     const quarterStep = VEX_PITCH_MM * 0.25; // 3.175mm
     const dir = Math.sign(delta[domAxis]);
     if (dir !== 0) {
+      // Quarter steps counted from the clear position, so parts off the world grid rest flush too
+      const base = clearPos[domAxis];
       const qIndex =
         dir > 0
-          ? Math.floor((lo[domAxis] + 0.05) / quarterStep)
-          : Math.ceil((lo[domAxis] - 0.05) / quarterStep);
-      const qVal = Number((qIndex * quarterStep).toFixed(3));
+          ? Math.floor((lo[domAxis] - base + 0.05) / quarterStep)
+          : Math.ceil((lo[domAxis] - base - 0.05) / quarterStep);
+      const qVal = Number((base + qIndex * quarterStep).toFixed(3));
       const distFromClear = (qVal - clearPos[domAxis]) * dir;
       const distFromLo = Math.abs(lo[domAxis] - qVal);
       if (distFromClear >= -0.01 && distFromLo <= 0.95) {
@@ -1087,6 +1171,54 @@ export default function Viewport3D({
       entries.push({ instanceId: instId, box, features });
     }
     otherFeaturesRef.current = entries;
+  };
+
+  /**
+   * Hole snapping for a Move drag: with the dragged part at `rawPos`, finds the smallest move along
+   * the gizmo's dragged axes that lines one of its pins/shafts/openings up with a matching one on
+   * another part (any angle). Returns the snapped position, with dragged axes that run along the
+   * hole's line taken from `gridPos`, or null when nothing is close enough.
+   */
+  const snapDragToHoles = (obj, partMeta, rawPos, gridPos) => {
+    const transform = transformRef.current;
+    const letters = (transform?.axis || '').replace(/[^XYZ]/g, '');
+    if (!letters || !partMeta) return null;
+    const directions = [...letters].map((l) => {
+      const dir = new THREE.Vector3(l === 'X' ? 1 : 0, l === 'Y' ? 1 : 0, l === 'Z' ? 1 : 0);
+      return transform.space === 'local' ? dir.applyQuaternion(obj.quaternion) : dir;
+    });
+
+    obj.position.copy(rawPos);
+    obj.updateMatrixWorld();
+    const selectedFeatures = collectWorldFeatures(
+      partMeta,
+      obj.matrixWorld,
+      obj.userData.instanceId,
+      getMeshMeasurements(obj, partMeta)
+    );
+    if (selectedFeatures.length === 0) return null;
+    const reachBox = worldPartBox(partMeta, obj.matrixWorld)?.expandByScalar(VEX_PITCH_MM);
+    const candidates = [];
+    for (const other of otherFeaturesRef.current) {
+      if (reachBox && other.box && !reachBox.intersectsBox(other.box)) continue;
+      for (const f of other.features) candidates.push(f);
+    }
+    const snap = findHoleSnap(selectedFeatures, candidates, directions);
+    if (!snap) return null;
+
+    const snapped = rawPos.clone().add(snap.offset);
+    // Dragged axes along the hole's line don't affect lining up: keep them on the drag grid
+    directions.forEach((dir, i) => {
+      if (Math.abs(dir.dot(snap.opening.axis)) > 0.999) {
+        const ax = letters[i].toLowerCase();
+        if (transform.space !== 'local') snapped[ax] = gridPos[ax];
+      }
+    });
+    return new THREE.Vector3(
+      Number(snapped.x.toFixed(3)),
+      Number(snapped.y.toFixed(3)),
+      Number(snapped.z.toFixed(3))
+    );
   };
 
   /**
@@ -1579,10 +1711,21 @@ export default function Viewport3D({
       // If stepping by >= 0.5P (6.35mm), check if there is an intermediate 0.25P (3.175mm) flush
       // stop right before a collision, or if the full step itself collides.
       group.position.copy(desiredVec);
-      const desiredColliding = checkGroupCollision(group, false);
+      let desiredColliding = checkGroupCollision(group, false);
+      let blockedVec = desiredVec;
+      let crossesLip = false;
+      // A whole step can carry a shaft's cap past a beam's lip: stop at the lip instead
+      if (!startColliding && !desiredColliding) {
+        const crossing = firstTooNarrowCrossing(group, startVec);
+        if (crossing) {
+          desiredColliding = true;
+          crossesLip = true;
+          blockedVec = crossing;
+        }
+      }
 
       if (!startColliding && desiredColliding) {
-        const flushVec = findFlushBoundaryPosition(group, startVec, desiredVec);
+        const flushVec = findFlushBoundaryPosition(group, startVec, blockedVec);
         if (flushVec && flushVec.distanceTo(startVec) > 0.12) {
           group.position.copy(savedPos);
           return {
@@ -1590,6 +1733,11 @@ export default function Viewport3D({
             isIntersecting: false,
             snappedFlush: true
           };
+        }
+        // Already resting on the lip: the cap can't go through, so the part stays put
+        if (crossesLip) {
+          group.position.copy(savedPos);
+          return { position: [startVec.x, startVec.y, startVec.z], isIntersecting: false, snappedFlush: true };
         }
       } else if (!startColliding && !desiredColliding && Math.abs(deltaMm) >= VEX_PITCH_MM * 0.49) {
         // Also check if startVec was off the 0.5P grid (e.g. at +3.175mm) and stepping by 6.35mm
@@ -1734,14 +1882,19 @@ export default function Viewport3D({
         const quarterStep = VEX_PITCH_MM * 0.25; // 3.175mm (0.25P flush wall boundary)
         const snappedPos = rawPos.clone();
 
+        // Steps are counted from where the drag started, so a part that starts lined up with holes
+        // (wherever they are, e.g. axles at wheel-radius height) moves in whole steps from there
+        const start = dragStartPosRef.current;
         if (step > 0) {
           for (const ax of ['x', 'y', 'z']) {
-            if (Math.abs(rawPos[ax] - dragStartPosRef.current[ax]) <= 0.005) {
-              snappedPos[ax] = dragStartPosRef.current[ax];
+            if (Math.abs(rawPos[ax] - start[ax]) <= 0.005) {
+              snappedPos[ax] = start[ax];
               continue;
             }
-            const gridVal = Number((Math.round(rawPos[ax] / step) * step).toFixed(3));
-            const qVal = Number((Math.round(rawPos[ax] / quarterStep) * quarterStep).toFixed(3));
+            const gridVal = Number((start[ax] + Math.round((rawPos[ax] - start[ax]) / step) * step).toFixed(3));
+            const qVal = Number(
+              (start[ax] + Math.round((rawPos[ax] - start[ax]) / quarterStep) * quarterStep).toFixed(3)
+            );
 
             // If cursor is closer to a 0.25P (3.175mm) coordinate than the coarse gridVal,
             // check if that 0.25P coordinate is a physical flush contact boundary!
@@ -1771,15 +1924,30 @@ export default function Viewport3D({
           }
         }
 
+        // Near a hole that a pin/shaft (or one of its own holes) can line up with: snap onto it
+        if (!altKeyRef.current) {
+          const holeSnapped = snapDragToHoles(obj, partMeta, rawPos, snappedPos);
+          if (holeSnapped) snappedPos.copy(holeSnapped);
+        }
+
         obj.position.copy(snappedPos);
         let isColliding = checkGroupCollision(obj, false);
+        let blockedAt = snappedPos;
+        // A whole grid step can carry a shaft's cap past a beam's lip; stop at the lip instead
+        if (!isColliding && hasClearDragPosRef.current) {
+          const crossing = firstTooNarrowCrossing(obj, lastClearDragPosRef.current);
+          if (crossing) {
+            isColliding = true;
+            blockedAt = crossing;
+          }
+        }
 
         // If the snapped step penetrated a solid surface (e.g. pushing a pin cap into a beam wall),
         // clamp to the exact physical flush contact boundary before allowing pass-through!
         if (isColliding && hasClearDragPosRef.current) {
           const penetrationDist = rawPos.distanceTo(lastClearDragPosRef.current);
           if (penetrationDist <= VEX_PITCH_MM * 1.35) {
-            const flushPos = findFlushBoundaryPosition(obj, lastClearDragPosRef.current, snappedPos);
+            const flushPos = findFlushBoundaryPosition(obj, lastClearDragPosRef.current, blockedAt);
             if (flushPos) {
               obj.position.copy(flushPos);
               isColliding = false;
@@ -2141,7 +2309,13 @@ export default function Viewport3D({
     };
 
     const handleContextMenu = (e) => e.preventDefault();
+    // Alt held while dragging turns hole snapping off (read before the gizmo moves the part)
+    const trackAltKey = (e) => {
+      altKeyRef.current = e.altKey;
+    };
 
+    renderer.domElement.addEventListener('pointerdown', trackAltKey, true);
+    renderer.domElement.addEventListener('pointermove', trackAltKey, true);
     renderer.domElement.addEventListener('pointerdown', handleRingPointerDown, true);
     renderer.domElement.addEventListener('pointerup', handleRingPointerUp, true);
     renderer.domElement.addEventListener('pointerdown', handlePointerDown);
@@ -2215,6 +2389,8 @@ export default function Viewport3D({
       renderer.domElement.removeEventListener('wheel', handleWheelCapture, { capture: true });
       container.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('keydown', handleKeyDownCapture, true);
+      renderer.domElement.removeEventListener('pointerdown', trackAltKey, true);
+      renderer.domElement.removeEventListener('pointermove', trackAltKey, true);
       cancelPendingSelect();
       clearTimeout(rotateGestureRef.current?.wheelTimer);
       rotateGestureRef.current = null;
@@ -2332,6 +2508,7 @@ export default function Viewport3D({
           .then(({ geometries, collisionGeometries, localBox }) => {
             if (!meshMapRef.current.has(inst.instanceId)) return;
             group.userData.collisionGeometries = collisionGeometries;
+            group.userData.renderGeometries = geometries;
             group.userData.localBox = localBox;
 
             const material = new THREE.MeshStandardMaterial({

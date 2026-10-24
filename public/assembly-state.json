@@ -337,7 +337,7 @@
       "position": [
         0,
         23.87,
-        75.7
+        75.2
       ],
       "rotation": [
         0,
@@ -351,7 +351,7 @@
       "lastValidPosition": [
         0,
         23.87,
-        75.7
+        75.2
       ],
       "lastValidRotation": [
         0,
@@ -366,7 +366,7 @@
       "position": [
         25.4,
         23.87,
-        75.7
+        75.2
       ],
       "rotation": [
         0,
@@ -380,7 +380,7 @@
       "lastValidPosition": [
         25.4,
         23.87,
-        75.7
+        75.2
       ],
       "lastValidRotation": [
         0,
@@ -395,7 +395,7 @@
       "position": [
         -25.4,
         23.87,
-        75.7
+        75.2
       ],
       "rotation": [
         0,
@@ -409,7 +409,7 @@
       "lastValidPosition": [
         -25.4,
         23.87,
-        75.7
+        75.2
       ],
       "lastValidRotation": [
         0,
@@ -888,7 +888,7 @@
       "position": [
         -63.5,
         23.87,
-        78.88
+        78.38
       ],
       "rotation": [
         0,
@@ -902,7 +902,7 @@
       "lastValidPosition": [
         -63.5,
         23.87,
-        78.88
+        78.38
       ],
       "lastValidRotation": [
         0,
@@ -1408,9 +1408,9 @@
       "partId": "2x-pitch-capped-shaft-228-2500-2219-84",
       "label": "Right Front Idler Shaft",
       "position": [
-        25.4,
-        23.87,
-        -76.2
+        -69.85,
+        55.62,
+        32.693
       ],
       "rotation": [
         -180,
@@ -1422,9 +1422,9 @@
       "locked": false,
       "isIntersecting": false,
       "lastValidPosition": [
-        25.4,
-        23.87,
-        -76.2
+        -69.85,
+        55.62,
+        32.693
       ],
       "lastValidRotation": [
         -180,
@@ -2243,9 +2243,38 @@
         0,
         0
       ]
+    },
+    {
+      "instanceId": "inst-1792858110368-hknp",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Left Front Axle End Collar (Copy)",
+      "position": [
+        91.159,
+        63.715,
+        41.36
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        91.159,
+        63.715,
+        41.36
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
     }
   ],
-  "updatedAt": "2026-10-24T14:28:13.714Z",
+  "updatedAt": "2026-10-24T16:21:12.934Z",
   "history": {
     "version": 1,
     "base": [],
@@ -5439,9 +5468,1555 @@
             }
           }
         ]
+      },
+      {
+        "id": "step-mvmipwok-8c7fwq",
+        "parentId": "step-mvmhoe1r-zqdn75",
+        "at": 1792853560244,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                25.4,
+                23.87,
+                -76.2
+              ]
+            },
+            "after": {
+              "position": [
+                25.4,
+                23.87,
+                -114.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmjrwoc-bhxora",
+        "parentId": "step-mvmipwok-8c7fwq",
+        "at": 1792855333164,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                25.4,
+                23.87,
+                -114.3
+              ]
+            },
+            "after": {
+              "position": [
+                25.4,
+                23.87,
+                -133.35
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmjs1f6-opdsz8",
+        "parentId": "step-mvmjrwoc-bhxora",
+        "at": 1792855339314,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                25.4,
+                23.87,
+                -133.35
+              ]
+            },
+            "after": {
+              "position": [
+                0,
+                36.57,
+                -133.35
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmjs35j-c25tsl",
+        "parentId": "step-mvmjs1f6-opdsz8",
+        "at": 1792855341559,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                0,
+                36.57,
+                -133.35
+              ]
+            },
+            "after": {
+              "position": [
+                0,
+                36.57,
+                -98.856
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmjsmqq-vjwdsl",
+        "parentId": "step-mvmjs35j-c25tsl",
+        "at": 1792855366946,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                0,
+                36.57,
+                -98.856
+              ]
+            },
+            "after": {
+              "position": [
+                6.35,
+                49.27,
+                -98.856
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmjst00-qdqhxw",
+        "parentId": "step-mvmjsmqq-vjwdsl",
+        "at": 1792855375056,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                6.35,
+                49.27,
+                -98.856
+              ]
+            },
+            "after": {
+              "position": [
+                -6.35,
+                55.62,
+                -98.856
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmjsx93-cfn1py",
+        "parentId": "step-mvmjst00-qdqhxw",
+        "at": 1792855380567,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                -6.35,
+                55.62,
+                -98.856
+              ]
+            },
+            "after": {
+              "position": [
+                -6.35,
+                55.62,
+                -53.608
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmju4cm-c6xqpw",
+        "parentId": "step-mvmhoe1r-zqdn75",
+        "at": 1792855436422,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                25.4,
+                23.87,
+                -76.2
+              ]
+            },
+            "after": {
+              "position": [
+                -12.7,
+                49.27,
+                -76.2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmju6h6-em4ii2",
+        "parentId": "step-mvmju4cm-c6xqpw",
+        "at": 1792855439178,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                -12.7,
+                49.27,
+                -76.2
+              ]
+            },
+            "after": {
+              "position": [
+                -12.7,
+                49.27,
+                -61.154
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmjuhya-n5q1pp",
+        "parentId": "step-mvmju6h6-em4ii2",
+        "at": 1792855454050,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                -12.7,
+                49.27,
+                -61.154
+              ]
+            },
+            "after": {
+              "position": [
+                -12.7,
+                49.27,
+                -105.604
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmjungw-nl2d4g",
+        "parentId": "step-mvmjuhya-n5q1pp",
+        "at": 1792855461200,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                -12.7,
+                49.27,
+                -105.604
+              ]
+            },
+            "after": {
+              "position": [
+                -63.5,
+                55.62,
+                -105.604
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmjupaf-cozlie",
+        "parentId": "step-mvmjungw-nl2d4g",
+        "at": 1792855463559,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                -63.5,
+                55.62,
+                -105.604
+              ]
+            },
+            "after": {
+              "position": [
+                -69.85,
+                55.62,
+                -105.604
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmjuudb-ps2r73",
+        "parentId": "step-mvmjupaf-cozlie",
+        "at": 1792855470143,
+        "source": "app",
+        "label": "Move Right Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121652-mc-ynnr",
+            "name": "Right Front Idler Shaft",
+            "before": {
+              "position": [
+                -69.85,
+                55.62,
+                -105.604
+              ]
+            },
+            "after": {
+              "position": [
+                -69.85,
+                55.62,
+                32.693
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlddrz-fch9da",
+        "parentId": "step-mvmjuudb-ps2r73",
+        "at": 1792858014719,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -25.4,
+                23.87,
+                75.7
+              ]
+            },
+            "after": {
+              "position": [
+                -25.4,
+                23.87,
+                120.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmldizx-vhwun4",
+        "parentId": "step-mvmlddrz-fch9da",
+        "at": 1792858021485,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -25.4,
+                23.87,
+                120.15
+              ]
+            },
+            "after": {
+              "position": [
+                82.55,
+                55.62,
+                120.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmldmf0-nym6dw",
+        "parentId": "step-mvmldizx-vhwun4",
+        "at": 1792858025916,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                82.55,
+                55.62,
+                120.15
+              ]
+            },
+            "after": {
+              "position": [
+                82.55,
+                55.62,
+                56.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmldyfu-8x0jcy",
+        "parentId": "step-mvmldmf0-nym6dw",
+        "at": 1792858041498,
+        "source": "app",
+        "label": "Move Left Motor Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-b-c72d",
+            "name": "Left Motor Shaft",
+            "before": {
+              "position": [
+                0,
+                23.87,
+                75.7
+              ]
+            },
+            "after": {
+              "position": [
+                0,
+                23.87,
+                75.2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmle5fj-580104",
+        "parentId": "step-mvmldyfu-8x0jcy",
+        "at": 1792858050559,
+        "source": "app",
+        "label": "Move Left Front Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-c-lfey",
+            "name": "Left Front Idler Shaft",
+            "before": {
+              "position": [
+                25.4,
+                23.87,
+                75.7
+              ]
+            },
+            "after": {
+              "position": [
+                25.4,
+                23.87,
+                75.2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlekdl-qpzpdh",
+        "parentId": "step-mvmle5fj-580104",
+        "at": 1792858069929,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                82.55,
+                55.62,
+                56.15
+              ]
+            },
+            "after": {
+              "position": [
+                95.25,
+                42.92,
+                56.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlev4s-ls6pp4",
+        "parentId": "step-mvmlekdl-qpzpdh",
+        "at": 1792858083868,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                95.25,
+                42.92,
+                56.15
+              ]
+            },
+            "after": {
+              "position": [
+                95.25,
+                61.97,
+                56.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlex9v-si5iv7",
+        "parentId": "step-mvmlev4s-ls6pp4",
+        "at": 1792858086643,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                95.25,
+                61.97,
+                56.15
+              ]
+            },
+            "after": {
+              "position": [
+                95.25,
+                55.62,
+                56.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlffkw-dw8eto",
+        "parentId": "step-mvmlex9v-si5iv7",
+        "at": 1792858110368,
+        "source": "app",
+        "label": "Duplicate Left Front Axle End Collar",
+        "ops": [
+          {
+            "op": "add",
+            "index": 77,
+            "part": {
+              "instanceId": "inst-1792858110368-hknp",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Left Front Axle End Collar (Copy)",
+              "position": [
+                72.11,
+                31.97,
+                41.36
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": null,
+              "lastValidRotation": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlfiwi-kf7dqa",
+        "parentId": "step-mvmlffkw-dw8eto",
+        "at": 1792858114674,
+        "source": "app",
+        "label": "Move Left Front Axle End Collar (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792858110368-hknp",
+            "name": "Left Front Axle End Collar (Copy)",
+            "before": {
+              "position": [
+                72.11,
+                31.97,
+                41.36
+              ]
+            },
+            "after": {
+              "position": [
+                122.91,
+                31.97,
+                41.36
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlfmuh-vffhmq",
+        "parentId": "step-mvmlfiwi-kf7dqa",
+        "at": 1792858119785,
+        "source": "app",
+        "label": "Move Left Front Axle End Collar (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792858110368-hknp",
+            "name": "Left Front Axle End Collar (Copy)",
+            "before": {
+              "position": [
+                122.91,
+                31.97,
+                41.36
+              ]
+            },
+            "after": {
+              "position": [
+                122.91,
+                31.97,
+                22.31
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlfszj-kb99nu",
+        "parentId": "step-mvmlfmuh-vffhmq",
+        "at": 1792858127743,
+        "source": "app",
+        "label": "Move Left Front Axle End Collar (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792858110368-hknp",
+            "name": "Left Front Axle End Collar (Copy)",
+            "before": {
+              "position": [
+                122.91,
+                31.97,
+                22.31
+              ]
+            },
+            "after": {
+              "position": [
+                75.285,
+                51.02,
+                22.31
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlfzf1-n9xjim",
+        "parentId": "step-mvmlfszj-kb99nu",
+        "at": 1792858136077,
+        "source": "app",
+        "label": "Move Left Front Axle End Collar (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792858110368-hknp",
+            "name": "Left Front Axle End Collar (Copy)",
+            "before": {
+              "position": [
+                75.285,
+                51.02,
+                22.31
+              ]
+            },
+            "after": {
+              "position": [
+                91.159,
+                63.715,
+                22.31
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlg0w1-b7i8d9",
+        "parentId": "step-mvmlfzf1-n9xjim",
+        "at": 1792858137985,
+        "source": "app",
+        "label": "Move Left Front Axle End Collar (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792858110368-hknp",
+            "name": "Left Front Axle End Collar (Copy)",
+            "before": {
+              "position": [
+                91.159,
+                63.715,
+                22.31
+              ]
+            },
+            "after": {
+              "position": [
+                91.159,
+                63.715,
+                41.36
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlhay8-vexel3",
+        "parentId": "step-mvmlg0w1-b7i8d9",
+        "at": 1792858197680,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                95.25,
+                55.62,
+                56.15
+              ]
+            },
+            "after": {
+              "position": [
+                -6.35,
+                11.17,
+                56.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlhcuj-owxpj4",
+        "parentId": "step-mvmlhay8-vexel3",
+        "at": 1792858200139,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -6.35,
+                11.17,
+                56.15
+              ]
+            },
+            "after": {
+              "position": [
+                -6.35,
+                11.17,
+                94.25
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlhh4k-0g1u9x",
+        "parentId": "step-mvmlhcuj-owxpj4",
+        "at": 1792858205684,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -6.35,
+                11.17,
+                94.25
+              ]
+            },
+            "after": {
+              "position": [
+                -31.172,
+                16.991,
+                94.25
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlhpls-tffwix",
+        "parentId": "step-mvmlhh4k-0g1u9x",
+        "at": 1792858216672,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -31.172,
+                16.991,
+                94.25
+              ]
+            },
+            "after": {
+              "position": [
+                -31.172,
+                16.991,
+                113.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlhtgg-kcqprq",
+        "parentId": "step-mvmlhpls-tffwix",
+        "at": 1792858221664,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -31.172,
+                16.991,
+                113.3
+              ]
+            },
+            "after": {
+              "position": [
+                -24.822,
+                29.691,
+                113.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlhzst-5hvsru",
+        "parentId": "step-mvmlhtgg-kcqprq",
+        "at": 1792858229885,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -24.822,
+                29.691,
+                113.3
+              ]
+            },
+            "after": {
+              "position": [
+                -12.122,
+                29.691,
+                113.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmli6x2-gjzlpw",
+        "parentId": "step-mvmlhzst-5hvsru",
+        "at": 1792858239110,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -12.122,
+                29.691,
+                113.3
+              ]
+            },
+            "after": {
+              "position": [
+                0.578,
+                42.391,
+                113.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlic0l-ajkhq5",
+        "parentId": "step-mvmli6x2-gjzlpw",
+        "at": 1792858245717,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                0.578,
+                42.391,
+                113.3
+              ]
+            },
+            "after": {
+              "position": [
+                -24.822,
+                23.341,
+                113.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmliqaz-e03csw",
+        "parentId": "step-mvmlic0l-ajkhq5",
+        "at": 1792858264235,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -24.822,
+                23.341,
+                113.3
+              ]
+            },
+            "after": {
+              "position": [
+                -24.822,
+                23.341,
+                75.2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlique-q0wies",
+        "parentId": "step-mvmliqaz-e03csw",
+        "at": 1792858264934,
+        "source": "app",
+        "label": "Move back Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -24.822,
+                23.341,
+                75.2
+              ]
+            },
+            "after": {
+              "position": [
+                -24.822,
+                23.341,
+                113.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlj0b5-heu9gk",
+        "parentId": "step-mvmlique-q0wies",
+        "at": 1792858277201,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -24.822,
+                23.341,
+                113.3
+              ]
+            },
+            "after": {
+              "position": [
+                76.778,
+                48.741,
+                113.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlj77b-gip7zy",
+        "parentId": "step-mvmlj0b5-heu9gk",
+        "at": 1792858286135,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                76.778,
+                48.741,
+                113.3
+              ]
+            },
+            "after": {
+              "position": [
+                -18.472,
+                16.991,
+                113.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmljbbf-3xufmz",
+        "parentId": "step-mvmlj77b-gip7zy",
+        "at": 1792858291467,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -18.472,
+                16.991,
+                113.3
+              ]
+            },
+            "after": {
+              "position": [
+                -24.822,
+                23.341,
+                113.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlrxe5-vqj46l",
+        "parentId": "step-mvmljbbf-3xufmz",
+        "at": 1792858693325,
+        "source": "app",
+        "label": "Move Left Rear Idler 36T",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-i-gcjm",
+            "name": "Left Rear Idler 36T",
+            "before": {
+              "position": [
+                -25.4,
+                23.87,
+                66.425
+              ]
+            },
+            "after": {
+              "position": [
+                -24.871,
+                11.748,
+                66.425
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmls1bc-qvyn7u",
+        "parentId": "step-mvmljbbf-3xufmz",
+        "at": 1792858698408,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -24.822,
+                23.341,
+                113.3
+              ]
+            },
+            "after": {
+              "position": [
+                -25.4,
+                23.87,
+                113.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmls3xm-wo9sik",
+        "parentId": "step-mvmls1bc-qvyn7u",
+        "at": 1792858701802,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -25.4,
+                23.87,
+                113.3
+              ]
+            },
+            "after": {
+              "position": [
+                -25.4,
+                23.87,
+                75.3
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlsc7f-n0udf3",
+        "parentId": "step-mvmls3xm-wo9sik",
+        "at": 1792858712523,
+        "source": "app",
+        "label": "Move Left Rear Hub",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-u-qk2q",
+            "name": "Left Rear Hub",
+            "before": {
+              "position": [
+                -63.5,
+                23.87,
+                78.88
+              ]
+            },
+            "after": {
+              "position": [
+                -63.5,
+                23.87,
+                78.38
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlupbu-yjirdi",
+        "parentId": "step-mvmlsc7f-n0udf3",
+        "at": 1792858822842,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -25.4,
+                23.87,
+                75.3
+              ]
+            },
+            "after": {
+              "position": [
+                -25.4,
+                23.87,
+                113.4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlut99-kga16n",
+        "parentId": "step-mvmlupbu-yjirdi",
+        "at": 1792858827933,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -25.4,
+                23.87,
+                113.4
+              ]
+            },
+            "after": {
+              "position": [
+                95.25,
+                55.62,
+                113.4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmluwo0-tmvq99",
+        "parentId": "step-mvmlut99-kga16n",
+        "at": 1792858832352,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                95.25,
+                55.62,
+                113.4
+              ]
+            },
+            "after": {
+              "position": [
+                95.25,
+                55.62,
+                56.4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlv2aq-el2k10",
+        "parentId": "step-mvmluwo0-tmvq99",
+        "at": 1792858839650,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                95.25,
+                55.62,
+                56.4
+              ]
+            },
+            "after": {
+              "position": [
+                120.65,
+                -39.63,
+                69.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlv4yt-abyqcr",
+        "parentId": "step-mvmlv2aq-el2k10",
+        "at": 1792858843109,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                120.65,
+                -39.63,
+                69.1
+              ]
+            },
+            "after": {
+              "position": [
+                -38.1,
+                -14.23,
+                69.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlvcah-rkx4g3",
+        "parentId": "step-mvmlv4yt-abyqcr",
+        "at": 1792858852601,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -38.1,
+                -14.23,
+                69.1
+              ]
+            },
+            "after": {
+              "position": [
+                -31.75,
+                -14.23,
+                69.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlvhte-p5ivh3",
+        "parentId": "step-mvmlvcah-rkx4g3",
+        "at": 1792858859762,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -31.75,
+                -14.23,
+                69.1
+              ]
+            },
+            "after": {
+              "position": [
+                -25.4,
+                23.87,
+                69.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlvlb1-owzo0p",
+        "parentId": "step-mvmlvhte-p5ivh3",
+        "at": 1792858864285,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -25.4,
+                23.87,
+                69.1
+              ]
+            },
+            "after": {
+              "position": [
+                -31.75,
+                3.415,
+                69.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlvmhe-7gs809",
+        "parentId": "step-mvmlvlb1-owzo0p",
+        "at": 1792858865810,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -31.75,
+                3.415,
+                69.1
+              ]
+            },
+            "after": {
+              "position": [
+                -31.75,
+                3.415,
+                107.2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlvp28-ulyrcf",
+        "parentId": "step-mvmlvmhe-7gs809",
+        "at": 1792858869152,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -31.75,
+                3.415,
+                107.2
+              ]
+            },
+            "after": {
+              "position": [
+                -25.4,
+                23.87,
+                107.2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmlvqqr-t4tgz3",
+        "parentId": "step-mvmlvp28-ulyrcf",
+        "at": 1792858871331,
+        "source": "app",
+        "label": "Move Left Rear Idler Shaft",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792820121651-d-gsgh",
+            "name": "Left Rear Idler Shaft",
+            "before": {
+              "position": [
+                -25.4,
+                23.87,
+                107.2
+              ]
+            },
+            "after": {
+              "position": [
+                -25.4,
+                23.87,
+                75.2
+              ]
+            }
+          }
+        ]
       }
     ],
-    "headId": "step-mvmhoe1r-zqdn75",
+    "headId": "step-mvmlvqqr-t4tgz3",
     "activeChild": {
       "root": "step-mvm1cbpd-8kprhe",
       "step-mvm1cbpd-8kprhe": "step-mvmho6hy-13n0rx",
@@ -5464,9 +7039,62 @@
       "step-mvmhm3o0-tc10ng": "step-mvmhmdo7-whvdkx",
       "step-mvmhmdo7-whvdkx": "step-mvmhmhmb-jcqoit",
       "step-mvmhmhmb-jcqoit": "step-mvmhmy05-sebdp6",
-      "step-mvmho6hy-13n0rx": "step-mvmhoe1r-zqdn75"
+      "step-mvmho6hy-13n0rx": "step-mvmhoe1r-zqdn75",
+      "step-mvmhoe1r-zqdn75": "step-mvmju4cm-c6xqpw",
+      "step-mvmipwok-8c7fwq": "step-mvmjrwoc-bhxora",
+      "step-mvmjrwoc-bhxora": "step-mvmjs1f6-opdsz8",
+      "step-mvmjs1f6-opdsz8": "step-mvmjs35j-c25tsl",
+      "step-mvmjs35j-c25tsl": "step-mvmjsmqq-vjwdsl",
+      "step-mvmjsmqq-vjwdsl": "step-mvmjst00-qdqhxw",
+      "step-mvmjst00-qdqhxw": "step-mvmjsx93-cfn1py",
+      "step-mvmju4cm-c6xqpw": "step-mvmju6h6-em4ii2",
+      "step-mvmju6h6-em4ii2": "step-mvmjuhya-n5q1pp",
+      "step-mvmjuhya-n5q1pp": "step-mvmjungw-nl2d4g",
+      "step-mvmjungw-nl2d4g": "step-mvmjupaf-cozlie",
+      "step-mvmjupaf-cozlie": "step-mvmjuudb-ps2r73",
+      "step-mvmjuudb-ps2r73": "step-mvmlddrz-fch9da",
+      "step-mvmlddrz-fch9da": "step-mvmldizx-vhwun4",
+      "step-mvmldizx-vhwun4": "step-mvmldmf0-nym6dw",
+      "step-mvmldmf0-nym6dw": "step-mvmldyfu-8x0jcy",
+      "step-mvmldyfu-8x0jcy": "step-mvmle5fj-580104",
+      "step-mvmle5fj-580104": "step-mvmlekdl-qpzpdh",
+      "step-mvmlekdl-qpzpdh": "step-mvmlev4s-ls6pp4",
+      "step-mvmlev4s-ls6pp4": "step-mvmlex9v-si5iv7",
+      "step-mvmlex9v-si5iv7": "step-mvmlffkw-dw8eto",
+      "step-mvmlffkw-dw8eto": "step-mvmlfiwi-kf7dqa",
+      "step-mvmlfiwi-kf7dqa": "step-mvmlfmuh-vffhmq",
+      "step-mvmlfmuh-vffhmq": "step-mvmlfszj-kb99nu",
+      "step-mvmlfszj-kb99nu": "step-mvmlfzf1-n9xjim",
+      "step-mvmlfzf1-n9xjim": "step-mvmlg0w1-b7i8d9",
+      "step-mvmlg0w1-b7i8d9": "step-mvmlhay8-vexel3",
+      "step-mvmlhay8-vexel3": "step-mvmlhcuj-owxpj4",
+      "step-mvmlhcuj-owxpj4": "step-mvmlhh4k-0g1u9x",
+      "step-mvmlhh4k-0g1u9x": "step-mvmlhpls-tffwix",
+      "step-mvmlhpls-tffwix": "step-mvmlhtgg-kcqprq",
+      "step-mvmlhtgg-kcqprq": "step-mvmlhzst-5hvsru",
+      "step-mvmlhzst-5hvsru": "step-mvmli6x2-gjzlpw",
+      "step-mvmli6x2-gjzlpw": "step-mvmlic0l-ajkhq5",
+      "step-mvmlic0l-ajkhq5": "step-mvmliqaz-e03csw",
+      "step-mvmliqaz-e03csw": "step-mvmlique-q0wies",
+      "step-mvmlique-q0wies": "step-mvmlj0b5-heu9gk",
+      "step-mvmlj0b5-heu9gk": "step-mvmlj77b-gip7zy",
+      "step-mvmlj77b-gip7zy": "step-mvmljbbf-3xufmz",
+      "step-mvmljbbf-3xufmz": "step-mvmls1bc-qvyn7u",
+      "step-mvmls1bc-qvyn7u": "step-mvmls3xm-wo9sik",
+      "step-mvmls3xm-wo9sik": "step-mvmlsc7f-n0udf3",
+      "step-mvmlsc7f-n0udf3": "step-mvmlupbu-yjirdi",
+      "step-mvmlupbu-yjirdi": "step-mvmlut99-kga16n",
+      "step-mvmlut99-kga16n": "step-mvmluwo0-tmvq99",
+      "step-mvmluwo0-tmvq99": "step-mvmlv2aq-el2k10",
+      "step-mvmlv2aq-el2k10": "step-mvmlv4yt-abyqcr",
+      "step-mvmlv4yt-abyqcr": "step-mvmlvcah-rkx4g3",
+      "step-mvmlvcah-rkx4g3": "step-mvmlvhte-p5ivh3",
+      "step-mvmlvhte-p5ivh3": "step-mvmlvlb1-owzo0p",
+      "step-mvmlvlb1-owzo0p": "step-mvmlvmhe-7gs809",
+      "step-mvmlvmhe-7gs809": "step-mvmlvp28-ulyrcf",
+      "step-mvmlvp28-ulyrcf": "step-mvmlvqqr-t4tgz3"
     },
-    "rev": 54
+    "rev": 119
   },
-  "historyRev": 54
+  "historyRev": 119
 }

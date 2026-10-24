@@ -304,6 +304,124 @@ function openingSpans(lo, hi, through, depth) {
   return spans;
 }
 
+// --- Parts too wide to go through a hole ------------------------------------------------------------
+// Collision meshes are shrunk 0.38 mm per part so pins and shafts can sit in their holes, which hides
+// overlaps smaller than ~0.76 mm. A capped shaft's cap (radius ~2.37 mm) is only ~0.28 mm wider than
+// a beam hole (~2.08 mm), so it slid straight through. These measurements catch that case exactly.
+export const PASS_PROBE_RAYS = 24;
+export const PASS_TOLERANCE_MM = 0.05; // a section must be this much wider than the hole to block it
+export const PASS_MAX_LATERAL_MM = 1.0; // further off the hole's line, the collision meshes catch it
+const PASS_SECTIONS = 5; // depths probed inside each opening
+const PROFILE_STEP_MM = 0.2; // spacing of the shaft width samples
+const PROFILE_PROBE_START_MM = 6; // inward rays start this far from the shaft's axis
+
+const crossAxes = (axis) => {
+  const u = new THREE.Vector3()
+    .crossVectors(axis, Math.abs(axis.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0))
+    .normalize();
+  return [u, new THREE.Vector3().crossVectors(axis, u)];
+};
+
+/**
+ * How wide a part may be to pass through each opening: at several depths, rays go out from the
+ * opening's axis to its wall in PASS_PROBE_RAYS directions; a section passes up to its widest
+ * reach (a square bore passes up to its corners), and the opening passes what its narrowest
+ * section does. `raycast(originArr, dirArr)` returns the distance to the visible surface, or null.
+ * Rubber shaft collars are left out: they are made to grip a shaft tighter than its width.
+ * Returns Map(featureId -> pass radius in mm).
+ */
+export function measureOpeningPassRadii(partMeta, raycast) {
+  const radii = new Map();
+  if (COLLAR_NAME_PATTERN.test(partMeta?.name || '')) return radii;
+  for (const f of getLocalFeatures(partMeta)) {
+    if (OPENINGS_BY_INSERT[f.kind] || f.kind === 'collar_hole') continue;
+    const axis = new THREE.Vector3(...f.axis);
+    const [u, v] = crossAxes(axis);
+    const t0 = dot3(f.origin, f.axis);
+    const inset = Math.min(0.3, (f.tMax - f.tMin) / 4);
+    let pass = Infinity;
+    for (let i = 0; i < PASS_SECTIONS; i++) {
+      const t = f.tMin + inset + ((f.tMax - f.tMin - 2 * inset) * i) / (PASS_SECTIONS - 1);
+      const center = new THREE.Vector3(...f.origin).addScaledVector(axis, t - t0);
+      let widest = 0;
+      for (let k = 0; k < PASS_PROBE_RAYS; k++) {
+        const ang = (k / PASS_PROBE_RAYS) * Math.PI * 2;
+        const dir = u.clone().multiplyScalar(Math.cos(ang)).addScaledVector(v, Math.sin(ang));
+        const d = raycast(center.toArray(), dir.toArray());
+        widest = Math.max(widest, d == null ? Infinity : d);
+      }
+      if (widest > 0 && Number.isFinite(widest)) pass = Math.min(pass, widest);
+    }
+    if (Number.isFinite(pass)) radii.set(f.featureId, pass);
+  }
+  return radii;
+}
+
+/**
+ * Width along each shaft of a shaft part (straight or capped), every PROFILE_STEP_MM: rays come in
+ * toward the axis from PASS_PROBE_RAYS directions, and a section counts its narrowest reach (a
+ * square shaft counts its flats). `raycast` as for measureOpeningPassRadii.
+ * Returns Map(featureId -> [{ t, r }]) with t measured from the feature origin along its axis.
+ */
+export function measureShaftProfiles(partMeta, raycast) {
+  const profiles = new Map();
+  if (!SHAFT_FASTENER_TYPES.has(partMeta?.fastenerSpecs?.fastenerType)) return profiles;
+  if (COLLAR_NAME_PATTERN.test(partMeta?.name || '')) return profiles;
+  for (const f of getLocalFeatures(partMeta)) {
+    if (f.kind !== 'shaft' || !Number.isFinite(f.tMin) || !Number.isFinite(f.tMax)) continue;
+    const axis = new THREE.Vector3(...f.axis);
+    const [u, v] = crossAxes(axis);
+    const t0 = dot3(f.origin, f.axis);
+    const samples = [];
+    for (let t = f.tMin; t <= f.tMax + 1e-6; t += PROFILE_STEP_MM) {
+      const center = new THREE.Vector3(...f.origin).addScaledVector(axis, t - t0);
+      // A shaft is solid: a ray that misses slipped through a mesh seam and is skipped
+      let narrowest = Infinity;
+      for (let k = 0; k < PASS_PROBE_RAYS; k++) {
+        const ang = (k / PASS_PROBE_RAYS) * Math.PI * 2;
+        const dir = u.clone().multiplyScalar(Math.cos(ang)).addScaledVector(v, Math.sin(ang));
+        const start = center.clone().addScaledVector(dir, PROFILE_PROBE_START_MM);
+        const d = raycast(start.toArray(), dir.clone().negate().toArray());
+        if (d != null) narrowest = Math.min(narrowest, Math.max(0, PROFILE_PROBE_START_MM - d));
+      }
+      const r = Number.isFinite(narrowest) ? narrowest : 0;
+      samples.push({ t: Number((t - t0).toFixed(3)), r: Number(r.toFixed(3)) });
+    }
+    profiles.set(f.featureId, samples);
+  }
+  return profiles;
+}
+
+/**
+ * Shafts that sit (almost) on an opening's line with a section inside it that is too wide to pass:
+ * e.g. a capped shaft pushed so far that its cap is in the hole. Lines must be parallel within 2°
+ * and at most PASS_MAX_LATERAL_MM apart (further off, the collision meshes catch it). Needs features
+ * from collectWorldFeatures with measured `profiles` and `passRadii`. Returns [{ insert, opening,
+ * widthMm, passMm }].
+ */
+export function findTooWideInserts(featuresA, featuresB) {
+  const hits = [];
+  for (const a of featuresA) {
+    for (const b of featuresB) {
+      if (a.instanceId === b.instanceId) continue;
+      const roles = pairRoles(a, b);
+      if (!roles?.insert.profile || !Number.isFinite(roles.opening.passRadius)) continue;
+      const { insert, opening } = roles;
+      if (Math.abs(insert.axis.dot(opening.axis)) < PARALLEL_MIN_DOT) continue;
+      _v.subVectors(opening.origin, insert.origin);
+      const along = _v.dot(insert.axis);
+      const lateral = Math.sqrt(Math.max(0, _v.lengthSq() - along * along));
+      if (lateral > PASS_MAX_LATERAL_MM) continue;
+      const [oMin, oMax] = projectRange(opening.start, opening.end, insert.origin, insert.axis);
+      const blocked = insert.profile.find(
+        (s) => s.t > oMin + 0.1 && s.t < oMax - 0.1 && s.r + lateral > opening.passRadius + PASS_TOLERANCE_MM
+      );
+      if (blocked) hits.push({ insert, opening, widthMm: blocked.r, passMm: opening.passRadius });
+    }
+  }
+  return hits;
+}
+
 export const PIN_END_PROBE_RAYS = 8;
 export const PIN_END_PROBE_START_RADIUS_MM = 4.5; // radial rays start this far from the pin axis
 export const PIN_END_PROBE_INSET_MM = 1.5; // radial probe sits this far in from the pin end
@@ -401,6 +519,8 @@ export function collectWorldFeatures(partMeta, matrixWorld, instanceId, measured
   const pinEnds = measured?.pinEnds;
   const result = [];
   const depths = measured?.depths;
+  const profiles = measured?.profiles;
+  const passRadii = measured?.passRadii;
   for (const f of getLocalFeatures(partMeta)) {
     const t0 = dot3(f.origin, f.axis);
     const measuredFaces = surfaces?.get(f.featureId);
@@ -425,6 +545,8 @@ export function collectWorldFeatures(partMeta, matrixWorld, instanceId, measured
         end,
         radiusMm: f.radiusMm,
         through: isOpening ? span.through : f.through,
+        ...(profiles?.has(f.featureId) ? { profile: profiles.get(f.featureId) } : {}),
+        ...(passRadii?.has(f.featureId) ? { passRadius: passRadii.get(f.featureId) } : {}),
         ...(f.kind === 'pin'
           ? { freeAtStart: pinEnds?.get(f.featureId)?.lo ?? true, freeAtEnd: pinEnds?.get(f.featureId)?.hi ?? true }
           : {})
@@ -594,6 +716,98 @@ export function findSeatedPairs(featuresA, featuresB) {
     }
   }
   return pairs;
+}
+
+// Hole snapping while dragging: the farthest a part is pulled onto a hole's line, how far apart
+// along that line a pin/shaft and opening may be for the pull to apply, and how big a sideways miss
+// the pull also settles on axes that aren't being dragged (a part that drifted slightly off a hole
+// pattern, e.g. after snapping into a gear's turned pin hole, otherwise never lines up again).
+export const HOLE_SNAP_RADIUS_MM = 3.5;
+export const HOLE_SNAP_AXIAL_REACH_MM = 2 * VEX_PITCH_MM;
+export const HOLE_SNAP_SETTLE_MM = 1.0;
+
+/**
+ * The move, using only `directions` (unit world vectors being dragged along), that best puts the
+ * line of `axis` through `fromPoint` onto the parallel line through `toPoint`. Null when the drag
+ * directions can't line them up to within HOLE_SNAP_SETTLE_MM; a smaller leftover miss is closed
+ * by also moving straight across the line.
+ */
+function moveOntoLine(fromPoint, toPoint, axis, directions) {
+  const offset = new THREE.Vector3().subVectors(toPoint, fromPoint);
+  offset.addScaledVector(axis, -offset.dot(axis)); // perpendicular part: what has to be closed
+  // Each drag direction's effect on that gap (its part across the line); along the line does nothing
+  const usable = directions
+    .map((dir) => ({ dir, across: dir.clone().addScaledVector(axis, -dir.dot(axis)) }))
+    .filter((d) => d.across.lengthSq() > 1e-4);
+
+  let move;
+  if (usable.length === 0) {
+    move = new THREE.Vector3(); // dragging along the line: only a small sideways settle can apply
+  } else if (usable.length >= 3) {
+    move = offset.clone(); // free drag: move straight across
+  } else if (usable.length === 2) {
+    const [a, b] = usable;
+    const aa = a.across.dot(a.across);
+    const ab = a.across.dot(b.across);
+    const bb = b.across.dot(b.across);
+    const det = aa * bb - ab * ab;
+    if (Math.abs(det) > 1e-6) {
+      const ra = a.across.dot(offset);
+      const rb = b.across.dot(offset);
+      const ca = (ra * bb - rb * ab) / det;
+      const cb = (rb * aa - ra * ab) / det;
+      move = a.dir.clone().multiplyScalar(ca).addScaledVector(b.dir, cb);
+    } else {
+      usable.splice(aa >= bb ? 1 : 0, 1);
+    }
+  }
+  if (!move) {
+    const [{ dir, across }] = usable;
+    move = dir.clone().multiplyScalar(across.dot(offset) / across.dot(across));
+  }
+
+  // Whatever the drag directions can't close, up to HOLE_SNAP_SETTLE_MM, is closed straight across
+  const reached = move.clone().addScaledVector(axis, -move.dot(axis));
+  const miss = offset.clone().sub(reached);
+  if (miss.length() > HOLE_SNAP_SETTLE_MM) return null;
+  return move.add(miss);
+}
+
+/**
+ * Hole snapping while dragging: the smallest move of the selected part, along the dragged
+ * `directions` (plus up to HOLE_SNAP_SETTLE_MM straight across), that puts one of its
+ * pins/shafts/openings on the axis line of a matching
+ * opening/pin/shaft of another part (same pairing rules as the hole highlights, axes parallel within
+ * 2°). The move must be at most `radiusMm`, and the two must be within `axialReachMm` of each other
+ * along the line, or overlapping. Works at any part angle, since it uses the real hole lines.
+ * Returns { offset: Vector3 (world mm), insert, opening } or null.
+ */
+export function findHoleSnap(
+  selectedFeatures,
+  otherFeatures,
+  directions,
+  { radiusMm = HOLE_SNAP_RADIUS_MM, axialReachMm = HOLE_SNAP_AXIAL_REACH_MM } = {}
+) {
+  let best = null;
+  for (const s of selectedFeatures) {
+    for (const o of otherFeatures) {
+      if (s.instanceId === o.instanceId) continue;
+      const roles = pairRoles(s, o);
+      if (!roles) continue;
+      if (Math.abs(s.axis.dot(o.axis)) < PARALLEL_MIN_DOT) continue;
+      const axis = o.axis;
+      _v.subVectors(o.origin, s.origin);
+      const along = _v.dot(axis);
+      if (_v.lengthSq() - along * along > radiusMm * radiusMm) continue; // moving can't be shorter
+      const [sMin, sMax] = projectRange(s.start, s.end, o.origin, axis);
+      const [oMin, oMax] = projectRange(o.start, o.end, o.origin, axis);
+      if (Math.max(oMin - sMax, sMin - oMax) > axialReachMm) continue;
+      const move = moveOntoLine(s.origin, o.origin, axis, directions);
+      if (!move || move.length() > radiusMm) continue;
+      if (!best || move.lengthSq() < best.offset.lengthSq()) best = { offset: move, ...roles };
+    }
+  }
+  return best;
 }
 
 const maxAlong = (a, b, dir) => Math.max(a.dot(dir), b.dot(dir));

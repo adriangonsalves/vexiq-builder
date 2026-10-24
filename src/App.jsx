@@ -1323,6 +1323,9 @@ export default function App() {
                 <span title="Drag a colored square on the Move gizmo to slide the part within that plane">
                   <kbd className="kbd">▢</kbd> Plane Drag
                 </span>
+                <span title="Dragging snaps a pin or shaft onto a nearby hole's line; hold Alt to drag without it">
+                  <kbd className="kbd">Alt</kbd> Drag w/o Hole Snap
+                </span>
                 <span>
                   <kbd className="kbd">E</kbd> Rotate
                 </span>

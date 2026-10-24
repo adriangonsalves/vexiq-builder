@@ -10,9 +10,12 @@ import {
   getLocalFeatures,
   findAlignedOpenings,
   findSeatedPairs,
+  findTooWideInserts,
   measureOpeningDepths,
+  measureOpeningPassRadii,
   measureOpeningSurfaces,
   measurePinEnds,
+  measureShaftProfiles,
   planMates
 } from '../src/utils/pinHoleAlignment.js';
 import { applyOps, diffParts, fromLegacy, loadHistory, recordStep, summarize } from '../src/utils/buildHistory.js';
@@ -58,11 +61,8 @@ export function findPart(query) {
  * inward-eroded MeshBVH (0.38mm clearance) so pins/shafts pass cleanly through holes
  * while solid intersections are detected accurately.
  */
-export function getPartCollisionBvh(part) {
-  if (bvhCache.has(part.id)) {
-    return bvhCache.get(part.id);
-  }
-
+// A part's GLB triangles as stored (positions, normals, indices)
+function readPartGlb(part) {
   const glbPath = path.join(ROOT_DIR, 'public', part.modelUrl.replace(/^\//, ''));
   const buf = fs.readFileSync(glbPath);
   const jsonLen = buf.readUInt32LE(12);
@@ -89,7 +89,30 @@ export function getPartCollisionBvh(part) {
     buf.byteOffset + binOffset + idxBv.byteOffset,
     idxBv.byteLength / IdxType.BYTES_PER_ELEMENT
   );
+  return { pos, norm, idx };
+}
 
+const rawBvhCache = new Map(); // partId -> BufferGeometry with a BVH over the unshrunk mesh
+
+/** BVH over a part's real (unshrunk) mesh, for measurements too fine for the collision mesh. */
+function getPartRawGeometry(part) {
+  if (!rawBvhCache.has(part.id)) {
+    const { pos, idx } = readPartGlb(part);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos.slice(), 3));
+    geo.setIndex(new THREE.BufferAttribute(idx.slice(), 1));
+    geo.boundsTree = new MeshBVH(geo);
+    rawBvhCache.set(part.id, geo);
+  }
+  return rawBvhCache.get(part.id);
+}
+
+export function getPartCollisionBvh(part) {
+  if (bvhCache.has(part.id)) {
+    return bvhCache.get(part.id);
+  }
+
+  const { pos, norm, idx } = readPartGlb(part);
   const clearanceMm = 0.38;
   const weldedNormals = new Map();
   for (let i = 0; i < pos.length; i += 3) {
@@ -146,6 +169,19 @@ export function buildWorldMatrix(position, rotationDeg) {
  * Checks if a candidate instance (partId, position, rotation) intersects any other
  * visible instance in the assembly list. Returns { isIntersecting, collidingWith: [...] }.
  */
+/** Distance to a part's real surface along a ray in part-local mm, or null on a miss. */
+function rawRaycast(part) {
+  const geo = getPartRawGeometry(part);
+  const ray = new THREE.Ray();
+  return (o, d) => {
+    ray.origin.set(o[0], o[1], o[2]);
+    ray.direction.set(d[0], d[1], d[2]);
+    return geo.boundsTree.raycastFirst(ray, THREE.DoubleSide)?.distance ?? null;
+  };
+}
+
+const isShaftPart = (part) => getPartMeasurements(part).profiles.size > 0;
+
 export function checkCandidateCollision(candidate, instances) {
   const { catalogById } = getCatalog();
   const partA = catalogById.get(candidate.partId);
@@ -158,6 +194,7 @@ export function checkCandidateCollision(candidate, instances) {
   const matBtoA = new THREE.Matrix4();
 
   const collidingWith = [];
+  let featuresA = null; // only worked out when a shaft and a hole meet
 
   for (const other of instances) {
     if (other.instanceId === candidate.instanceId) continue;
@@ -172,7 +209,13 @@ export function checkCandidateCollision(candidate, instances) {
     if (!worldBoxA.intersectsBox(worldBoxB)) continue;
 
     matBtoA.multiplyMatrices(invMatA, matB);
-    if (geoA.boundsTree.intersectsGeometry(geoB, matBtoA)) {
+    let hit = geoA.boundsTree.intersectsGeometry(geoB, matBtoA);
+    // The shrunk meshes miss small overlaps, like a shaft's cap inside a hole it can't pass
+    if (!hit && (isShaftPart(partA) || isShaftPart(partB))) {
+      featuresA ||= worldFeaturesFor(candidate);
+      hit = findTooWideInserts(featuresA, worldFeaturesFor(other)).length > 0;
+    }
+    if (hit) {
       collidingWith.push({
         instanceId: other.instanceId,
         label: other.label,
@@ -456,7 +499,10 @@ export function getPartMeasurements(part) {
       const hit = firstHit(o, d);
       return hit ? { distance: hit.distance, normal: hit.face.normal.toArray() } : null;
     }),
-    depths: measureOpeningDepths(part, raycast, surfaces)
+    depths: measureOpeningDepths(part, raycast, surfaces),
+    // Hole and shaft widths come from the real mesh: shrinking leaves a 0.8 mm cap a sliver
+    passRadii: measureOpeningPassRadii(part, rawRaycast(part)),
+    profiles: measureShaftProfiles(part, rawRaycast(part))
   };
   measurementCache.set(part.id, measured);
   return measured;
