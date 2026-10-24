@@ -868,7 +868,8 @@ export default function Viewport3D({
   focusTrigger,
   onLoadingChange,
   onMateFeedback,
-  onToggleRotateRequest
+  onToggleRotateRequest,
+  collisionRecheck
 }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
@@ -2440,6 +2441,30 @@ export default function Viewport3D({
     syncGizmos();
     updateAlignedHoleHighlights();
   }, [instances, selectedId, catalogMap, showConnectors, explodeMode]);
+
+  // Undo, redo and history jumps put parts back without their overlap flags: check the moved parts
+  // again (after the effect above has posed them) and report any flag that changed
+  useEffect(() => {
+    if (!collisionRecheck?.ids?.length) return;
+    for (const id of collisionRecheck.ids) {
+      const group = meshMapRef.current.get(id);
+      const inst = instancesRef.current.find((i) => i.instanceId === id);
+      if (!group || !inst || !group.userData.collisionGeometries) continue;
+      partGroupRef.current?.updateMatrixWorld(true);
+      const isColliding = checkGroupCollision(group, explodeModeRef.current !== 'off');
+      group.userData.isIntersecting = isColliding;
+      const partMeta = catalogMapRef.current.get(inst.partId);
+      applyGroupAppearance(group, {
+        baseColor: inst.color || partMeta?.defaultColor,
+        isSelected: selectedIdRef.current === id,
+        isIntersecting: isColliding
+      });
+      if (isColliding !== Boolean(inst.isIntersecting)) {
+        onUpdateTransformRef.current(id, { isIntersecting: isColliding });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collisionRecheck]);
 
   // Camera Focus / Frame trigger (key 'F' or toolbar button)
   useEffect(() => {

@@ -14,6 +14,7 @@ import {
   getCatalog,
   mirrorSubassembly
 } from './mcp/assembly-engine.mjs';
+import { applyOps, diffParts, loadHistory, mergeBrowserSave, recordStep, summarize } from './src/utils/buildHistory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STATE_FILE = path.join(__dirname, 'public', 'assembly-state.json');
@@ -26,9 +27,23 @@ const STATE_FILE = path.join(__dirname, 'public', 'assembly-state.json');
 function vexiqMcpBridgePlugin() {
   const sseClients = new Set();
 
-  function broadcastState(payload, source = 'ui-action') {
+  // The saved state with its history (a file without one gets a "Starting assembly" step), or null
+  function readSaved() {
+    try {
+      if (!fs.existsSync(STATE_FILE)) return null;
+      const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+      if (!data || !Array.isArray(data.instances)) return null;
+      const history = loadHistory(data.history, data.instances);
+      return { ...data, history, historyRev: history.rev };
+    } catch {
+      return null;
+    }
+  }
+
+  // clientId: the browser tab that sent the change, so only that tab skips its own echo
+  function broadcastState(payload, source = 'ui-action', clientId = undefined) {
     fs.writeFileSync(STATE_FILE, JSON.stringify(payload, null, 2));
-    const msg = `data: ${JSON.stringify({ source, state: payload })}\n\n`;
+    const msg = `data: ${JSON.stringify({ source, clientId, state: payload })}\n\n`;
     for (const client of sseClients) {
       client.write(msg);
     }
@@ -74,6 +89,22 @@ function vexiqMcpBridgePlugin() {
                   : { instances: [] };
 
             const { catalogById } = getCatalog();
+
+            // A smart action's change is one history step (source 'action'), applied on top of the
+            // saved build. Fills in nextState's parts and history so the reply carries them too.
+            const baseInstances = state.instances;
+            const recordAction = (nextState) => {
+              const saved = readSaved();
+              if (!saved) return nextState;
+              const ops = diffParts(baseInstances, nextState.instances);
+              const instances =
+                diffParts(baseInstances, saved.instances).length > 0 ? applyOps(saved.instances, ops) : nextState.instances;
+              const { history } = recordStep(saved.history, saved.instances, instances, {
+                source: 'action',
+                label: (stepOps) => `${action}: ${summarize(stepOps)}`
+              });
+              return Object.assign(nextState, { instances, history, historyRev: history.rev });
+            };
 
             if (action === 'auto_fasten') {
               const instA = state.instances.find((i) => i.instanceId === params.instanceIdA);
@@ -150,7 +181,7 @@ function vexiqMcpBridgePlugin() {
               };
 
               if (placedPins.length > 0) {
-                broadcastState(nextState, 'mcp-server');
+                broadcastState(recordAction(nextState), 'mcp-server');
               }
 
               res.setHeader('Content-Type', 'application/json');
@@ -224,7 +255,7 @@ function vexiqMcpBridgePlugin() {
                 instances: nextInstances,
                 updatedAt: new Date().toISOString()
               };
-              broadcastState(nextState, 'mcp-server');
+              broadcastState(recordAction(nextState), 'mcp-server');
 
               res.setHeader('Content-Type', 'application/json');
               res.end(
@@ -271,7 +302,7 @@ function vexiqMcpBridgePlugin() {
                 instances: gearRes.workingInstances,
                 updatedAt: new Date().toISOString()
               };
-              broadcastState(nextState, 'mcp-server');
+              broadcastState(recordAction(nextState), 'mcp-server');
 
               res.setHeader('Content-Type', 'application/json');
               res.end(
@@ -303,7 +334,7 @@ function vexiqMcpBridgePlugin() {
                 updatedAt: new Date().toISOString()
               };
               if (mirRes.mirroredCount > 0) {
-                broadcastState(nextState, 'mcp-server');
+                broadcastState(recordAction(nextState), 'mcp-server');
               }
 
               res.setHeader('Content-Type', 'application/json');
@@ -394,8 +425,14 @@ function vexiqMcpBridgePlugin() {
       server.middlewares.use('/api/assembly', (req, res, next) => {
         if (req.method === 'GET') {
           res.setHeader('Content-Type', 'application/json');
-          if (fs.existsSync(STATE_FILE)) {
-            res.end(fs.readFileSync(STATE_FILE, 'utf8'));
+          const saved = readSaved();
+          if (saved) {
+            // Save the history if it had to be started or reconciled, so every writer shares one
+            const raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+            if (raw.history?.rev !== saved.history.rev || !raw.history) {
+              fs.writeFileSync(STATE_FILE, JSON.stringify(saved, null, 2));
+            }
+            res.end(JSON.stringify(saved));
           } else {
             res.end(JSON.stringify({ instances: [] }));
           }
@@ -410,12 +447,21 @@ function vexiqMcpBridgePlugin() {
           req.on('end', () => {
             try {
               const parsed = JSON.parse(body);
-              const payload = {
-                ...parsed,
-                updatedAt: new Date().toISOString()
-              };
               const source = req.headers['x-mcp-source'] || 'unknown';
-              broadcastState(payload, source);
+              let payload = { ...parsed, updatedAt: new Date().toISOString() };
+              if (source === 'browser') {
+                // Keep the saved history when the browser sends only parts; refuse a save built on
+                // an older history (an MCP step landed in between) so no step is overwritten
+                const merged = mergeBrowserSave(readSaved(), payload);
+                if (merged.conflict) {
+                  res.statusCode = 409;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ ok: false, conflict: true, state: merged.state }));
+                  return;
+                }
+                payload = merged.state;
+              }
+              broadcastState(payload, source, req.headers['x-client-id']);
 
               res.setHeader('Content-Type', 'application/json');
               // browserClients tells the MCP server whether anyone has the app open to see the change

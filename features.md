@@ -143,7 +143,14 @@ Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP 
 ## 5. Dual MCP Integration (Node Stdio MCP + Browser WebMCP) & Persistence
 
 - **Node Stdio MCP Server ([`mcp/vexiq-mcp-server.mjs`](file:///Users/adriangonsalves/projects/vexiq_builder/mcp/vexiq-mcp-server.mjs)):**
-  - Exposes 17 tools to external AI agents (`search_parts`, `get_part_details`, `get_assembly`, `place_part`, `place_parts`, `update_part`, `align_part_to_hole`, `mate_parts`, `auto_fasten_joint`, `mesh_gear_train`, `mirror_subassembly`, `audit_assembly`, `capture_viewport_views`, `capture_screenshot`, `remove_part`, `clear_assembly`, `configure_viewport`).
+  - Exposes 20 tools to external AI agents (`search_parts`, `get_part_details`, `get_assembly`, `place_part`, `place_parts`, `update_part`, `align_part_to_hole`, `mate_parts`, `auto_fasten_joint`, `mesh_gear_train`, `mirror_subassembly`, `audit_assembly`, `capture_viewport_views`, `capture_screenshot`, `remove_part`, `clear_assembly`, `configure_viewport`, `get_history`, `undo`, `redo`).
+  - **Build history over MCP:**
+    - Every tool call that changes parts is one history step labeled with the tool and a summary, for example `place_parts: 72 parts`. One undo removes the whole call.
+    - Calls that change nothing (`dryRun`, refused `rejectIntersecting`, reading tools, `configure_viewport`) add no step.
+    - Replies to changing calls include `historyStep`, plus `historyNote` when the change started a new branch.
+    - `get_history` lists the current line's steps (label, source, time, part counts) and where branches split off.
+    - `undo` / `redo` move through the history without adding steps.
+    - `get_assembly` reports only `history: { currentStep, totalSteps }`.
   - Synchronizes live with the browser UI in real time over Server-Sent Events (`/api/assembly/events`) and REST (`/api/assembly`).
   - **`place_parts`:** places a whole list of parts in one call and replies with one line per part plus one audit summary.
     - Each item gives either a position and rotation, or an **insert**: put this part's pin, peg, shaft or bore into a hole of a placed part or of an earlier item (`ref`), and push it straight in until it touches something, like double-click mating.
@@ -156,6 +163,36 @@ Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP 
   - Registers in-page tools for browser-hosted AI assistants.
 - **Import / Export & Auto-Save:**
   - Saves valid assemblies to `localStorage` (`vexiq_builder_assembly_v2`) and `.vexiq-assembly-state.json`, plus supports `.vexiq.json` file export (`Save`) and import (`Load`).
+  - The build history is saved with the build: `history` and `historyRev` fields in `public/assembly-state.json` and in exported `.vexiq.json` files (export `version: '1.1'`). localStorage keeps parts only.
+  - Overlapping parts are left out of an export, as before, and the saved history then ends with a "Leave out overlapping parts" step, so replaying a file's history always gives exactly its parts.
+  - Opening a file replaces the build and its history. A file without history (saved before this feature) opens with one "Starting assembly" step.
+
+## 5a. Build History, Undo/Redo & Timeline
+
+Shared history code: [`src/utils/buildHistory.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/buildHistory.js). Timeline: [`src/components/HistoryTimeline.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/HistoryTimeline.jsx). Checks: `node scripts/check-history.mjs`.
+
+- **Steps:**
+  - Every change to the parts becomes one step with a label, a time and a source: `app`, `mcp`, `assistant` (in-page WebMCP) or `action` (smart actions).
+  - Recorded changes: add, move, rotate, mate, delete, duplicate, recolor, hide/show, lock/unlock, clear, starter, and moving an overlapping part back.
+  - Not recorded: selection, the camera, explode view, viewport settings, and the app's own overlap-flag updates.
+  - Steps store only what changed, so long histories stay small.
+- **Typing:** typing in an Inspector field, dragging the color picker, or repeated nudges on one part within 1 s merge into one step.
+- **Undo / Redo:**
+  - Unlimited, from the toolbar arrows or **Ctrl/Cmd+Z** and **Shift+Ctrl/Cmd+Z** / **Ctrl+Y**.
+  - In text fields those keys keep their normal text editing.
+  - After undo or redo, the moved parts' overlap status is checked again.
+- **Branches:** undoing and then making a change keeps the undone steps as a branch. Nothing is ever deleted.
+- **Timeline (History button, clock icon):**
+  - A bar under the 3D view with one mark per step, colored by source (App blue, MCP amber, Assistant purple, Smart action green), plus "Step N of M" and hover tips with the label, source, time and part counts.
+  - Click or drag to go to any step.
+  - A step that touched many parts, such as one `place_parts` call, plays its parts one at a time while you scrub through it. The view is read-only part-way through a step, with a **Go to end of step** button.
+  - **Play** (1×/2×/4×) replays the build from the start. Any edit, undo, redo or MCP change stops playback.
+  - Branch markers open a menu to switch to another branch.
+  - Whether the timeline is shown is remembered in this browser.
+- **Sync:**
+  - The app, the MCP server and smart actions all record into the same saved history.
+  - A browser save built on an older history (an MCP step landed in between) is refused with `409`. The app then takes the saved build and puts its change on top, so neither side loses a step.
+  - Each browser tab has its own id, so open tabs stay in step with each other.
 
 ---
 

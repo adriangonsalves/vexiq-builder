@@ -41,7 +41,8 @@ body,
 
 .app-shell {
   display: grid;
-  grid-template-rows: 52px 1fr;
+  /* The toolbar grows to a second row in narrow windows instead of being clipped */
+  grid-template-rows: auto minmax(0, 1fr);
   width: 100vw;
   height: 100vh;
 }
@@ -50,7 +51,8 @@ body,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  min-height: 52px;
+  padding: 6px 16px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-strong);
   gap: 12px;
@@ -142,7 +144,8 @@ body,
 .workspace-grid {
   display: grid;
   grid-template-columns: 340px 1fr 330px;
-  height: calc(100vh - 52px);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -844,4 +847,163 @@ body,
   background: transparent;
   color: inherit;
   font: inherit;
+}
+
+/* Build history timeline (bottom of the 3D view) */
+.history-timeline {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  z-index: 5;
+}
+
+.history-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.history-speed .btn {
+  padding: 3px 7px;
+}
+
+.history-count {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.history-legend {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+}
+
+.history-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.history-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.history-track {
+  position: relative;
+  height: 26px;
+  margin-top: 8px;
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+
+.history-track:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+  border-radius: 4px;
+}
+
+.history-track canvas {
+  display: block;
+}
+
+.history-branch-marker {
+  position: absolute;
+  top: -12px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 14px;
+  padding: 0;
+  border: 1px solid #a78bfa;
+  border-radius: 4px;
+  background: #1e1b4b;
+  color: #c4b5fd;
+  cursor: pointer;
+}
+
+.history-tip,
+.history-branch-menu {
+  position: absolute;
+  bottom: 32px;
+  transform: translateX(-50%);
+  background: var(--bg-panel-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 6px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.history-tip strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.history-branch-menu {
+  pointer-events: auto;
+  min-width: 220px;
+  white-space: normal;
+}
+
+.history-branch-title {
+  color: var(--text-muted);
+  padding-bottom: 2px;
+}
+
+.history-branch-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.history-branch-item:hover,
+.history-branch-item.active {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.history-branch-meta {
+  color: var(--text-secondary);
+}
+
+.history-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fcd34d;
+}
+
+.history-banner .btn {
+  padding: 2px 8px;
+  font-size: 11px;
 }

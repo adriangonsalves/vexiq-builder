@@ -20,6 +20,15 @@ import {
   readAssemblyState,
   writeAssemblyState
 } from './assembly-engine.mjs';
+import {
+  branchesAt,
+  currentLine,
+  diffParts,
+  headPosition,
+  redo as redoHistory,
+  stepById,
+  undo as undoHistory
+} from '../src/utils/buildHistory.js';
 
 const TOOLS = [
   {
@@ -546,6 +555,38 @@ const TOOLS = [
         height: { type: 'number', default: 768, description: '320 to 1920 px.' }
       }
     }
+  },
+  {
+    name: 'get_history',
+    description:
+      "List the build history: the steps on the current line (number, label, source app/mcp/assistant/action, time, parts added/removed/changed), which step is current, and where other branches split off. Every change to the parts is a step; each MCP call that changes parts is one step.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', default: 50, description: 'Return only the last N steps of the line (the current step is always included).' }
+      }
+    }
+  },
+  {
+    name: 'undo',
+    description:
+      'Undo the last step(s) of the build history, e.g. to back out an MCP call that placed parts wrongly. Undone steps are kept: redo brings them back, and a new change starts a branch instead of deleting them.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        steps: { type: 'number', default: 1, description: 'How many steps to undo.' }
+      }
+    }
+  },
+  {
+    name: 'redo',
+    description: 'Redo step(s) that were undone, along the current line of the build history.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        steps: { type: 'number', default: 1, description: 'How many steps to redo.' }
+      }
+    }
   }
 ];
 
@@ -625,6 +666,8 @@ async function executeTool(name, args = {}) {
       updatedAt: state.updatedAt,
       selectedId: state.selectedId,
       viewport: state.viewport,
+      // Only where the build is in its history; get_history lists the steps
+      history: headPosition(state.history),
       instanceCount: state.instances.length,
       instances: state.instances.map((inst) => {
         const part = catalogById.get(inst.partId);
@@ -635,6 +678,63 @@ async function executeTool(name, args = {}) {
           pitchPosition: inst.position.map((c) => Number((c / VEX_PITCH_MM).toFixed(2)))
         };
       })
+    };
+  }
+
+  if (name === 'get_history') {
+    const { history } = readAssemblyState();
+    const line = currentLine(history);
+    const { currentStep, totalSteps } = headPosition(history);
+    const limit = Math.max(1, Math.floor(Number(args.limit) || 50));
+    const from = Math.max(0, Math.min(totalSteps - limit, currentStep - 1));
+    const count = (step, op) => step.ops.filter((o) => o.op === op).length;
+    return {
+      currentStep,
+      totalSteps,
+      steps: line.slice(from, from + limit).map((step, i) => ({
+        step: from + i + 1,
+        label: step.label,
+        source: step.source,
+        at: new Date(step.at).toISOString(),
+        added: count(step, 'add'),
+        removed: count(step, 'remove'),
+        changed: count(step, 'update'),
+        current: step.id === history.headId
+      })),
+      // Steps (0 = the start) where more than one branch continues
+      branchPoints: [null, ...line.map((s) => s.id)]
+        .map((id, i) => ({ afterStep: i, branches: branchesAt(history, id) }))
+        .filter((p) => p.branches.length > 1)
+        .map((p) => ({
+          afterStep: p.afterStep,
+          branches: p.branches.map((b) => ({ firstLabel: b.label, steps: b.length, onCurrentLine: b.active }))
+        }))
+    };
+  }
+
+  if (name === 'undo' || name === 'redo') {
+    const state = readAssemblyState();
+    const count = Math.max(1, Math.floor(Number(args.steps) || 1));
+    const moved = (name === 'undo' ? undoHistory : redoHistory)(state.history, state.instances, count);
+    if (!moved) {
+      return { ok: false, message: name === 'undo' ? 'Nothing to undo: the build is at the start of its history.' : 'Nothing to redo: the build is at the end of the current line.' };
+    }
+    const labelOf = (id) => stepById(state.history, id)?.label;
+    const changes = diffParts(state.instances, moved.parts);
+    const keepSelection = moved.parts.some((p) => p.instanceId === state.selectedId);
+    await writeAssemblyState(
+      { ...state, selectedId: keepSelection ? state.selectedId : null, instances: moved.parts, history: moved.history },
+      { recordHistory: false }
+    );
+    return {
+      ok: true,
+      [name === 'undo' ? 'undone' : 'redone']: (name === 'undo' ? moved.undone : moved.redone).map(labelOf),
+      ...headPosition(moved.history),
+      currentLabel: labelOf(moved.history.headId) || '(start)',
+      partsAdded: changes.filter((o) => o.op === 'add').length,
+      partsRemoved: changes.filter((o) => o.op === 'remove').length,
+      partsChanged: changes.filter((o) => o.op === 'update').length,
+      instanceCount: moved.parts.length
     };
   }
 
@@ -1312,11 +1412,19 @@ async function handleJsonRpcMessage(req) {
       const toolName = params?.name;
       const toolArgs = params?.arguments || {};
       // Tools that save the assembly report whether the open app received the change
-      const sync = {};
+      // The tool name and call id let a changing call be recorded as one history step
+      const sync = { toolName, callId: `${Date.now().toString(36)}-${id ?? Math.random().toString(36).slice(2, 8)}` };
       const output = await appSyncContext.run(sync, () => executeTool(toolName, toolArgs));
       if (sync.appSync && output && typeof output === 'object') {
         output.appSync = sync.appSync;
         if (sync.appHint) output.appHint = sync.appHint;
+      }
+      if (sync.historyStep && output && typeof output === 'object') {
+        output.historyStep = sync.historyStep;
+        if (sync.historyBranched) {
+          output.historyNote =
+            'The build had been moved back in its history, so this change started a new branch. The later steps are kept as another branch (see get_history).';
+        }
       }
       sendResponse({
         jsonrpc: '2.0',

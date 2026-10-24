@@ -9,23 +9,41 @@ import {
   Eye,
   EyeOff,
   Grid,
+  History as HistoryIcon,
   Layers,
   Lock,
   Maximize2,
   Move,
   Radio,
+  Redo2,
   RotateCcw,
   RotateCw,
   Search,
   Sparkles,
   Trash2,
+  Undo2,
   Unlock,
   Upload,
   X
 } from 'lucide-react';
 import Viewport3D from './components/Viewport3D.jsx';
 import PartThumbnail from './components/PartThumbnail.jsx';
+import HistoryTimeline from './components/HistoryTimeline.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
+import {
+  applyOps,
+  createHistory,
+  diffParts,
+  headPosition,
+  isHistory,
+  loadHistory,
+  moveTo as moveHistoryTo,
+  recordStep,
+  redo as redoHistory,
+  stepById,
+  undo as undoHistory,
+  withExportStep
+} from './utils/buildHistory.js';
 
 const VEX_PITCH_MM = 12.7;
 
@@ -44,6 +62,9 @@ const VEX_COLORS = [
 ];
 
 const STORAGE_KEY = 'vexiq_builder_assembly_v2';
+const TIMELINE_KEY = 'vexiq_history_timeline_visible';
+// This tab's id: its own saves come back over SSE and are skipped; other tabs' saves are taken
+const TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const EXPLODE_MODES = ['off', 'x', 'y', 'z', 'all'];
 
 export default function App() {
@@ -51,7 +72,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
 
-  const [instances, setInstances] = useState([]);
+  // Parts and their history change together: every change to the parts is recorded as a step
+  const [build, setBuild] = useState(() => ({ instances: [], history: createHistory() }));
+  const { instances, history } = build;
   const [selectedId, setSelectedId] = useState(null);
   const [transformMode, setTransformMode] = useState('translate'); // 'translate' | 'rotate'
   const [snapPitchFactor, setSnapPitchFactor] = useState(0.5); // 1 = 12.7mm, 0.5 = 6.35mm, 0.25 = 3.175mm, 0 = Free
@@ -79,6 +102,113 @@ export default function App() {
   const [actionFeedback, setActionFeedback] = useState(null);
   const [isRunningAction, setIsRunningAction] = useState(false);
   const [auditModalData, setAuditModalData] = useState(null);
+
+  // The history the server last confirmed (its rev and the parts at that point), so a save built on
+  // an older history is refused by the bridge and re-recorded on top instead of overwriting MCP steps
+  const syncRef = useRef({ baseRev: undefined, baseInstances: [], postedHistory: null });
+
+  // Timeline: shown or not (remembered in this browser), and a read-only preview of a past point
+  const [timelineVisible, setTimelineVisible] = useState(() => {
+    try {
+      return localStorage.getItem(TIMELINE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [preview, setPreview] = useState(null); // { parts, info } while scrubbing or playing
+  const previewRef = useRef(null);
+  previewRef.current = preview;
+  const handlePreview = useCallback((parts, info) => setPreview(parts ? { parts, info } : null), []);
+  const noop = useCallback(() => {}, []);
+
+  /**
+   * Changes the parts and records the change as one history step (none when no build field changed,
+   * e.g. the viewport updating overlap flags). meta: { label, source ('app' | 'assistant'), mergeKey }.
+   */
+  const setInstances = useCallback((updater, meta = {}) => {
+    // A past point on the timeline is read-only
+    if (previewRef.current) {
+      setActionFeedback({ message: "This is a preview of an earlier point. Go to a step's end to edit.", isError: true });
+      return;
+    }
+    const source = meta.source || 'app';
+    setBuild((b) => {
+      const next = typeof updater === 'function' ? updater(b.instances) : updater;
+      if (next === b.instances) return b;
+      const recorded = recordStep(b.history, b.instances, next, { source, label: meta.label, mergeKey: meta.mergeKey });
+      return { instances: next, history: recorded.history };
+    });
+  }, []);
+
+  /** Takes parts (and history, when present) that came from the server: MCP, smart actions, startup. */
+  const adoptServerState = useCallback((state) => {
+    if (!state || !Array.isArray(state.instances)) return;
+    if (isHistory(state.history)) {
+      const history = loadHistory(state.history, state.instances);
+      syncRef.current = { baseRev: history.rev, baseInstances: state.instances, postedHistory: history };
+      setBuild({ instances: state.instances, history });
+    } else {
+      // An older writer sent parts without history: record what it changed
+      setBuild((b) => ({
+        instances: state.instances,
+        history: recordStep(b.history, b.instances, state.instances, { source: 'mcp', label: 'External change' }).history
+      }));
+    }
+  }, []);
+
+  // Overlapping parts snap back to their last good pose; ones that never had one are dropped
+  const moveBackLabel = (ops) => {
+    const name = (op) => op.name || op.part?.label;
+    const verb = ops.every((op) => op.op === 'remove') ? 'Cancel placement of' : 'Move back';
+    return ops.length === 1 ? `${verb} ${name(ops[0])}` : `${verb} ${ops.length} parts`;
+  };
+
+  /**
+   * Result of moving through the history (undo, redo, timeline): the parts, the history, and the
+   * parts whose pose changed, so the viewport checks their overlap flags again.
+   */
+  const afterHistoryMove = (b, moved) => {
+    if (!moved) return b;
+    const ids = new Set();
+    for (const stepId of [...moved.undone, ...moved.redone]) {
+      for (const op of stepById(moved.history, stepId)?.ops || []) {
+        if (op.op === 'add' || op.op === 'remove') ids.add(op.part.instanceId);
+        else if (op.op === 'update' && (op.after.position || op.after.rotation)) ids.add(op.id);
+      }
+    }
+    return { instances: moved.parts, history: moved.history, recheck: { ids: [...ids], rev: moved.history.rev } };
+  };
+
+  const handleUndo = useCallback(() => {
+    setBuild((b) => afterHistoryMove(b, undoHistory(b.history, b.instances)));
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    setBuild((b) => afterHistoryMove(b, redoHistory(b.history, b.instances)));
+  }, []);
+
+  // Timeline: make any step (null = the start) the current one
+  const handleMoveTo = useCallback((stepId) => {
+    setBuild((b) => afterHistoryMove(b, moveHistoryTo(b.history, b.instances, stepId)));
+  }, []);
+
+  const toggleTimeline = () => {
+    setTimelineVisible((visible) => {
+      try {
+        localStorage.setItem(TIMELINE_KEY, visible ? '0' : '1');
+      } catch {
+        // ignore
+      }
+      return !visible;
+    });
+  };
+
+  const historyPosition = useMemo(() => headPosition(history), [history]);
+
+  // Undo, redo or an MCP change can remove the selected part
+  useEffect(() => {
+    if (selectedId && !instances.some((i) => i.instanceId === selectedId)) setSelectedId(null);
+  }, [instances, selectedId]);
 
   const fileInputRef = useRef(null);
   const auditDialogRef = useRef(null);
@@ -128,9 +258,14 @@ export default function App() {
     ])
       .then(([catalogData, serverState]) => {
         setCatalog(catalogData);
-        if (serverState && Array.isArray(serverState.instances) && serverState.instances.length > 0) {
+        // A saved build with parts, or one emptied on purpose (its history has steps), is kept as is
+        const hasSavedBuild =
+          serverState &&
+          Array.isArray(serverState.instances) &&
+          (serverState.instances.length > 0 || serverState.history?.steps?.length > 0);
+        if (hasSavedBuild) {
           suppressNextServerSyncRef.current = true;
-          setInstances(serverState.instances);
+          adoptServerState(serverState);
           if (serverState.selectedId !== undefined) setSelectedId(serverState.selectedId);
           if (serverState.viewport) {
             if (serverState.viewport.transformMode) setTransformMode(serverState.viewport.transformMode);
@@ -150,7 +285,8 @@ export default function App() {
           }
         } else {
           const starter = buildStarterAssembly(catalogData);
-          setInstances(starter);
+          if (serverState) adoptServerState(serverState);
+          setInstances(starter, { label: 'Load starter assembly' });
           setSelectedId(starter[1]?.instanceId || starter[0]?.instanceId || null);
         }
       })
@@ -180,11 +316,11 @@ export default function App() {
           }).catch(() => {});
           return;
         }
-        if (msg.source === 'browser') return;
+        if (msg.source === 'browser' && (!msg.clientId || msg.clientId === TAB_ID)) return;
         const nextState = msg.state;
         if (nextState && Array.isArray(nextState.instances)) {
           suppressNextServerSyncRef.current = true;
-          setInstances(nextState.instances);
+          adoptServerState(nextState);
           if (nextState.selectedId !== undefined) {
             setSelectedId(nextState.selectedId);
           }
@@ -221,14 +357,24 @@ export default function App() {
       return;
     }
 
+    // History goes along only when it changed since the last save; the bridge keeps it otherwise
+    const base = syncRef.current;
+    const sendHistory = history !== base.postedHistory;
+    if (sendHistory) {
+      syncRef.current = { baseRev: history.rev, baseInstances: instances, postedHistory: history };
+    }
+    const postedInstances = instances;
     fetch('/api/assembly', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-mcp-source': 'browser'
+        'x-mcp-source': 'browser',
+        'x-client-id': TAB_ID
       },
       body: JSON.stringify({
         version: '1.0',
+        baseHistoryRev: base.baseRev,
+        ...(sendHistory ? { history } : {}),
         selectedId,
         viewport: {
           transformMode,
@@ -241,12 +387,35 @@ export default function App() {
         },
         instances
       })
-    }).catch(() => {
-      // ignore offline
-    });
+    })
+      .then(async (res) => {
+        if (res.status !== 409) return;
+        // Another writer saved first: take the saved build, then put this tab's change on top of it
+        const { state } = await res.json();
+        if (!state || !isHistory(state.history)) return;
+        adoptServerState(state);
+        if (!sendHistory) return;
+        const newSteps = history.steps.filter((st) => !stepById(state.history, st.id));
+        if (newSteps.length === 0) {
+          // Only moved through the history (undo, redo, timeline): make the same move on the saved one
+          if (history.headId === null || stepById(state.history, history.headId)) {
+            setBuild((b) => afterHistoryMove(b, moveHistoryTo(b.history, b.instances, history.headId)));
+          }
+          return;
+        }
+        // New edits: record what they changed as one step on top
+        const ops = diffParts(base.baseInstances, postedInstances);
+        if (ops.length > 0) {
+          setInstances((prev) => applyOps(prev, ops), { label: newSteps.at(-1).label, source: newSteps.at(-1).source });
+        }
+      })
+      .catch(() => {
+        // ignore offline
+      });
   }, [
     catalog.length,
     instances,
+    history,
     selectedId,
     transformMode,
     snapPitchFactor,
@@ -403,19 +572,23 @@ export default function App() {
   };
 
   const handleSelectInstance = (nextId) => {
-    setInstances((prev) => resolveIntersectingInstances(prev, nextId));
+    setInstances((prev) => resolveIntersectingInstances(prev, nextId), { label: moveBackLabel });
     setSelectedId(nextId);
   };
 
   const handleRevertSelectedIntersection = () => {
     if (!selectedInstance) return;
-    setInstances((prev) => resolveIntersectingInstances(prev, null));
+    setInstances((prev) => resolveIntersectingInstances(prev, null), { label: moveBackLabel });
     if (!selectedInstance.lastValidPosition) {
       setSelectedId(null);
     }
   };
 
-  const handleAddPart = (part, customPos = null, customColor = null) => {
+  const handleAddPart = (part, customPos = null, customColor = null, meta = {}) => {
+    if (previewRef.current) {
+      setActionFeedback({ message: "This is a preview of an earlier point. Go to a step's end to edit.", isError: true });
+      return null;
+    }
     if (explodeMode !== 'off') setExplodeMode('off');
     const samePartCount = instances.filter((i) => i.partId === part.id).length;
     const basePos =
@@ -446,22 +619,27 @@ export default function App() {
       locked: false
     };
 
-    setInstances((prev) => [...resolveIntersectingInstances(prev, null), newInst]);
+    setInstances((prev) => [...resolveIntersectingInstances(prev, null), newInst], {
+      label: `Add ${newInst.label}`,
+      ...meta
+    });
     setSelectedId(newInst.instanceId);
     return newInst;
   };
 
-  const handleUpdateTransform = (instanceId, patch) => {
-    setInstances((prev) =>
-      prev.map((inst) => {
-        if (inst.instanceId !== instanceId) return inst;
-        const updated = { ...inst, ...patch };
-        if (updated.isIntersecting === false) {
-          updated.lastValidPosition = [...updated.position];
-          updated.lastValidRotation = [...updated.rotation];
-        }
-        return updated;
-      })
+  const handleUpdateTransform = (instanceId, patch, meta = {}) => {
+    setInstances(
+      (prev) =>
+        prev.map((inst) => {
+          if (inst.instanceId !== instanceId) return inst;
+          const updated = { ...inst, ...patch };
+          if (updated.isIntersecting === false) {
+            updated.lastValidPosition = [...updated.position];
+            updated.lastValidRotation = [...updated.rotation];
+          }
+          return updated;
+        }),
+      meta
     );
   };
 
@@ -481,7 +659,9 @@ export default function App() {
       lastValidRotation: null,
       isIntersecting: false
     };
-    setInstances((prev) => [...resolveIntersectingInstances(prev, null), copy]);
+    setInstances((prev) => [...resolveIntersectingInstances(prev, null), copy], {
+      label: `Duplicate ${selectedInstance.label}`
+    });
     setSelectedId(copy.instanceId);
   };
 
@@ -520,10 +700,11 @@ export default function App() {
     if (flushMoverRef.current) {
       const resolved = flushMoverRef.current(selectedInstance.instanceId, axisIndex, deltaMm);
       if (resolved) {
-        handleUpdateTransform(selectedInstance.instanceId, {
-          position: resolved.position,
-          isIntersecting: resolved.isIntersecting
-        });
+        handleUpdateTransform(
+          selectedInstance.instanceId,
+          { position: resolved.position, isIntersecting: resolved.isIntersecting },
+          { mergeKey: `nudge:${selectedInstance.instanceId}` }
+        );
         if (resolved.snappedFlush) {
           setActionFeedback({
             message: `Snapped flush to physical contact boundary (${resolved.position[axisIndex]}mm).`,
@@ -536,7 +717,11 @@ export default function App() {
 
     const nextPos = [...selectedInstance.position];
     nextPos[axisIndex] = Number((nextPos[axisIndex] + deltaMm).toFixed(3));
-    handleUpdateTransform(selectedInstance.instanceId, { position: nextPos });
+    handleUpdateTransform(
+      selectedInstance.instanceId,
+      { position: nextPos },
+      { mergeKey: `nudge:${selectedInstance.instanceId}` }
+    );
   };
 
   // Keep WebMCP context ref up to date and register WebMCP tools on mount
@@ -544,7 +729,7 @@ export default function App() {
     catalog,
     instances,
     selectedId,
-    placePartAt: (part, pos, color) => handleAddPart(part, pos, color),
+    placePartAt: (part, pos, color) => handleAddPart(part, pos, color, { source: 'assistant' }),
     configureViewport: ({
       transformMode: tm,
       showGrid: sg,
@@ -562,10 +747,10 @@ export default function App() {
       setExplodeMode('off');
       if (mode === 'starter') {
         const starter = buildStarterAssembly(catalog);
-        setInstances(starter);
+        setInstances(starter, { label: 'Load starter assembly', source: 'assistant' });
         setSelectedId(starter[0]?.instanceId || null);
       } else {
-        setInstances([]);
+        setInstances([], { label: 'Clear assembly', source: 'assistant' });
         setSelectedId(null);
       }
     }
@@ -578,10 +763,26 @@ export default function App() {
   // Global keyboard shortcuts for 3D Modeler
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+      const active = document.activeElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(active?.tagName) || active?.isContentEditable) {
         return;
       }
       const key = e.key.toLowerCase();
+      // Undo: Ctrl/Cmd+Z. Redo: Shift+Ctrl/Cmd+Z or Ctrl+Y
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) handleRedo();
+        else handleUndo();
+        return;
+      }
+      if (e.ctrlKey && key === 'y') {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+      // Nothing else edits or selects while a past point is shown
+      if (previewRef.current) return;
       if (key === 'w') {
         setTransformMode('translate');
       } else if (key === 'e') {
@@ -602,7 +803,7 @@ export default function App() {
         if (explodeMode !== 'off') {
           setExplodeMode('off');
         } else {
-          setInstances((prev) => resolveIntersectingInstances(prev, null));
+          setInstances((prev) => resolveIntersectingInstances(prev, null), { label: moveBackLabel });
           setSelectedId(null);
         }
       }
@@ -613,11 +814,15 @@ export default function App() {
 
   const handleExportJson = () => {
     const validInstances = instances.filter((i) => !i.isIntersecting);
+    // Overlapping parts are left out; the saved history ends with a step that removes them
+    const savedHistory = withExportStep(history, instances, validInstances);
     const payload = {
-      version: '1.0',
+      version: '1.1',
       pitchUnitMm: VEX_PITCH_MM,
       exportedAt: new Date().toISOString(),
-      instances: validInstances
+      instances: validInstances,
+      history: savedHistory,
+      historyRev: savedHistory.rev
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -637,7 +842,11 @@ export default function App() {
         const parsed = JSON.parse(String(reader.result));
         if (Array.isArray(parsed.instances)) {
           setExplodeMode('off');
-          setInstances(parsed.instances);
+          // Opening a file replaces the build and its history (a file without one starts a new one)
+          setBuild({
+            instances: parsed.instances,
+            history: loadHistory(parsed.history, parsed.instances, { source: 'app', label: 'External change' })
+          });
           setSelectedId(null);
           setFocusTrigger((c) => c + 1);
         }
@@ -693,7 +902,7 @@ export default function App() {
       } else {
         if (data.state && Array.isArray(data.state.instances)) {
           suppressNextServerSyncRef.current = true;
-          setInstances(data.state.instances);
+          adoptServerState(data.state);
           if (data.state.selectedId !== undefined) {
             setSelectedId(data.state.selectedId);
           }
@@ -748,6 +957,39 @@ export default function App() {
 
         {/* Transform, Snap & Explode Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div className="toolbar-group" role="group" aria-label="Undo and Redo">
+            <button
+              type="button"
+              className="btn"
+              onClick={handleUndo}
+              disabled={historyPosition.currentStep === 0}
+              title="Undo (Ctrl/Cmd+Z)"
+              aria-label="Undo"
+            >
+              <Undo2 size={14} />
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={handleRedo}
+              disabled={historyPosition.currentStep >= historyPosition.totalSteps}
+              title="Redo (Shift+Ctrl/Cmd+Z or Ctrl+Y)"
+              aria-label="Redo"
+            >
+              <Redo2 size={14} />
+            </button>
+            <button
+              type="button"
+              className={`btn ${timelineVisible ? 'active' : ''}`}
+              onClick={toggleTimeline}
+              title="History: show the build as a timeline you can scrub and play"
+              aria-label="History"
+              aria-pressed={timelineVisible}
+            >
+              <HistoryIcon size={14} />
+            </button>
+          </div>
+
           <div className="toolbar-group" role="group" aria-label="Transform Mode">
             <button
               type="button"
@@ -863,7 +1105,7 @@ export default function App() {
             onClick={() => {
               setExplodeMode('off');
               const starter = buildStarterAssembly(catalog);
-              setInstances(starter);
+              setInstances(starter, { label: 'Load starter assembly' });
               setSelectedId(starter[1]?.instanceId || starter[0]?.instanceId || null);
               setFocusTrigger((c) => c + 1);
             }}
@@ -990,11 +1232,11 @@ export default function App() {
         {/* Center 3D Viewport */}
         <main className="viewport-container">
           <Viewport3D
-            instances={instances}
+            instances={preview ? preview.parts : instances}
             catalogMap={catalogMap}
-            selectedId={selectedId}
-            onSelect={handleSelectInstance}
-            onUpdateTransform={handleUpdateTransform}
+            selectedId={preview ? null : selectedId}
+            onSelect={preview ? noop : handleSelectInstance}
+            onUpdateTransform={preview ? noop : handleUpdateTransform}
             onRegisterFlushMover={handleRegisterFlushMover}
             onRegisterScreenshot={handleRegisterScreenshot}
             transformMode={transformMode}
@@ -1006,7 +1248,8 @@ export default function App() {
             focusTrigger={focusTrigger}
             onLoadingChange={setIsLoadingMesh}
             onMateFeedback={(message, isError) => setActionFeedback({ message, isError })}
-            onToggleRotateRequest={handleToggleRotateRequest}
+            onToggleRotateRequest={preview ? noop : handleToggleRotateRequest}
+            collisionRecheck={preview ? undefined : build.recheck}
           />
 
           <div className="viewport-hud-top">
@@ -1061,37 +1304,43 @@ export default function App() {
             )}
           </div>
 
-          <div className="viewport-hud-bottom">
-            <div className="shortcuts-bar">
-              <span>
-                <kbd className="kbd">LMB</kbd> Select / Orbit
-              </span>
-              <span>
-                <kbd className="kbd">RMB</kbd> Pan
-              </span>
-              <span>
-                <kbd className="kbd">W</kbd> Move
-              </span>
-              <span title="Drag a colored square on the Move gizmo to slide the part within that plane">
-                <kbd className="kbd">▢</kbd> Plane Drag
-              </span>
-              <span>
-                <kbd className="kbd">E</kbd> Rotate
-              </span>
-              <span>
-                <kbd className="kbd">X</kbd> Cycle Explode
-              </span>
-              <span>
-                <kbd className="kbd">D</kbd> Duplicate
-              </span>
-              <span>
-                <kbd className="kbd">F</kbd> Focus
-              </span>
-              <span>
-                <kbd className="kbd">Esc</kbd> Un-Explode / Cancel
-              </span>
+          {timelineVisible && (
+            <HistoryTimeline history={history} onMoveTo={handleMoveTo} onPreview={handlePreview} />
+          )}
+
+          {!timelineVisible && (
+            <div className="viewport-hud-bottom">
+              <div className="shortcuts-bar">
+                <span>
+                  <kbd className="kbd">LMB</kbd> Select / Orbit
+                </span>
+                <span>
+                  <kbd className="kbd">RMB</kbd> Pan
+                </span>
+                <span>
+                  <kbd className="kbd">W</kbd> Move
+                </span>
+                <span title="Drag a colored square on the Move gizmo to slide the part within that plane">
+                  <kbd className="kbd">▢</kbd> Plane Drag
+                </span>
+                <span>
+                  <kbd className="kbd">E</kbd> Rotate
+                </span>
+                <span>
+                  <kbd className="kbd">X</kbd> Cycle Explode
+                </span>
+                <span>
+                  <kbd className="kbd">D</kbd> Duplicate
+                </span>
+                <span>
+                  <kbd className="kbd">F</kbd> Focus
+                </span>
+                <span>
+                  <kbd className="kbd">Esc</kbd> Un-Explode / Cancel
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </main>
 
         {/* Right Sidebar: Scene Assembly Outliner + Precision Inspector */}
@@ -1111,7 +1360,7 @@ export default function App() {
                     style={{ padding: '2px 7px', fontSize: 11 }}
                     onClick={() => {
                       setExplodeMode('off');
-                      setInstances([]);
+                      setInstances([], { label: 'Clear assembly' });
                       setSelectedId(null);
                     }}
                   >
@@ -1243,9 +1492,11 @@ export default function App() {
                             if (Number.isNaN(val)) return;
                             const next = [...selectedInstance.position];
                             next[idx] = val;
-                            handleUpdateTransform(selectedInstance.instanceId, {
-                              position: next
-                            });
+                            handleUpdateTransform(
+                              selectedInstance.instanceId,
+                              { position: next },
+                              { mergeKey: `position-${idx}:${selectedInstance.instanceId}` }
+                            );
                           }}
                         />
                       </label>
@@ -1301,9 +1552,11 @@ export default function App() {
                             if (Number.isNaN(val)) return;
                             const next = [...selectedInstance.rotation];
                             next[idx] = val;
-                            handleUpdateTransform(selectedInstance.instanceId, {
-                              rotation: next
-                            });
+                            handleUpdateTransform(
+                              selectedInstance.instanceId,
+                              { rotation: next },
+                              { mergeKey: `rotation-${idx}:${selectedInstance.instanceId}` }
+                            );
                           }}
                         />
                       </label>
@@ -1348,9 +1601,11 @@ export default function App() {
                       type="color"
                       value={selectedInstance.color || '#64748b'}
                       onChange={(e) =>
-                        handleUpdateTransform(selectedInstance.instanceId, {
-                          color: e.target.value
-                        })
+                        handleUpdateTransform(
+                          selectedInstance.instanceId,
+                          { color: e.target.value },
+                          { mergeKey: `color:${selectedInstance.instanceId}` }
+                        )
                       }
                       style={{
                         width: 26,

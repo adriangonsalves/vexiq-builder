@@ -15,6 +15,7 @@ import {
   measurePinEnds,
   planMates
 } from '../src/utils/pinHoleAlignment.js';
+import { applyOps, diffParts, fromLegacy, loadHistory, recordStep, summarize } from '../src/utils/buildHistory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -272,34 +273,94 @@ export function buildDefaultStarterState() {
   };
 }
 
-export function readAssemblyState() {
+// The saved state with its history (files without one get a "Starting assembly" step), or null
+function readStateFile() {
   try {
     if (fs.existsSync(STATE_PATH)) {
       const data = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
       if (data && Array.isArray(data.instances)) {
-        return data;
+        const history = loadHistory(data.history, data.instances);
+        return { ...data, history, historyRev: history.rev };
       }
     }
   } catch {
-    // fallback below
+    // fallback in readAssemblyState
   }
-  const initial = buildDefaultStarterState();
-  fs.writeFileSync(STATE_PATH, JSON.stringify(initial, null, 2));
-  return initial;
+  return null;
+}
+
+export function readAssemblyState() {
+  let state = readStateFile();
+  if (!state) {
+    const starter = buildDefaultStarterState();
+    const history = fromLegacy(starter.instances);
+    state = { ...starter, history, historyRev: history.rev };
+    fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
+  }
+  // The parts this tool call started from, so its change can be recorded (and rebased) as one step
+  const store = appSyncContext.getStore();
+  if (store && !store.baseInstances) store.baseInstances = JSON.parse(JSON.stringify(state.instances));
+  return state;
 }
 
 /**
  * Per tool call: whether the open app received the last saved change. The MCP server runs each
  * call inside `appSyncContext.run(store, ...)`; writeAssemblyState fills `store.appSync`
- * ('live' | 'no-browser' | 'saved-to-file-only') and `store.appHint`.
+ * ('live' | 'no-browser' | 'saved-to-file-only') and `store.appHint`. The server also puts the
+ * tool's name and a call id in the store, so the call's change is recorded as one history step
+ * (`store.historyStep`, `store.historyBranched`).
  */
 export const appSyncContext = new AsyncLocalStorage();
 
 export const appUrl = () => `http://localhost:${process.env.VEXIQ_APP_PORT || 5173}`;
 
-export async function writeAssemblyState(nextState, notifyVite = true) {
+// "<tool>: <summary>", e.g. "place_parts: 72 parts"; clearing says only the tool
+function mcpStepLabel(toolName, ops) {
+  if (!toolName) return summarize(ops);
+  if (toolName === 'clear_assembly') {
+    return ops.every((op) => op.op === 'remove') ? 'clear_assembly' : 'clear_assembly: starter';
+  }
+  return `${toolName}: ${summarize(ops)}`;
+}
+
+/**
+ * Saves the state and tells the open app. Unless `recordHistory` is false (undo/redo, which pass
+ * their own moved history), the change is recorded as one step on top of the saved history. When
+ * the app changed the parts while this call ran, the call's own change is applied on top of the
+ * app's instead of overwriting it.
+ */
+export async function writeAssemblyState(nextState, options = {}) {
+  const { notifyVite = true, recordHistory = true } =
+    typeof options === 'boolean' ? { notifyVite: options } : options;
+  const store = appSyncContext.getStore();
+  let instances = nextState.instances || [];
+  let history = nextState.history;
+
+  if (recordHistory) {
+    const saved = readStateFile() || { instances: [], history: fromLegacy([]) };
+    const base = store?.baseInstances || saved.instances;
+    if (diffParts(base, saved.instances).length > 0) {
+      instances = applyOps(saved.instances, diffParts(base, instances));
+    }
+    const recorded = recordStep(saved.history, saved.instances, instances, {
+      source: 'mcp',
+      label: (ops) => mcpStepLabel(store?.toolName, ops),
+      mergeKey: store?.callId ? `mcp:${store.callId}` : undefined,
+      mergeWindowMs: Infinity
+    });
+    history = recorded.history;
+    if (store) {
+      store.baseInstances = JSON.parse(JSON.stringify(instances));
+      if (recorded.step) store.historyStep = recorded.step.label;
+      if (recorded.branched) store.historyBranched = true;
+    }
+  }
+
   const state = {
     ...nextState,
+    instances,
+    history,
+    historyRev: history?.rev ?? 0,
     updatedAt: new Date().toISOString()
   };
   fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));

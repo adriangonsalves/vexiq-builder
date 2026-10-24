@@ -11,6 +11,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { currentLine, diffParts, loadHistory, matchesParts, stepById } from '../src/utils/buildHistory.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REAL_STATE = path.join(ROOT, 'public', 'assembly-state.json');
@@ -111,12 +112,42 @@ const rpc = (method, params = {}) =>
     server.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
   });
 /** Calls a tool; returns { data (parsed text content), content (raw content items), isError }. */
-const call = async (name, args = {}) => {
+const callRaw = async (name, args = {}) => {
   const msg = await rpc('tools/call', { name, arguments: args });
   if (msg.error) return { data: null, content: [], isError: true, error: msg.error };
   const content = msg.result?.content || [];
   const text = content.find((c) => c.type === 'text')?.text;
   return { data: text ? JSON.parse(text) : null, content, isError: Boolean(msg.result?.isError) };
+};
+
+// Every call is also a history check: a call that changes parts adds exactly one MCP step labeled
+// with its tool, a call that changes nothing adds none, and the saved history replays to the saved parts.
+const historyCheck = { problems: [], stepsByTool: {} };
+const savedBuild = () => {
+  if (!fs.existsSync(statePath)) return null;
+  const s = readState();
+  return { raw: s.history, parts: s.instances, history: loadHistory(s.history, s.instances) };
+};
+const call = async (name, args = {}) => {
+  const before = savedBuild();
+  const res = await callRaw(name, args);
+  const after = savedBuild();
+  if (!before || !after) return res;
+  const changed = diffParts(before.parts, after.parts).length > 0;
+  const added = after.history.steps.length - before.history.steps.length;
+  const head = stepById(after.history, after.history.headId);
+  const where = `${name} ${JSON.stringify(args).slice(0, 80)}`;
+  if (name !== 'undo' && name !== 'redo') {
+    if (changed && !(added === 1 && head?.source === 'mcp' && head.label.startsWith(name))) {
+      historyCheck.problems.push(`${where}: changed parts but added ${added} step(s), head "${head?.label}"`);
+    }
+    if (!changed && added !== 0) historyCheck.problems.push(`${where}: changed nothing but added ${added} step(s)`);
+    if (changed && added === 1) historyCheck.stepsByTool[name] = (historyCheck.stepsByTool[name] || 0) + 1;
+  }
+  if (after.raw && !matchesParts(after.raw, after.parts)) {
+    historyCheck.problems.push(`${where}: saved history does not replay to the saved parts`);
+  }
+  return res;
 };
 
 await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'check', version: '0' } });
@@ -460,6 +491,89 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   res = await call('capture_screenshot', {});
   check('App not running: error with an npm run dev hint', res.isError && /isn't running/.test(res.data?.error) && /npm run dev/.test(res.data?.appHint), JSON.stringify(res.data));
   await startBridge();
+}
+
+// ---------------------------------------------------------------------------
+// Build history (openspec: mcp-history)
+// ---------------------------------------------------------------------------
+{
+  bridge.browsers = 1;
+  writeState(emptyState());
+  const items = Array.from({ length: 36 }, (_, i) => ({
+    partQuery: '0x2 Connector Pin',
+    label: `Left Pin ${i + 1}`,
+    position: [(i % 6) * 25.4, Math.floor(i / 6) * 25.4, 40]
+  }));
+  const placed = await call('place_parts', { parts: items, mirror: { plane: 'Z', offsetMm: 0 } });
+  let saved = readState();
+  const line = currentLine(saved.history);
+  const step = line.at(-1);
+  const addOrder = step?.ops.filter((o) => o.op === 'add').map((o) => o.part.instanceId).join();
+  check(
+    'place_parts with 36 items and mirror: one step adding 72 parts, labeled "place_parts: 72 parts"',
+    placed.data?.placedCount === 72 && line.length === 1 && step.label === 'place_parts: 72 parts' && step.source === 'mcp' && step.ops.length === 72,
+    JSON.stringify({ placed: placed.data?.placedCount, steps: line.length, label: step?.label })
+  );
+  check('  its parts are recorded in placement order', addOrder === saved.instances.map((p) => p.instanceId).join());
+  check('  the reply names the step', placed.data?.historyStep === 'place_parts: 72 parts', JSON.stringify(placed.data?.historyStep));
+
+  const dry = await call('place_parts', { dryRun: true, parts: [{ partQuery: '1x6 Beam', position: [0, 200, 0] }] });
+  check('place_parts dryRun adds no step', dry.data?.dryRun && currentLine(readState().history).length === 1);
+  const asm = await call('get_assembly');
+  check('get_assembly reports the step count, not the steps', asm.data?.history?.currentStep === 1 && asm.data?.history?.totalSteps === 1 && !asm.data?.history?.steps);
+
+  // Undo / redo / get_history
+  let res = await call('undo');
+  saved = readState();
+  check('undo removes the call\'s 72 parts without adding a step', res.data?.ok && saved.instances.length === 0 && saved.history.steps.length === 1 && res.data?.undone?.[0] === 'place_parts: 72 parts', JSON.stringify(res.data));
+  check('  undo reports appSync', res.data?.appSync === 'live');
+  res = await call('undo');
+  check('undo at the start refuses with a message', res.data?.ok === false && /Nothing to undo/.test(res.data?.message));
+  res = await call('redo');
+  saved = readState();
+  check('redo brings the 72 parts back', res.data?.ok && saved.instances.length === 72 && res.data?.currentStep === 1);
+  res = await call('redo');
+  check('redo at the end refuses with a message', res.data?.ok === false && /Nothing to redo/.test(res.data?.message));
+
+  await call('undo');
+  res = await call('place_part', { partQuery: '1x6 Beam', label: 'Branch Beam', position: [0, 150, 0] });
+  check('a change after undo starts a branch and the reply says so', /new branch/.test(res.data?.historyNote || ''), JSON.stringify(res.data?.historyNote));
+  const hist = await call('get_history');
+  check(
+    'get_history lists labels and sources, and the branch point at the start',
+    hist.data?.totalSteps === 1 &&
+      hist.data.steps[0].label === 'place_part: Branch Beam' &&
+      hist.data.steps[0].source === 'mcp' &&
+      hist.data.branchPoints.length === 1 &&
+      hist.data.branchPoints[0].afterStep === 0 &&
+      hist.data.branchPoints[0].branches.length === 2,
+    JSON.stringify(hist.data)
+  );
+
+  // Every changing tool records one step (checked by the call wrapper); exercise the rest
+  writeState(emptyState());
+  const railA = (await call('place_part', { partQuery: '228-2500-026', label: 'Rail A', position: [0, 23.87, 0] })).data?.instance?.instanceId;
+  const railB = (await call('place_part', { partQuery: '228-2500-026', label: 'Rail B', position: [0, 23.87, 6.1] })).data?.instance?.instanceId;
+  await call('update_part', { instanceId: railB, color: '#ff0000' });
+  await call('auto_fasten_joint', { instanceIdA: railA, instanceIdB: railB, maxPins: 2 });
+  await call('align_part_to_hole', { targetInstanceId: railA, partQuery: '0x2 Connector Pin', holeIndex: 5 });
+  const mated = await call('mate_parts', { partQuery: '0x2 Connector Pin', targetInstanceId: railA, targetPortId: 'hole_29' });
+  await call('mesh_gear_train', { supportBeamId: railA, startPortId: 'hole_31', gears: ['228-2500-214', '228-2500-214'], axialOffsetMm: -30 });
+  await call('mirror_subassembly', { instanceIds: [railA], mirrorPlane: 'Z', planeOffsetMm: -40 });
+  await call('remove_part', { instanceId: mated.data?.instance?.instanceId });
+  await call('configure_viewport', { showGrid: false });
+  await call('clear_assembly', { mode: 'empty' });
+  await call('clear_assembly', { mode: 'starter' });
+  const changingTools = ['place_part', 'place_parts', 'update_part', 'align_part_to_hole', 'mate_parts', 'auto_fasten_joint', 'mesh_gear_train', 'mirror_subassembly', 'remove_part', 'clear_assembly'];
+  const missing = changingTools.filter((t) => !historyCheck.stepsByTool[t]);
+  check('every changing tool recorded a step', missing.length === 0, `no step from: ${missing.join(', ')}`);
+  const labels = currentLine(readState().history).map((s) => s.label);
+  check('clear_assembly steps are labeled "clear_assembly" and "clear_assembly: starter"', labels.includes('clear_assembly') && labels.includes('clear_assembly: starter'), labels.join(' | '));
+  check(
+    'every call: one step when parts changed, none otherwise, and the saved history replays to the saved parts',
+    historyCheck.problems.length === 0,
+    historyCheck.problems.slice(0, 5).join(' || ')
+  );
 }
 
 // ---------------------------------------------------------------------------
