@@ -21,6 +21,7 @@
   - Interactive category filter pills with part counts.
   - Instant search by part name, VEX part number (`228-2500-...`), or category.
   - On-demand WebGL thumbnail rendering ([`src/components/PartThumbnail.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/PartThumbnail.jsx)) with viewport visibility deferral (`content-visibility: auto`).
+  - Near-white parts (connectors) are drawn with stronger, denser outlines so their shape reads on the dark card; a thumbnail is redrawn whenever its part's default color changes.
 - **4,137 BVH-Verified Semantic Connection Ports:**
   - Every part is indexed with typed, raycast-verified local connection ports:
     - `pin_hole` (Cyan) — $\varnothing 4.8\text{ mm}$ round pin holes with through/blind classification and axial span `spanMm`.
@@ -47,6 +48,20 @@
   - When moving parts with the **3D Move Gizmo** (`W`) or **Inspector Nudge Buttons** (`-X/+X`, `-Y/+Y`, `-Z/+Z`), the translation solver automatically detects physical contact boundaries using a **10-step BVH binary search** + **`0.25P` (`3.175 mm`) sub-pitch flush seat detection**.
   - Pushing a connector pin into a beam or plate stops **flush** when the pin's flat cap/shoulder contacts the plate surface (`z = ±3.175 mm`) instead of stepping into the solid wall of the beam.
   - Continuing to drag past the contact detent releases the part so it can pass through to the other side when desired.
+- **Aligned Hole Highlighting (See-Through):**
+  - While a part is selected or dragged (Move `W` or Rotate `E`), every opening that lines up with one of its pins or its shaft is marked with an **orange ring** on the hole's rim, projected onto the receiving part's actual surface on the side where the pin or shaft will enter (e.g. the recessed floor around a beam hole), shown as a **solid ring on the surface at both faces** of the receiving part (only the entry face for the blind motor socket), plus a **faint see-through ring** at the entry face that shows through any parts in front, so alignment is visible without changing the camera view. Rings match each opening's rim (pin holes `3.175 mm`, bores and the motor socket `2.5 mm`, collar hole `1.575 mm`).
+  - **Pins** (`pin_peg`) light up round **pin holes** (`pin_hole`). **Shafts** light up pin holes, **gear/wheel/pulley bores** (`shaft_bore`), the **Smart Motor drive socket** (`shaft_socket`), and the hole in a **Rubber Shaft Collar**.
+  - Works both ways: dragging a beam, gear, wheel, motor, or rubber collar lights up its own openings that line up with pins or shafts already placed.
+  - "Lined up" means axes within `2°`, axis lines within `0.25 mm`, and the opening within `12P` (`152.4 mm`) of the pin or shaft along the axis.
+  - Pins only project the way they stick out of their part: each pin end is checked against the 3D model, so a corner connector no longer lights holes on its body side, while connector pins, idler pins (snap end and smooth end) and male–male standoffs project both ways. Every pin part works, including the 2x3 Smooth Idler Pin, which has no pin in the catalog data.
+  - A ring shows only while the pin or shaft is still outside that opening; it disappears as soon as the pin or shaft reaches the surface the ring is drawn on (more openings further along the same line stay lit until reached). Through holes in beams, plates, and gears work from either side.
+  - Rings stay while the part remains selected (including after Inspector nudges, Snap & Mate, and MCP updates) and clear on deselect, when the part is hidden, or in Explode view. Highlighting never moves parts or changes saved state.
+- **Double-Click Mating:**
+  - With rings showing, **double-click the selected part** (it can be behind another part) to finish the joint: it is shifted sideways onto the hole's axis (at most `0.25 mm`), then moved straight along the axis until it touches the receiving part (pin cap or shoulder on the face, shaft at the bottom of the motor socket), using the same flush-contact stop as dragging. It keeps going while the pin or shaft is still in the holes, so a pin goes all the way in even after its tip comes out the far side. The saved position is checked so the part never ends up overlapping. It is never rotated.
+  - Works both ways: a pin or shaft goes into the lined-up holes, or a beam, gear, or motor moves onto lined-up pins and shafts. Holes lined up in the same direction mate together.
+  - If nothing is touched while the pin or shaft is in the holes (a plain shaft through beams and gears, a gear onto a shaft), the part stops when the leading end is flush with the far face of the last lined-up hole.
+  - Parts that can mate in more than one direction (e.g. the **Triple 2x Wide, 2x2 Corner Connector**, with pins on `+X`, `+Z` and `−Z`) show **one large orange arrow per direction** instead, and the gizmo hides. **Click an arrow** to mate that way; `Esc`, clicking elsewhere, or a selection change cancels.
+  - The result is saved and synced like a drag release, and a message appears in the Inspector ("Mated with …", "Nothing lined up to mate with", "Part is locked", "Can't mate: already touching another part").
 - **Real-Time Concave Mesh Collision Detection (`three-mesh-bvh`):**
   - Uses inward-eroded (`0.38 mm` clearance) concave triangle meshes so pins and shafts pass cleanly through `4.8 mm` holes without false-positive bounding-box collisions, while true solid-body intersections are flagged immediately.
   - Intersecting parts render in **transparent grey** (`opacity: 0.42`) with a top HUD warning and a one-click **Revert Pose / Cancel Placement** button.
@@ -63,7 +78,8 @@
   - `D` / `Cmd+D`: Duplicate selected part
   - `F`: Focus camera on selected part (or full assembly)
   - `Del` / `Backspace`: Delete selected part
-  - `Esc`: Exit Explode mode / revert intersecting part & deselect
+  - `Esc`: Hide mate arrows if shown; otherwise exit Explode mode / revert intersecting part & deselect
+  - Double-click selected part: Mate with lined-up holes / pins (shows direction arrows when there is more than one way)
 
 ---
 
@@ -75,7 +91,7 @@ Located in the right-hand **Part Inspector** ([`src/App.jsx`](file:///Users/adri
    - Direct numeric `X`, `Y`, `Z` inputs in millimeters with live VEX Pitch (`P`) readout.
    - Contact-aware `-X`, `+X`, `-Y`, `+Y`, `-Z`, `+Z` Nudge buttons that step by the active Pitch setting and automatically stop flush at physical contact boundaries.
    - Direct `X`, `Y`, `Z` Euler degree inputs plus one-click **Rotate X/Y/Z +90°** flip buttons.
-   - 10 official VEX IQ color swatches plus a custom hex color picker.
+   - 11 VEX IQ color swatches (including Connector White, the default for Connectors & Brackets) plus a custom hex color picker.
 2. **⚡ Auto-Fasten Joint (Pins):**
    - Automatically scans all verified `pin_hole` ports between the selected part and either a specific partner part or **`ALL` touching parts**.
    - Finds coaxial overlapping holes (`collinearDist <= 1.2 mm`), measures total stack thickness (`2P` vs `3P+`), selects the appropriate VEX Connector Pin (`1x1`, `0x2`, or `1x2`), computes the exact shoulder seating depth, and verifies zero BVH collisions before inserting up to `maxPins` pins.

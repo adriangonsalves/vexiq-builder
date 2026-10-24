@@ -3,8 +3,66 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { loadPartAsset } from '../utils/geometryCache.js';
+import {
+  MAX_AXIAL_GAP_MM,
+  collectWorldFeatures,
+  findAlignedOpenings,
+  measureOpeningSurfaces,
+  measurePinEnds,
+  planMates,
+  worldPartBox
+} from '../utils/pinHoleAlignment.js';
 
 const VEX_PITCH_MM = 12.7; // 1x VEX IQ Pitch = 0.5 inch = 12.7 mm
+const HOLE_HIGHLIGHT_COLOR = 0xf97316; // orange: distinct from Axes overlay, selection, collision & gizmo colors
+const COLLISION_EROSION_MM = 0.38; // collision meshes are eroded inward by this much (see geometryCache.js)
+
+const openingSurfaceCache = new Map(); // partId -> Map(featureId -> { lo, hi }) measured on the mesh
+const pinEndCache = new Map(); // partId -> Map(featureId -> { lo, hi }) which pin ends stick out
+
+/**
+ * Returns a part-local raycaster over a group's (eroded) collision meshes that reports the nearest
+ * hit as { distance, normal } (normal: the hit triangle's face normal), or null on a miss.
+ */
+function createCollisionRaycaster(geos) {
+  const ray = new THREE.Ray();
+  const origin = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  return (originArr, dirArr) => {
+    ray.set(origin.fromArray(originArr), dir.fromArray(dirArr));
+    let best = null;
+    for (const geo of geos) {
+      const hit = geo.boundsTree?.raycastFirst(ray, THREE.DoubleSide);
+      if (hit && (best == null || hit.distance < best.distance)) best = hit;
+    }
+    return best ? { distance: best.distance, normal: best.face.normal.toArray() } : null;
+  };
+}
+
+/**
+ * Mesh measurements used by the alignment math, computed once per part from its collision mesh:
+ * real face positions of its openings (so rings sit on the surface around each rim) and which ends
+ * of its pins stick out. Returns null until the GLB has loaded.
+ */
+function getMeshMeasurements(group, partMeta) {
+  const geos = group.userData.collisionGeometries;
+  if (!geos || geos.length === 0) return null;
+  let raycastHit = null;
+  const hitFn = () => (raycastHit ||= createCollisionRaycaster(geos));
+
+  if (!openingSurfaceCache.has(partMeta.id)) {
+    const surfaces = measureOpeningSurfaces(partMeta, (originArr, dirArr) => {
+      const hit = hitFn()(originArr, dirArr);
+      // Step back from the eroded collision surface onto the visible one
+      return hit ? Math.max(0, hit.distance - COLLISION_EROSION_MM) : null;
+    });
+    openingSurfaceCache.set(partMeta.id, surfaces);
+  }
+  if (!pinEndCache.has(partMeta.id)) {
+    pinEndCache.set(partMeta.id, measurePinEnds(partMeta, (o, d) => hitFn()(o, d)));
+  }
+  return { surfaces: openingSurfaceCache.get(partMeta.id), pinEnds: pinEndCache.get(partMeta.id) };
+}
 
 /**
  * Builds a dual-resolution VEX IQ pitch grid (major lines every 1x Pitch = 12.7mm,
@@ -98,6 +156,199 @@ function createConnectorAxesGroup(partMeta) {
   }
 
   return group;
+}
+
+/**
+ * Builds the overlay that marks openings lined up with the selected part's pins/shafts:
+ * - a solid ring on the receiving part's surface at each face of the opening (both faces for a
+ *   through opening), depth-tested so it reads as part of the surface and hides behind other parts;
+ * - a faint see-through ring on the face toward the pin/shaft, so a hidden opening is still findable.
+ * Rings are pooled and hidden rather than removed so dragging never allocates geometry.
+ */
+function createHoleHighlightOverlay() {
+  const group = new THREE.Group();
+  group.name = '__aligned_hole_highlights__';
+
+  const RING_WIDTH_MM = 0.7;
+  const SOLID_RING_LIFT_MM = 0.15; // lift off the measured surface so the depth test never buries it
+  const GHOST_OPACITY = 0.3;
+  const ringGeoByRadius = new Map(); // rim radius (mm) -> shared RingGeometry hugging that rim
+  const ringGeoFor = (radiusMm = 3.175) => {
+    const key = radiusMm.toFixed(3);
+    if (!ringGeoByRadius.has(key)) {
+      ringGeoByRadius.set(key, new THREE.RingGeometry(radiusMm, radiusMm + RING_WIDTH_MM, 40));
+    }
+    return ringGeoByRadius.get(key);
+  };
+  const baseMaterial = {
+    color: HOLE_HIGHLIGHT_COLOR,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    fog: false,
+    toneMapped: false
+  };
+  const solidMaterial = new THREE.MeshBasicMaterial({
+    ...baseMaterial,
+    depthTest: true,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2
+  });
+  const ghostMaterial = new THREE.MeshBasicMaterial({
+    ...baseMaterial,
+    depthTest: false,
+    transparent: true,
+    opacity: GHOST_OPACITY
+  });
+  const solidPool = [];
+  const ghostPool = [];
+  const ringNormal = new THREE.Vector3(0, 0, 1);
+
+  // Places one pooled ring per entry of `placements` ({ position, normal, radiusMm }).
+  const placeRings = (pool, material, renderOrder, placements) => {
+    while (pool.length < placements.length) {
+      const ring = new THREE.Mesh(ringGeoFor(), material);
+      ring.renderOrder = renderOrder;
+      group.add(ring);
+      pool.push(ring);
+    }
+    pool.forEach((ring, i) => {
+      const p = placements[i];
+      ring.visible = Boolean(p);
+      if (!p) return;
+      ring.geometry = ringGeoFor(p.radiusMm);
+      ring.position.copy(p.position);
+      ring.quaternion.setFromUnitVectors(ringNormal, p.normal);
+    });
+  };
+
+  const show = (openings) => {
+    const solid = [];
+    const ghost = [];
+    for (const o of openings) {
+      solid.push({
+        position: o.face.clone().addScaledVector(o.outward, SOLID_RING_LIFT_MM),
+        normal: o.outward,
+        radiusMm: o.radiusMm
+      });
+      if (o.farFace) {
+        const inward = o.outward.clone().negate();
+        solid.push({
+          position: o.farFace.clone().addScaledVector(inward, SOLID_RING_LIFT_MM),
+          normal: inward,
+          radiusMm: o.radiusMm
+        });
+      }
+      ghost.push({ position: o.face, normal: o.outward, radiusMm: o.radiusMm });
+    }
+    // Ghost first, solid on top; both above the Axes overlay (999/1000) and below the gizmo (Infinity)
+    placeRings(ghostPool, ghostMaterial, 1001, ghost);
+    placeRings(solidPool, solidMaterial, 1002, solid);
+  };
+
+  const dispose = () => {
+    for (const geo of ringGeoByRadius.values()) geo.dispose();
+    solidMaterial.dispose();
+    ghostMaterial.dispose();
+  };
+
+  return { group, show, dispose };
+}
+
+/**
+ * Builds the large direction arrows shown when a double-clicked part can mate in more than one
+ * direction. Arrows are sized in gizmo units and rescaled every frame (like TransformControls) so
+ * they stay large on screen; they draw through parts and carry fatter invisible pickers for clicking.
+ */
+function createMateArrowOverlay() {
+  const group = new THREE.Group();
+  group.name = '__mate_direction_arrows__';
+  group.visible = false;
+
+  const ARROW_COLOR = HOLE_HIGHLIGHT_COLOR;
+  const ARROW_HOVER_COLOR = 0xfdba74;
+  // Built along +Y in gizmo units: shaft from 0.12 to 1.0, cone tip at 1.35
+  const shaftGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.88, 12).translate(0, 0.56, 0);
+  const headGeo = new THREE.ConeGeometry(0.11, 0.35, 20).translate(0, 1.175, 0);
+  const pickGeo = new THREE.CylinderGeometry(0.16, 0.16, 1.25, 8).translate(0, 0.725, 0);
+  const pickMaterial = new THREE.MeshBasicMaterial({ visible: false });
+  const yAxis = new THREE.Vector3(0, 1, 0);
+  const arrows = []; // { root, material, picker }
+  let shownCount = 0;
+
+  const makeArrow = () => {
+    const material = new THREE.MeshBasicMaterial({
+      color: ARROW_COLOR,
+      transparent: true,
+      opacity: 0.95,
+      depthTest: false,
+      depthWrite: false,
+      fog: false,
+      toneMapped: false
+    });
+    const root = new THREE.Group();
+    const shaft = new THREE.Mesh(shaftGeo, material);
+    const head = new THREE.Mesh(headGeo, material);
+    const picker = new THREE.Mesh(pickGeo, pickMaterial);
+    shaft.renderOrder = 1003; // above the hole rings (1001/1002)
+    head.renderOrder = 1003;
+    root.add(shaft, head, picker);
+    group.add(root);
+    return { root, material, picker };
+  };
+
+  const show = (directions, origin) => {
+    while (arrows.length < directions.length) arrows.push(makeArrow());
+    arrows.forEach((arrow, i) => {
+      const dir = directions[i];
+      arrow.root.visible = Boolean(dir);
+      if (!dir) return;
+      arrow.root.position.copy(origin);
+      arrow.root.quaternion.setFromUnitVectors(yAxis, dir);
+      arrow.material.color.setHex(ARROW_COLOR);
+    });
+    shownCount = directions.length;
+    group.visible = shownCount > 0;
+  };
+
+  const hide = () => {
+    shownCount = 0;
+    group.visible = false;
+  };
+
+  /** Index of the arrow under the raycaster, or -1. */
+  const pick = (raycaster) => {
+    if (!group.visible) return -1;
+    group.updateMatrixWorld(true);
+    const pickers = arrows.slice(0, shownCount).map((a) => a.picker);
+    const hit = raycaster.intersectObjects(pickers, false)[0];
+    return hit ? pickers.indexOf(hit.object) : -1;
+  };
+
+  const setHover = (index) => {
+    arrows.forEach((arrow, i) => arrow.material.color.setHex(i === index ? ARROW_HOVER_COLOR : ARROW_COLOR));
+  };
+
+  // Same screen-size factor TransformControls uses for its gizmo
+  const updateScale = (camera) => {
+    if (!group.visible) return;
+    for (const arrow of arrows.slice(0, shownCount)) {
+      const factor =
+        arrow.root.position.distanceTo(camera.position) *
+        Math.min((1.9 * Math.tan((Math.PI * camera.fov) / 360)) / camera.zoom, 7);
+      arrow.root.scale.setScalar((factor * 0.95) / 4);
+    }
+  };
+
+  const dispose = () => {
+    shaftGeo.dispose();
+    headGeo.dispose();
+    pickGeo.dispose();
+    pickMaterial.dispose();
+    for (const arrow of arrows) arrow.material.dispose();
+  };
+
+  return { group, show, hide, pick, setHover, updateScale, isShown: () => group.visible, dispose };
 }
 
 /**
@@ -314,7 +565,8 @@ export default function Viewport3D({
   showConnectors,
   explodeMode = 'off',
   focusTrigger,
-  onLoadingChange
+  onLoadingChange,
+  onMateFeedback
 }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
@@ -327,9 +579,15 @@ export default function Viewport3D({
   const explodeLinesGroupRef = useRef(null);
   const meshMapRef = useRef(new Map()); // instanceId -> THREE.Group
   const wasDraggingRef = useRef(false);
+  const dragMovedRef = useRef(false); // the last gizmo drag actually moved/rotated the part
   const dragStartPosRef = useRef(new THREE.Vector3());
   const lastClearDragPosRef = useRef(new THREE.Vector3());
   const hasClearDragPosRef = useRef(false);
+  const holeOverlayRef = useRef(null);
+  const otherFeaturesRef = useRef([]); // [{ instanceId, box, features }] for visible non-selected parts
+  const lastAlignedRef = useRef([]); // latest findAlignedOpenings result for the selected part
+  const arrowOverlayRef = useRef(null);
+  const arrowPlansRef = useRef([]); // mate plans behind the arrows currently shown
 
   const instancesRef = useRef(instances);
   instancesRef.current = instances;
@@ -354,6 +612,9 @@ export default function Viewport3D({
 
   const onUpdateTransformRef = useRef(onUpdateTransform);
   onUpdateTransformRef.current = onUpdateTransform;
+
+  const onMateFeedbackRef = useRef(onMateFeedback);
+  onMateFeedbackRef.current = onMateFeedback;
 
   /**
    * Exact concave mesh-to-mesh intersection check using three-mesh-bvh on inward-eroded
@@ -484,6 +745,203 @@ export default function Viewport3D({
       Number(lo.y.toFixed(3)),
       Number(lo.z.toFixed(3))
     );
+  };
+
+  /**
+   * Caches world pins/shafts/openings of every visible non-selected part. Nothing but the selected
+   * part moves during a drag, so this is rebuilt only at drag start and after scene syncs.
+   */
+  const rebuildOtherFeatures = () => {
+    const entries = [];
+    for (const [instId, group] of meshMapRef.current.entries()) {
+      if (instId === selectedIdRef.current || !group.visible) continue;
+      const partMeta = catalogMapRef.current.get(group.userData.partId);
+      if (!partMeta) continue;
+      group.updateMatrixWorld();
+      const features = collectWorldFeatures(
+        partMeta,
+        group.matrixWorld,
+        instId,
+        getMeshMeasurements(group, partMeta)
+      );
+      if (features.length === 0) continue;
+      const box = worldPartBox(partMeta, group.matrixWorld)?.expandByScalar(MAX_AXIAL_GAP_MM);
+      entries.push({ instanceId: instId, box, features });
+    }
+    otherFeaturesRef.current = entries;
+  };
+
+  /**
+   * Highlights (see-through) every opening lined up with the selected part's pins/shafts, and the
+   * selected part's openings lined up with other parts' pins/shafts, while the insert is still outside.
+   */
+  const updateAlignedHoleHighlights = () => {
+    const overlay = holeOverlayRef.current;
+    if (!overlay) return;
+
+    const selId = selectedIdRef.current;
+    const group = selId ? meshMapRef.current.get(selId) : null;
+    const selectedInst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
+    const partMeta = group ? catalogMapRef.current.get(group.userData.partId) : null;
+    lastAlignedRef.current = [];
+    if (
+      !group ||
+      !partMeta ||
+      !selectedInst ||
+      selectedInst.visible === false ||
+      explodeModeRef.current !== 'off'
+    ) {
+      overlay.show([]);
+      return;
+    }
+
+    group.updateMatrixWorld();
+    const selectedFeatures = collectWorldFeatures(
+      partMeta,
+      group.matrixWorld,
+      selId,
+      getMeshMeasurements(group, partMeta)
+    );
+    if (selectedFeatures.length === 0) {
+      overlay.show([]);
+      return;
+    }
+
+    const reachBox = worldPartBox(partMeta, group.matrixWorld)?.expandByScalar(MAX_AXIAL_GAP_MM);
+    const candidates = [];
+    for (const other of otherFeaturesRef.current) {
+      if (other.instanceId === selId) continue;
+      if (reachBox && other.box && !reachBox.intersectsBox(other.box)) continue;
+      for (const f of other.features) candidates.push(f);
+    }
+    lastAlignedRef.current = findAlignedOpenings(selectedFeatures, candidates);
+    overlay.show(lastAlignedRef.current);
+  };
+
+  /** Hides the mate direction arrows and gives the move/rotate gizmo back. */
+  const hideMateArrows = () => {
+    const arrows = arrowOverlayRef.current;
+    if (!arrows?.isShown()) return;
+    arrows.hide();
+    arrowPlansRef.current = [];
+    const transform = transformRef.current;
+    if (transform) {
+      transform.enabled = true;
+      transform.getHelper().visible = transform.object !== undefined;
+    }
+  };
+
+  /** Shows one large arrow per mate plan at the selected part's center and hides the gizmo. */
+  const showMateArrows = (plans, group) => {
+    const arrows = arrowOverlayRef.current;
+    const transform = transformRef.current;
+    if (!arrows || !transform) return;
+    const center = new THREE.Box3().setFromObject(group).getCenter(new THREE.Vector3());
+    arrowPlansRef.current = plans;
+    arrows.show(
+      plans.map((p) => p.direction),
+      center
+    );
+    if (cameraRef.current) arrows.updateScale(cameraRef.current);
+    transform.enabled = false;
+    transform.getHelper().visible = false;
+  };
+
+  /**
+   * Mates the selected part along one plan (see planMates): shift sideways onto the axis, then
+   * sweep along the direction in 0.5mm steps for as long as the pin/shaft is still in an opening
+   * (sweepMm); at the first contact use the drag's flush-boundary bisection, otherwise stop at the
+   * plan's travel limit (leading end flush with the far face). Commits like a drag release, after
+   * making sure the rounded position is clear.
+   */
+  const mateSelected = (plan) => {
+    const selId = selectedIdRef.current;
+    const group = selId ? meshMapRef.current.get(selId) : null;
+    if (!group || !plan) return;
+    const feedback = (message, isError = false) => onMateFeedbackRef.current?.(message, isError);
+
+    const original = group.position.clone();
+    const start = original.clone().add(plan.lateral);
+    group.position.copy(start);
+    if (checkGroupCollision(group, false)) {
+      group.position.copy(original);
+      feedback("Can't mate: already touching another part", true);
+      return;
+    }
+
+    const STEP_MM = 0.5;
+    const travel = Math.max(0, plan.travelMm);
+    const sweep = Math.max(travel, plan.sweepMm ?? 0);
+    const lastClear = start.clone();
+    let final = null;
+    for (let d = Math.min(STEP_MM, sweep); d > 0; d = Math.min(d + STEP_MM, sweep)) {
+      const probe = start.clone().addScaledVector(plan.direction, d);
+      group.position.copy(probe);
+      if (checkGroupCollision(group, false)) {
+        final = findFlushBoundaryPosition(group, lastClear, probe) || lastClear.clone();
+        break;
+      }
+      lastClear.copy(probe);
+      if (d >= sweep) break;
+    }
+    if (!final) final = start.clone().addScaledVector(plan.direction, travel);
+
+    // The contact found by bisection is within ~0.0005mm of touching, so rounding to 0.001mm can
+    // land on the touching side: step back along the move until the rounded position is clear.
+    const roundVec = (vec) =>
+      new THREE.Vector3(Number(vec.x.toFixed(3)), Number(vec.y.toFixed(3)), Number(vec.z.toFixed(3)));
+    const BACK_OFF_MM = 0.002;
+    let rounded = roundVec(final);
+    group.position.copy(rounded);
+    for (let i = 0; i < 50 && checkGroupCollision(group, false); i++) {
+      rounded = roundVec(final.addScaledVector(plan.direction, -BACK_OFF_MM));
+      group.position.copy(rounded);
+    }
+    final = rounded;
+    group.updateMatrixWorld();
+
+    onUpdateTransformRef.current(selId, {
+      position: [
+        Number(final.x.toFixed(3)),
+        Number(final.y.toFixed(3)),
+        Number(final.z.toFixed(3))
+      ],
+      rotation: [
+        Number(THREE.MathUtils.radToDeg(group.rotation.x).toFixed(2)),
+        Number(THREE.MathUtils.radToDeg(group.rotation.y).toFixed(2)),
+        Number(THREE.MathUtils.radToDeg(group.rotation.z).toFixed(2))
+      ],
+      isIntersecting: false
+    });
+
+    const partnerIds = new Set(
+      plan.pairs.map((p) => (p.insertInstanceId === selId ? p.instanceId : p.insertInstanceId))
+    );
+    const labels = [...partnerIds].map(
+      (id) => instancesRef.current.find((i) => i.instanceId === id)?.label || id
+    );
+    feedback(`Mated with ${labels.join(', ')}`);
+  };
+
+  /** Double-click on the selected part: mate in its only direction, or offer arrows for several. */
+  const handleMateRequest = () => {
+    const selId = selectedIdRef.current;
+    const group = selId ? meshMapRef.current.get(selId) : null;
+    const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
+    if (!group || !inst || explodeModeRef.current !== 'off') return;
+    const feedback = (message, isError = false) => onMateFeedbackRef.current?.(message, isError);
+    if (inst.locked) {
+      feedback('Part is locked', true);
+      return;
+    }
+    const plans = planMates(lastAlignedRef.current, selId);
+    if (plans.length === 0) {
+      feedback('Nothing lined up to mate with', true);
+    } else if (plans.length === 1) {
+      mateSelected(plans[0]);
+    } else {
+      showMateArrows(plans, group);
+    }
   };
 
   // Expose a contact-aware nudge/move resolver to App.jsx for the Inspector -X/+X/-Y/+Y/-Z/+Z buttons
@@ -626,6 +1084,16 @@ export default function Viewport3D({
     scene.add(explodeLinesGroup);
     explodeLinesGroupRef.current = explodeLinesGroup;
 
+    // Aligned-hole highlights live on the scene root (not partsRoot) so click selection ignores them
+    const holeOverlay = createHoleHighlightOverlay();
+    scene.add(holeOverlay.group);
+    holeOverlayRef.current = holeOverlay;
+
+    // Mate direction arrows (double-click on a part that can mate in several directions)
+    const arrowOverlay = createMateArrowOverlay();
+    scene.add(arrowOverlay.group);
+    arrowOverlayRef.current = arrowOverlay;
+
     // OrbitControls
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
@@ -642,6 +1110,7 @@ export default function Viewport3D({
     transform.addEventListener('objectChange', () => {
       const obj = transform.object;
       if (!obj) return;
+      dragMovedRef.current = true;
       const instId = obj.userData.instanceId;
       const inst = instancesRef.current.find((i) => i.instanceId === instId);
       const partMeta = inst ? catalogMapRef.current.get(inst.partId) : null;
@@ -717,6 +1186,7 @@ export default function Viewport3D({
           isSelected: true,
           isIntersecting: isColliding
         });
+        updateAlignedHoleHighlights();
         return;
       }
 
@@ -728,12 +1198,16 @@ export default function Viewport3D({
         isSelected: true,
         isIntersecting: isColliding
       });
+      updateAlignedHoleHighlights();
     });
 
     transform.addEventListener('dragging-changed', (event) => {
       orbit.enabled = !event.value;
       if (event.value) {
         wasDraggingRef.current = true;
+        dragMovedRef.current = false;
+        hideMateArrows();
+        rebuildOtherFeatures();
         if (transform.object) {
           dragStartPosRef.current.copy(transform.object.position);
           const startColliding = checkGroupCollision(transform.object, false);
@@ -777,25 +1251,24 @@ export default function Viewport3D({
     // Click raycasting for part selection
     const raycaster = new THREE.Raycaster();
     const pointerDownPos = new THREE.Vector2();
+    let lastArrowClickAt = -Infinity; // the dblclick that follows an arrow click must not mate again
 
     const handlePointerDown = (e) => {
       pointerDownPos.set(e.clientX, e.clientY);
     };
 
-    const handlePointerUp = (e) => {
-      if (e.button !== 0) return;
-      if (transform.dragging || wasDraggingRef.current) return;
-      const dx = e.clientX - pointerDownPos.x;
-      const dy = e.clientY - pointerDownPos.y;
-      if (Math.hypot(dx, dy) > 5) return;
-
+    const setRayFromEvent = (e) => {
       const rect = renderer.domElement.getBoundingClientRect();
       const mouse = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1
       );
-
       raycaster.setFromCamera(mouse, camera);
+    };
+
+    // Instance ids of the visible parts under the pointer, nearest first
+    const pickPartsAt = (e) => {
+      setRayFromEvent(e);
       const meshes = [];
       partsRoot.traverse((child) => {
         if (
@@ -807,18 +1280,95 @@ export default function Viewport3D({
           meshes.push(child);
         }
       });
-
-      const hits = raycaster.intersectObjects(meshes, false);
-      if (hits.length > 0) {
-        const hitInstanceId = hits[0].object.userData.instanceId;
-        onSelectRef.current(hitInstanceId);
-      } else {
-        onSelectRef.current(null);
+      const ids = [];
+      for (const hit of raycaster.intersectObjects(meshes, false)) {
+        const id = hit.object.userData.instanceId;
+        if (!ids.includes(id)) ids.push(id);
       }
+      return ids;
+    };
+
+    // A click on another part that sits in front of the selected part waits one double-click interval
+    // before changing the selection, so double-clicking a selected part hidden behind it still mates it.
+    const DOUBLE_CLICK_WINDOW_MS = 350;
+    let pendingSelectTimer = null;
+    const cancelPendingSelect = () => {
+      if (pendingSelectTimer) clearTimeout(pendingSelectTimer);
+      pendingSelectTimer = null;
+    };
+
+    const handlePointerUp = (e) => {
+      if (e.button !== 0) return;
+      if (transform.dragging || wasDraggingRef.current) return;
+      const dx = e.clientX - pointerDownPos.x;
+      const dy = e.clientY - pointerDownPos.y;
+      if (Math.hypot(dx, dy) > 5) return;
+
+      // While mate arrows are shown, a click either picks an arrow or dismisses them
+      if (arrowOverlay.isShown()) {
+        setRayFromEvent(e);
+        const index = arrowOverlay.pick(raycaster);
+        const plan = index >= 0 ? arrowPlansRef.current[index] : null;
+        hideMateArrows();
+        if (plan) {
+          lastArrowClickAt = performance.now();
+          mateSelected(plan);
+          return;
+        }
+      }
+
+      const ids = pickPartsAt(e);
+      const front = ids[0] ?? null;
+      const selId = selectedIdRef.current;
+      cancelPendingSelect();
+      if (selId && front !== selId && ids.includes(selId)) {
+        pendingSelectTimer = setTimeout(() => {
+          pendingSelectTimer = null;
+          onSelectRef.current(front);
+        }, DOUBLE_CLICK_WINDOW_MS);
+        return;
+      }
+      onSelectRef.current(front);
+    };
+
+    const handlePointerMove = (e) => {
+      if (!arrowOverlay.isShown()) return;
+      setRayFromEvent(e);
+      const index = arrowOverlay.pick(raycaster);
+      arrowOverlay.setHover(index);
+      renderer.domElement.style.cursor = index >= 0 ? 'pointer' : '';
+    };
+
+    // The gizmo's center grab area ('XYZ' in move mode, 'XYZE' in rotate mode) covers small parts, and
+    // pressing it starts a zero-length drag; only arrow/plane/ring handles or a real move block a mate.
+    const GIZMO_CENTER_AXES = new Set(['XYZ', 'XYZE']);
+    const handleDoubleClick = (e) => {
+      if (transform.dragging) return;
+      if (wasDraggingRef.current && dragMovedRef.current) return;
+      if (transform.object && transform.axis && !GIZMO_CENTER_AXES.has(transform.axis)) return;
+      if (arrowOverlay.isShown()) return;
+      if (performance.now() - lastArrowClickAt < 600) return; // second click of an arrow double-click
+      const selId = selectedIdRef.current;
+      // The selected part may be behind another part; anywhere under the pointer counts
+      if (!selId || !pickPartsAt(e).includes(selId)) return;
+      cancelPendingSelect();
+      handleMateRequest();
+    };
+
+    // Capture phase, so Esc only dismisses the arrows and doesn't reach App's deselect handler
+    const handleKeyDownCapture = (e) => {
+      if (e.key !== 'Escape' || !arrowOverlay.isShown()) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      hideMateArrows();
+      renderer.domElement.style.cursor = '';
     };
 
     renderer.domElement.addEventListener('pointerdown', handlePointerDown);
     renderer.domElement.addEventListener('pointerup', handlePointerUp);
+    renderer.domElement.addEventListener('pointermove', handlePointerMove);
+    renderer.domElement.addEventListener('dblclick', handleDoubleClick);
+    window.addEventListener('keydown', handleKeyDownCapture, true);
 
     const resizeObserver = new ResizeObserver(() => {
       if (!container) return;
@@ -835,6 +1385,7 @@ export default function Viewport3D({
     const animate = () => {
       animFrameId = requestAnimationFrame(animate);
       orbit.update();
+      arrowOverlay.updateScale(camera);
       renderer.render(scene, camera);
     };
     animate();
@@ -844,8 +1395,14 @@ export default function Viewport3D({
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
+      renderer.domElement.removeEventListener('pointermove', handlePointerMove);
+      renderer.domElement.removeEventListener('dblclick', handleDoubleClick);
+      window.removeEventListener('keydown', handleKeyDownCapture, true);
+      cancelPendingSelect();
       transform.dispose();
       orbit.dispose();
+      holeOverlay.dispose();
+      arrowOverlay.dispose();
       renderer.dispose();
     };
   }, []);
@@ -999,6 +1556,10 @@ export default function Viewport3D({
                 isIntersecting: isColliding
               });
             }
+
+            // Mesh is now available: re-place highlight rings on the measured surfaces
+            rebuildOtherFeatures();
+            updateAlignedHoleHighlights();
           })
           .catch((err) => {
             console.error('Failed to load GLB for part:', partMeta.name, err);
@@ -1062,6 +1623,12 @@ export default function Viewport3D({
     } else {
       transform.detach();
     }
+
+    // Any scene change (selection, Explode, hide, server sync, a committed mate) makes shown mate
+    // plans stale, so dismiss the arrows
+    hideMateArrows();
+    rebuildOtherFeatures();
+    updateAlignedHoleHighlights();
   }, [instances, selectedId, catalogMap, showConnectors, explodeMode]);
 
   // Camera Focus / Frame trigger (key 'F' or toolbar button)

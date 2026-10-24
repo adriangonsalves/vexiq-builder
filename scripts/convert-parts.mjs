@@ -108,7 +108,7 @@ function classifyPart(name) {
     lower.includes('corner') ||
     lower.includes('offset')
   ) {
-    return { category: 'Connectors & Brackets', defaultColor: '#475569' };
+    return { category: 'Connectors & Brackets', defaultColor: '#f8fafc' };
   }
 
   if (

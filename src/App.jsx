@@ -39,6 +39,7 @@ const VEX_COLORS = [
   '#16a34a', // VEX Green
   '#9333ea', // VEX Purple
   '#e2e8f0', // Metal / Silver
+  '#f8fafc', // VEX Connector White
   '#1f2937'  // Tire / Rubber Black
 ];
 
@@ -968,6 +969,7 @@ export default function App() {
             explodeMode={explodeMode}
             focusTrigger={focusTrigger}
             onLoadingChange={setIsLoadingMesh}
+            onMateFeedback={(message, isError) => setActionFeedback({ message, isError })}
           />
 
           <div className="viewport-hud-top">

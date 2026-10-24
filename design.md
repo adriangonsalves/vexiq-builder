@@ -75,6 +75,7 @@ flowchart LR
 | [`vite.config.js`](file:///Users/adriangonsalves/projects/vexiq_builder/vite.config.js) | Custom Vite plugin `vexIqMcpBridgePlugin()` providing `/api/assembly`, `/api/assembly/events` (SSE), and `/api/assembly/action`. |
 | [`src/App.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/App.jsx) | Main 3-column CAD UI: Part Library, 3D Viewport container & HUD, Scene Outliner, Precision Inspector, Smart Assembly card, and Audit & Blueprint `<dialog>`. |
 | [`src/components/Viewport3D.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/Viewport3D.jsx) | Three.js WebGL scene, `OrbitControls`, `TransformControls`, BVH Flush Contact Boundary solver, Explode View engine, and Semantic Port 3D overlays. |
+| [`src/utils/pinHoleAlignment.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/pinHoleAlignment.js) | Pure pin/shaft-to-opening alignment math (`collectWorldFeatures`, `findAlignedOpenings`) used by the viewport's aligned-hole highlights; checked from Node by [`scripts/check-pin-hole-alignment.mjs`](file:///Users/adriangonsalves/projects/vexiq_builder/scripts/check-pin-hole-alignment.mjs). |
 | [`src/utils/geometryCache.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/geometryCache.js) | Singleton `.glb` loader and inward-eroded (`0.38 mm`) `MeshBVH` builder shared across viewport instances and thumbnails. |
 | [`src/components/PartThumbnail.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/PartThumbnail.jsx) | Shared offscreen WebGL renderer that rasterizes and caches 2D data-URL thumbnails for catalog cards. |
 | [`src/utils/webMcpTools.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/webMcpTools.js) | W3C WebMCP (`navigator.modelContext`) tool registration for in-browser AI agents. |
@@ -149,6 +150,62 @@ When moving a part via the 3D Move Gizmo or Inspector Nudge buttons:
   - Outline: a `LineSegments` square added with the **same handle name**, so `TransformControlsGizmo.updateMatrixWorld()` positions, scales, hides it edge-on (`PLANE_HIDE_THRESHOLD = 0.2`), and highlights it yellow alongside its fill.
   - Picker squares: enlarged to $0.32$ units for easier grabbing.
 - Plane drags flow through the same `objectChange` handler as axis drags: the per-axis snap leaves the locked (normal) axis at its drag-start value, while in-plane axes get world-grid / `0.25P` flush-seat snapping and BVH bisection clamping.
+
+### 5.4 Aligned Hole Highlighting ([`pinHoleAlignment.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/pinHoleAlignment.js) + [`Viewport3D.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/Viewport3D.jsx))
+- **Features per part** (`getLocalFeatures`, part-local, cached per catalog entry). Each feature is an axis line plus a usable extent $[t_{\min}, t_{\max}]$ with $t = \mathbf{p} \cdot \hat{\mathbf{a}}$ measured from the part origin (the same convention as port `spanMm`):
+
+  | Kind | Source | Extent |
+  | :--- | :--- | :--- |
+  | `pin` (insert) | `ports[]` `pin_peg` | `spanMm` |
+  | `shaft` (insert) | `fastenerSpecs.fastenerType` ∈ `straight_shaft` / `capped_shaft` / `motor_shaft`; local `fastenerSpecs.axis` line through `(0,0,0)` | `usableSpanZ` |
+  | `pin_hole`, `shaft_bore` | `ports[]` | through hole in a part $\le 7\text{ mm}$ thick along the axis (`THIN_PART_MAX_MM`): whole bbox, face to face; otherwise `spanMm` |
+  | `shaft_socket` | `ports[]` (Smart Motor) | $[t_0 - \text{maxDepthMm},\ t_0]$, $t_0 = \mathbf{o} \cdot \hat{\mathbf{a}}$ |
+  | `collar_hole` | `Rubber Shaft Collar` `cylinders[]` entry with $r \in [1.4, 1.7]\text{ mm}$ | whole bbox along the axis |
+
+  Every extent is intersected with the part `bbox` projected on the axis, because peg `spanMm` comes from STEP cylinder placements and can overrun the part (0x2 Connector Pin: `[-14.441, 5.439]` vs bbox `z ∈ [-6.26, 6.14]`). Opening ends within `1 mm` of a part face (`FACE_SNAP_MM`) are moved onto it, so the ring and the "entered" test use the visible face (interior beam hole spans stop at `±2.286 mm`, the face is at `±3.05 mm`; the socket face moves `0 → 0.13 mm`). The thin-through-hole rule exists because 2,152 of 3,875 catalog holes/bores cover only part of the part's depth (12x12 Plate holes: `[1, 2.286]`). Openings carry a rim radius (`OPENING_RIM_RADIUS_MM`: pin hole `3.175`, bore/socket `2.5`; collar: its cylinder radius `1.575`). Rubber Shaft Collars are tagged `straight_shaft` in the catalog but are treated as openings, never shafts. `Rubber Shaft Collar v1` is in `EXCLUDED_PART_NAMES` because none of its catalog cylinders is its real hole (radial BVH raycast check in the Node script).
+- **Surface projection** (`measureOpeningSurfaces` + `getOpeningSurfaces` in `Viewport3D.jsx`): once a part's GLB has loaded, each opening's two faces are measured on its collision BVH with 8 rays parallel to the axis at rim + 0.35 mm, started 2 mm outside the bbox; per side the hit nearest the approaching insert is kept (hits > 1 mm outside the catalog extent ignored), 0.38 mm is subtracted for the erosion, and the result is clamped to the bbox. Results are cached per part id and replace the opening extent in `collectWorldFeatures`, so rings sit on the real surface (beam/plate hole recess at ±2.46 mm instead of the ±3.05 mm bbox face) and the outside test matches. Before the GLB loads, the catalog extent is used.
+- **Matching:** `pin` → `pin_hole`; `shaft` → `pin_hole`, `shaft_bore`, `shaft_socket`, `collar_hole`. Pairs on the same instance are skipped.
+- **Highlight test** for insert $I$ and opening $O$ (`findAlignedOpenings`, both directions):
+  1. Parallel: $|\hat{\mathbf{a}}_I \cdot \hat{\mathbf{a}}_O| \ge \cos 2^\circ$ (`PARALLEL_MIN_DOT`).
+  2. Same line: perpendicular distance from $\mathbf{o}_O$ to $I$'s axis $\le 0.25\text{ mm}$ (`MAX_LINE_DISTANCE_MM`).
+  3. Project both world extents onto $\hat{\mathbf{a}}_I$: $\text{overlap} = \min(I_{\max}, O_{\max}) - \max(I_{\min}, O_{\min})$.
+  4. Highlight when $\text{overlap} \le 0.05\text{ mm}$ (`OUTSIDE_OVERLAP_ALLOWANCE_MM`, insert still outside) and the gap $-\text{overlap} \le 12\text{P} = 152.4\text{ mm}$ (`MAX_AXIAL_GAP_MM`).
+  5. A `pin` insert counts only through an end that sticks out (`freeAtStart` / `freeAtEnd`, from `measurePinEnds`).
+  6. The result's `face` is the opening end on the insert's side (the face the pin/shaft will enter).
+- **Pin ends** (`measurePinEnds`, cached per part id with the opening surfaces in `getMeshMeasurements`): an end sticks out when
+  - (a) at least 4 of 8 radial rays from 4.5 mm, 1.5 mm in from the end, first hit the pin's own surface within 2.0–3.0 mm, and none hits anything closer (2–4 rays pass through the split pin tip). Face direction is ignored here because idler pins' smooth ends have inward-facing triangles;
+  - (b) a point 1 mm past the end is in open air: of 6 rays from it, at most 2 first meet a back face. A single axial ray isn't used because pins are hollow.
+
+  A pin with neither end passing (a hollow-tube "peg" such as the Straight Standoff Connector) keeps both ends. Shafts are not measured. A pin-shaped "...Pin" part in Pins & Standoffs with no stored peg (the 2x3 Smooth Idler Pin) gets a stand-in pin along local Z through its origin.
+- **Viewport wiring:** `rebuildOtherFeatures()` caches world features of every visible non-selected part (at drag start and after each instance sync). `updateAlignedHoleHighlights()` recomputes the selected part's features, skips other parts whose `152.4 mm`-grown world box misses the selected part's grown box, and runs the test. It is called from `objectChange` (after the final snapped/flush pose is set, and in rotate mode) and at the end of the instance-sync effect; it shows nothing when there is no selection, the selected part is hidden, or Explode is on.
+- **Overlay** (`createHoleHighlightOverlay`): group `__aligned_hole_highlights__` on the scene root (outside `partsRoot`, so click selection and collision ignore it). Two ring kinds share the per-radius geometries: **solid** rings (`depthTest: true`, `polygonOffset`, `renderOrder 1002`) at `face` and `farFace` (`farFace` is null for non-`through` openings such as the motor socket), lifted `0.15 mm` off the surface along the outward normal (`outward`, toward the insert, for the entry face; reversed for the far face); and one **ghost** ring (`depthTest: false`, opacity `0.3`, `renderOrder 1001`) at `face` only, so a hidden opening is still visible through parts. Each ring is a `RingGeometry(r, r + 0.7)` on the opening rim (`r = radiusMm`, one cached geometry per radius) facing the opening axis, orange `0xf97316`; both kinds draw above the `Axes` overlay and below the gizmo. Rings are pooled and hidden rather than removed, so dragging allocates no geometry.
+
+### 5.5 Double-Click Mating (`planMates` in [`pinHoleAlignment.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/pinHoleAlignment.js) + `mateSelected` in [`Viewport3D.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/Viewport3D.jsx))
+- **Candidates** are exactly the highlighted pairs (`lastAlignedRef`, the latest `findAlignedOpenings` result). Each pair also carries its insert (`insertInstanceId`, `insertOrigin`, `insertAxis`, `insertStart`, `insertEnd`).
+- **`planMates(pairs, selectedId)`:**
+  - direction $\hat{\mathbf{d}} = -\text{outward}$ when the selected part holds the insert, $+\text{outward}$ when it holds the opening; directions within $2^\circ$ merge into one plan;
+  - lateral shift: the perpendicular from the nearest pair's insert axis to its opening origin (negated when the selected part holds the opening), at most $0.25\text{ mm}$;
+  - travel limit: with $\mathbf{v}$ the insert's motion relative to the opening ($+\hat{\mathbf{d}}$ or $-\hat{\mathbf{d}}$), $\text{travel} = \max_{\mathbf{v}}(\text{opening}) - \max_{\mathbf{v}}(\text{insert})$, maximized over the plan's pairs, so the leading end ends flush with the far face of the farthest opening;
+  - contact search range: $\text{sweep} = \max_{\mathbf{v}}(\text{opening}) - \min_{\mathbf{v}}(\text{insert})$, the travel until the insert's trailing end reaches the far face. Contact is searched over this whole range, and the travel limit is used only when nothing is touched.
+- **`mateSelected(plan)`:**
+  - apply the lateral shift and abort if that pose already collides;
+  - step along $\hat{\mathbf{d}}$ in $0.5\text{ mm}$ steps up to the contact search range using `checkGroupCollision`;
+  - at the first collision, `findFlushBoundaryPosition(group, lastClear, probe)` gives the contact pose (10-step bisection plus the $0.25\text{P}$ flush-seat preference); otherwise stop at the travel limit;
+  - round to $0.001\text{ mm}$; if that pose collides (bisection ends about $0.0005\text{ mm}$ from contact), step back along $-\hat{\mathbf{d}}$ in $0.002\text{ mm}$ steps until clear;
+  - commit through `onUpdateTransform` with `isIntersecting: false`, exactly like a drag release, and report through `onMateFeedback`, which App shows as `actionFeedback`.
+- **Double-click** (`dblclick` on the canvas) acts on the selected part when it is anywhere under the pointer, even behind another part. A single click on a part in front of the selected one waits 350 ms before selecting it, so a double-click keeps the selection. It does not act when:
+  - a gizmo drag actually moved the part (`dragMovedRef`);
+  - the pointer is on an arrow, plane or ring handle (`transform.axis` other than the center `XYZ` / `XYZE` grab area, which covers small parts);
+  - it comes within 600 ms of an arrow click.
+
+  Locked → "Part is locked"; no plans → "Nothing lined up to mate with"; one plan → mate; more → arrows.
+- **Arrows** (`createMateArrowOverlay`, group `__mate_direction_arrows__`):
+  - shaft and cone in orange `0xf97316` (hover `0xfdba74`), `depthTest: false`, `renderOrder 1003`, with fat invisible pickers;
+  - placed at the selected part's world box center and rescaled each frame with the gizmo's screen-size factor;
+  - while they show, TransformControls is disabled and its helper hidden.
+  - **Clicks:** a click picks an arrow (mate) or dismisses them and then selects as usual.
+  - **Esc:** a capture-phase `keydown` listener dismisses them and stops the event, so App's deselect doesn't run.
+  - **Other dismissals:** drag start and every instance-sync effect run also dismiss them.
 
 ---
 

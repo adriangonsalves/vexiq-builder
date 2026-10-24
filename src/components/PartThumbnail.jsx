@@ -2,7 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { loadPartAsset } from '../utils/geometryCache.js';
 
-const thumbnailDataUrlCache = new Map(); // partId -> string (dataURL)
+const thumbnailDataUrlCache = new Map(); // "partId|defaultColor" -> string (dataURL)
+const thumbKey = (part) => `${part.id}|${part.defaultColor}`;
+
+// Near-white parts (connectors) lose their shape under the studio lights: draw them with stronger,
+// denser outlines and a less shiny surface so they read clearly against the dark card.
+const LIGHT_PART_LUMINANCE = 0.85; // linear luminance; #f8fafc ≈ 0.94, Metal/Silver #e2e8f0 ≈ 0.77
+const isLightColor = (color) => color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722 > LIGHT_PART_LUMINANCE;
 let sharedThumbRenderer = null;
 let sharedThumbScene = null;
 let sharedThumbCamera = null;
@@ -45,8 +51,8 @@ function getThumbnailStudio() {
 }
 
 function renderPartToDataUrl(part, geometries, localBox) {
-  if (thumbnailDataUrlCache.has(part.id)) {
-    return thumbnailDataUrlCache.get(part.id);
+  if (thumbnailDataUrlCache.has(thumbKey(part))) {
+    return thumbnailDataUrlCache.get(thumbKey(part));
   }
 
   const { renderer, scene, camera, group } = getThumbnailStudio();
@@ -61,23 +67,26 @@ function renderPartToDataUrl(part, geometries, localBox) {
     }
   }
 
+  const partColor = new THREE.Color(part.defaultColor || '#64748b');
+  const light = isLightColor(partColor);
+
   const mat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(part.defaultColor || '#64748b'),
-    roughness: 0.35,
+    color: partColor,
+    roughness: light ? 0.55 : 0.35,
     metalness: 0.15
   });
 
   const edgeMat = new THREE.LineBasicMaterial({
     color: 0x0f172a,
     transparent: true,
-    opacity: 0.35
+    opacity: light ? 0.85 : 0.35
   });
 
   for (const geo of geometries) {
     const mesh = new THREE.Mesh(geo, mat);
     group.add(mesh);
 
-    const edgeGeo = new THREE.EdgesGeometry(geo, 35);
+    const edgeGeo = new THREE.EdgesGeometry(geo, light ? 25 : 35);
     const edges = new THREE.LineSegments(edgeGeo, edgeMat);
     edges.name = '__thumb_edges__';
     group.add(edges);
@@ -102,17 +111,17 @@ function renderPartToDataUrl(part, geometries, localBox) {
 
   renderer.render(scene, camera);
   const dataUrl = renderer.domElement.toDataURL('image/webp', 0.88);
-  thumbnailDataUrlCache.set(part.id, dataUrl);
+  thumbnailDataUrlCache.set(thumbKey(part), dataUrl);
   return dataUrl;
 }
 
 export default function PartThumbnail({ part, index }) {
-  const [dataUrl, setDataUrl] = useState(() => thumbnailDataUrlCache.get(part.id) || null);
+  const [dataUrl, setDataUrl] = useState(() => thumbnailDataUrlCache.get(thumbKey(part)) || null);
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (thumbnailDataUrlCache.has(part.id)) {
-      setDataUrl(thumbnailDataUrlCache.get(part.id));
+    if (thumbnailDataUrlCache.has(thumbKey(part))) {
+      setDataUrl(thumbnailDataUrlCache.get(thumbKey(part)));
       return;
     }
 
