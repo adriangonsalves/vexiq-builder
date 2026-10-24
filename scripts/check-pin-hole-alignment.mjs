@@ -3,7 +3,7 @@
  * Run: node scripts/check-pin-hole-alignment.mjs   (exits 1 on any failure)
  */
 import * as THREE from 'three';
-import { auditAssembly, buildWorldMatrix, checkCandidateCollision, findPart, getPartCollisionBvh } from '../mcp/assembly-engine.mjs';
+import { auditAssembly, buildWorldMatrix, checkCandidateCollision, findPart, getPartCollisionBvh, getPartMeasurements, worldFeaturesFor } from '../mcp/assembly-engine.mjs';
 import fs from 'node:fs';
 import {
   EXCLUDED_PART_NAMES,
@@ -11,6 +11,12 @@ import {
   findAlignedOpenings,
   findEngagedJoints,
   findHoleSnap,
+  findSeatedPairs,
+  insertLeadEnds,
+  insertPose,
+  isOpeningTaken,
+  listInsertFits,
+  openFaces,
   getLocalFeatures,
   measureOpeningDepths,
   measureOpeningSurfaces,
@@ -44,6 +50,7 @@ const place = (name, position = [0, 0, 0], rotation = [0, 0, 0]) => {
 const local = (name, kind) => getLocalFeatures(part(name)).find((f) => f.kind === kind);
 const featureById = (placed, featureId) => placed.features.find((f) => f.featureId === featureId);
 const near = (a, b, tol = 0.01) => Math.abs(a - b) <= tol;
+const dot3v = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const fmt = (hits) => JSON.stringify(hits.map((h) => `${h.instanceId}:${h.featureId}`));
 
 /** Highlights for `selected` given the other placed parts. */
@@ -715,6 +722,123 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   const state = JSON.parse(fs.readFileSync(new URL('./fixtures/drivetrain.json', import.meta.url), 'utf8'));
   const audit = auditAssembly(state);
   check('drivetrain fixture (shafts through holes, gears and the motor) still has no collisions', audit.collisionCount === 0 && audit.isMechanicallySound, JSON.stringify(audit.collisions).slice(0, 200));
+}
+
+// ---------------------------------------------------------------------------
+// Picking a hole (pick-hole-insert): pose, fits, faces, taken holes
+// ---------------------------------------------------------------------------
+{
+  const deg = THREE.MathUtils.degToRad;
+  const inst = (id, name, position, rotation = [0, 0, 0]) => ({ instanceId: id, label: id, partId: part(name).id, position, rotation });
+  const quatOf = (rotation) => new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation.map(deg), 'XYZ'));
+  const posed = (name, pose, id = 'sel') => collectWorldFeatures(part(name), pose.matrix, id, getPartMeasurements(part(name)));
+  const lineMiss = (a, b) => {
+    const d = b.origin.clone().sub(a.origin);
+    return Math.sqrt(Math.max(0, d.lengthSq() - d.dot(b.axis) ** 2));
+  };
+  const leadPointOf = (feature, end) => (end === 'hi' ? feature.end : feature.start);
+
+  // 1.1 pose
+  const tilted = inst('tilted', '2x12 Beam', [10, 20, 30], [30, 0, 0]);
+  const tHole = worldFeaturesFor(tilted).find((f) => f.featureId === 'hole_22');
+  const faces = openFaces(tHole);
+  const pin = part('0x2 Connector Pin');
+  const pinEnds = insertLeadEnds(pin, getLocalFeatures(pin)[0], getPartMeasurements(pin)).map((e) => e.end);
+  for (const [i, face] of faces.entries()) {
+    const pose = insertPose({ partMeta: pin, measured: getPartMeasurements(pin), featureId: 'peg_1', end: pinEnds[0], face: face.point, outward: face.outward, receivingQuaternion: quatOf(tilted.rotation) });
+    const peg = posed('0x2 Connector Pin', pose).find((f) => f.kind === 'pin');
+    const tip = leadPointOf(peg, pinEnds[0]);
+    check(
+      `pick: upright pin into a beam tilted 30° (face ${i + 1} of 2): on the hole axis, tip 1 mm outside that face`,
+      Math.abs(peg.axis.dot(tHole.axis)) > 0.99999 && lineMiss(peg, tHole) < 0.01 && tip.distanceTo(face.point.clone().addScaledVector(face.outward, 1)) < 0.01,
+      JSON.stringify({ miss: lineMiss(peg, tHole), tip: tip.toArray(), want: face.point.clone().addScaledVector(face.outward, 1).toArray() })
+    );
+  }
+  const capped = part('2x Pitch Capped Shaft');
+  const cappedEnds = insertLeadEnds(capped, getLocalFeatures(capped)[0]);
+  check('pick: a capped shaft only leads with its uncapped end', cappedEnds.length === 1 && cappedEnds[0].end === 'lo');
+  const sPose = insertPose({ partMeta: capped, featureId: 'shaft', end: 'lo', face: faces[0].point, outward: faces[0].outward, receivingQuaternion: quatOf(tilted.rotation) });
+  const sFeature = posed('2x Pitch Capped Shaft', sPose).find((f) => f.kind === 'shaft');
+  const out = (p) => p.clone().sub(faces[0].point).dot(faces[0].outward);
+  check('  it goes in shaft-first: the cap end stays outside, farther out than the tip', near(out(sFeature.start), 1, 0.01) && out(sFeature.end) > out(sFeature.start) + 20, JSON.stringify([out(sFeature.start), out(sFeature.end)]));
+  const motor = inst('motor', 'VEX IQ Smart Motor', [0, 0, 0], [0, 0, 90]);
+  const socket = worldFeaturesFor(motor).find((f) => f.kind === 'shaft_socket');
+  const socketFaces = openFaces(socket);
+  const motorBox = new THREE.Box3(new THREE.Vector3(...part('VEX IQ Smart Motor').bbox.min), new THREE.Vector3(...part('VEX IQ Smart Motor').bbox.max)).applyMatrix4(buildWorldMatrix(motor.position, motor.rotation));
+  const mPose = insertPose({ partMeta: capped, featureId: 'shaft', end: 'lo', face: socketFaces[0].point, outward: socketFaces[0].outward, receivingQuaternion: quatOf(motor.rotation) });
+  check('pick: the Smart Motor socket offers one face, and a shaft comes in from outside the motor', socketFaces.length === 1 && !motorBox.containsPoint(mPose.leadPoint), JSON.stringify(mPose.leadPoint.toArray()));
+
+  // 1.3 faces and taken holes
+  const rail = inst('rail', '2x12 Beam', [0, 0, 0]);
+  const railFeatures = worldFeaturesFor(rail);
+  const rHole = railFeatures.find((f) => f.featureId === 'hole_22');
+  check('pick: a beam hole offers 2 faces, pointing out of the beam both ways', openFaces(rHole).length === 2 && near(openFaces(rHole)[0].outward.dot(openFaces(rHole)[1].outward), -1));
+  const seated = worldFeaturesFor(inst('pinIn', '0x2 Connector Pin', [rHole.origin.x, rHole.origin.y, 0]));
+  const above = worldFeaturesFor(inst('pinUp', '0x2 Connector Pin', [rHole.origin.x, rHole.origin.y, 20]));
+  check('pick: a hole with a seated pin is taken', isOpeningTaken(rHole, seated));
+  check('  a pin 5+ mm above it does not take it', !isOpeningTaken(rHole, above));
+
+  // 1.2 fits
+  const corner = part('2x Wide, 2x2 Corner Connector');
+  const turned = inst('turned', '2x12 Beam', [0, 0, 0], [0, 0, 30]);
+  const turnedFeatures = worldFeaturesFor(turned);
+  const fitsAt = (holeId, beam = turned, feats = turnedFeatures, name = '2x Wide, 2x2 Corner Connector') => {
+    const opening = feats.find((f) => f.featureId === holeId);
+    const face = openFaces(opening).find((f) => f.outward.z > 0);
+    return listInsertFits({ partMeta: part(name), measured: getPartMeasurements(part(name)), instanceId: 'sel', hovered: { opening, face }, receivingQuaternion: quatOf(beam.rotation), otherFeatures: feats, currentQuaternion: new THREE.Quaternion() });
+  };
+  let fits = fitsAt('hole_31'); // centre hole
+  const best = fits[0];
+  const beamX = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), deg(30));
+  const pegLine = best && best.markers[0] ? best.markers[0].point.clone().sub(openFaces(turnedFeatures.find((f) => f.featureId === 'hole_31')).find((f) => f.outward.z > 0).point).normalize() : null;
+  check('pick: corner connector into a beam turned 30°: best fit has both pegs in holes', best && best.green === 2 && best.total === 2, JSON.stringify(fits.map((f) => [f.featureId, f.roll, f.green, f.total])));
+  check('  and its peg line runs along the beam\'s 30° hole row', pegLine && Math.abs(pegLine.dot(beamX)) > 0.999, JSON.stringify(pegLine?.toArray()));
+  fits = fitsAt('hole_26'); // last centre hole, x = 63.5 along the beam
+  check('pick: at the beam\'s last hole the best fit still has 2 in holes, and another fit has 1 green + 1 red', fits[0]?.green === 2 && fits.some((f) => f.green === 1 && f.total === 2), JSON.stringify(fits.map((f) => [f.featureId, f.roll, f.green])));
+  const pinFits = fitsAt('hole_31', turned, turnedFeatures, '0x2 Connector Pin');
+  check('pick: a single pin\'s 4 rolls collapse to one fit per leading end', pinFits.length === pinEnds.length, `${pinFits.length} fits, ${pinEnds.length} ends`);
+  // Hole patterns not square to the receiving part: the angled face of a 30° corner connector
+  // (poses from a real scene where the 2x3 corner connector couldn't be lined up before)
+  {
+    const recv = inst('angled', '2x Wide, 30 Degree Left 1x2 Corner Connector', [-15.011, 44.131, 378.096], [0, 0, -45]);
+    const sel = inst('sel', '2x Wide, 2x3 Corner Connector', [-19.26, 39.661, 352.696], [-90, 45, -90]);
+    const recvFeatures = worldFeaturesFor(recv);
+    const opening = recvFeatures.find((f) => f.featureId === 'hole_1');
+    const selPart = part('2x Wide, 2x3 Corner Connector');
+    const results = openFaces(opening).map((face) => {
+      const fit = listInsertFits({ partMeta: selPart, measured: getPartMeasurements(selPart), instanceId: 'sel', hovered: { opening, face }, receivingQuaternion: quatOf(recv.rotation), otherFeatures: recvFeatures, currentQuaternion: quatOf(sel.rotation) })[0];
+      const at = (d) => ({ ...sel, position: fit.position.clone().addScaledVector(fit.direction, d).toArray(), rotation: fit.rotationDeg });
+      let d = 0;
+      while (d < fit.sweepMm && !checkCandidateCollision(at(d + 0.25), [recv]).isIntersecting) d += 0.25;
+      return { green: fit.green, seated: findSeatedPairs(worldFeaturesFor(at(d)), recvFeatures).length, overlap: checkCandidateCollision(at(d), [recv]).isIntersecting };
+    });
+    check(
+      'pick: 2x3 corner connector into the angled holes of a 30° corner connector: best fit has both pegs in holes, from either face',
+      results.every((r) => r.green === 2),
+      JSON.stringify(results)
+    );
+    check('  pushed in, both pegs end up seated and nothing overlaps', results.every((r) => r.seated === 2 && !r.overlap), JSON.stringify(results));
+  }
+
+  // A part with pins pointing two ways: only pins parallel to the anchor are marked
+  const twoWay = (() => {
+    const { catalog } = { catalog: JSON.parse(fs.readFileSync(new URL('../public/catalog.json', import.meta.url), 'utf8')) };
+    return catalog.find((p) => {
+      const pins = getLocalFeatures(p).filter((f) => f.kind === 'pin');
+      return pins.length >= 2 && pins.some((a) => pins.some((b) => Math.abs(dot3v(a.axis, b.axis)) < 0.5));
+    });
+  })();
+  if (twoWay) {
+    const tFits = fitsAt('hole_31', turned, turnedFeatures, twoWay.name);
+    const parallelOnly = tFits.every((fit) => {
+      const world = collectWorldFeatures(twoWay, new THREE.Matrix4().compose(fit.position, fit.quaternion, new THREE.Vector3(1, 1, 1)), 'sel', getPartMeasurements(twoWay));
+      const anchorAxis = world.find((w) => w.featureId === fit.featureId).axis;
+      return fit.markers.every((m) => Math.abs(world.find((w) => w.featureId === m.featureId).axis.dot(anchorAxis)) > 0.999);
+    });
+    check(`pick: ${twoWay.name} (pins two ways): only pins parallel to the anchor are marked`, tFits.length > 0 && parallelOnly, `${tFits.length} fits`);
+  } else {
+    check('pick: found a part with pins pointing two ways for the parallel-only check', false);
+  }
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);

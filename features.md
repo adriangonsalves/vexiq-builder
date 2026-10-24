@@ -85,6 +85,15 @@
   - If nothing is touched while the pin or shaft is in the holes (a plain shaft through beams and gears, a gear onto a shaft), the part stops when the leading end is flush with the far face of the last lined-up hole.
   - Parts that can mate in more than one direction (e.g. the **Triple 2x Wide, 2x2 Corner Connector**, with pins on `+X`, `+Z` and `−Z`) show **one large orange arrow per direction** instead, and the gizmo hides. **Click an arrow** to mate that way; `Esc`, clicking elsewhere, or a selection change cancels.
   - The result is saved and synced like a drag release, and a message appears in the Inspector ("Mated with …", "Nothing lined up to mate with", "Part is locked", "Can't mate: already touching another part").
+- **Pick a hole (double-click with nothing lined up):**
+  - Double-clicking a selected part that has pins, pegs or shafts but lines up with nothing starts **hole picking**. A cyan banner shows the controls and the gizmo hides; the camera still moves.
+  - **Hover** near a hole face, within about `24 px`, to ring it in cyan. The face you point at is the side the part goes in from. A hole that already has a pin or shaft in it rings grey and says so.
+  - A **see-through cyan copy** shows the part turned onto the hole's axis whatever angle it was at, its tip `1 mm` outside the face. Its roll follows the receiving part: a pattern on a plate turned 30° is shown turned 30°.
+  - Other pins pointing the same way are marked **green** (a hole lines up) or **red** (none does). The banner reads, for example, "Fit 1 of 8 · 2 of 2 pins in holes".
+  - The best fit (most pins in holes, then the smallest turn) comes first. The **mouse wheel** or **`R`** / **`Shift+R`** steps through the others: which pin goes in the hole, which end leads, 90° rolls, and **pattern rolls**. A pattern roll is the exact turn that puts another pin on a parallel hole. Holes are searched out to the part's own widest pin spread across the axis and within 2 pitch along it, so hole rows that aren't square to their part (like the angled face of a 30° corner connector) can still be filled. Pins and shafts that look the same at any roll get one roll; capped shafts always lead with the uncapped end.
+  - **Click** to insert. The part is turned and placed, then pushed in until it touches, exactly like double-click mating (a shaft cap stops on the hole's lip). It is saved as one history step, "Insert … into …", so one undo restores it. Something in the way just outside the hole gives "The way in is blocked".
+  - `Esc`, clicking where no hole is ringed, selecting another part, changing Move/Rotate or Explode, or the part being moved by undo or MCP ends picking without changes.
+  - Parts without pins or shafts (beams, plates) still get "Nothing lined up to mate with". Picking a beam onto pins already in the model is a planned follow-up.
 - **Real-Time Concave Mesh Collision Detection (`three-mesh-bvh`):**
   - Uses inward-eroded (`0.38 mm` clearance) concave triangle meshes so pins and shafts pass cleanly through `4.8 mm` holes without false-positive bounding-box collisions, while true solid-body intersections are flagged immediately.
   - Intersecting parts render in **transparent grey** (`opacity: 0.42`) with a top HUD warning and a one-click **Revert Pose / Cancel Placement** button.
@@ -104,7 +113,7 @@
   - `F`: Focus camera on selected part (or full assembly)
   - `Del` / `Backspace`: Delete selected part
   - `Esc`: Hide mate arrows if shown; otherwise exit Explode mode / revert intersecting part & deselect
-  - Double-click selected part: Mate with lined-up holes / pins (shows direction arrows when there is more than one way)
+  - Double-click selected part: Mate with lined-up holes / pins (shows direction arrows when there is more than one way); with nothing lined up, pick any hole to insert into
 
 ---
 

@@ -1007,3 +1007,20 @@ body,
   padding: 2px 8px;
   font-size: 11px;
 }
+
+/* Hole picking banner (double-click a part with nothing lined up) */
+.hud-pill-pick {
+  border-color: rgba(34, 211, 238, 0.6);
+  color: #a5f3fc;
+  max-width: 720px;
+}
+
+.hud-pill-pick svg {
+  flex-shrink: 0;
+  color: #22d3ee;
+}
+
+.hud-pill-pick-warning {
+  border-color: rgba(245, 158, 11, 0.6);
+  color: #fcd34d;
+}

@@ -11,10 +11,15 @@ import {
   findEngagedJoints,
   findHoleSnap,
   findTooWideInserts,
+  getLocalFeatures,
+  insertFitsOpening,
+  isOpeningTaken,
+  listInsertFits,
   measureOpeningPassRadii,
   measureOpeningSurfaces,
   measurePinEnds,
   measureShaftProfiles,
+  openFaces,
   planMates,
   worldPartBox
 } from '../utils/pinHoleAlignment.js';
@@ -294,6 +299,99 @@ function createHoleHighlightOverlay() {
   };
 
   return { group, show, dispose };
+}
+
+const PICK_COLOR = 0x22d3ee; // cyan: the hovered hole and the preview while picking a hole
+const PICK_TAKEN_COLOR = 0x9ca3af; // grey: a hovered hole that already has a part in it
+
+/**
+ * Overlay for hole picking: a ring on the hovered hole face (cyan, grey when taken), a see-through
+ * copy of the selected part at the previewed fit, and green/red discs where its other pins meet the
+ * face plane. Lives on the scene root, so click picking ignores it; draws through parts.
+ */
+function createPickOverlay() {
+  const group = new THREE.Group();
+  group.name = '__hole_pick__';
+  const ringMaterial = new THREE.MeshBasicMaterial({ color: PICK_COLOR, side: THREE.DoubleSide, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95, toneMapped: false });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.3, 40), ringMaterial);
+  ring.renderOrder = 1003;
+  ring.visible = false;
+  group.add(ring);
+  const ghostMaterial = new THREE.MeshBasicMaterial({ color: PICK_COLOR, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false });
+  const ghost = new THREE.Group();
+  ghost.visible = false;
+  group.add(ghost);
+  const markerGeo = new THREE.CircleGeometry(2.4, 24);
+  const markerMaterials = {
+    green: new THREE.MeshBasicMaterial({ color: 0x22c55e, side: THREE.DoubleSide, depthTest: false, depthWrite: false, toneMapped: false }),
+    red: new THREE.MeshBasicMaterial({ color: 0xef4444, side: THREE.DoubleSide, depthTest: false, depthWrite: false, toneMapped: false })
+  };
+  const markers = [];
+  const zAxis = new THREE.Vector3(0, 0, 1);
+
+  /** Ring on a hole face: { point, outward, radiusMm, taken }, or null to hide it. */
+  const showRing = (face) => {
+    ring.visible = Boolean(face);
+    if (!face) return;
+    const r = face.radiusMm ?? 3.175;
+    ring.geometry.dispose();
+    ring.geometry = new THREE.RingGeometry(r, r + 0.9, 40);
+    ring.position.copy(face.point).addScaledVector(face.outward, 0.2);
+    ring.quaternion.setFromUnitVectors(zAxis, face.outward);
+    ringMaterial.color.setHex(face.taken ? PICK_TAKEN_COLOR : PICK_COLOR);
+  };
+  /** See-through copy of a part group's meshes (built once per pick). */
+  const setGhostSource = (sourceGroup) => {
+    ghost.clear();
+    sourceGroup?.traverse((child) => {
+      if (child.isMesh && child.userData.isPartMesh) {
+        const copy = new THREE.Mesh(child.geometry, ghostMaterial);
+        copy.position.copy(child.position);
+        copy.quaternion.copy(child.quaternion);
+        copy.renderOrder = 1001;
+        ghost.add(copy);
+      }
+    });
+  };
+  /** Pose of the preview copy ({ position, quaternion }), or null to hide it. */
+  const showGhost = (pose) => {
+    ghost.visible = Boolean(pose);
+    if (!pose) return;
+    ghost.position.copy(pose.position);
+    ghost.quaternion.copy(pose.quaternion);
+  };
+  /** Discs: [{ point, green }] facing `normal`. */
+  const showMarkers = (list, normal) => {
+    while (markers.length < list.length) {
+      const m = new THREE.Mesh(markerGeo, markerMaterials.green);
+      m.renderOrder = 1004;
+      group.add(m);
+      markers.push(m);
+    }
+    markers.forEach((m, i) => {
+      const entry = list[i];
+      m.visible = Boolean(entry);
+      if (!entry) return;
+      m.material = entry.green ? markerMaterials.green : markerMaterials.red;
+      m.position.copy(entry.point).addScaledVector(normal, 0.4);
+      m.quaternion.setFromUnitVectors(zAxis, normal);
+    });
+  };
+  const clear = () => {
+    showRing(null);
+    showGhost(null);
+    showMarkers([], zAxis);
+    ghost.clear();
+  };
+  const dispose = () => {
+    ring.geometry.dispose();
+    ringMaterial.dispose();
+    ghostMaterial.dispose();
+    markerGeo.dispose();
+    markerMaterials.green.dispose();
+    markerMaterials.red.dispose();
+  };
+  return { group, showRing, setGhostSource, showGhost, showMarkers, clear, dispose };
 }
 
 /**
@@ -909,7 +1007,8 @@ export default function Viewport3D({
   onLoadingChange,
   onMateFeedback,
   onToggleRotateRequest,
-  collisionRecheck
+  collisionRecheck,
+  onPickStatus
 }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
@@ -927,6 +1026,11 @@ export default function Viewport3D({
   const lastClearDragPosRef = useRef(new THREE.Vector3());
   const hasClearDragPosRef = useRef(false);
   const altKeyRef = useRef(false); // Alt held: drag without snapping onto holes
+  // Hole picking (double-click with nothing lined up): { selId, ... } while picking, else null
+  const pickModeRef = useRef(null);
+  const pickOverlayRef = useRef(null);
+  const onPickStatusRef = useRef(onPickStatus);
+  onPickStatusRef.current = onPickStatus;
   const holeOverlayRef = useRef(null);
   const otherFeaturesRef = useRef([]); // [{ instanceId, box, features }] for visible non-selected parts
   const lastAlignedRef = useRef([]); // latest findAlignedOpenings result for the selected part
@@ -1306,7 +1410,7 @@ export default function Viewport3D({
    * plan's travel limit (leading end flush with the far face). Commits like a drag release, after
    * making sure the rounded position is clear.
    */
-  const mateSelected = (plan) => {
+  const mateSelected = (plan, { label, message } = {}) => {
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     if (!group || !plan) return;
@@ -1352,19 +1456,27 @@ export default function Viewport3D({
     final = rounded;
     group.updateMatrixWorld();
 
-    onUpdateTransformRef.current(selId, {
-      position: [
-        Number(final.x.toFixed(3)),
-        Number(final.y.toFixed(3)),
-        Number(final.z.toFixed(3))
-      ],
-      rotation: [
-        Number(THREE.MathUtils.radToDeg(group.rotation.x).toFixed(2)),
-        Number(THREE.MathUtils.radToDeg(group.rotation.y).toFixed(2)),
-        Number(THREE.MathUtils.radToDeg(group.rotation.z).toFixed(2))
-      ],
-      isIntersecting: false
-    });
+    onUpdateTransformRef.current(
+      selId,
+      {
+        position: [
+          Number(final.x.toFixed(3)),
+          Number(final.y.toFixed(3)),
+          Number(final.z.toFixed(3))
+        ],
+        rotation: [
+          Number(THREE.MathUtils.radToDeg(group.rotation.x).toFixed(2)),
+          Number(THREE.MathUtils.radToDeg(group.rotation.y).toFixed(2)),
+          Number(THREE.MathUtils.radToDeg(group.rotation.z).toFixed(2))
+        ],
+        isIntersecting: false
+      },
+      label ? { label } : undefined
+    );
+    if (message) {
+      feedback(message);
+      return;
+    }
 
     const partnerIds = new Set(
       plan.pairs.map((p) => (p.insertInstanceId === selId ? p.instanceId : p.insertInstanceId))
@@ -1373,6 +1485,214 @@ export default function Viewport3D({
       (id) => instancesRef.current.find((i) => i.instanceId === id)?.label || id
     );
     feedback(`Mated with ${labels.join(', ')}`);
+  };
+
+  // --- Hole picking (openspec: hole-pick-insert) -----------------------------------------------------
+
+  const PICK_HOVER_PX = 24;
+  const pickLabelOf = (id) => instancesRef.current.find((i) => i.instanceId === id)?.label || id;
+
+  /** Tells App what to show in the picking banner, or null when picking ends. */
+  const emitPickStatus = () => {
+    const pick = pickModeRef.current;
+    if (!pick) {
+      onPickStatusRef.current?.(null);
+      return;
+    }
+    const name = pickLabelOf(pick.selId);
+    let text = `Pick a hole for ${name}: point at a hole, click to insert, Esc to cancel`;
+    let tone = 'info';
+    if (pick.hovered?.taken) {
+      text = 'That hole already has a part in it';
+      tone = 'warning';
+    } else if (pick.hovered && pick.fits.length === 0) {
+      text = `${name} doesn't fit this hole from this side`;
+      tone = 'warning';
+    } else if (pick.hovered) {
+      const fit = pick.fits[pick.fitIndex];
+      text = `${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length} · ${fit.green} of ${fit.total} pins in holes. Click to insert, wheel or R for other fits, Esc to cancel`;
+    }
+    if (pick.message) {
+      text = pick.message;
+      tone = 'warning';
+    }
+    onPickStatusRef.current?.({ text, tone });
+  };
+
+  /** Shows the hovered face, the preview copy and its pin markers for the current fit. */
+  const renderPick = () => {
+    const pick = pickModeRef.current;
+    const overlay = pickOverlayRef.current;
+    if (!pick || !overlay) return;
+    const hovered = pick.hovered;
+    overlay.showRing(hovered ? { ...hovered.face, radiusMm: hovered.opening.radiusMm, taken: hovered.taken } : null);
+    const fit = hovered && !hovered.taken ? pick.fits[pick.fitIndex] : null;
+    overlay.showGhost(fit ? { position: fit.position, quaternion: fit.quaternion } : null);
+    overlay.showMarkers(fit ? fit.markers : [], hovered ? hovered.face.outward : new THREE.Vector3(0, 0, 1));
+    emitPickStatus();
+  };
+
+  /**
+   * Starts hole picking for the selected part when it has pins, pegs or shafts: hides the gizmo and
+   * gathers every open face of every other part's openings that one of its inserts fits.
+   * Returns false (nothing started) for parts without inserts.
+   */
+  const startPick = () => {
+    const selId = selectedIdRef.current;
+    const group = selId ? meshMapRef.current.get(selId) : null;
+    const partMeta = group ? catalogMapRef.current.get(group.userData.partId) : null;
+    if (!group || !partMeta) return false;
+    const insertKinds = [...new Set(getLocalFeatures(partMeta).filter((f) => f.kind === 'pin' || f.kind === 'shaft').map((f) => f.kind))];
+    if (insertKinds.length === 0) return false;
+
+    rebuildOtherFeatures();
+    const others = otherFeaturesRef.current.flatMap((o) => o.features);
+    const candidates = [];
+    for (const f of others) {
+      if (!insertKinds.some((k) => insertFitsOpening(k, f.kind))) continue;
+      for (const face of openFaces(f)) candidates.push({ opening: f, face });
+    }
+    pickModeRef.current = {
+      selId,
+      partMeta,
+      measured: getMeshMeasurements(group, partMeta),
+      startPosition: group.position.clone(),
+      startQuaternion: group.quaternion.clone(),
+      transformMode: transformModeRef.current,
+      explodeMode: explodeModeRef.current,
+      candidates,
+      others,
+      hovered: null,
+      fits: [],
+      fitIndex: 0,
+      message: null
+    };
+    const transform = transformRef.current;
+    if (transform) {
+      transform.enabled = false;
+      transform.getHelper().visible = false;
+    }
+    pickOverlayRef.current?.setGhostSource(group);
+    refreshRotateSetup(); // hides the rotate rings while picking
+    renderPick();
+    return true;
+  };
+
+  /** Leaves hole picking without changing the part, and gives the gizmo back. */
+  const endPick = () => {
+    if (!pickModeRef.current) return;
+    pickModeRef.current = null;
+    pickOverlayRef.current?.clear();
+    const transform = transformRef.current;
+    if (transform) {
+      transform.enabled = true;
+      transform.getHelper().visible = transform.object !== undefined;
+    }
+    if (rendererRef.current) rendererRef.current.domElement.style.cursor = '';
+    refreshRotateSetup();
+    emitPickStatus();
+  };
+
+  /**
+   * Finds the hole face near the cursor (canvas px): faces within PICK_HOVER_PX on screen, the one
+   * nearest the camera (nearest on screen when within 2 mm in depth). Works out its fits when the
+   * hovered face changes.
+   */
+  const updatePickHover = (canvasX, canvasY) => {
+    const pick = pickModeRef.current;
+    const camera = cameraRef.current;
+    const renderer = rendererRef.current;
+    if (!pick || !camera || !renderer) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    const near = [];
+    const ndc = new THREE.Vector3();
+    for (const c of pick.candidates) {
+      ndc.copy(c.face.point).project(camera);
+      if (ndc.z > 1) continue; // behind the camera
+      const sx = ((ndc.x + 1) / 2) * rect.width;
+      const sy = ((1 - ndc.y) / 2) * rect.height;
+      const screen = Math.hypot(sx - canvasX, sy - canvasY);
+      if (screen > PICK_HOVER_PX) continue;
+      near.push({ c, screen, depth: camera.position.distanceTo(c.face.point) });
+    }
+    near.sort((a, b) => a.depth - b.depth);
+    const front = near.filter((n) => n.depth <= near[0]?.depth + 2).sort((a, b) => a.screen - b.screen)[0]?.c ?? null;
+    const same = front && pick.hovered && pick.hovered.opening === front.opening && pick.hovered.face === front.face;
+    if (same || (!front && !pick.hovered)) return;
+    pick.message = null;
+    if (!front) {
+      pick.hovered = null;
+      pick.fits = [];
+    } else {
+      const taken = isOpeningTaken(front.opening, pick.others);
+      const receiving = meshMapRef.current.get(front.opening.instanceId);
+      const receivingQuaternion = receiving ? receiving.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
+      pick.hovered = { ...front, taken };
+      pick.fits = taken
+        ? []
+        : listInsertFits({
+            partMeta: pick.partMeta,
+            measured: pick.measured,
+            instanceId: pick.selId,
+            hovered: front,
+            receivingQuaternion,
+            otherFeatures: pick.others,
+            currentQuaternion: pick.startQuaternion
+          });
+      pick.fitIndex = 0;
+    }
+    renderer.domElement.style.cursor = pick.hovered ? 'pointer' : 'crosshair';
+    renderPick();
+  };
+
+  /** Steps through the hovered hole's fits (wheel, R, Shift+R). Returns true when it did. */
+  const cyclePickFit = (delta) => {
+    const pick = pickModeRef.current;
+    if (!pick?.hovered || pick.fits.length < 2) return Boolean(pick?.hovered);
+    pick.fitIndex = (pick.fitIndex + delta + pick.fits.length) % pick.fits.length;
+    pick.message = null;
+    renderPick();
+    return true;
+  };
+
+  /**
+   * A click while picking: insert into the hovered hole (turn the part to the fit's pose just outside
+   * the face, then push it in like mating), say why not, or leave picking when nothing is hovered.
+   */
+  const pickClick = () => {
+    const pick = pickModeRef.current;
+    if (!pick) return;
+    if (!pick.hovered) {
+      endPick();
+      return;
+    }
+    if (pick.hovered.taken) {
+      pick.message = 'That hole already has a part in it';
+      emitPickStatus();
+      return;
+    }
+    const fit = pick.fits[pick.fitIndex];
+    const group = meshMapRef.current.get(pick.selId);
+    if (!fit || !group) return;
+    const oldPosition = group.position.clone();
+    const oldQuaternion = group.quaternion.clone();
+    group.position.copy(fit.position);
+    group.quaternion.copy(fit.quaternion);
+    group.updateMatrixWorld(true);
+    if (checkGroupCollision(group, false)) {
+      group.position.copy(oldPosition);
+      group.quaternion.copy(oldQuaternion);
+      group.updateMatrixWorld(true);
+      pick.message = 'The way in is blocked: something is in the way just outside that hole';
+      emitPickStatus();
+      return;
+    }
+    const label = `Insert ${pickLabelOf(pick.selId)} into ${pickLabelOf(pick.hovered.opening.instanceId)}`;
+    endPick();
+    mateSelected(
+      { lateral: new THREE.Vector3(), direction: fit.direction, travelMm: fit.travelMm, sweepMm: fit.sweepMm, pairs: [] },
+      { label, message: label.replace(/^Insert/, 'Inserted') }
+    );
   };
 
   /** Double-click on the selected part: mate in its only direction, or offer arrows for several. */
@@ -1388,7 +1708,8 @@ export default function Viewport3D({
     }
     const plans = planMates(lastAlignedRef.current, selId);
     if (plans.length === 0) {
-      feedback('Nothing lined up to mate with', true);
+      // Nothing lined up: a part with pins or shafts can pick any hole instead
+      if (!startPick()) feedback('Nothing lined up to mate with', true);
     } else if (plans.length === 1) {
       mateSelected(plans[0]);
     } else {
@@ -1435,7 +1756,7 @@ export default function Viewport3D({
     }
     if (inst.locked) return clear('Part is locked');
     if (explodeModeRef.current !== 'off') return clear("Can't rotate in Explode view");
-    if (arrowOverlayRef.current?.isShown() || !group.userData.localBox) return clear();
+    if (arrowOverlayRef.current?.isShown() || pickModeRef.current || !group.userData.localBox) return clear();
 
     group.updateMatrixWorld();
     const selectedFeatures = collectWorldFeatures(
@@ -1846,6 +2167,11 @@ export default function Viewport3D({
     scene.add(arrowOverlay.group);
     arrowOverlayRef.current = arrowOverlay;
 
+    // Hole picking: hovered face ring, preview copy and pin markers
+    const pickOverlay = createPickOverlay();
+    scene.add(pickOverlay.group);
+    pickOverlayRef.current = pickOverlay;
+
     // Rotate-mode rings and their angle labels (typed angles turn the part)
     const rotateGizmo = createRotateGizmo();
     rotateGizmo.setSnap(rotationSnapDegRef.current || 0);
@@ -2196,6 +2522,15 @@ export default function Viewport3D({
         ringClickHandled = false;
         return;
       }
+      if (pickModeRef.current) {
+        // Picking: a click inserts into the hovered hole (or leaves); a drag just turns the camera
+        if (Math.hypot(dx, dy) <= 5) {
+          const rect = renderer.domElement.getBoundingClientRect();
+          updatePickHover(e.clientX - rect.left, e.clientY - rect.top);
+          pickClick();
+        }
+        return;
+      }
       if (transform.dragging || wasDraggingRef.current) return;
       if (Math.hypot(dx, dy) > 5) return;
       if (selectedRingRef.current >= 0) selectRing(-1); // a click off the rings unselects the ring
@@ -2227,7 +2562,20 @@ export default function Viewport3D({
       onSelectRef.current(front);
     };
 
+    let pickHoverFrame = 0;
+    let pickHoverAt = null;
     const handlePointerMove = (e) => {
+      if (pickModeRef.current) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pickHoverAt = [e.clientX - rect.left, e.clientY - rect.top];
+        if (!pickHoverFrame) {
+          pickHoverFrame = requestAnimationFrame(() => {
+            pickHoverFrame = 0;
+            if (pickHoverAt) updatePickHover(...pickHoverAt);
+          });
+        }
+        return;
+      }
       if (rotateGestureRef.current?.kind === 'drag') {
         handleRingDragMove(e);
         return;
@@ -2250,6 +2598,7 @@ export default function Viewport3D({
     // pressing it starts a zero-length drag; only arrow/plane/ring handles or a real move block a mate.
     const GIZMO_CENTER_AXES = new Set(['XYZ', 'XYZE']);
     const handleDoubleClick = (e) => {
+      if (pickModeRef.current) return; // picking: single clicks insert
       if (transform.dragging) return;
       if (wasDraggingRef.current && dragMovedRef.current) return;
       if (transform.object && transform.axis && !GIZMO_CENTER_AXES.has(transform.axis)) return;
@@ -2269,6 +2618,20 @@ export default function Viewport3D({
     // Capture phase, so Esc only dismisses the arrows (or unselects the wheel ring) and doesn't reach
     // App's deselect handler. Esc in an angle field is handled by the field itself.
     const handleKeyDownCapture = (e) => {
+      if (pickModeRef.current && e.target?.tagName !== 'INPUT') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          endPick();
+          return;
+        }
+        if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          cyclePickFit(e.shiftKey ? -1 : 1);
+          return;
+        }
+      }
       if (e.key !== 'Escape' || e.target?.tagName === 'INPUT') return;
       if (arrowOverlay.isShown()) {
         e.preventDefault();
@@ -2286,7 +2649,19 @@ export default function Viewport3D({
     // of zooming; saved 300 ms after the last notch. Capture phase, ahead of OrbitControls' zoom.
     const WHEEL_NOTCH = 100; // deltaY of one mouse-wheel notch in pixel mode; trackpad deltas add up
     let wheelAccum = 0;
+    let pickWheelAccum = 0;
     const handleWheelCapture = (e) => {
+      // Picking with a hole highlighted: the wheel steps through fits instead of zooming
+      if (pickModeRef.current?.hovered) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        pickWheelAccum += e.deltaY;
+        if (Math.abs(pickWheelAccum) >= 40) {
+          cyclePickFit(pickWheelAccum > 0 ? 1 : -1);
+          pickWheelAccum = 0;
+        }
+        return;
+      }
       const ring = selectedRingRef.current;
       const setup = rotateSetupRef.current;
       if (ring < 0 || !setup || rotateGestureRef.current?.kind === 'drag') return;
@@ -2398,6 +2773,8 @@ export default function Viewport3D({
       orbit.dispose();
       holeOverlay.dispose();
       arrowOverlay.dispose();
+      pickOverlay.dispose();
+      if (pickHoverFrame) cancelAnimationFrame(pickHoverFrame);
       rotateGizmo.dispose();
       angleLabels.dispose();
       renderer.dispose();
@@ -2618,6 +2995,31 @@ export default function Viewport3D({
     syncGizmos();
     updateAlignedHoleHighlights();
   }, [instances, selectedId, catalogMap, showConnectors, explodeMode]);
+
+  // Hole picking ends when its part is no longer the one being picked for, or the mode around it
+  // changes: another selection, Move/Rotate, Explode, or the part moved/hidden/locked/removed by
+  // undo, redo, the timeline or MCP.
+  useEffect(() => {
+    const pick = pickModeRef.current;
+    if (!pick) return;
+    const inst = instances.find((i) => i.instanceId === pick.selId);
+    const rotation = inst ? new THREE.Quaternion().setFromEuler(new THREE.Euler(...inst.rotation.map((r) => THREE.MathUtils.degToRad(r)), 'XYZ')) : null;
+    const moved =
+      !inst ||
+      inst.visible === false ||
+      inst.locked ||
+      new THREE.Vector3(...inst.position).distanceTo(pick.startPosition) > 0.001 ||
+      rotation.angleTo(pick.startQuaternion) > 0.0005;
+    if (
+      moved ||
+      selectedId !== pick.selId ||
+      transformMode !== pick.transformMode ||
+      explodeMode !== pick.explodeMode
+    ) {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      endPick();
+    }
+  }, [instances, selectedId, transformMode, explodeMode]);
 
   // Undo, redo and history jumps put parts back without their overlap flags: check the moved parts
   // again (after the effect above has posed them) and report any flag that changed

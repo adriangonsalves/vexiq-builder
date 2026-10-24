@@ -863,3 +863,219 @@ export function planMates(alignedOpenings, selectedId) {
   }
   return plans;
 }
+
+// --- Picking a hole: the pose that puts a part's pin or shaft into a chosen hole -------------------
+
+export const PICK_GAP_MM = 1.0; // the leading end waits this far outside the picked face
+// Holes searched for another pin of the pattern may sit this far from the picked hole along its axis
+const PATTERN_AXIAL_REACH_MM = 2 * VEX_PITCH_MM;
+const LOCAL_AXES = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
+
+/**
+ * The ends an insert can go into a hole with: a pin's ends that stick out of its part, both ends of
+ * a straight shaft, the uncapped (low) end of a capped shaft. [{ end: 'lo' | 'hi', dir, point }] in
+ * part-local mm, `dir` pointing from the insert toward that end.
+ */
+export function insertLeadEnds(partMeta, feature, measured = null) {
+  const axis = new THREE.Vector3(...feature.axis);
+  const t0 = dot3(feature.origin, feature.axis);
+  const pointAt = (t) => new THREE.Vector3(...feature.origin).addScaledVector(axis, t - t0);
+  const ends = [];
+  const add = (end) =>
+    ends.push({
+      end,
+      dir: end === 'hi' ? axis.clone() : axis.clone().negate(),
+      point: pointAt(end === 'hi' ? feature.tMax : feature.tMin)
+    });
+  if (feature.kind === 'pin') {
+    const sticksOut = measured?.pinEnds?.get(feature.featureId) ?? { lo: true, hi: true };
+    if (sticksOut.lo) add('lo');
+    if (sticksOut.hi) add('hi');
+  } else if (feature.kind === 'shaft') {
+    add('lo');
+    if (partMeta?.fastenerSpecs?.fastenerType !== 'capped_shaft') add('hi');
+  }
+  return ends;
+}
+
+// Of `axes`, the one most across `dir`, made exactly perpendicular to it
+const mostAcross = (dir, axes) => {
+  const best = axes.reduce((a, b) => (Math.abs(a.dot(dir)) <= Math.abs(b.dot(dir)) ? a : b));
+  return best.clone().addScaledVector(dir, -best.dot(dir)).normalize();
+};
+
+/**
+ * Pose of the selected part (design.md §1) with insert `featureId` going in by its `end` through the
+ * hole face at world point `face`, whose `outward` unit direction points toward the side the part
+ * comes from. The insert's axis lies on the hole's axis pointing in, its leading end `gapMm` outside
+ * the face, and the part rolled around the axis to match the receiving part (its world rotation
+ * `receivingQuaternion`), plus `roll` quarter turns, or `rollRad` radians when given.
+ * Returns { quaternion, position, rotationDeg, matrix, leadPoint } or null when the insert/end is unknown.
+ */
+export function insertPose({ partMeta, measured = null, featureId, end, face, outward, receivingQuaternion, roll = 0, rollRad = null, gapMm = PICK_GAP_MM }) {
+  const feature = getLocalFeatures(partMeta).find((f) => f.featureId === featureId);
+  const lead = feature && insertLeadEnds(partMeta, feature, measured).find((e) => e.end === end);
+  if (!lead) return null;
+  const n = outward.clone().normalize();
+  const inward = n.clone().negate();
+  const rs = mostAcross(lead.dir, LOCAL_AXES);
+  const rr = mostAcross(n, LOCAL_AXES.map((a) => a.clone().applyQuaternion(receivingQuaternion)));
+  const rk = rr.applyAxisAngle(n, rollRad ?? (roll * Math.PI) / 2);
+  const local = new THREE.Matrix4().makeBasis(lead.dir, rs, lead.dir.clone().cross(rs));
+  const world = new THREE.Matrix4().makeBasis(inward, rk, inward.clone().cross(rk));
+  const quaternion = new THREE.Quaternion().setFromRotationMatrix(world.multiply(local.transpose()));
+  const leadPoint = face.clone().addScaledVector(n, gapMm);
+  const position = leadPoint.clone().sub(lead.point.clone().applyQuaternion(quaternion));
+  const euler = new THREE.Euler().setFromQuaternion(quaternion, 'XYZ');
+  const rotationDeg = [euler.x, euler.y, euler.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(4)));
+  const matrix = new THREE.Matrix4().compose(position, quaternion, new THREE.Vector3(1, 1, 1));
+  return { quaternion, position, rotationDeg, matrix, leadPoint };
+}
+
+/**
+ * Faces of a world opening the part can go in through: { point, outward } with `outward` pointing out
+ * of the opening at that face. Through openings: both. A blind opening split per face ('@hi' /
+ * '@lo'): its open face. Other blind openings (Smart Motor socket, standoff ends): the `end` face,
+ * since their axis points out of the opening.
+ */
+export function openFaces(opening) {
+  const along = new THREE.Vector3().subVectors(opening.end, opening.start);
+  if (along.lengthSq() < 1e-9) along.copy(opening.axis);
+  along.normalize();
+  const atEnd = { point: opening.end.clone(), outward: along.clone() };
+  const atStart = { point: opening.start.clone(), outward: along.clone().negate() };
+  if (opening.through) return [atStart, atEnd];
+  if (opening.featureId.endsWith('@lo')) return [atStart];
+  return [atEnd];
+}
+
+/** True when another part's pin or shaft is already seated in `opening`. */
+export function isOpeningTaken(opening, otherFeatures) {
+  return findSeatedPairs([opening], otherFeatures.filter((f) => f.instanceId !== opening.instanceId)).length > 0;
+}
+
+/**
+ * True when rolling the part around `feature`'s axis can't change how it looks: the axis runs
+ * through the middle of the part's bbox and the bbox is equally wide both ways across it (pins,
+ * shafts, standoffs). Such a part gets one roll instead of four.
+ */
+function spinSymmetric(partMeta, feature) {
+  const bbox = partMeta?.bbox;
+  if (!bbox) return false;
+  const axis = new THREE.Vector3(...feature.axis);
+  const across = LOCAL_AXES.filter((a) => Math.abs(a.dot(axis)) < 0.01);
+  if (across.length !== 2 || Math.abs(Math.abs(axis.x) + Math.abs(axis.y) + Math.abs(axis.z) - 1) > 0.01) return false;
+  const origin = new THREE.Vector3(...feature.origin);
+  const widths = across.map((a) => {
+    const i = a.x ? 0 : a.y ? 1 : 2;
+    const center = (bbox.min[i] + bbox.max[i]) / 2;
+    return { offset: Math.abs(origin.getComponent(i) - center), width: bbox.max[i] - bbox.min[i] };
+  });
+  return widths.every((w) => w.offset < 0.1) && Math.abs(widths[0].width - widths[1].width) < 0.1;
+}
+
+/**
+ * Every way the selected part can go into the picked hole face (design.md §2): each of its inserts
+ * that fits the opening, by each end it can lead with, at each of 4 quarter-turn rolls and at every
+ * roll that puts another of its pins on a parallel hole that fits it (searched within the part's
+ * widest pin spread across the axis, and PATTERN_AXIAL_REACH_MM along it); poses that
+ * come out the same are listed once, and a part that looks the same at any roll (spinSymmetric) gets
+ * one roll. Each fit marks the selected part's other inserts parallel to
+ * the anchor, at the face plane: green when a matching opening on another part lines up with it.
+ * Sorted by green count (most first), then by the smallest turn from `currentQuaternion`.
+ * `hovered`: { opening (world feature), face: { point, outward } }. Returns
+ * [{ featureId, end, roll, quaternion, position, rotationDeg, markers, green, total, turnRad,
+ *    travelMm, sweepMm }].
+ */
+export function listInsertFits({ partMeta, measured = null, instanceId, hovered, receivingQuaternion, otherFeatures, currentQuaternion }) {
+  const { opening, face } = hovered;
+  const n = face.outward.clone().normalize();
+  const farFace = face.point.distanceTo(opening.start) < face.point.distanceTo(opening.end) ? opening.end : opening.start;
+  const depth = face.point.distanceTo(farFace);
+  const candidates = otherFeatures.filter((o) => o.instanceId !== instanceId);
+  // Openings that could take another pin of the pattern: parallel to the picked one and within
+  // PATTERN_AXIAL_REACH_MM of it along the axis (how far across is checked per pin below)
+  const across = (v) => v.clone().addScaledVector(n, -v.dot(n));
+  const patternOpenings = candidates
+    .filter(
+      (o) =>
+        o !== opening &&
+        !OPENINGS_BY_INSERT[o.kind] &&
+        Math.abs(o.axis.dot(n)) >= PARALLEL_MIN_DOT &&
+        Math.abs(o.origin.clone().sub(opening.origin).dot(n)) <= PATTERN_AXIAL_REACH_MM
+    )
+    .map((o) => ({ o, v: across(o.origin.clone().sub(opening.origin)) }));
+  const fits = [];
+  for (const f of getLocalFeatures(partMeta)) {
+    if (!OPENINGS_BY_INSERT[f.kind]?.has(opening.kind)) continue;
+    for (const lead of insertLeadEnds(partMeta, f, measured)) {
+      const base = { partMeta, measured, featureId: f.featureId, end: lead.end, face: face.point, outward: n, receivingQuaternion };
+      // Quarter turns relative to the receiving part, plus the exact turns that put another of the
+      // part's pins on a nearby matching hole (patterns that are not square to the receiving
+      // part's axes, e.g. the angled face of a 30° corner connector)
+      const rollAngles = spinSymmetric(partMeta, f) ? [0] : [0, 1, 2, 3].map((q) => (q * Math.PI) / 2);
+      const basePose = insertPose(base);
+      if (basePose && rollAngles.length > 1) {
+        const world = collectWorldFeatures(partMeta, basePose.matrix, instanceId, measured);
+        const anchor = world.find((w) => w.featureId === f.featureId);
+        // The part's other parallel pins and how far each is across the axis from the anchor; holes
+        // further across than the widest of them can't take any pin, so they are skipped
+        const others = world
+          .filter((w) => w !== anchor && OPENINGS_BY_INSERT[w.kind] && Math.abs(w.axis.dot(n)) >= PARALLEL_MIN_DOT)
+          .map((w) => ({ w, u: across(w.origin.clone().sub(anchor.origin)) }))
+          .filter(({ u }) => u.length() >= 0.5);
+        const span = Math.max(0, ...others.map(({ u }) => u.length())) + MAX_LINE_DISTANCE_MM;
+        const reachable = patternOpenings.filter(({ v }) => v.length() <= span);
+        for (const { w, u } of others) {
+          for (const { o, v } of reachable) {
+            if (!OPENINGS_BY_INSERT[w.kind].has(o.kind)) continue;
+            if (Math.abs(v.length() - u.length()) > MAX_LINE_DISTANCE_MM) continue;
+            const angle = Math.atan2(n.dot(u.clone().cross(v)), u.dot(v));
+            rollAngles.push(((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2));
+          }
+        }
+      }
+      for (const [rollIndex, rollRad] of rollAngles.entries()) {
+        const roll = rollIndex < 4 ? rollIndex : 4; // 0-3: quarter turns; 4: a turn found from the hole pattern
+        const pose = insertPose({ ...base, rollRad });
+        if (!pose) continue;
+        const duplicate = fits.some(
+          (g) => g.position.distanceTo(pose.position) < 0.01 && g.quaternion.angleTo(pose.quaternion) < THREE.MathUtils.degToRad(0.1)
+        );
+        if (duplicate) continue;
+
+        const world = collectWorldFeatures(partMeta, pose.matrix, instanceId, measured);
+        const anchor = world.find((w) => w.featureId === f.featureId);
+        const markers = [];
+        for (const w of world) {
+          if (!OPENINGS_BY_INSERT[w.kind] || w === anchor) continue;
+          if (Math.abs(w.axis.dot(n)) < PARALLEL_MIN_DOT) continue;
+          const green = candidates.some((o) => pairRoles(w, o)?.insert === w && linesCoincide(w.origin, w.axis, o.origin, o.axis));
+          // Where its axis meets the face plane
+          const p = w.origin.clone();
+          markers.push({ featureId: w.featureId, green, point: p.addScaledVector(n, -p.clone().sub(face.point).dot(n)) });
+        }
+        const travelMm = PICK_GAP_MM + depth;
+        fits.push({
+          featureId: f.featureId,
+          end: lead.end,
+          roll,
+          quaternion: pose.quaternion,
+          position: pose.position,
+          rotationDeg: pose.rotationDeg,
+          markers,
+          green: 1 + markers.filter((m) => m.green).length,
+          total: 1 + markers.length,
+          turnRad: currentQuaternion ? pose.quaternion.angleTo(currentQuaternion) : 0,
+          travelMm,
+          sweepMm: travelMm + Math.max(0, f.tMax - f.tMin),
+          direction: n.clone().negate()
+        });
+      }
+    }
+  }
+  return fits.sort((a, b) => b.green - a.green || a.turnRad - b.turnRad || a.roll - b.roll);
+}
+
+/** True when an insert of `insertKind` ('pin' / 'shaft') fits an opening of `openingKind`. */
+export const insertFitsOpening = (insertKind, openingKind) => Boolean(OPENINGS_BY_INSERT[insertKind]?.has(openingKind));

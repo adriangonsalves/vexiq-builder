@@ -4,6 +4,7 @@ import {
   Box,
   Compass,
   Copy,
+  Crosshair,
   Download,
   Expand,
   Eye,
@@ -116,6 +117,7 @@ export default function App() {
     }
   });
   const [preview, setPreview] = useState(null); // { parts, info } while scrubbing or playing
+  const [pickStatus, setPickStatus] = useState(null); // { text, tone } while picking a hole
   const previewRef = useRef(null);
   previewRef.current = preview;
   const handlePreview = useCallback((parts, info) => setPreview(parts ? { parts, info } : null), []);
@@ -1250,6 +1252,7 @@ export default function App() {
             onMateFeedback={(message, isError) => setActionFeedback({ message, isError })}
             onToggleRotateRequest={preview ? noop : handleToggleRotateRequest}
             collisionRecheck={preview ? undefined : build.recheck}
+            onPickStatus={setPickStatus}
           />
 
           <div className="viewport-hud-top">
@@ -1267,6 +1270,13 @@ export default function App() {
                 <span style={{ color: '#93c5fd', marginLeft: 6 }}>• Loading mesh…</span>
               )}
             </div>
+
+            {pickStatus && (
+              <div className={`hud-pill hud-pill-pick ${pickStatus.tone === 'warning' ? 'hud-pill-pick-warning' : ''}`} role="status">
+                <Crosshair size={14} />
+                <span>{pickStatus.text}</span>
+              </div>
+            )}
 
             {selectedInstance?.isIntersecting ? (
               <div className="hud-pill hud-pill-warning">
