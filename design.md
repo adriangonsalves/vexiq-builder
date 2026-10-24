@@ -177,7 +177,7 @@ When moving a part via the 3D Move Gizmo or Inspector Nudge buttons:
   - (b) a point 1 mm past the end is in open air: of 6 rays from it, at most 2 first meet a back face. A single axial ray isn't used because pins are hollow.
 
   A pin with neither end passing (a hollow-tube "peg" such as the Straight Standoff Connector) keeps both ends. Shafts are not measured. A pin-shaped "...Pin" part in Pins & Standoffs with no stored peg (the 2x3 Smooth Idler Pin) gets a stand-in pin along local Z through its origin.
-- **Viewport wiring:** `rebuildOtherFeatures()` caches world features of every visible non-selected part (at drag start and after each instance sync). `updateAlignedHoleHighlights()` recomputes the selected part's features, skips other parts whose `152.4 mm`-grown world box misses the selected part's grown box, and runs the test. It is called from `objectChange` (after the final snapped/flush pose is set, and in rotate mode) and at the end of the instance-sync effect; it shows nothing when there is no selection, the selected part is hidden, or Explode is on.
+- **Viewport wiring:** `rebuildOtherFeatures()` caches world features of every visible non-selected part (at drag start and after each instance sync). `updateAlignedHoleHighlights()` recomputes the selected part's features, skips other parts whose `152.4 mm`-grown world box misses the selected part's grown box, and runs the test. It is called from `objectChange` (after the final snapped/flush pose is set), on every rotate-ring turn (`turnSelectedTo`), and at the end of the instance-sync effect; it shows nothing when there is no selection, the selected part is hidden, or Explode is on.
 - **Overlay** (`createHoleHighlightOverlay`): group `__aligned_hole_highlights__` on the scene root (outside `partsRoot`, so click selection and collision ignore it). Two ring kinds share the per-radius geometries: **solid** rings (`depthTest: true`, `polygonOffset`, `renderOrder 1002`) at `face` and `farFace` (`farFace` is null for non-`through` openings such as the motor socket), lifted `0.15 mm` off the surface along the outward normal (`outward`, toward the insert, for the entry face; reversed for the far face); and one **ghost** ring (`depthTest: false`, opacity `0.3`, `renderOrder 1001`) at `face` only, so a hidden opening is still visible through parts. Each ring is a `RingGeometry(r, r + 0.7)` on the opening rim (`r = radiusMm`, one cached geometry per radius) facing the opening axis, orange `0xf97316`; both kinds draw above the `Axes` overlay and below the gizmo. Rings are pooled and hidden rather than removed, so dragging allocates no geometry.
 
 ### 5.5 Double-Click Mating (`planMates` in [`pinHoleAlignment.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/pinHoleAlignment.js) + `mateSelected` in [`Viewport3D.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/Viewport3D.jsx))
@@ -195,7 +195,7 @@ When moving a part via the 3D Move Gizmo or Inspector Nudge buttons:
   - commit through `onUpdateTransform` with `isIntersecting: false`, exactly like a drag release, and report through `onMateFeedback`, which App shows as `actionFeedback`.
 - **Double-click** (`dblclick` on the canvas) acts on the selected part when it is anywhere under the pointer, even behind another part. A single click on a part in front of the selected one waits 350 ms before selecting it, so a double-click keeps the selection. It does not act when:
   - a gizmo drag actually moved the part (`dragMovedRef`);
-  - the pointer is on an arrow, plane or ring handle (`transform.axis` other than the center `XYZ` / `XYZE` grab area, which covers small parts);
+  - the pointer is on a Move arrow or plane handle (`transform.axis` other than the center `XYZ` grab area, which covers small parts) or on a rotate ring;
   - it comes within 600 ms of an arrow click.
 
   Locked → "Part is locked"; no plans → "Nothing lined up to mate with"; one plan → mate; more → arrows.
@@ -206,6 +206,18 @@ When moving a part via the 3D Move Gizmo or Inspector Nudge buttons:
   - **Clicks:** a click picks an arrow (mate) or dismisses them and then selects as usual.
   - **Esc:** a capture-phase `keydown` listener dismisses them and stops the event, so App's deselect doesn't run.
   - **Other dismissals:** drag start and every instance-sync effect run also dismiss them.
+  - While they show, the rotate rings are hidden too.
+
+### 5.6 Rotate Mode (`findEngagedJoints` in [`pinHoleAlignment.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/pinHoleAlignment.js) + `createRotateGizmo` in [`Viewport3D.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/Viewport3D.jsx))
+- **Gizmos:** TransformControls only moves. In Rotate mode it is detached and the ring gizmo (`createRotateGizmo`, group `__rotate_gizmo__`) is shown instead. `syncGizmos()` picks one after every instance sync and mode change; neither shows while exploded, for locked parts, or for hidden parts.
+- **Joints:** `findEngagedJoints(selectedFeatures, otherFeatures)` uses the same insert/opening pairing and $2^\circ$ / $0.25\text{ mm}$ axis test as the highlighting (shared `linesCoincide` / `coaxialSpans` helpers). A pair is engaged when the insert and opening spans overlap along the axis by more than $0.05\text{ mm}$, i.e. exactly the pairs the highlighting skips as already inside. Pairs on the same line merge, giving `{ lines: [{ origin, axis, pairs }] }`.
+- **Setup** (`refreshRotateSetup`, on mode change, selection change, mesh load, and after every saved turn): 0 lines → pivot at the part's local-box center in world space (fixed under any turn about itself) with world `X`/`Y`/`Z` rings; 1 line → pivot at the point of the line closest to that center, one orange ring around it; more → no rings and a message. Ring angles carry over while the same part keeps the same rings (same axes, pivot within $0.5\text{ mm}$); entering Rotate mode or selecting another part starts them at $0^\circ$.
+- **Turning** (`turnSelectedTo`): with $q$ the turn of (ring total − total at gesture start) about the ring axis $\hat{\mathbf{a}}$ through pivot $\mathbf{p}$, $\mathbf{x} = \mathbf{p} + q(\mathbf{x}_0 - \mathbf{p})$ and orientation $q \cdot q_0$, always from the gesture's start pose so snapping adds no error. Turning around the joint line keeps every held pin or shaft on its axis.
+- **Ring drag:** a capture-phase `pointerdown` picks a ring before OrbitControls sees the press (orbit is disabled for the drag). The angle is the signed, unwrapped angle of the pointer's ray–plane hit around $\hat{\mathbf{a}}$, measured from the press point's hit on the same plane; when the plane is within about $11^\circ$ of edge-on ($|\hat{\mathbf{r}} \cdot \hat{\mathbf{a}}| < 0.2$), the pointer's travel along the ring's on-screen tangent is used instead. The ring total snaps to multiples of `rotationSnapDeg`. A release under 5 px selects or unselects the ring instead.
+- **Wheel:** with a ring selected, a capture-phase `wheel` listener turns one snap step (or $5^\circ$) per 100 px of `deltaY` and stops OrbitControls from zooming (`enableZoom` is also off while a ring is selected); the turn is saved 300 ms after the last notch.
+- **Labels** (`createAngleLabels`): HTML buttons over the canvas, placed each frame at the ring point furthest toward a per-ring screen direction; a click swaps in a number field.
+- **Saving** (`commitRotation`): same rounding and `onUpdateTransform` call as a drag release, with `isIntersecting` from `checkGroupCollision`. While a turn is in progress, the instance-sync effect leaves that part's pose alone.
+- **Right-click:** a right-button press/release under 5 px with the selected part under the pointer calls App's `onToggleRotateRequest`, which refuses locked parts and Explode view with a message and otherwise toggles `transformMode`. `contextmenu` is blocked on the viewport.
 
 ---
 
@@ -234,6 +246,7 @@ Given a `sourceInstance` + `sourcePort` $(\mathbf{o}_s, \hat{\mathbf{a}}_s)$ and
 ### 6.4 BVH-Compensated Symmetry Mirror (`mirrorSubassembly`)
 1. Reflects part positions across `X = planeOffsetMm` or `Z = planeOffsetMm` and reflects the rotation matrix $R' = S \cdot R \cdot S$ (with handedness correction so $\det(R') = +1$).
 2. Tests the mirrored instance with `checkCandidateCollision`; if an asymmetric part (e.g. Smart Motor, capped pin, corner connector) collides after pure reflection, searches $180^\circ$ roll/yaw compensations and $\pm 0.25\text{P}$ axial shifts to seat it cleanly.
+3. **`place_parts` mirroring (`mirrorPose`) is exact instead.** `localMirrorSymmetry(part)` finds a local plane $x_k = c$ across which the part's bbox and catalog features map onto themselves. The mirrored pose is then $R' = S R L$ and $\mathbf{t}' = S(R(2c\,\mathbf{e}_k) + \mathbf{t})$, where $S$ is the world reflection and $L$ the local one. This keeps parts like the corner connector right side up, where candidate rotations scored by box center can flip it. Left- or right-handed parts with no such plane fall back to `mirrorSubassembly` and are flagged `mirrorApproximate`.
 
 ---
 
@@ -241,11 +254,15 @@ Given a `sourceInstance` + `sourcePort` $(\mathbf{o}_s, \hat{\mathbf{a}}_s)$ and
 
 `auditAssembly()` evaluates six physical criteria:
 1. **Stage 1 (Solid Collisions):** Runs `checkCandidateCollision` across all visible instances.
-2. **Stage 2 (Fastener Engagement):** Projects every structural `pin_hole`, `shaft_bore`, and `shaft_socket` onto each fastener's world line segment $[-\frac{L}{2}, +\frac{L}{2}]$. A Connector Pin must engage $\ge 2$ distinct structural parts; a Shaft must engage $\ge 1$ part.
-3. **Stage 3 (Unsecured & Heavy Parts):** Counts fastener engagements per non-fastener part and compares against `part.mountingRules.minFastenersRequired` (`2` for Brain/Motor/Battery, `1` for standard parts).
-4. **Stage 4 (Connectivity Graph):** Builds an undirected graph where edges represent shared fasteners, coaxial mated ports, meshed gears, or flush touching bounding boxes, then runs BFS to count connected components and flag isolated islands.
-5. **Stage 5 (Shaft Protrusions):** Computes the axial projection interval of all engaged parts along each shaft and flags overhangs $> 8.0\text{ mm}$ beyond the outermost wheel/frame.
-6. **Stage 6 (Kinematic Drivetrain):** Builds a directed power graph from each `Smart Motor`'s `shaft_socket` $\rightarrow$ engaged `Shaft` $\rightarrow$ coaxial `Gear` (`shaft_bore`) $\rightarrow$ pitch-circle tangent `Gear` ($\|\Delta \mathbf{p}_\perp - (R_1 + R_2)\| \le 2.2\text{ mm}$) $\rightarrow$ `Wheel`, reporting `drivenWheelCount / totalWheelCount`.
+2. **Stage 2 (Seated Joints):**
+   - Every part's features come from `worldFeaturesFor(instance)`: the shared `collectWorldFeatures` with `getPartMeasurements(part)` (opening faces, pin ends and opening depths measured on the eroded BVH, corrected for the `0.38 mm` erosion, and cached per part).
+   - `findSeatedPairs` gives every pin/shaft-in-opening pair: axes within `2°` and `0.25 mm`, overlap $> 0.05\text{ mm}$.
+   - **Roles:** fasteners are parts whose `fastenerSpecs.fastenerType` is a pin, standoff or shaft type (Rubber Shaft Collars excluded). A fastener seated in 0 parts is floating, in 1 half-seated, in $\ge 2$ joining. A non-fastener's own pegs seated in another part join the two directly (`pegJoints`).
+   - **Measured depths** (`measureOpeningDepths`): five rays along each opening's axis from each side. An opening that isn't open all the way becomes a blind opening from each face open $\ge 1\text{ mm}$ (`<id>@lo` / `<id>@hi` when both are).
+3. **Stage 3 (Unsecured & Heavy Parts):** Counts seated fasteners and pegs per non-fastener part and compares against `part.mountingRules.minFastenersRequired` (`2` for Brain/Motor/Battery, `1` for standard parts).
+4. **Stage 4 (Connectivity Graph):** Builds an undirected graph whose edges are joining fasteners, peg joints, meshed gears and the two-fastened-parts clamp rule, then runs BFS to count connected components and flag isolated islands.
+5. **Stage 5 (Shaft Protrusions):** Flags a shaft whose span reaches more than `4.5 mm` past the outer box faces (projected on its axis) of the parts it is seated in, collars included.
+6. **Stage 6 (Kinematic Drivetrain):** Builds a directed power graph from each `Smart Motor` $\rightarrow$ the `Shaft` seated in its socket $\rightarrow$ `Gear`s and wheels that shaft is seated in $\rightarrow$ pitch-circle tangent `Gear`s ($\|\Delta \mathbf{p}_\perp - (R_1 + R_2)\| \le 2\text{ mm}$) $\rightarrow$ their shafts $\rightarrow$ `Wheel`s, reporting `drivenWheelCount / totalWheelCount`.
 
 ---
 
@@ -256,5 +273,11 @@ Given a `sourceInstance` + `sourcePort` $(\mathbf{o}_s, \hat{\mathbf{a}}_s)$ and
 - **Server-Sent Events (`/api/assembly/events`):**
   - When an MCP tool mutates the assembly, `writeAssemblyState()` POSTs to `http://localhost:5173/api/assembly` with header `x-mcp-source: mcp-server`.
   - Vite broadcasts the updated state to all connected browser tabs via SSE (`es.onmessage`), updating the 3D scene immediately without page reload.
+- **App status (`appSync`):** the bridge's `POST /api/assembly` reply includes `browserClients` (open SSE streams). `writeAssemblyState` records the result in the per-call `appSyncContext` (`AsyncLocalStorage`): `live`, `no-browser`, or `saved-to-file-only` when the POST fails. The MCP server adds it, with a hint, to the reply of any tool call that saved.
+- **Screenshots (`capture_screenshot`):**
+  1. The MCP server POSTs `{ view, width, height, focusInstanceId }` to `/api/assembly/screenshot`.
+  2. The bridge answers 409 with no browser. Otherwise it sends a `screenshot-request` SSE message to the most recently connected browser and waits up to 10 s (then 504) for `POST /api/assembly/screenshot-result`.
+  3. `App.jsx` hands the request to the renderer `Viewport3D` registers (`onRegisterScreenshot`). In one task, that hides the gizmos, hole rings, mate arrows, rotate rings and selection tint, renders at the requested size with a cloned camera (framed for standard views), reads `toDataURL`, and restores everything.
+  4. The tool returns the PNG as MCP image content.
 - **Manual UI Smart Actions (`POST /api/assembly/action`):**
   - When the user clicks **Auto-Fasten**, **Snap & Mate**, **Build Meshed Gear Train**, **Mirror**, or **Audit & Blueprint** in the React UI, [`src/App.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/App.jsx) sends the current browser state + action payload to `/api/assembly/action`, which executes the exact same `mcp/assembly-engine.mjs` solver and returns the updated state and audit/blueprint artifacts.

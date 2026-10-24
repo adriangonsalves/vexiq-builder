@@ -8,7 +8,9 @@ import {
   EXCLUDED_PART_NAMES,
   collectWorldFeatures,
   findAlignedOpenings,
+  findEngagedJoints,
   getLocalFeatures,
+  measureOpeningDepths,
   measureOpeningSurfaces,
   measurePinEnds,
   planMates
@@ -475,6 +477,102 @@ const placeFull = (name, position = [0, 0, 0], rotation = [0, 0, 0]) => {
   const pinOff = place('0x2 Connector Pin', [hole.origin.x + 0.2, hole.origin.y, zp]);
   plans = planMates(highlights(pinOff, [beamA]), pinOff.instanceId);
   check('Pin 0.2 mm off axis: sideways correction of 0.2 mm back onto the axis', plans.length === 1 && vecNear(plans[0].lateral, [-0.2, 0, 0], 0.005), JSON.stringify(plans.map((p) => p.lateral.toArray())));
+}
+
+// ---------------------------------------------------------------------------
+// mcp-agent-build-tools 1.2 Measured opening depths (blind / through / split)
+// ---------------------------------------------------------------------------
+{
+  const measuredFeatures = (name) => {
+    const meta = part(name);
+    const { colGeo } = getPartCollisionBvh(meta);
+    const raycast = (o, d) => {
+      const hit = colGeo.boundsTree.raycastFirst(new THREE.Ray(new THREE.Vector3(...o), new THREE.Vector3(...d)), THREE.DoubleSide);
+      return hit ? Math.max(0, hit.distance - COLLISION_EROSION_MM) : null;
+    };
+    const surfaces = surfacesOf(name);
+    const depths = measureOpeningDepths(meta, raycast, surfaces);
+    return collectWorldFeatures(meta, new THREE.Matrix4(), name, { surfaces, depths });
+  };
+  const spanLen = (f) => f.start.distanceTo(f.end);
+  const show = (fs) => JSON.stringify(fs.map((f) => ({ id: f.featureId, len: +spanLen(f).toFixed(2), through: f.through })));
+
+  const motor = measuredFeatures('VEX IQ Smart Motor');
+  const hole1 = motor.filter((f) => f.featureId.startsWith('hole_1') && !/^hole_1\d/.test(f.featureId));
+  check(
+    'Smart Motor hole_1 (listed as through) is one blind hole from the front face (~9 mm), closed at the back',
+    hole1.length === 1 && hole1[0].featureId === 'hole_1' && !hole1[0].through && spanLen(hole1[0]) > 7 && spanLen(hole1[0]) < 11 && hole1[0].end.y > -2,
+    show(hole1)
+  );
+  // Made-up 10 mm block with a hole listed as through but solid for z in [-1, 1]
+  const block = {
+    name: 'Test Block', category: 'Beams & Plates',
+    bbox: { min: [-5, -5, -5], max: [5, 5, 5] },
+    ports: [{ portId: 'hole_1', type: 'pin_hole', origin: [0, 0, 0], axis: [0, 0, 1], through: true, spanMm: [-5, 5] }]
+  };
+  const blockRay = (o, d) => (d[2] < 0 ? o[2] - 1 : -1 - o[2]); // first solid at z = +1 coming down, z = -1 coming up
+  const blockFeatures = collectWorldFeatures(block, new THREE.Matrix4(), 'block', { depths: measureOpeningDepths(block, blockRay) });
+  check(
+    'Hole blocked in the middle splits into @lo and @hi blind openings, 4 mm deep each',
+    blockFeatures.length === 2 && blockFeatures.every((f) => !f.through && Math.abs(spanLen(f) - 4) < 0.01) && blockFeatures.some((f) => f.featureId === 'hole_1@lo') && blockFeatures.some((f) => f.featureId === 'hole_1@hi'),
+    show(blockFeatures)
+  );
+  const socket = motor.filter((f) => f.featureId.startsWith('motor_drive_socket'));
+  check(
+    'Smart Motor drive socket stays one blind opening about 4.7 mm deep',
+    socket.length === 1 && socket[0].featureId === 'motor_drive_socket' && !socket[0].through && Math.abs(spanLen(socket[0]) - 4.7) <= 0.6,
+    show(socket)
+  );
+  const beamHole = measuredFeatures('1x6 Beam').filter((f) => f.featureId.startsWith('hole_2'));
+  check('1x6 Beam hole_2 stays one through opening', beamHole.length === 1 && beamHole[0].featureId === 'hole_2' && beamHole[0].through, show(beamHole));
+  const gearBore = measuredFeatures('36 Tooth Gear').filter((f) => f.featureId.startsWith('center_shaft_bore'));
+  check('36 Tooth Gear bore stays one through opening', gearBore.length === 1 && gearBore[0].through, show(gearBore));
+}
+
+// ---------------------------------------------------------------------------
+// right-click-rotate-mode 1.2 Engaged joints (what holds a part)
+// ---------------------------------------------------------------------------
+{
+  const joints = (selected, others) => findEngagedJoints(selected.features, others.flatMap((o) => o.features)).lines;
+  const linesDetail = (lines) => JSON.stringify(lines.map((l) => ({ origin: l.origin.toArray(), axis: l.axis.toArray(), pairs: l.pairs.length })));
+  const beamA = place('1x6 Beam');
+  const hole = featureById(beamA, 'hole_2');
+  const pinLocal = local('0x2 Connector Pin', 'pin');
+
+  const seated = place('0x2 Connector Pin', [hole.origin.x, hole.origin.y, 3.175]);
+  let lines = joints(seated, [beamA]);
+  check(
+    'Pin seated in a beam hole: held on 1 line, the hole axis',
+    lines.length === 1 && Math.abs(lines[0].axis.z) > 0.999 && near(lines[0].origin.x, hole.origin.x) && near(lines[0].origin.y, hole.origin.y),
+    linesDetail(lines)
+  );
+
+  const above = place('0x2 Connector Pin', [hole.origin.x, hole.origin.y, 3.05 + 5 - pinLocal.tMin]);
+  lines = joints(above, [beamA]);
+  check(
+    'Pin 5 mm above a beam hole: not held, and the hole is still highlighted',
+    lines.length === 0 && has(highlights(above, [beamA]), beamA, 'hole_2'),
+    linesDetail(lines)
+  );
+
+  const gear = place('36 Tooth Gear');
+  const beamOverGear = place('1x6 Beam', [6.35, 0, 15]); // hole_1 at x = 0, over the gear bore
+  const shaft = place('4x Pitch Shaft', [0, 0, 6]);
+  lines = joints(shaft, [gear, beamOverGear]);
+  check('Shaft through a beam hole and a gear bore: held on 1 line with 2 pairs', lines.length === 1 && lines[0].pairs.length === 2, linesDetail(lines));
+
+  const hole4 = featureById(beamA, 'hole_4');
+  const pinA = place('0x2 Connector Pin', [hole.origin.x, hole.origin.y, 3.175]);
+  const pinB = place('0x2 Connector Pin', [hole4.origin.x, hole4.origin.y, 3.175]);
+  lines = joints(beamA, [pinA, pinB]);
+  check('Beam with pins seated in two holes: held on 2 lines', lines.length === 2, linesDetail(lines));
+  lines = joints(beamA, [pinA]);
+  check('Beam with one pin seated: held on 1 line', lines.length === 1, linesDetail(lines));
+
+  const beamLow = place('1x6 Beam', [0, 0, -6.35]);
+  const pinThrough = place('0x2 Connector Pin', [hole.origin.x, hole.origin.y, -3.175]);
+  lines = joints(pinThrough, [beamA, beamLow]);
+  check('Pin seated in two stacked beams: held on 1 line with 2 pairs', lines.length === 1 && lines[0].pairs.length === 2, linesDetail(lines));
 }
 
 // ---------------------------------------------------------------------------

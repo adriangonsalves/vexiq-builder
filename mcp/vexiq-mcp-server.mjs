@@ -2,17 +2,21 @@
 import * as THREE from 'three';
 import {
   VEX_PITCH_MM,
+  appSyncContext,
+  appUrl,
   auditAssembly,
   buildDefaultStarterState,
   buildMeshedGearTrain,
   buildWorldMatrix,
   checkCandidateCollision,
   computeMateTransform,
+  describePartConnections,
   findMatchingPinHoles,
   findPart,
   generateOrthographicViews,
   getCatalog,
   mirrorSubassembly,
+  placeParts,
   readAssemblyState,
   writeAssemblyState
 } from './assembly-engine.mjs';
@@ -45,13 +49,18 @@ const TOOLS = [
   {
     name: 'get_part_details',
     description:
-      'Get full CAD geometry metadata for a VEX IQ part, including bounding box (mm and VEX Pitch) and extracted cylindrical hole/pin axes.',
+      'Get a VEX IQ part\'s size and connection points in its own frame: every pin hole, shaft bore, socket, collar hole, pin/peg and shaft with its position, axis, usable span along the axis (t = dot(point, axis), mm), real depth measured on the 3D model, whether it goes through, and which ends of each peg stick out. Pass verbose for the raw catalog record (cylinders, ports, mesh counts).',
     inputSchema: {
       type: 'object',
       properties: {
         partQuery: {
           type: 'string',
           description: 'Part ID, part number (e.g. "228-2500-025"), or exact part name.'
+        },
+        verbose: {
+          type: 'boolean',
+          default: false,
+          description: 'Also return the full catalog record: raw ports, cylinders, vertex/triangle/connector counts.'
         }
       },
       required: ['partQuery']
@@ -464,6 +473,79 @@ const TOOLS = [
       type: 'object',
       properties: {}
     }
+  },
+  {
+    name: 'place_parts',
+    description:
+      'Place a list of parts in one call and get one short reply: per part its ref, instanceId, label and status (placed / overlapping), then one combined audit summary (overlaps, floating and half-seated fasteners, unsecured parts, disconnected groups, driven wheels). Each item gives either an absolute position/rotation, or an insert: put one of the item\'s pins/pegs/shafts/openings into an opening of a placed part (instanceId) or of an earlier item (ref), and push it straight in until it touches something (like double-click mating). Use dryRun to check a layout without saving, and mirror to also place every item\'s mirror image (e.g. build the left half, get the right half). World: Y up, mm, Euler XYZ degrees.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        parts: {
+          type: 'array',
+          minItems: 1,
+          description: 'Items, processed in order.',
+          items: {
+            type: 'object',
+            properties: {
+              partQuery: { type: 'string', description: 'Part number, part ID, or part name.' },
+              ref: { type: 'string', description: 'Name later items in this call can use in insert.into.ref.' },
+              label: { type: 'string' },
+              color: { type: 'string' },
+              position: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3, description: 'World [x, y, z] mm (absolute placement).' },
+              rotation: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3, description: 'Euler [rx, ry, rz] degrees (absolute placement).' },
+              insert: {
+                type: 'object',
+                description: 'Place by inserting into an opening instead of position/rotation.',
+                properties: {
+                  sourcePort: { type: 'string', description: "This part's pin/peg/shaft/opening (port id from get_part_details). Defaults to its shaft, peg, or bore." },
+                  into: {
+                    type: 'object',
+                    properties: {
+                      instanceId: { type: 'string' },
+                      ref: { type: 'string' },
+                      port: { type: 'string', description: "The target's opening (or pin/shaft when the source is an opening), port id from get_part_details." }
+                    },
+                    required: ['port']
+                  },
+                  rollDeg: { type: 'number', default: 0, description: 'Turn around the shared axis.' },
+                  fromSide: { type: 'string', enum: ['+', '-'], description: "Side of the target port's axis to come in from. Defaults to the open side of a blind opening, else '+'." }
+                },
+                required: ['into']
+              }
+            },
+            required: ['partQuery']
+          }
+        },
+        dryRun: { type: 'boolean', default: false, description: 'Check only: same reply (with poses), nothing saved.' },
+        rejectIntersecting: { type: 'boolean', default: false, description: 'Save nothing if any item overlaps another part.' },
+        mirror: {
+          type: 'object',
+          description: 'Also place every item mirrored across this plane.',
+          properties: {
+            plane: { type: 'string', enum: ['X', 'Y', 'Z'] },
+            offsetMm: { type: 'number', default: 0 }
+          },
+          required: ['plane']
+        },
+        verbose: { type: 'boolean', default: false, description: 'Include each part\'s position and rotation.' }
+      },
+      required: ['parts']
+    }
+  },
+  {
+    name: 'capture_screenshot',
+    description:
+      "Return a PNG picture of the app's 3D view, rendered by the browser that has the app open. view 'current' uses the user's camera; 'iso', 'front', 'top' and 'side' use a separate camera framed on the whole assembly (or focusInstanceId) and leave the user's camera alone. Gizmos, hole highlights and the selection tint are left out. Fails with a hint when the app isn't running or no browser has it open.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        view: { type: 'string', enum: ['current', 'iso', 'front', 'top', 'side'], default: 'iso' },
+        focusInstanceId: { type: 'string', description: 'Frame this part instead of the whole assembly (standard views only).' },
+        width: { type: 'number', default: 1024, description: '320 to 1920 px.' },
+        height: { type: 'number', default: 768, description: '320 to 1920 px.' }
+      }
+    }
   }
 ];
 
@@ -509,17 +591,24 @@ async function executeTool(name, args = {}) {
     if (!part) {
       return { isError: true, error: `Part not found for query: "${args.partQuery}"` };
     }
-    return {
+    const compact = {
       id: part.id,
       name: part.name,
       partNumber: part.partNumber,
       category: part.category,
-      defaultColor: part.defaultColor,
-      bbox: part.bbox,
-      pitchSize: part.pitchSize || part.bbox.size.map((d) => Number((d / VEX_PITCH_MM).toFixed(2))),
+      sizeMm: part.bbox.size,
+      bbox: { min: part.bbox.min, max: part.bbox.max },
       originType: part.originType || 'centered',
       gearSpecs: part.gearSpecs || null,
       fastenerSpecs: part.fastenerSpecs || null,
+      connections: describePartConnections(part)
+    };
+    if (!args.verbose) return compact;
+    return {
+      ...compact,
+      defaultColor: part.defaultColor,
+      bbox: part.bbox,
+      pitchSize: part.pitchSize || part.bbox.size.map((d) => Number((d / VEX_PITCH_MM).toFixed(2))),
       mountingRules: part.mountingRules || null,
       portCounts: part.portCounts || { total: part.ports?.length || 0 },
       ports: part.ports || [],
@@ -1071,6 +1160,87 @@ async function executeTool(name, args = {}) {
     };
   }
 
+  if (name === 'place_parts') {
+    const state = readAssemblyState();
+    const dryRun = Boolean(args.dryRun);
+    const result = placeParts(state, args.parts, { mirror: args.mirror });
+    if (result.error) {
+      const { index, ref, reason } = result.error;
+      const where = index == null ? '' : `item ${index}${ref ? ` (ref "${ref}")` : ''}: `;
+      return { isError: true, ok: false, saved: false, error: `${where}${reason}`, item: result.error };
+    }
+
+    const overlapping = result.placed.filter((p) => p.inst.isIntersecting);
+    const rejected = Boolean(args.rejectIntersecting) && overlapping.length > 0;
+    const withPoses = Boolean(args.verbose) || dryRun;
+    const parts = result.placed.map((p) => ({
+      ref: p.ref ?? p.index,
+      instanceId: p.inst.instanceId,
+      label: p.inst.label,
+      status: p.inst.isIntersecting ? 'overlapping' : 'placed',
+      ...(p.collidingWith.length ? { overlaps: p.collidingWith } : {}),
+      ...(p.stoppedAgainst ? { stoppedAgainst: p.stoppedAgainst } : {}),
+      ...(p.mirrorApproximate ? { mirrorApproximate: true } : {}),
+      ...(withPoses ? { position: p.inst.position, rotation: p.inst.rotation } : {})
+    }));
+
+    const saved = !dryRun && !rejected;
+    if (saved) {
+      await writeAssemblyState({
+        ...state,
+        selectedId: result.placed.at(-1)?.inst.instanceId ?? state.selectedId,
+        instances: result.instances
+      });
+    }
+    return {
+      ok: !rejected,
+      ...(dryRun ? { dryRun: true } : {}),
+      saved,
+      ...(rejected ? { message: `Nothing saved: ${overlapping.length} part(s) overlap (rejectIntersecting).` } : {}),
+      placedCount: parts.length,
+      parts,
+      audit: result.audit
+    };
+  }
+
+  if (name === 'capture_screenshot') {
+    const clamp = (v, d) => Math.round(Math.min(Math.max(Number(v) || d, 320), 1920));
+    const request = {
+      view: ['current', 'iso', 'front', 'top', 'side'].includes(args.view) ? args.view : 'iso',
+      width: clamp(args.width, 1024),
+      height: clamp(args.height, 768),
+      ...(args.focusInstanceId ? { focusInstanceId: args.focusInstanceId } : {})
+    };
+    let res;
+    try {
+      res = await fetch(`${appUrl()}/api/assembly/screenshot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal: AbortSignal.timeout(12000)
+      });
+    } catch {
+      return {
+        isError: true,
+        error: "The app isn't running, so there is no view to capture.",
+        appHint: 'Start it with `npm run dev`.'
+      };
+    }
+    const reply = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      return { isError: true, error: 'No browser has the app open.', appHint: `Open ${appUrl()} to see it.` };
+    }
+    if (!res.ok || !reply.png) {
+      return { isError: true, error: reply.error || `Screenshot failed (HTTP ${res.status}).` };
+    }
+    return {
+      mcpContent: [
+        { type: 'image', data: reply.png, mimeType: 'image/png' },
+        { type: 'text', text: JSON.stringify({ ok: true, ...request }) }
+      ]
+    };
+  }
+
   if (name === 'capture_viewport_views') {
     const state = readAssemblyState();
     return generateOrthographicViews(state);
@@ -1141,12 +1311,19 @@ async function handleJsonRpcMessage(req) {
     if (method === 'tools/call') {
       const toolName = params?.name;
       const toolArgs = params?.arguments || {};
-      const output = await executeTool(toolName, toolArgs);
+      // Tools that save the assembly report whether the open app received the change
+      const sync = {};
+      const output = await appSyncContext.run(sync, () => executeTool(toolName, toolArgs));
+      if (sync.appSync && output && typeof output === 'object') {
+        output.appSync = sync.appSync;
+        if (sync.appHint) output.appHint = sync.appHint;
+      }
       sendResponse({
         jsonrpc: '2.0',
         id,
         result: {
-          content: [
+          // A tool may return its own content items (e.g. an image) instead of a JSON text reply
+          content: output?.mcpContent || [
             {
               type: 'text',
               text: JSON.stringify(output, null, 2)

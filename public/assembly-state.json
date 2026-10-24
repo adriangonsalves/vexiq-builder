@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "selectedId": "inst-1792764596947-q9d5",
+  "selectedId": null,
   "viewport": {
     "transformMode": "translate",
     "snapPitchFactor": 0.5,
@@ -12,179 +12,2238 @@
   },
   "instances": [
     {
-      "instanceId": "inst-starter-beam",
-      "partId": "2x10-beam-228-2500-025-166",
-      "label": "2x10 Beam #1",
+      "instanceId": "inst-1792820121651-0-eywf",
+      "partId": "4x16-plate-228-2500-046-252",
+      "label": "Left Inner Wall",
       "position": [
         0,
-        12.7,
-        -25.4
+        36.57,
+        53.85
       ],
       "rotation": [
         0,
         0,
         0
       ],
-      "lastValidPosition": [
-        0,
-        12.7,
-        -25.4
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
       "color": "#64748b",
       "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-starter-pin",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #1",
-      "position": [
-        31.75,
-        6.35,
-        -34.925
-      ],
-      "rotation": [
-        0,
-        180,
-        0
-      ],
+      "locked": false,
+      "isIntersecting": false,
       "lastValidPosition": [
-        31.75,
-        6.35,
-        -34.925
+        0,
+        36.57,
+        53.85
       ],
       "lastValidRotation": [
         0,
-        180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-1-zta2",
+      "partId": "2x16-beam-228-2500-028-171",
+      "label": "Left Outer Rail",
+      "position": [
+        0,
+        23.87,
+        72.65
+      ],
+      "rotation": [
+        0,
+        0,
         0
       ],
+      "color": "#64748b",
+      "visible": true,
+      "locked": false,
       "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        23.87,
+        72.65
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-2-xolf",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Left Rail Standoff FT",
+      "position": [
+        95.25,
+        30.22,
+        69.6
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        95.25,
+        30.22,
+        69.6
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-3-qogq",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Left Rail Standoff FB",
+      "position": [
+        95.25,
+        17.52,
+        69.6
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        95.25,
+        17.52,
+        69.6
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-4-w5ys",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Left Rail Standoff RT",
+      "position": [
+        -95.25,
+        30.22,
+        69.6
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -95.25,
+        30.22,
+        69.6
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-5-1d6q",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Left Rail Standoff RB",
+      "position": [
+        -95.25,
+        17.52,
+        69.6
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -95.25,
+        17.52,
+        69.6
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-6-002i",
+      "partId": "vex-iq-smart-motor-228-2560-500",
+      "label": "Left Motor",
+      "position": [
+        -9.525,
+        23.87,
+        50.67
+      ],
+      "rotation": [
+        -90,
+        0,
+        -180
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -9.525,
+        23.87,
+        50.67
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-7-3ms8",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "Left Motor Pin 1",
+      "position": [
+        -31.75,
+        30.22,
+        50.8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
       "color": "#2563eb",
       "visible": true,
-      "locked": false
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -31.75,
+        30.22,
+        50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
     },
     {
-      "instanceId": "inst-starter-shaft",
-      "partId": "4x-pitch-shaft-228-2500-120-234",
-      "label": "4x Pitch Shaft #1",
+      "instanceId": "inst-1792820121651-8-0h6s",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "Left Motor Pin 2",
       "position": [
-        -19.05,
-        6.35,
-        -12.7
+        -31.75,
+        17.52,
+        50.8
       ],
       "rotation": [
         0,
         0,
         0
       ],
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
       "lastValidPosition": [
-        -19.05,
-        6.35,
-        -12.7
+        -31.75,
+        17.52,
+        50.8
       ],
       "lastValidRotation": [
         0,
         0,
         0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-9-0qhs",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "Left Motor Pin 3",
+      "position": [
+        6.35,
+        30.22,
+        50.8
       ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false,
       "isIntersecting": false,
+      "lastValidPosition": [
+        6.35,
+        30.22,
+        50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-a-gqqa",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "Left Motor Pin 4",
+      "position": [
+        6.35,
+        17.52,
+        50.8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        6.35,
+        17.52,
+        50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-b-c72d",
+      "partId": "2-5x-pitch-capped-shaft-228-2500-2220-80",
+      "label": "Left Motor Shaft",
+      "position": [
+        0,
+        23.87,
+        75.7
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
       "color": "#cbd5e1",
       "visible": true,
-      "locked": false
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        23.87,
+        75.7
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
     },
     {
-      "instanceId": "inst-starter-gear",
-      "partId": "60-tooth-gear-228-2500-215-338",
-      "label": "60 Tooth Gear #1",
+      "instanceId": "inst-1792820121651-c-lfey",
+      "partId": "2x-pitch-capped-shaft-228-2500-2219-84",
+      "label": "Left Front Idler Shaft",
       "position": [
-        -19.05,
-        6.35,
-        -12.7
+        25.4,
+        23.87,
+        75.7
       ],
       "rotation": [
         0,
         0,
         0
       ],
-      "lastValidPosition": [
-        -19.05,
-        6.35,
-        -12.7
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#dc2626",
+      "color": "#cbd5e1",
       "visible": true,
-      "locked": false
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        25.4,
+        23.87,
+        75.7
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
     },
     {
-      "instanceId": "inst-1792764596947-q9d5",
-      "partId": "1x-wide-1x1-offset-corner-connector-228-2500-130-28",
-      "label": "1x Wide, 1x1 Offset Corner Connector #1",
+      "instanceId": "inst-1792820121651-d-gsgh",
+      "partId": "2x-pitch-capped-shaft-228-2500-2219-84",
+      "label": "Left Rear Idler Shaft",
       "position": [
-        57.15,
-        6.35,
-        -57.15
+        -25.4,
+        23.87,
+        75.7
       ],
       "rotation": [
         0,
         0,
         0
       ],
+      "color": "#cbd5e1",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
       "lastValidPosition": [
-        57.15,
-        6.35,
-        -57.15
+        -25.4,
+        23.87,
+        75.7
       ],
       "lastValidRotation": [
         0,
         0,
         0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-e-2xid",
+      "partId": "4x-pitch-capped-shaft-228-2500-2223-227",
+      "label": "Left Front Axle",
+      "position": [
+        63.5,
+        23.87,
+        94.88
       ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#cbd5e1",
+      "visible": true,
+      "locked": false,
       "isIntersecting": false,
+      "lastValidPosition": [
+        63.5,
+        23.87,
+        94.88
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-f-b2ol",
+      "partId": "4x-pitch-capped-shaft-228-2500-2223-227",
+      "label": "Left Rear Axle",
+      "position": [
+        -63.5,
+        23.87,
+        94.88
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#cbd5e1",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -63.5,
+        23.87,
+        94.88
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-g-h72c",
+      "partId": "12-tooth-gear-228-2500-213-290",
+      "label": "Left Motor 12T Gear",
+      "position": [
+        0,
+        23.87,
+        66.425
+      ],
+      "rotation": [
+        0,
+        0,
+        15
+      ],
+      "color": "#374151",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        23.87,
+        66.425
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        15
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-h-n431",
+      "partId": "36-tooth-gear-228-2500-214-328",
+      "label": "Left Front Idler 36T",
+      "position": [
+        25.4,
+        23.87,
+        66.425
+      ],
+      "rotation": [
+        0,
+        0,
+        5
+      ],
+      "color": "#374151",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        25.4,
+        23.87,
+        66.425
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        5
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-i-gcjm",
+      "partId": "36-tooth-gear-228-2500-214-328",
+      "label": "Left Rear Idler 36T",
+      "position": [
+        -25.4,
+        23.87,
+        66.425
+      ],
+      "rotation": [
+        0,
+        0,
+        5
+      ],
+      "color": "#374151",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -25.4,
+        23.87,
+        66.425
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        5
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-j-661h",
+      "partId": "36-tooth-gear-228-2500-214-328",
+      "label": "Left Front Wheel 36T",
+      "position": [
+        63.5,
+        23.87,
+        66.425
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#374151",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        63.5,
+        23.87,
+        66.425
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-k-kqrq",
+      "partId": "36-tooth-gear-228-2500-214-328",
+      "label": "Left Rear Wheel 36T",
+      "position": [
+        -63.5,
+        23.87,
+        66.425
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#374151",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -63.5,
+        23.87,
+        66.425
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-l-jcp9",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Left Motor Shaft Collar",
+      "position": [
+        -4.09,
+        31.97,
+        53.81
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -4.09,
+        31.97,
+        53.81
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-m-2k0p",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Left Front Idler Collar",
+      "position": [
+        21.31,
+        31.97,
+        53.81
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        21.31,
+        31.97,
+        53.81
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-n-czde",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Left Rear Idler Collar",
+      "position": [
+        -29.49,
+        31.97,
+        53.81
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -29.49,
+        31.97,
+        53.81
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-o-ujw8",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Left Front Axle Collar",
+      "position": [
+        59.41,
+        31.97,
+        53.81
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        59.41,
+        31.97,
+        53.81
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-p-1on8",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Left Rear Axle Collar",
+      "position": [
+        -67.59,
+        31.97,
+        53.81
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -67.59,
+        31.97,
+        53.81
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-q-1dml",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Left Front Axle End Collar",
+      "position": [
+        59.41,
+        31.97,
+        41.36
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        59.41,
+        31.97,
+        41.36
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-r-gufx",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Left Rear Axle End Collar",
+      "position": [
+        -67.59,
+        31.97,
+        41.36
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -67.59,
+        31.97,
+        41.36
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-s-hs3w",
+      "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+      "label": "Left Front Hub",
+      "position": [
+        63.5,
+        23.87,
+        78.88
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#6b7280",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        63.5,
+        23.87,
+        78.88
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-t-ei8n",
+      "partId": "tire-160-mm-travel-228-2500-210-448",
+      "label": "Left Front Tire",
+      "position": [
+        63.5,
+        23.87,
+        85.725
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        63.5,
+        23.87,
+        85.725
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-u-qk2q",
+      "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+      "label": "Left Rear Hub",
+      "position": [
+        -63.5,
+        23.87,
+        78.88
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#6b7280",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -63.5,
+        23.87,
+        78.88
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-v-59lz",
+      "partId": "tire-160-mm-travel-228-2500-210-448",
+      "label": "Left Rear Tire",
+      "position": [
+        -63.5,
+        23.87,
+        85.29
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -63.5,
+        23.87,
+        85.29
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-w-hil8",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Left Brain Standoff 1",
+      "position": [
+        -44.45,
+        55.62,
+        50.8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
       "color": "#475569",
       "visible": true,
-      "locked": false
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -44.45,
+        55.62,
+        50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
     },
     {
-      "instanceId": "inst-1792764604347-96xi",
-      "partId": "1x2-right-chassis-corner-connector-228-2500-1255-42",
-      "label": "1x2 Right Chassis Corner Connector #1",
+      "instanceId": "inst-1792820121651-x-ghdn",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Left Brain Standoff 2",
       "position": [
-        19.05,
-        19.05,
-        -28.575
+        -19.05,
+        55.62,
+        50.8
       ],
       "rotation": [
         0,
         0,
         0
       ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
       "lastValidPosition": [
-        19.05,
-        19.05,
-        -28.575
+        -19.05,
+        55.62,
+        50.8
       ],
       "lastValidRotation": [
         0,
         0,
         0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-y-nlx1",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Left Brain Standoff 3",
+      "position": [
+        19.05,
+        55.62,
+        50.8
       ],
-      "isIntersecting": false,
+      "rotation": [
+        0,
+        0,
+        0
+      ],
       "color": "#475569",
       "visible": true,
-      "locked": false
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        19.05,
+        55.62,
+        50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121651-z-b3qi",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Left Brain Standoff 4",
+      "position": [
+        44.45,
+        55.62,
+        50.8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        44.45,
+        55.62,
+        50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-m0-wgje",
+      "partId": "4x16-plate-228-2500-046-252",
+      "label": "Right Inner Wall",
+      "position": [
+        0,
+        36.57,
+        -53.85
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#64748b",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        36.57,
+        -53.85
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-m1-hxd8",
+      "partId": "2x16-beam-228-2500-028-171",
+      "label": "Right Outer Rail",
+      "position": [
+        0,
+        23.87,
+        -72.65
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#64748b",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        23.87,
+        -72.65
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-m2-dirp",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Right Rail Standoff FT",
+      "position": [
+        95.25,
+        30.22,
+        -69.6
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        95.25,
+        30.22,
+        -69.6
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-m3-byho",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Right Rail Standoff FB",
+      "position": [
+        95.25,
+        17.52,
+        -69.6
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        95.25,
+        17.52,
+        -69.6
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-m4-ycad",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Right Rail Standoff RT",
+      "position": [
+        -95.25,
+        30.22,
+        -69.6
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -95.25,
+        30.22,
+        -69.6
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-m5-omfq",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Right Rail Standoff RB",
+      "position": [
+        -95.25,
+        17.52,
+        -69.6
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -95.25,
+        17.52,
+        -69.6
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-m6-wz24",
+      "partId": "vex-iq-smart-motor-228-2560-500",
+      "label": "Right Motor",
+      "position": [
+        -9.525,
+        23.87,
+        -50.67
+      ],
+      "rotation": [
+        90,
+        0,
+        -180
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -9.525,
+        23.87,
+        -50.67
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-m7-7jei",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "Right Motor Pin 1",
+      "position": [
+        -31.75,
+        30.22,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -31.75,
+        30.22,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-m8-6ukl",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "Right Motor Pin 2",
+      "position": [
+        -31.75,
+        17.52,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -31.75,
+        17.52,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-m9-pav9",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "Right Motor Pin 3",
+      "position": [
+        6.35,
+        30.22,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        6.35,
+        30.22,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-ma-w6l3",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "Right Motor Pin 4",
+      "position": [
+        6.35,
+        17.52,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        6.35,
+        17.52,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mb-6fl7",
+      "partId": "2-5x-pitch-capped-shaft-228-2500-2220-80",
+      "label": "Right Motor Shaft",
+      "position": [
+        0,
+        23.87,
+        -75.7
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#cbd5e1",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        23.87,
+        -75.7
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mc-ynnr",
+      "partId": "2x-pitch-capped-shaft-228-2500-2219-84",
+      "label": "Right Front Idler Shaft",
+      "position": [
+        25.4,
+        23.87,
+        -75.7
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#cbd5e1",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        25.4,
+        23.87,
+        -75.7
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-md-bviq",
+      "partId": "2x-pitch-capped-shaft-228-2500-2219-84",
+      "label": "Right Rear Idler Shaft",
+      "position": [
+        -25.4,
+        23.87,
+        -75.7
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#cbd5e1",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -25.4,
+        23.87,
+        -75.7
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-me-nvp6",
+      "partId": "4x-pitch-capped-shaft-228-2500-2223-227",
+      "label": "Right Front Axle",
+      "position": [
+        63.5,
+        23.87,
+        -94.88
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#cbd5e1",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        63.5,
+        23.87,
+        -94.88
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mf-hqfk",
+      "partId": "4x-pitch-capped-shaft-228-2500-2223-227",
+      "label": "Right Rear Axle",
+      "position": [
+        -63.5,
+        23.87,
+        -94.88
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#cbd5e1",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -63.5,
+        23.87,
+        -94.88
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mg-560i",
+      "partId": "12-tooth-gear-228-2500-213-290",
+      "label": "Right Motor 12T Gear",
+      "position": [
+        0,
+        23.87,
+        -66.425
+      ],
+      "rotation": [
+        -180,
+        0,
+        165
+      ],
+      "color": "#374151",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        23.87,
+        -66.425
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        165
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mh-u7t4",
+      "partId": "36-tooth-gear-228-2500-214-328",
+      "label": "Right Front Idler 36T",
+      "position": [
+        25.4,
+        23.87,
+        -66.425
+      ],
+      "rotation": [
+        -180,
+        0,
+        175
+      ],
+      "color": "#374151",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        25.4,
+        23.87,
+        -66.425
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        175
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mi-lyyd",
+      "partId": "36-tooth-gear-228-2500-214-328",
+      "label": "Right Rear Idler 36T",
+      "position": [
+        -25.4,
+        23.87,
+        -66.425
+      ],
+      "rotation": [
+        -180,
+        0,
+        175
+      ],
+      "color": "#374151",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -25.4,
+        23.87,
+        -66.425
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        175
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mj-x5n1",
+      "partId": "36-tooth-gear-228-2500-214-328",
+      "label": "Right Front Wheel 36T",
+      "position": [
+        63.5,
+        23.87,
+        -66.425
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#374151",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        63.5,
+        23.87,
+        -66.425
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mk-rli6",
+      "partId": "36-tooth-gear-228-2500-214-328",
+      "label": "Right Rear Wheel 36T",
+      "position": [
+        -63.5,
+        23.87,
+        -66.425
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#374151",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -63.5,
+        23.87,
+        -66.425
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-ml-15sm",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Right Motor Shaft Collar",
+      "position": [
+        4.08,
+        31.97,
+        -53.81
+      ],
+      "rotation": [
+        90,
+        0,
+        -180
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        4.08,
+        31.97,
+        -53.81
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mm-gknu",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Right Front Idler Collar",
+      "position": [
+        29.48,
+        31.97,
+        -53.81
+      ],
+      "rotation": [
+        90,
+        0,
+        -180
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        29.48,
+        31.97,
+        -53.81
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mn-vcr3",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Right Rear Idler Collar",
+      "position": [
+        -21.32,
+        31.97,
+        -53.81
+      ],
+      "rotation": [
+        90,
+        0,
+        -180
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -21.32,
+        31.97,
+        -53.81
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mo-5dfq",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Right Front Axle Collar",
+      "position": [
+        67.58,
+        31.97,
+        -53.81
+      ],
+      "rotation": [
+        90,
+        0,
+        -180
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        67.58,
+        31.97,
+        -53.81
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mp-8dd7",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Right Rear Axle Collar",
+      "position": [
+        -59.42,
+        31.97,
+        -53.81
+      ],
+      "rotation": [
+        90,
+        0,
+        -180
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -59.42,
+        31.97,
+        -53.81
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mq-h1km",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Right Front Axle End Collar",
+      "position": [
+        67.58,
+        31.97,
+        -41.36
+      ],
+      "rotation": [
+        90,
+        0,
+        -180
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        67.58,
+        31.97,
+        -41.36
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mr-fo2w",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Right Rear Axle End Collar",
+      "position": [
+        -59.42,
+        31.97,
+        -41.36
+      ],
+      "rotation": [
+        90,
+        0,
+        -180
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -59.42,
+        31.97,
+        -41.36
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-ms-bt7b",
+      "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+      "label": "Right Front Hub",
+      "position": [
+        63.5,
+        23.87,
+        -78.88
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#6b7280",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        63.5,
+        23.87,
+        -78.88
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mt-tcha",
+      "partId": "tire-160-mm-travel-228-2500-210-448",
+      "label": "Right Front Tire",
+      "position": [
+        63.5,
+        23.87,
+        -85.29
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        63.5,
+        23.87,
+        -85.29
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mu-ndde",
+      "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+      "label": "Right Rear Hub",
+      "position": [
+        -63.5,
+        23.87,
+        -78.88
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#6b7280",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -63.5,
+        23.87,
+        -78.88
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mv-lyke",
+      "partId": "tire-160-mm-travel-228-2500-210-448",
+      "label": "Right Rear Tire",
+      "position": [
+        -63.5,
+        23.87,
+        -85.29
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -63.5,
+        23.87,
+        -85.29
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mw-s6e9",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Right Brain Standoff 1",
+      "position": [
+        -44.45,
+        55.62,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -44.45,
+        55.62,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mx-3dpb",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Right Brain Standoff 2",
+      "position": [
+        -19.05,
+        55.62,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -19.05,
+        55.62,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-my-3u6v",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Right Brain Standoff 3",
+      "position": [
+        19.05,
+        55.62,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        19.05,
+        55.62,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820121652-mz-lx7q",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Right Brain Standoff 4",
+      "position": [
+        44.45,
+        55.62,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        -180
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        44.45,
+        55.62,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        -180
+      ]
+    },
+    {
+      "instanceId": "inst-1792820134671-0-qoqk",
+      "partId": "vex-iq-robot-brain-228-2540-502",
+      "label": "Robot Brain",
+      "position": [
+        0,
+        61.895,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        61.895,
+        0
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820134671-1-2jh1",
+      "partId": "8x-pitch-standoff-228-2500-1061-280",
+      "label": "Front Cross Standoff Low",
+      "position": [
+        88.9,
+        23.87,
+        50.8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        88.9,
+        23.87,
+        50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820134671-2-f4sy",
+      "partId": "8x-pitch-standoff-228-2500-1061-280",
+      "label": "Front Cross Standoff High",
+      "position": [
+        88.9,
+        49.27,
+        50.8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        88.9,
+        49.27,
+        50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820134671-3-br59",
+      "partId": "8x-pitch-standoff-228-2500-1061-280",
+      "label": "Rear Cross Standoff Low",
+      "position": [
+        -88.9,
+        23.87,
+        50.8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -88.9,
+        23.87,
+        50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1792820134671-4-wzci",
+      "partId": "8x-pitch-standoff-228-2500-1061-280",
+      "label": "Rear Cross Standoff High",
+      "position": [
+        -88.9,
+        49.27,
+        50.8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -88.9,
+        49.27,
+        50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
     }
   ],
-  "updatedAt": "2026-10-23T14:18:24.480Z"
+  "updatedAt": "2026-10-24T05:39:31.299Z"
 }

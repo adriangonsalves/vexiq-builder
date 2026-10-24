@@ -36,7 +36,7 @@
 - **VEX Pitch Grid (`1x Pitch = 12.7 mm = 0.5"`):**
   - Dual-resolution floor grid (`12.7 mm` major lines in blue, `6.35 mm` half-pitch minor lines in slate).
   - Selectable pitch snap increments in the top toolbar: **`1P` (`12.7 mm`)**, **`0.5P` (`6.35 mm`)**, **`0.25P` (`3.175 mm`)**, and **`Free`**.
-  - Selectable rotation snap increments (`15°`, `45°`, `90°`, or `Free`).
+  - Rotation snap setting (`15°`, `45°`, `90°`, or `Free`), kept in the saved viewport state and settable by the assistant (there is no toolbar control for it yet).
 - **Move Gizmo: Axis Arrows + Plane-Drag Handles:**
   - Selecting a part in Move mode (`W`) shows red/green/blue **axis arrows** (drag along `X`, `Y`, or `Z`) plus three large, outlined, color-coded **plane squares**:
     - **Blue `XY` square** — drag within the front/back (vertical) plane; `Z` stays fixed.
@@ -44,6 +44,15 @@
     - **Green `XZ` square** — drag along the ground plane; height `Y` stays fixed.
   - The hovered/active plane highlights yellow. Plane handles auto-hide when viewed edge-on (where in-plane dragging would be unstable).
   - Plane drags use the same VEX pitch snapping and BVH flush-contact detent as axis drags.
+- **Rotate Mode: Rings Around the Part:**
+  - **Right-click the selected part** (it can be behind another part) to switch between Move and Rotate; `E` and the toolbar **Rotate** button open the same mode, `W` / **Move** leave it. Right-drag still pans the camera, and the browser menu never opens over the viewport.
+  - A part that isn't held by anything gets three flat rings, **red `X`**, **green `Y`** and **blue `Z`**, centered on the middle of the part. Dragging a ring turns the part around that world axis through its center, so any orientation can be reached.
+  - A part **held by a pin or shaft** (one of its pins or its shaft is inside another part's hole, or another part's pin or shaft is inside one of its holes) gets **one orange ring** around that joint's axis. Dragging it swings the part around the pin or shaft, which stays in its hole. Joints on the same axis line (a shaft through a beam and a gear, a pin through two stacked beams) count as one.
+  - A part held on **two or more axis lines** can't be turned: no rings, and the Inspector says "Can't rotate: held by pins or shafts on more than one axis". Locked parts ("Part is locked") and Explode view ("Can't rotate in Explode view") are refused too.
+  - Rings always go around the whole part and keep a steady size on screen when zooming out. Tick marks show the snap angles; while dragging, the turned slice is shaded.
+  - Each ring has an **angle label** (e.g. `Z 30°`, `↻ 45°` for a joint) counting the turn since Rotate mode started for this part, shown from `−180°` to `180°`. Dragging snaps to the rotation snap setting (`Free` follows the pointer). **Click a label to type an angle**; `Enter` turns the part to exactly that angle, `Esc` or clicking away cancels.
+  - **Click a ring** to select it (it brightens): the **mouse wheel** then turns the part one snap step per notch (`5°` when `Free`) instead of zooming. Click the ring again, click elsewhere, or press `Esc` to unselect it.
+  - Turning isn't blocked by other parts: an overlap is shown and saved as overlapping like any other move. Every finished drag, typed angle, or pause in wheel turning is saved and synced like a drag release, and which joints hold the part is worked out again.
 - **BVH Physical Flush Contact Boundary Snapping (Contact Detent):**
   - When moving parts with the **3D Move Gizmo** (`W`) or **Inspector Nudge Buttons** (`-X/+X`, `-Y/+Y`, `-Z/+Z`), the translation solver automatically detects physical contact boundaries using a **10-step BVH binary search** + **`0.25P` (`3.175 mm`) sub-pitch flush seat detection**.
   - Pushing a connector pin into a beam or plate stops **flush** when the pin's flat cap/shoulder contacts the plate surface (`z = ±3.175 mm`) instead of stepping into the solid wall of the beam.
@@ -74,6 +83,8 @@
 - **Keyboard Shortcuts:**
   - `W`: Move Tool (`translate`)
   - `E`: Rotate Tool (`rotate`)
+  - Right-click the selected part: switch between Move and Rotate
+  - `Esc` (with a ring selected): unselect the ring
   - `X`: Cycle Explode View (`off` → `x` → `y` → `z` → `all`)
   - `D` / `Cmd+D`: Duplicate selected part
   - `F`: Focus camera on selected part (or full assembly)
@@ -116,10 +127,11 @@ Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP 
 
 - **6-Stage Engineering Verification (`isMechanicallySound`):**
   1. **Solid Collisions (`collisionCount`):** Pairwise concave BVH mesh intersection check across all visible parts.
-  2. **Floating Fasteners (`floatingFastenerCount`):** Verifies every Connector Pin engages $\ge 2$ distinct structural parts and every Shaft engages $\ge 1$ bore/hole.
-  3. **Unsecured & Heavy Parts (`unsecuredPartCount`, `underSecuredHeavyPartCount`):** Checks that every non-fastener part has $\ge 1$ fastener engagement and heavy components (Brain, Smart Motors, Battery) meet their `minFastenersRequired` threshold ($\ge 2$ pins).
-  4. **Connectivity Graph (`connectedComponentCount`, `disconnectedIslandCount`):** Builds a full multi-part fastener & mated-surface adjacency graph to verify the robot forms a single unified assembly (`0` disconnected islands).
-  5. **Shaft Protrusions (`protrudingShaftCount`):** Flags shafts overhanging $> 8\text{ mm}$ beyond their outermost wheel/frame without an outboard bearing support.
+  2. **Floating & Half-Seated Fasteners (`floatingFastenerCount`, `halfSeatedFastenerCount`):** A pin, peg or shaft only counts as joining parts when it actually **sits inside a matching hole** on each of them (same matching rules as the aligned-hole highlighting: axes within `2°` and `0.25 mm`, overlapping along the axis by more than `0.05 mm`). Parts whose boxes merely touch don't count. A fastener seated in no part is *floating*; seated on one side only, it's *half-seated*. `joints` lists what every fastener sits in, and `pegJoints` lists parts joined by their own pegs (e.g. corner connectors).
+  3. **Unsecured & Heavy Parts (`unsecuredPartCount`, `underSecuredHeavyPartCount`):** Checks that every non-fastener part has $\ge 1$ seated fastener or peg, and heavy components (Brain, Smart Motors, Battery) meet their `minFastenersRequired` threshold. Rubber Shaft Collars count as parts held on a shaft, not as shafts.
+  4. **Connectivity Graph (`connectedComponentCount`, `disconnectedIslandCount`):** Builds the graph from seated joints, meshed gears and clamped parts to verify the robot forms a single unified assembly (`0` disconnected islands).
+  5. **Shaft Protrusions (`protrudingShaftCount`):** Flags shafts reaching more than `4.5 mm` past the outer faces of the parts they sit in (collars included).
+  - **Real hole depths:** hole depths are measured on each part's 3D model. A hole listed as going through but blocked inside is treated as a blind hole from each face that is open at least `1 mm` deep; for example, the Smart Motor's back face only has `~0.4 mm` marks, not holes.
   6. **Kinematic Drivetrain Trace (`kinematics`):** Traces torque transmission from each `Smart Motor` $\rightarrow$ `Motor Shaft` $\rightarrow$ `Driver Gear` $\rightarrow$ `Meshed Idler/Driven Gears` $\rightarrow$ `Driven Shafts` $\rightarrow$ `Driven Wheels`.
 - **Interactive Issue Callouts:**
   - Any flagged part appears as a clickable pill in the Audit dialog; clicking it selects the part, closes the modal, and focuses the 3D camera directly on the offending component.
@@ -131,8 +143,15 @@ Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP 
 ## 5. Dual MCP Integration (Node Stdio MCP + Browser WebMCP) & Persistence
 
 - **Node Stdio MCP Server ([`mcp/vexiq-mcp-server.mjs`](file:///Users/adriangonsalves/projects/vexiq_builder/mcp/vexiq-mcp-server.mjs)):**
-  - Exposes 16 tools to external AI agents (`search_parts`, `get_part_details`, `get_assembly`, `place_part`, `update_part`, `align_part_to_hole`, `mate_parts`, `auto_fasten_joint`, `mesh_gear_train`, `mirror_subassembly`, `audit_assembly`, `capture_viewport_views`, `find_coaxial_holes`, `remove_part`, `clear_assembly`, `configure_viewport`).
+  - Exposes 17 tools to external AI agents (`search_parts`, `get_part_details`, `get_assembly`, `place_part`, `place_parts`, `update_part`, `align_part_to_hole`, `mate_parts`, `auto_fasten_joint`, `mesh_gear_train`, `mirror_subassembly`, `audit_assembly`, `capture_viewport_views`, `capture_screenshot`, `remove_part`, `clear_assembly`, `configure_viewport`).
   - Synchronizes live with the browser UI in real time over Server-Sent Events (`/api/assembly/events`) and REST (`/api/assembly`).
+  - **`place_parts`:** places a whole list of parts in one call and replies with one line per part plus one audit summary.
+    - Each item gives either a position and rotation, or an **insert**: put this part's pin, peg, shaft or bore into a hole of a placed part or of an earlier item (`ref`), and push it straight in until it touches something, like double-click mating.
+    - `dryRun: true` checks a layout without saving it, and `rejectIntersecting: true` saves nothing if anything overlaps.
+    - `mirror: { plane, offsetMm }` also places every item's exact mirror image, using each part's own symmetry. Left/Right are swapped in labels, and parts centered on the plane aren't doubled.
+  - **`get_part_details`:** returns a compact list of each part's connection points (position, axis, usable span, measured depth, through or blind, which way pegs stick out). The raw catalog record comes back only with `verbose: true`.
+  - **App status:** every tool that changes the assembly reports `appSync`: `live` (the open app got it), `no-browser` (the app is running but nobody has it open) or `saved-to-file-only` (the app isn't running), with a hint.
+  - **`capture_screenshot`:** returns a PNG of the 3D view rendered by the open app, either from the user's camera or a framed `iso` / `front` / `top` / `side` view. Gizmos, hole rings and the selection tint are left out, and the user's camera isn't moved.
 - **Browser W3C WebMCP (`navigator.modelContext` in [`src/utils/webMcpTools.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/webMcpTools.js)):**
   - Registers in-page tools for browser-hosted AI assistants.
 - **Import / Export & Auto-Save:**

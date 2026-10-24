@@ -806,3 +806,42 @@ body,
   display: block;
 }
 
+
+/* Rotate-mode angle labels, placed over the canvas next to each ring */
+.rotate-angle-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.rotate-angle-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  pointer-events: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--ring-color, #94a3b8);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #f8fafc;
+  font: 600 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  cursor: text;
+  user-select: none;
+}
+
+.rotate-angle-label:hover {
+  background: rgba(30, 41, 59, 0.95);
+}
+
+.rotate-angle-input {
+  width: 64px;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}

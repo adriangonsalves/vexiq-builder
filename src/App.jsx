@@ -90,6 +90,12 @@ export default function App() {
     flushMoverRef.current = fn;
   }, []);
 
+  // The viewport's screenshot renderer, used to answer the MCP server's capture_screenshot requests
+  const screenshotRef = useRef(null);
+  const handleRegisterScreenshot = useCallback((fn) => {
+    screenshotRef.current = fn;
+  }, []);
+
   // Fallback for browsers without <dialog closedby="any"> support
   useEffect(() => {
     const dialog = auditDialogRef.current;
@@ -159,6 +165,21 @@ export default function App() {
     es.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (msg.type === 'screenshot-request') {
+          let reply;
+          try {
+            const png = screenshotRef.current?.(msg);
+            reply = png ? { requestId: msg.requestId, png } : { requestId: msg.requestId, error: 'The 3D view is not ready yet' };
+          } catch (err) {
+            reply = { requestId: msg.requestId, error: err?.message || String(err) };
+          }
+          fetch('/api/assembly/screenshot-result', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reply)
+          }).catch(() => {});
+          return;
+        }
         if (msg.source === 'browser') return;
         const nextState = msg.state;
         if (nextState && Array.isArray(nextState.instances)) {
@@ -468,6 +489,20 @@ export default function App() {
     if (!selectedId) return;
     setInstances((prev) => prev.filter((i) => i.instanceId !== selectedId));
     setSelectedId(null);
+  };
+
+  // Right-click on the selected part in the viewport: switch between Move and Rotate
+  const handleToggleRotateRequest = () => {
+    if (!selectedInstance) return;
+    if (selectedInstance.locked) {
+      setActionFeedback({ message: 'Part is locked', isError: true });
+      return;
+    }
+    if (explodeMode !== 'off') {
+      setActionFeedback({ message: "Can't rotate in Explode view", isError: true });
+      return;
+    }
+    setTransformMode((mode) => (mode === 'rotate' ? 'translate' : 'rotate'));
   };
 
   const handleRotate90 = (axisIndex) => {
@@ -961,6 +996,7 @@ export default function App() {
             onSelect={handleSelectInstance}
             onUpdateTransform={handleUpdateTransform}
             onRegisterFlushMover={handleRegisterFlushMover}
+            onRegisterScreenshot={handleRegisterScreenshot}
             transformMode={transformMode}
             snapPitchFactor={snapPitchFactor}
             rotationSnapDeg={rotationSnapDeg}
@@ -970,6 +1006,7 @@ export default function App() {
             focusTrigger={focusTrigger}
             onLoadingChange={setIsLoadingMesh}
             onMateFeedback={(message, isError) => setActionFeedback({ message, isError })}
+            onToggleRotateRequest={handleToggleRotateRequest}
           />
 
           <div className="viewport-hud-top">

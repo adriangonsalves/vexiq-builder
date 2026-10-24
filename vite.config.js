@@ -341,6 +341,56 @@ function vexiqMcpBridgePlugin() {
         });
       });
 
+      // Screenshot round trip: the MCP server asks for a picture, the most recently connected browser
+      // renders it and posts it back. Registered before '/api/assembly', which would match these too.
+      const pendingShots = new Map(); // requestId -> { res, timer }
+      const readJson = (req) =>
+        new Promise((resolve) => {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+          });
+          req.on('end', () => {
+            try {
+              resolve(JSON.parse(body || '{}'));
+            } catch {
+              resolve({});
+            }
+          });
+        });
+      const sendJson = (res, status, payload) => {
+        res.statusCode = status;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(payload));
+      };
+
+      server.middlewares.use('/api/assembly/screenshot-result', async (req, res) => {
+        if (req.method !== 'POST') return sendJson(res, 405, { ok: false, error: 'Method not allowed' });
+        const { requestId, png, error } = await readJson(req);
+        const pending = pendingShots.get(requestId);
+        if (pending) {
+          pendingShots.delete(requestId);
+          clearTimeout(pending.timer);
+          if (png) sendJson(pending.res, 200, { ok: true, png });
+          else sendJson(pending.res, 500, { ok: false, error: error || 'The app could not render the view' });
+        }
+        sendJson(res, 200, { ok: true });
+      });
+
+      server.middlewares.use('/api/assembly/screenshot', async (req, res) => {
+        if (req.method !== 'POST') return sendJson(res, 405, { ok: false, error: 'Method not allowed' });
+        const request = await readJson(req);
+        const client = [...sseClients].at(-1);
+        if (!client) return sendJson(res, 409, { ok: false, error: 'No browser has the app open' });
+        const requestId = `shot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const timer = setTimeout(() => {
+          pendingShots.delete(requestId);
+          sendJson(res, 504, { ok: false, error: 'The app did not send a screenshot within 10 seconds' });
+        }, 10000);
+        pendingShots.set(requestId, { res, timer });
+        client.write(`data: ${JSON.stringify({ type: 'screenshot-request', requestId, ...request })}\n\n`);
+      });
+
       server.middlewares.use('/api/assembly', (req, res, next) => {
         if (req.method === 'GET') {
           res.setHeader('Content-Type', 'application/json');
@@ -368,7 +418,8 @@ function vexiqMcpBridgePlugin() {
               broadcastState(payload, source);
 
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ ok: true }));
+              // browserClients tells the MCP server whether anyone has the app open to see the change
+              res.end(JSON.stringify({ ok: true, browserClients: sseClients.size }));
             } catch (err) {
               res.statusCode = 400;
               res.end(JSON.stringify({ ok: false, error: err.message }));

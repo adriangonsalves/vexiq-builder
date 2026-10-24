@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "vexiq": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "mcp/vexiq-mcp-server.mjs"
+      ],
+      "env": {}
+    }
+  }
+}

@@ -1,13 +1,26 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
+import {
+  COLLAR_NAME_PATTERN,
+  collectWorldFeatures,
+  getLocalFeatures,
+  findAlignedOpenings,
+  findSeatedPairs,
+  measureOpeningDepths,
+  measureOpeningSurfaces,
+  measurePinEnds,
+  planMates
+} from '../src/utils/pinHoleAlignment.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
 export const CATALOG_PATH = path.join(ROOT_DIR, 'public', 'catalog.json');
-export const STATE_PATH = path.join(ROOT_DIR, 'public', 'assembly-state.json');
+// VEXIQ_STATE_PATH lets checks run against a temporary assembly file instead of the user's
+export const STATE_PATH = process.env.VEXIQ_STATE_PATH || path.join(ROOT_DIR, 'public', 'assembly-state.json');
 export const VEX_PITCH_MM = 12.7;
 
 let catalogCache = null;
@@ -275,6 +288,15 @@ export function readAssemblyState() {
   return initial;
 }
 
+/**
+ * Per tool call: whether the open app received the last saved change. The MCP server runs each
+ * call inside `appSyncContext.run(store, ...)`; writeAssemblyState fills `store.appSync`
+ * ('live' | 'no-browser' | 'saved-to-file-only') and `store.appHint`.
+ */
+export const appSyncContext = new AsyncLocalStorage();
+
+export const appUrl = () => `http://localhost:${process.env.VEXIQ_APP_PORT || 5173}`;
+
 export async function writeAssemblyState(nextState, notifyVite = true) {
   const state = {
     ...nextState,
@@ -283,15 +305,26 @@ export async function writeAssemblyState(nextState, notifyVite = true) {
   fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
 
   if (notifyVite) {
+    const store = appSyncContext.getStore();
     try {
-      const port = process.env.VEXIQ_APP_PORT || 5173;
-      await fetch(`http://localhost:${port}/api/assembly`, {
+      const res = await fetch(`${appUrl()}/api/assembly`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-mcp-source': 'mcp-server' },
         body: JSON.stringify(state)
       });
+      const reply = await res.json().catch(() => ({}));
+      if (store) {
+        // An older bridge doesn't report browserClients; assume someone is watching
+        const browsers = typeof reply.browserClients === 'number' ? reply.browserClients : 1;
+        store.appSync = browsers > 0 ? 'live' : 'no-browser';
+        store.appHint = browsers > 0 ? undefined : `No browser has the app open. Open ${appUrl()} to see it.`;
+      }
     } catch {
-      // Vite server might not be running or reachable; file state is already persisted
+      // Vite server isn't running or reachable; file state is already persisted
+      if (store) {
+        store.appSync = 'saved-to-file-only';
+        store.appHint = "The app isn't running, so this was only saved to the file. Start it with `npm run dev`.";
+      }
     }
   }
   return state;
@@ -330,6 +363,86 @@ export function getWorldPortsForInstance(instance) {
         Number(worldAxis.z.toFixed(4))
       ]
     };
+  });
+}
+
+const COLLISION_EROSION_MM = 0.38; // getPartCollisionBvh erodes meshes inward by this much
+const measurementCache = new Map(); // partId -> { surfaces, pinEnds, depths }
+
+/**
+ * Mesh measurements of a catalog part for the shared fit rules in src/utils/pinHoleAlignment.js:
+ * opening faces (`surfaces`), which pin ends stick out (`pinEnds`) and real opening depths
+ * (`depths`), measured on the engine's eroded collision mesh (distances are corrected for the
+ * erosion). Cached per part id.
+ */
+export function getPartMeasurements(part) {
+  if (measurementCache.has(part.id)) return measurementCache.get(part.id);
+  const { colGeo } = getPartCollisionBvh(part);
+  const ray = new THREE.Ray();
+  const firstHit = (o, d) => {
+    ray.origin.set(o[0], o[1], o[2]);
+    ray.direction.set(d[0], d[1], d[2]);
+    return colGeo.boundsTree.raycastFirst(ray, THREE.DoubleSide);
+  };
+  const raycast = (o, d) => {
+    const hit = firstHit(o, d);
+    return hit ? Math.max(0, hit.distance - COLLISION_EROSION_MM) : null;
+  };
+  const surfaces = measureOpeningSurfaces(part, raycast);
+  const measured = {
+    surfaces,
+    pinEnds: measurePinEnds(part, (o, d) => {
+      const hit = firstHit(o, d);
+      return hit ? { distance: hit.distance, normal: hit.face.normal.toArray() } : null;
+    }),
+    depths: measureOpeningDepths(part, raycast, surfaces)
+  };
+  measurementCache.set(part.id, measured);
+  return measured;
+}
+
+/** World pins/shafts/openings of a placed instance, with measured faces, pin ends and depths. */
+export function worldFeaturesFor(instance) {
+  const part = getCatalog().catalogById.get(instance.partId);
+  if (!part) return [];
+  return collectWorldFeatures(
+    part,
+    buildWorldMatrix(instance.position, instance.rotation),
+    instance.instanceId,
+    getPartMeasurements(part)
+  );
+}
+
+const round2 = (n) => Number(n.toFixed(2)) + 0;
+
+/**
+ * A part's connection points in its own frame, with measured depths: openings (pin holes, shaft
+ * bores, the motor socket, collar holes) with their open span and depth, and pins/pegs/shafts
+ * with their span and which ends stick out of the part. Span values are t = dot(point, axis).
+ */
+export function describePartConnections(part) {
+  const identity = new THREE.Matrix4();
+  const features = collectWorldFeatures(part, identity, part.id, getPartMeasurements(part));
+  return features.map((f) => {
+    const axis = f.axis.toArray().map(round2);
+    const lo = f.start.dot(f.axis);
+    const hi = f.end.dot(f.axis);
+    const entry = {
+      port: f.featureId,
+      kind: f.kind,
+      origin: f.origin.toArray().map(round2),
+      axis,
+      span: [round2(Math.min(lo, hi)), round2(Math.max(lo, hi))]
+    };
+    if (f.kind === 'pin') {
+      const atLo = lo <= hi ? f.freeAtStart : f.freeAtEnd;
+      const atHi = lo <= hi ? f.freeAtEnd : f.freeAtStart;
+      entry.sticksOut = atLo && atHi ? 'both' : atHi ? 'hi' : atLo ? 'lo' : 'none';
+    } else if (f.kind !== 'shaft') {
+      entry.depthMm = round2(Math.abs(hi - lo));
+      entry.through = Boolean(f.through);
+    }
+    return entry;
   });
 }
 
@@ -388,11 +501,15 @@ export function findMatchingPinHoles(instA, instB) {
 /**
  * Audits the entire assembly across 6 mechanical & kinematic dimensions:
  * 1) Solid mesh intersections (`collisions`)
- * 2) Unconnected / floating fasteners (`floatingFasteners`)
+ * 2) Floating and half-seated fasteners (`floatingFasteners`, `halfSeatedFasteners`)
  * 3) Unsecured parts & Single-Pin Pivot warnings (`unsecuredParts`, `singlePinPivotParts`, `underSecuredHeavyParts`)
  * 4) Full Mechanical Connectivity Graph & Disconnected Island detection (`connectedComponentCount`, `disconnectedIslands`)
  * 5) Shaft Protrusion / Overhang check (`protrudingShafts`)
  * 6) Kinematic Drivetrain Power Tracing from Smart Motors -> Shafts -> Meshing Gears -> Wheels (`kinematics`)
+ *
+ * Parts count as joined only through seated joints: a pin, peg or shaft inside a matching opening
+ * (the shared fit rules in src/utils/pinHoleAlignment.js, on measured hole depths), never through
+ * bounding boxes that merely overlap. `joints` lists what every fastener is seated in.
  */
 export function auditAssembly(state) {
   const { catalogById } = getCatalog();
@@ -403,6 +520,7 @@ export function auditAssembly(state) {
   const expandedWorldBoxes = new Map();
   const nonFasteners = [];
   const fasteners = [];
+  const featuresById = new Map();
 
   for (const inst of visible) {
     const part = catalogById.get(inst.partId);
@@ -424,62 +542,92 @@ export function auditAssembly(state) {
     ).applyMatrix4(mat);
     rawWorldBoxes.set(inst.instanceId, rawBox);
 
-    // Expand box slightly (0.6mm) so flush surface-mounted parts register engagement with pins/shafts
-    const expBox = rawBox.clone().expandByScalar(0.6);
-    expandedWorldBoxes.set(inst.instanceId, expBox);
+    // Expand box slightly (0.6mm) so flush surface-mounted parts register for the clamp rule below
+    expandedWorldBoxes.set(inst.instanceId, rawBox.clone().expandByScalar(0.6));
+    featuresById.set(inst.instanceId, worldFeaturesFor(inst));
 
-    const isFastener =
-      part.category === 'Pins & Standoffs' ||
-      (part.category === 'Shafts, Spacers & Collars' &&
-        part.name.toLowerCase().includes('shaft')) ||
-      part.name.toLowerCase().includes('shaft');
-
-    if (isFastener) {
+    if (isFastenerPart(part, featuresById.get(inst.instanceId))) {
       fasteners.push({ inst, part, mat });
     } else {
       nonFasteners.push({ inst, part, mat });
     }
   }
 
-  const fastenerCountByPartInstance = new Map(nonFasteners.map((n) => [n.inst.instanceId, 0]));
-  const floatingFasteners = [];
-  const engagedByFastener = new Map();
+  const fastenerById = new Map(fasteners.map((f) => [f.inst.instanceId, f]));
+  const labelOf = (id) => visible.find((i) => i.instanceId === id)?.label || id;
 
-  // Adjacency list for the mechanical connectivity graph over nonFasteners
-  const adjacency = new Map(nonFasteners.map((n) => [n.inst.instanceId, new Set()]));
-
-  for (const f of fasteners) {
-    const { inst } = f;
-    const engagedParts = [];
-    const fBox = expandedWorldBoxes.get(inst.instanceId);
-
-    for (const nf of nonFasteners) {
-      const nfBox = expandedWorldBoxes.get(nf.inst.instanceId);
-      if (nfBox && fBox && nfBox.intersectsBox(fBox)) {
-        engagedParts.push(nf);
-      }
-    }
-
-    engagedByFastener.set(inst.instanceId, engagedParts);
-
-    if (engagedParts.length < 2) {
-      floatingFasteners.push({
-        instanceId: inst.instanceId,
-        label: inst.label,
-        engagedWith: engagedParts.map((e) => e.inst.label)
-      });
-    } else {
-      for (let i = 0; i < engagedParts.length; i++) {
-        const idA = engagedParts[i].inst.instanceId;
-        fastenerCountByPartInstance.set(idA, (fastenerCountByPartInstance.get(idA) || 0) + 1);
-        for (let j = i + 1; j < engagedParts.length; j++) {
-          const idB = engagedParts[j].inst.instanceId;
-          adjacency.get(idA)?.add(idB);
-          adjacency.get(idB)?.add(idA);
-        }
+  // Seated joints between every pair of parts whose boxes touch
+  const seatedPairs = []; // { insertOwner, openingOwner, insert, opening }
+  for (let i = 0; i < visible.length; i++) {
+    const a = visible[i];
+    const boxA = rawWorldBoxes.get(a.instanceId);
+    if (!boxA) continue;
+    for (let j = i + 1; j < visible.length; j++) {
+      const b = visible[j];
+      const boxB = rawWorldBoxes.get(b.instanceId);
+      if (!boxB || !boxA.clone().expandByScalar(1).intersectsBox(boxB)) continue;
+      for (const pair of findSeatedPairs(featuresById.get(a.instanceId), featuresById.get(b.instanceId))) {
+        seatedPairs.push({
+          insertOwner: pair.insert.instanceId,
+          openingOwner: pair.opening.instanceId,
+          insert: pair.insert,
+          opening: pair.opening
+        });
       }
     }
   }
+
+  // What each fastener is seated in; integral pegs (e.g. corner connector pegs) join parts directly
+  const seatedIn = new Map(fasteners.map((f) => [f.inst.instanceId, new Map()])); // fastener -> partId -> [ports]
+  const directJoints = []; // [holderId, otherId] from integral pegs and parts held on parts
+  for (const p of seatedPairs) {
+    const insertIsFastener = fastenerById.has(p.insertOwner);
+    const openingIsFastener = fastenerById.has(p.openingOwner);
+    if (insertIsFastener && !openingIsFastener) {
+      const ports = seatedIn.get(p.insertOwner);
+      if (!ports.has(p.openingOwner)) ports.set(p.openingOwner, []);
+      ports.get(p.openingOwner).push(p.opening.featureId);
+    } else if (!insertIsFastener && !openingIsFastener) {
+      directJoints.push([p.insertOwner, p.openingOwner]);
+    }
+  }
+
+  const fastenerCountByPartInstance = new Map(nonFasteners.map((n) => [n.inst.instanceId, 0]));
+  const floatingFasteners = [];
+  const halfSeatedFasteners = [];
+  const joints = [];
+  const adjacency = new Map(nonFasteners.map((n) => [n.inst.instanceId, new Set()]));
+  const link = (idA, idB) => {
+    adjacency.get(idA)?.add(idB);
+    adjacency.get(idB)?.add(idA);
+  };
+
+  for (const f of fasteners) {
+    const ports = seatedIn.get(f.inst.instanceId);
+    const partners = [...ports.keys()];
+    const seatedList = partners.map((id) => ({ part: labelOf(id), ports: ports.get(id) }));
+    joints.push({ instanceId: f.inst.instanceId, label: f.inst.label, seatedIn: seatedList });
+    if (partners.length === 0) {
+      floatingFasteners.push({ instanceId: f.inst.instanceId, label: f.inst.label, engagedWith: [] });
+    } else if (partners.length === 1) {
+      halfSeatedFasteners.push({ instanceId: f.inst.instanceId, label: f.inst.label, seatedIn: seatedList });
+    } else {
+      for (let i = 0; i < partners.length; i++) {
+        fastenerCountByPartInstance.set(partners[i], (fastenerCountByPartInstance.get(partners[i]) || 0) + 1);
+        for (let j = i + 1; j < partners.length; j++) link(partners[i], partners[j]);
+      }
+    }
+  }
+  const pegJointsByKey = new Map(); // "holder|other" -> { part, joinedTo, pegs }
+  for (const [idA, idB] of directJoints) {
+    fastenerCountByPartInstance.set(idA, (fastenerCountByPartInstance.get(idA) || 0) + 1);
+    fastenerCountByPartInstance.set(idB, (fastenerCountByPartInstance.get(idB) || 0) + 1);
+    link(idA, idB);
+    const key = `${idA}|${idB}`;
+    if (!pegJointsByKey.has(key)) pegJointsByKey.set(key, { part: labelOf(idA), joinedTo: labelOf(idB), pegs: 0 });
+    pegJointsByKey.get(key).pegs += 1;
+  }
+  const pegJoints = [...pegJointsByKey.values()];
 
   // Detect unsecured parts, under-secured heavy parts, and single-pin pivot structural parts
   const unsecuredParts = [];
@@ -517,58 +665,30 @@ export function auditAssembly(state) {
     }
   }
 
-  // Check Shaft Protrusion / Overhang beyond outermost engaged parts
-  const protrudingShafts = [];
-  for (const f of fasteners) {
-    const isShaft =
-      f.part.fastenerSpecs?.fastenerType === 'shaft' ||
-      f.part.name.toLowerCase().includes('shaft');
-    if (!isShaft) continue;
-
-    const engaged = engagedByFastener.get(f.inst.instanceId) || [];
-    if (engaged.length === 0) continue;
-
-    const euler = new THREE.Euler(
-      THREE.MathUtils.degToRad(f.inst.rotation[0] || 0),
-      THREE.MathUtils.degToRad(f.inst.rotation[1] || 0),
-      THREE.MathUtils.degToRad(f.inst.rotation[2] || 0),
-      'XYZ'
-    );
-    const quat = new THREE.Quaternion().setFromEuler(euler);
-    const shaftAxis = new THREE.Vector3(0, 0, 1).applyQuaternion(quat).normalize();
-
-    const pMinWorld = new THREE.Vector3(0, 0, f.part.bbox.min[2]).applyMatrix4(f.mat);
-    const pMaxWorld = new THREE.Vector3(0, 0, f.part.bbox.max[2]).applyMatrix4(f.mat);
-    const t0 = pMinWorld.dot(shaftAxis);
-    const t1 = pMaxWorld.dot(shaftAxis);
-    const shaftMinT = Math.min(t0, t1);
-    const shaftMaxT = Math.max(t0, t1);
-
-    let engagedMinT = Infinity;
-    let engagedMaxT = -Infinity;
-
-    for (const ep of engaged) {
-      const box = rawWorldBoxes.get(ep.inst.instanceId);
-      if (!box) continue;
-      const corners = [
-        new THREE.Vector3(box.min.x, box.min.y, box.min.z),
-        new THREE.Vector3(box.min.x, box.min.y, box.max.z),
-        new THREE.Vector3(box.min.x, box.max.y, box.min.z),
-        new THREE.Vector3(box.min.x, box.max.y, box.max.z),
-        new THREE.Vector3(box.max.x, box.min.y, box.min.z),
-        new THREE.Vector3(box.max.x, box.min.y, box.max.z),
-        new THREE.Vector3(box.max.x, box.max.y, box.min.z),
-        new THREE.Vector3(box.max.x, box.max.y, box.max.z)
-      ];
-      for (const c of corners) {
-        const proj = c.dot(shaftAxis);
-        if (proj < engagedMinT) engagedMinT = proj;
-        if (proj > engagedMaxT) engagedMaxT = proj;
+  // Shaft Protrusion / Overhang beyond the outer faces of the parts it is seated in (collars included)
+  const boxCorners = (box) => {
+    const out = [];
+    for (const x of [box.min.x, box.max.x]) {
+      for (const y of [box.min.y, box.max.y]) {
+        for (const z of [box.min.z, box.max.z]) out.push(new THREE.Vector3(x, y, z));
       }
     }
+    return out;
+  };
+  const protrudingShafts = [];
+  for (const f of fasteners) {
+    const shaftFeature = featuresById.get(f.inst.instanceId).find((x) => x.kind === 'shaft');
+    if (!shaftFeature) continue;
+    const partners = new Set(
+      seatedPairs.filter((p) => p.insertOwner === f.inst.instanceId && p.insert === shaftFeature).map((p) => p.openingOwner)
+    );
+    if (partners.size === 0) continue;
 
-    const negOverhangMm = Number(Math.max(0, engagedMinT - shaftMinT).toFixed(2));
-    const posOverhangMm = Number(Math.max(0, shaftMaxT - engagedMaxT).toFixed(2));
+    const axis = shaftFeature.axis;
+    const shaftT = [shaftFeature.start.dot(axis), shaftFeature.end.dot(axis)];
+    const openingT = [...partners].flatMap((id) => boxCorners(rawWorldBoxes.get(id)).map((c) => c.dot(axis)));
+    const negOverhangMm = Number(Math.max(0, Math.min(...openingT) - Math.min(...shaftT)).toFixed(2));
+    const posOverhangMm = Number(Math.max(0, Math.max(...shaftT) - Math.max(...openingT)).toFixed(2));
     // Allow up to 4.5mm for flush Capped Shaft caps (3.18mm) or Motor Shaft collars
     if (negOverhangMm > 4.5 || posOverhangMm > 4.5) {
       protrudingShafts.push({
@@ -682,51 +802,19 @@ export function auditAssembly(state) {
     (nf) =>
       nf.part.category === 'Wheels & Treads' || nf.part.name.toLowerCase().includes('wheel')
   );
-  const shaftFasteners = fasteners.filter(
-    (f) =>
-      f.part.fastenerSpecs?.fastenerType === 'shaft' ||
-      f.part.name.toLowerCase().includes('shaft')
-  );
+  const shaftFasteners = fasteners.filter((f) => featuresById.get(f.inst.instanceId).some((x) => x.kind === 'shaft'));
 
-  // Map each shaft to its coaxial engaged gears, wheels, and motors
+  // A part is on a shaft when the shaft is seated in one of its openings
+  const nonFastenerById = new Map(nonFasteners.map((n) => [n.inst.instanceId, n]));
   const shaftToCoaxialParts = new Map();
   const partToCoaxialShafts = new Map();
-
   for (const sf of shaftFasteners) {
-    const euler = new THREE.Euler(
-      THREE.MathUtils.degToRad(sf.inst.rotation[0] || 0),
-      THREE.MathUtils.degToRad(sf.inst.rotation[1] || 0),
-      THREE.MathUtils.degToRad(sf.inst.rotation[2] || 0),
-      'XYZ'
-    );
-    const shaftAxis = new THREE.Vector3(0, 0, 1)
-      .applyQuaternion(new THREE.Quaternion().setFromEuler(euler))
-      .normalize();
-    const shaftPos = new THREE.Vector3(...sf.inst.position);
-
-    const engaged = engagedByFastener.get(sf.inst.instanceId) || [];
-    const coaxialList = [];
-
-    for (const ep of engaged) {
-      // Check if ep has a shaft_socket, shaft_bore, or center coaxial with shaftAxis
-      const ports = getWorldPortsForInstance(ep.inst);
-      const centerWorld = new THREE.Vector3(...ep.part.bbox.center).applyMatrix4(ep.mat);
-      const candidates = [
-        ...ports.map((p) => new THREE.Vector3(...p.worldOrigin)),
-        centerWorld
-      ];
-      const isCoaxial = candidates.some((pt) => {
-        const d = pt.clone().sub(shaftPos);
-        const perp = d.clone().addScaledVector(shaftAxis, -d.dot(shaftAxis));
-        return perp.length() <= 2.2;
-      });
-      if (isCoaxial) {
-        coaxialList.push(ep);
-        if (!partToCoaxialShafts.has(ep.inst.instanceId)) {
-          partToCoaxialShafts.set(ep.inst.instanceId, []);
-        }
-        partToCoaxialShafts.get(ep.inst.instanceId).push(sf);
-      }
+    const coaxialList = [...(seatedIn.get(sf.inst.instanceId)?.keys() || [])]
+      .map((id) => nonFastenerById.get(id))
+      .filter(Boolean);
+    for (const ep of coaxialList) {
+      if (!partToCoaxialShafts.has(ep.inst.instanceId)) partToCoaxialShafts.set(ep.inst.instanceId, []);
+      partToCoaxialShafts.get(ep.inst.instanceId).push(sf);
     }
     shaftToCoaxialParts.set(sf.inst.instanceId, coaxialList);
   }
@@ -814,6 +902,7 @@ export function auditAssembly(state) {
     isMechanicallySound:
       collisions.length === 0 &&
       floatingFasteners.length === 0 &&
+      halfSeatedFasteners.length === 0 &&
       unsecuredParts.length === 0 &&
       underSecuredHeavyParts.length === 0 &&
       disconnectedIslands.length === 0 &&
@@ -822,6 +911,8 @@ export function auditAssembly(state) {
     collisions,
     floatingFastenerCount: floatingFasteners.length,
     floatingFasteners,
+    halfSeatedFastenerCount: halfSeatedFasteners.length,
+    halfSeatedFasteners,
     unsecuredPartCount: unsecuredParts.length,
     unsecuredParts,
     underSecuredHeavyPartCount: underSecuredHeavyParts.length,
@@ -833,6 +924,8 @@ export function auditAssembly(state) {
     disconnectedIslands,
     protrudingShaftCount: protrudingShafts.length,
     protrudingShafts,
+    joints,
+    pegJoints,
     kinematics: {
       motorCount: motors.length,
       meshedGearPairCount: meshedGearPairs.length,
@@ -842,6 +935,23 @@ export function auditAssembly(state) {
       motorDriveChains
     }
   };
+}
+
+const FASTENER_TYPES = new Set(['connector_pin', 'standoff', 'straight_shaft', 'capped_shaft', 'motor_shaft']);
+
+/**
+ * Fasteners are the parts that join others: pins, standoffs and shafts (by their catalog fastener
+ * type), plus pin parts with no fastener data that carry only pins. Rubber Shaft Collars are held
+ * parts (rings on a shaft), even though the catalog tags them as shafts.
+ */
+function isFastenerPart(part, features) {
+  if (COLLAR_NAME_PATTERN.test(part.name || '')) return false;
+  if (FASTENER_TYPES.has(part.fastenerSpecs?.fastenerType)) return true;
+  return (
+    part.category === 'Pins & Standoffs' &&
+    features.length > 0 &&
+    features.every((f) => f.kind === 'pin' || f.kind === 'shaft')
+  );
 }
 
 /**
@@ -1657,3 +1767,377 @@ export function generateOrthographicViews(state) {
 
 
 
+
+/** Short form of an auditAssembly result: counts, plus the names of the parts behind each problem. */
+export function summarizeAudit(audit) {
+  const names = (list) => list.map((x) => x.label);
+  return {
+    isMechanicallySound: audit.isMechanicallySound,
+    collisionCount: audit.collisionCount,
+    floatingFastenerCount: audit.floatingFastenerCount,
+    halfSeatedFastenerCount: audit.halfSeatedFastenerCount,
+    unsecuredPartCount: audit.unsecuredPartCount,
+    underSecuredHeavyPartCount: audit.underSecuredHeavyPartCount,
+    disconnectedIslandCount: audit.disconnectedIslandCount,
+    protrudingShaftCount: audit.protrudingShaftCount,
+    drivenWheelCount: audit.kinematics.drivenWheelCount,
+    totalWheelCount: audit.kinematics.totalWheelCount,
+    problems: Object.fromEntries(
+      Object.entries({
+        collisions: audit.collisions.map((c) => `${c.label} x ${c.collidingWith.join(', ')}`),
+        floating: names(audit.floatingFasteners),
+        halfSeated: names(audit.halfSeatedFasteners),
+        unsecured: names(audit.unsecuredParts),
+        underSecuredHeavy: names(audit.underSecuredHeavyParts),
+        disconnected: audit.disconnectedIslands.map((island) => island.map((p) => p.label).join(', ')),
+        protruding: names(audit.protrudingShafts),
+        undrivenWheels: names(audit.kinematics.unpoweredWheels)
+      }).filter(([, v]) => v.length > 0)
+    )
+  };
+}
+
+/**
+ * Places a list of parts into a copy of `state` (see the place_parts tool). Items are resolved in
+ * order; an item may name an earlier item by its `ref`. Each item gives either an absolute
+ * `position` / `rotation` or an `insert` (placed into an opening and pushed in until contact).
+ * With `mirror`, every item is also placed as its mirror image. Overlaps are checked once all items
+ * are in, against old and new parts alike. Nothing is written here.
+ * Returns { error: { index, ref, reason } } or { instances, placed, audit }.
+ */
+export function placeParts(state, items, options = {}) {
+  const working = [...(state.instances || [])];
+  const refs = new Map(); // ref -> instance
+  const placed = []; // { index, ref, inst, stoppedAgainst }
+  const fail = (index, ref, reason) => ({ error: { index, ref: ref ?? null, reason } });
+  if (!Array.isArray(items) || items.length === 0) return fail(null, null, 'parts must be a non-empty list');
+
+  const newId = (() => {
+    const stamp = Date.now();
+    let n = 0;
+    return () => `inst-${stamp}-${(n++).toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  })();
+  const resolveInstance = (into) => {
+    if (into?.ref !== undefined) return refs.get(into.ref) || null;
+    if (into?.instanceId) return working.find((i) => i.instanceId === into.instanceId) || null;
+    return null;
+  };
+
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index] || {};
+    const part = item.partQuery ? findPart(item.partQuery) : null;
+    if (!part) return fail(index, item.ref, `part not found: "${item.partQuery}"`);
+    if (item.ref !== undefined && refs.has(item.ref)) return fail(index, item.ref, `ref "${item.ref}" is used twice`);
+
+    const sameCount = working.filter((i) => i.partId === part.id).length;
+    const inst = {
+      instanceId: newId(),
+      partId: part.id,
+      label: item.label || `${part.name} #${sameCount + 1}`,
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      color: item.color || part.defaultColor,
+      visible: true,
+      locked: false
+    };
+    let stoppedAgainst;
+
+    if (item.insert) {
+      const target = resolveInstance(item.insert.into);
+      if (!target) return fail(index, item.ref, 'insert.into must name an existing instanceId or an earlier ref');
+      const pose = insertIntoOpening(part, item.insert, target, working, inst.instanceId);
+      if (pose.error) return fail(index, item.ref, pose.error);
+      inst.position = pose.position;
+      inst.rotation = pose.rotation;
+      stoppedAgainst = pose.stoppedAgainst;
+    } else {
+      if (!Array.isArray(item.position) || item.position.length !== 3) {
+        return fail(index, item.ref, 'give either position [x, y, z] (mm) or insert');
+      }
+      inst.position = item.position.map((n) => Number(Number(n).toFixed(3)));
+      inst.rotation = Array.isArray(item.rotation) && item.rotation.length === 3
+        ? item.rotation.map((r) => Number(Number(r).toFixed(2)))
+        : [0, 0, 0];
+    }
+
+    working.push(inst);
+    if (item.ref !== undefined) refs.set(item.ref, inst);
+    placed.push({ index, ref: item.ref, inst, stoppedAgainst });
+  }
+
+  if (options.mirror) {
+    const mirrored = mirrorPlacedParts(placed, options.mirror);
+    if (mirrored.error) return fail(null, null, mirrored.error);
+    for (const m of mirrored.items) {
+      working.push(m.inst);
+      placed.push(m);
+    }
+  }
+
+  for (const p of placed) {
+    const { isIntersecting, collidingWith } = checkCandidateCollision(p.inst, working);
+    p.inst.isIntersecting = isIntersecting;
+    p.inst.lastValidPosition = isIntersecting ? null : [...p.inst.position];
+    p.inst.lastValidRotation = isIntersecting ? null : [...p.inst.rotation];
+    p.collidingWith = collidingWith.map((c) => c.label);
+  }
+
+  return {
+    instances: working,
+    placed,
+    audit: summarizeAudit(auditAssembly({ ...state, instances: working }))
+  };
+}
+
+const INSERT_START_GAP_MM = 1; // the item starts this far outside the target before moving in
+const INSERT_STEP_MM = 0.5;
+const INSERT_BACK_OFF_MM = 0.002;
+
+/** Picks a feature by port id; a split opening (`<id>@lo` / `<id>@hi`) is picked by side. */
+function pickFeature(features, port, side) {
+  if (!port) return null;
+  const exact = features.find((f) => f.featureId === port);
+  if (exact) return exact;
+  const parts = features.filter((f) => f.featureId.startsWith(`${port}@`));
+  if (parts.length === 0) return null;
+  return parts.find((f) => f.featureId.endsWith(side < 0 ? '@lo' : '@hi')) || parts[0];
+}
+
+/**
+ * Pose for placing `part` by inserting one of its features into `target`'s port (see place_parts):
+ * line the axes up with the item 1 mm outside on `fromSide`, then move straight in until it first
+ * touches another part in `others` — the double-click mating rule (planMates + contact search, the
+ * 0.25-pitch flush seat preference, and a back-off so the saved pose never overlaps).
+ * Returns { position, rotation, stoppedAgainst } or { error }.
+ */
+function insertIntoOpening(part, insert, target, others, instanceId) {
+  const measured = getPartMeasurements(part);
+  const local = collectWorldFeatures(part, new THREE.Matrix4(), instanceId, measured);
+  const targetFeatures = worldFeaturesFor(target);
+  const port = insert.into?.port;
+
+  const sideArg = insert.fromSide === '-' ? -1 : insert.fromSide === '+' ? 1 : null;
+  const targetFeature = pickFeature(targetFeatures, port, sideArg ?? 1);
+  if (!targetFeature) return { error: `"${target.label}" has no port "${port}"` };
+  // Blind openings open toward +axis (`@lo` halves toward -axis); through ones default to +
+  const side = sideArg ?? (targetFeature.featureId.endsWith('@lo') ? -1 : 1);
+
+  const isInsert = (f) => f.kind === 'pin' || f.kind === 'shaft';
+  let source;
+  if (insert.sourcePort) {
+    source = pickFeature(local, insert.sourcePort, -side);
+    if (!source) return { error: `"${part.name}" has no port "${insert.sourcePort}"` };
+  } else {
+    source = isInsert(targetFeature)
+      ? local.find((f) => !isInsert(f) && f.through) || local.find((f) => !isInsert(f))
+      : local.find((f) => f.kind === 'shaft') || local.find((f) => f.kind === 'pin');
+    if (!source) return { error: `"${part.name}" has nothing that fits "${port}"` };
+  }
+  if (isInsert(source) === isInsert(targetFeature)) {
+    return { error: `"${source.featureId}" and "${port}" are both ${isInsert(source) ? 'pins/shafts' : 'openings'}` };
+  }
+
+  // Which way the source's local axis must point. The item travels along -side * targetAxis.
+  //  - pin/peg: lead with an end that sticks out (hi when it can), so +u points along the travel;
+  //  - capped shaft: lead with the plain end (lo), so +u points back toward the approach side;
+  //  - blind opening (socket): its mouth (hi end) must face the travel direction;
+  //  - through opening or plain shaft: keep +u along the target axis.
+  const a = targetFeature.axis.clone();
+  const travel = a.clone().multiplyScalar(-side);
+  let uWorld;
+  if (source.kind === 'pin') uWorld = source.freeAtEnd !== false || !source.freeAtStart ? travel : travel.clone().negate();
+  else if (source.kind === 'shaft') uWorld = part.fastenerSpecs?.hasEndCap ? travel.clone().negate() : a;
+  else if (!source.through) uWorld = source.featureId.endsWith('@lo') ? travel.clone().negate() : travel;
+  else uWorld = a;
+  const q = buildAxisAlignedQuaternion(source.axis.toArray(), uWorld.toArray(), Number(insert.rollDeg) || 0);
+  const euler = new THREE.Euler().setFromQuaternion(q, 'XYZ');
+  const rotation = [euler.x, euler.y, euler.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2)) + 0);
+
+  // Start pose: on the target's axis line, leading end 1 mm outside the target feature on `side`
+  const placedAt = (position) => ({ instanceId, partId: part.id, label: part.name, position, rotation, visible: true });
+  const featureAt = (position) =>
+    collectWorldFeatures(part, buildWorldMatrix(position, rotation), instanceId, measured).find((f) => f.featureId === source.featureId);
+  const at0 = featureAt([0, 0, 0]);
+  const tOf = (f) => [f.start.dot(a), f.end.dot(a)];
+  const tTarget = tOf(targetFeature);
+  const tSource = tOf(at0);
+  const targetFace = side > 0 ? Math.max(...tTarget) : Math.min(...tTarget);
+  const sourceLead = side > 0 ? Math.min(...tSource) : Math.max(...tSource);
+  const toLine = targetFeature.origin.clone().sub(at0.origin);
+  toLine.addScaledVector(a, -toLine.dot(a));
+  const start = toLine.addScaledVector(a, targetFace + side * INSERT_START_GAP_MM - sourceLead);
+
+  const startFeatures = collectWorldFeatures(part, buildWorldMatrix(start.toArray(), rotation), instanceId, measured);
+  const pair = findAlignedOpenings(startFeatures, targetFeatures).find((p) =>
+    isInsert(source)
+      ? p.featureId === targetFeature.featureId && p.insertFeatureId === source.featureId
+      : p.instanceId === instanceId && p.featureId === source.featureId && p.insertFeatureId === targetFeature.featureId
+  );
+  if (!pair) return { error: `"${source.featureId}" can't go into "${target.label}" ${port} from the ${side > 0 ? '+' : '-'} side` };
+  const plan = planMates([pair], instanceId)[0];
+
+  const pos = start.clone().add(plan.lateral);
+  const collidesAt = (vec) => checkCandidateCollision(placedAt(vec.toArray()), others);
+  const startHit = collidesAt(pos);
+  if (startHit.isIntersecting) {
+    return { error: `the start pose outside ${port} already touches ${startHit.collidingWith.map((c) => c.label).join(', ')}` };
+  }
+
+  // Keep looking for contact while the insert is still in the opening; a blind opening's measured
+  // floor is a hard stop (end-on contact between the eroded meshes is only seen ~0.76 mm too deep)
+  const blind = !(isInsert(source) ? targetFeature : source).through;
+  const sweep = blind ? plan.travelMm : Math.max(plan.travelMm, plan.sweepMm ?? 0);
+  const lastClear = pos.clone();
+  let final = null;
+  let stoppedAgainst = null;
+  for (let d = Math.min(INSERT_STEP_MM, sweep); d > 0; d = Math.min(d + INSERT_STEP_MM, sweep)) {
+    const probe = pos.clone().addScaledVector(plan.direction, d);
+    const hit = collidesAt(probe);
+    if (hit.isIntersecting) {
+      stoppedAgainst = hit.collidingWith.map((c) => c.label).join(', ');
+      const lo = lastClear.clone();
+      const hi = probe.clone();
+      for (let i = 0; i < 10; i++) {
+        const mid = lo.clone().lerp(hi, 0.5);
+        if (collidesAt(mid).isIntersecting) hi.copy(mid);
+        else lo.copy(mid);
+      }
+      final = lo;
+      // Prefer a clean 0.25-pitch coordinate on the dominant axis within 0.95 mm, if it is clear
+      const axisKey = ['x', 'y', 'z'].reduce((best, k) => (Math.abs(plan.direction[k]) > Math.abs(plan.direction[best]) ? k : best), 'x');
+      const dir = Math.sign(plan.direction[axisKey]);
+      const quarter = VEX_PITCH_MM * 0.25;
+      const qVal = Number(((dir > 0 ? Math.floor((final[axisKey] + 0.05) / quarter) : Math.ceil((final[axisKey] - 0.05) / quarter)) * quarter).toFixed(3));
+      if (Math.abs(final[axisKey] - qVal) <= 0.95 && (qVal - pos[axisKey]) * dir >= -0.01) {
+        const candidate = final.clone();
+        candidate[axisKey] = qVal;
+        if (!collidesAt(candidate).isIntersecting) final = candidate;
+      }
+      break;
+    }
+    lastClear.copy(probe);
+    if (d >= sweep) break;
+  }
+  if (!final) final = pos.clone().addScaledVector(plan.direction, plan.travelMm);
+
+  // Rounding to 0.001 mm can land on the touching side: back off along the move until clear
+  const roundVec = (vec) => new THREE.Vector3(...vec.toArray().map((n) => Number(n.toFixed(3)) + 0));
+  let rounded = roundVec(final);
+  for (let i = 0; i < 50 && collidesAt(rounded).isIntersecting; i++) {
+    final.addScaledVector(plan.direction, -INSERT_BACK_OFF_MM);
+    rounded = roundVec(final);
+  }
+  return { position: rounded.toArray(), rotation, stoppedAgainst: stoppedAgainst || 'flush with far face' };
+}
+const mirrorSymmetryCache = new Map(); // partId -> { axis, center } | null
+
+/**
+ * A local axis k (0 = x, 1 = y, 2 = z) and plane coordinate c such that reflecting the part's own
+ * geometry across local plane x_k = c gives the same part: same bbox, and every pin, peg, shaft and
+ * opening lands on one of the same kind with the same span. null for a part with no such plane
+ * (a left- or right-handed part).
+ */
+function localMirrorSymmetry(part) {
+  if (mirrorSymmetryCache.has(part.id)) return mirrorSymmetryCache.get(part.id);
+  const features = getLocalFeatures(part);
+  const ends = (f, k, c) => {
+    const o = new THREE.Vector3(...f.origin);
+    const a = new THREE.Vector3(...f.axis);
+    const t0 = o.dot(a);
+    const pts = [o.clone().addScaledVector(a, f.tMin - t0), o.clone().addScaledVector(a, f.tMax - t0)];
+    if (k !== undefined) for (const p of pts) p.setComponent(k, 2 * c - p.getComponent(k));
+    return pts;
+  };
+  const sameEnds = (p, q, tol) =>
+    (p[0].distanceTo(q[0]) <= tol && p[1].distanceTo(q[1]) <= tol) ||
+    (p[0].distanceTo(q[1]) <= tol && p[1].distanceTo(q[0]) <= tol);
+  let found = null;
+  for (const k of [0, 1, 2]) {
+    const c = (part.bbox.min[k] + part.bbox.max[k]) / 2;
+    const symmetric = features.every((f) => {
+      const mirrored = ends(f, k, c);
+      return features.some((g) => g.kind === f.kind && sameEnds(mirrored, ends(g), 0.3));
+    });
+    if (symmetric) {
+      found = { axis: k, center: c };
+      break;
+    }
+  }
+  mirrorSymmetryCache.set(part.id, found);
+  return found;
+}
+
+/**
+ * Mirror image of a placed part across world plane x_i = offsetMm, as a proper pose:
+ * with world reflection S and the part's own symmetry L (localMirrorSymmetry), the mirrored part
+ * S(R p + t) equals R' q + t' with R' = S R L and t' = S(R (2c e_k) + t). Returns
+ * { position, rotation, exact }; exact is false for a part without a symmetry plane, where the
+ * closest pose from mirrorSubassembly is used.
+ */
+function mirrorPose(part, inst, axisIdx, offsetMm) {
+  const sym = localMirrorSymmetry(part);
+  if (!sym) {
+    const fallback = mirrorSubassembly({ instances: [inst] }, { instanceIds: [inst.instanceId], mirrorPlane: 'XYZ'[axisIdx], planeOffsetMm: offsetMm }).mirroredInstances[0];
+    return { position: fallback.position, rotation: fallback.rotation, exact: false };
+  }
+  const R = new THREE.Matrix4().makeRotationFromEuler(
+    new THREE.Euler(...inst.rotation.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ')
+  );
+  const S = new THREE.Matrix4().makeScale(...[0, 1, 2].map((i) => (i === axisIdx ? -1 : 1)));
+  const L = new THREE.Matrix4().makeScale(...[0, 1, 2].map((i) => (i === sym.axis ? -1 : 1)));
+  const Rp = new THREE.Matrix4().multiplyMatrices(S, R).multiply(L);
+  const shift = new THREE.Vector3().setComponent(sym.axis, 2 * sym.center).applyMatrix4(R);
+  const t = new THREE.Vector3(...inst.position).add(shift).applyMatrix4(S);
+  t.setComponent(axisIdx, t.getComponent(axisIdx) + 2 * offsetMm);
+  const e = new THREE.Euler().setFromRotationMatrix(Rp, 'XYZ');
+  return {
+    position: t.toArray().map((n) => Number(n.toFixed(3)) + 0),
+    rotation: [e.x, e.y, e.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2)) + 0),
+    exact: true
+  };
+}
+
+/** Swaps Left and Right in a label (keeping case), or adds " (mirror)" when it has neither. */
+function mirrorLabel(label) {
+  if (!/left|right/i.test(label)) return `${label} (mirror)`;
+  return label.replace(/left|right/gi, (w) => {
+    const swap = /left/i.test(w) ? 'right' : 'left';
+    if (w === w.toUpperCase()) return swap.toUpperCase();
+    if (w[0] === w[0].toUpperCase()) return swap[0].toUpperCase() + swap.slice(1);
+    return swap;
+  });
+}
+
+/**
+ * Mirror images of the items placed by placeParts across `mirror.plane` at `mirror.offsetMm`.
+ * An item that is its own mirror image (e.g. a plate centered on the plane) is not doubled.
+ * Returns { items: [{ index, ref, inst, mirrorApproximate }] } or { error }.
+ */
+function mirrorPlacedParts(placed, mirror) {
+  const axisIdx = 'XYZ'.indexOf(String(mirror.plane || '').toUpperCase());
+  if (axisIdx < 0) return { error: 'mirror.plane must be X, Y or Z' };
+  const offsetMm = Number(mirror.offsetMm) || 0;
+  const { catalogById } = getCatalog();
+  const items = [];
+  const stamp = Date.now();
+  for (const p of placed) {
+    const part = catalogById.get(p.inst.partId);
+    const pose = mirrorPose(part, p.inst, axisIdx, offsetMm);
+    const mirroredInst = { ...p.inst, instanceId: `inst-${stamp}-m${items.length.toString(36)}-${Math.random().toString(36).slice(2, 6)}`, position: pose.position, rotation: pose.rotation };
+    // Its own mirror image: every feature lands where the original's are
+    const original = worldFeaturesFor(p.inst).map((f) => [f.start, f.end]);
+    const image = worldFeaturesFor(mirroredInst).map((f) => [f.start, f.end]);
+    const isSelf =
+      original.length > 0 &&
+      image.every(([a, b]) => original.some(([c, d]) => (a.distanceTo(c) < 0.05 && b.distanceTo(d) < 0.05) || (a.distanceTo(d) < 0.05 && b.distanceTo(c) < 0.05)));
+    if (isSelf) continue;
+    mirroredInst.label = mirrorLabel(p.inst.label);
+    items.push({
+      index: p.index,
+      ref: p.ref !== undefined ? `${p.ref}#mirror` : undefined,
+      inst: mirroredInst,
+      ...(pose.exact ? {} : { mirrorApproximate: true })
+    });
+  }
+  return { items };
+}

@@ -7,6 +7,7 @@ import {
   MAX_AXIAL_GAP_MM,
   collectWorldFeatures,
   findAlignedOpenings,
+  findEngagedJoints,
   measureOpeningSurfaces,
   measurePinEnds,
   planMates,
@@ -351,6 +352,305 @@ function createMateArrowOverlay() {
   return { group, show, hide, pick, setHover, updateScale, isShown: () => group.visible, dispose };
 }
 
+const ROTATE_RING_INNER = 0.85; // gizmo units; the outer edge is at 1.0
+const ROTATE_RING_COLORS = { X: 0xef4444, Y: 0x22c55e, Z: 0x3b82f6, Joint: HOLE_HIGHLIGHT_COLOR };
+
+/**
+ * Builds the Rotate-mode gizmo: up to three flat rings around one pivot, one per turning axis. Each
+ * ring has a thin rim (so it still shows edge-on), tick marks at the snap angles, a fatter invisible
+ * picker, and a shaded slice shown while dragging. Rings are sized in screen units like the mate
+ * arrows, but never smaller than the part (`minRadius`, world mm), so they always go around it.
+ */
+function createRotateGizmo() {
+  const group = new THREE.Group();
+  group.name = '__rotate_gizmo__';
+  group.visible = false;
+
+  const OUTER = 1.0;
+  const zAxis = new THREE.Vector3(0, 0, 1);
+  const bandGeo = new THREE.RingGeometry(ROTATE_RING_INNER, OUTER, 96);
+  const rimGeo = new THREE.TorusGeometry(OUTER, 0.012, 6, 96);
+  const pickGeo = new THREE.TorusGeometry((ROTATE_RING_INNER + OUTER) / 2, 0.1, 8, 64);
+  const pickMaterial = new THREE.MeshBasicMaterial({ visible: false });
+  let tickGeo = new THREE.BufferGeometry();
+  const overlayMaterial = (color, opacity) =>
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false,
+      fog: false,
+      toneMapped: false
+    });
+
+  const rings = []; // { root, band, rim, ticks, slice, picker, color, minRadius }
+  let shownCount = 0;
+  let hoverIndex = -1;
+  let selectedIndex = -1;
+  let dragIndex = -1;
+
+  const makeRing = () => {
+    const root = new THREE.Group();
+    const band = new THREE.Mesh(bandGeo, overlayMaterial(0xffffff, 0.28));
+    const rim = new THREE.Mesh(rimGeo, overlayMaterial(0xffffff, 0.9));
+    const ticks = new THREE.LineSegments(
+      tickGeo,
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false, depthWrite: false })
+    );
+    const slice = new THREE.Mesh(new THREE.BufferGeometry(), overlayMaterial(0xffffff, 0.25));
+    const picker = new THREE.Mesh(pickGeo, pickMaterial);
+    // Above the hole rings (1001/1002) and mate arrows (1003)
+    band.renderOrder = 1004;
+    slice.renderOrder = 1004;
+    rim.renderOrder = 1005;
+    ticks.renderOrder = 1005;
+    slice.visible = false;
+    root.add(band, rim, ticks, slice, picker);
+    group.add(root);
+    return { root, band, rim, ticks, slice, picker, color: new THREE.Color(), minRadius: 0 };
+  };
+
+  const refreshLooks = () => {
+    rings.forEach((ring, i) => {
+      const active = i === dragIndex || i === selectedIndex;
+      const color = active ? ring.color.clone().lerp(new THREE.Color(0xffffff), 0.35) : ring.color;
+      ring.band.material.color.copy(color);
+      ring.band.material.opacity = active ? 0.7 : i === hoverIndex ? 0.5 : 0.28;
+      ring.rim.material.color.copy(color);
+      ring.ticks.material.color.copy(color);
+      ring.slice.material.color.copy(ring.color);
+    });
+  };
+
+  /** `rings`: [{ axis (unit), color (hex), minRadius (world mm) }], all turning about `pivot`. */
+  const show = (pivot, ringDefs) => {
+    while (rings.length < ringDefs.length) rings.push(makeRing());
+    group.position.copy(pivot);
+    rings.forEach((ring, i) => {
+      const def = ringDefs[i];
+      ring.root.visible = Boolean(def);
+      if (!def) return;
+      ring.root.quaternion.setFromUnitVectors(zAxis, def.axis);
+      ring.color.setHex(def.color);
+      ring.minRadius = def.minRadius;
+      ring.slice.visible = false;
+    });
+    shownCount = ringDefs.length;
+    group.visible = shownCount > 0;
+    refreshLooks();
+  };
+
+  const hide = () => {
+    shownCount = 0;
+    group.visible = false;
+    hoverIndex = -1;
+    dragIndex = -1;
+  };
+
+  /** Ring under the raycaster as { index, point } (world hit point), or null. */
+  const pick = (raycaster) => {
+    if (!group.visible) return null;
+    group.updateMatrixWorld(true);
+    const pickers = rings.slice(0, shownCount).map((r) => r.picker);
+    const hit = raycaster.intersectObjects(pickers, false)[0];
+    return hit ? { index: pickers.indexOf(hit.object), point: hit.point.clone() } : null;
+  };
+
+  const setHover = (index) => {
+    if (index === hoverIndex) return;
+    hoverIndex = index;
+    refreshLooks();
+  };
+  const setSelected = (index) => {
+    selectedIndex = index;
+    refreshLooks();
+  };
+  const setDragging = (index) => {
+    dragIndex = index;
+    refreshLooks();
+  };
+
+  /** Tick marks every `stepDeg` (longer every 90°); none when snapping is off. */
+  const setSnap = (stepDeg) => {
+    const positions = [];
+    if (stepDeg > 0) {
+      for (let deg = 0; deg < 360 - 1e-6; deg += stepDeg) {
+        const a = THREE.MathUtils.degToRad(deg);
+        const len = Math.abs(deg % 90) < 1e-6 ? 0.14 : 0.07;
+        const c = Math.cos(a);
+        const s = Math.sin(a);
+        positions.push(c * OUTER, s * OUTER, 0, c * (OUTER + len), s * (OUTER + len), 0);
+      }
+    }
+    const next = new THREE.BufferGeometry();
+    next.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    for (const ring of rings) ring.ticks.geometry = next;
+    tickGeo.dispose();
+    tickGeo = next;
+  };
+
+  /** Axis and in-plane unit vectors u, v (u × v = axis) of a ring, plus its world radius. */
+  const frame = (index) => {
+    const ring = rings[index];
+    return {
+      axis: zAxis.clone().applyQuaternion(ring.root.quaternion),
+      u: new THREE.Vector3(1, 0, 0).applyQuaternion(ring.root.quaternion),
+      v: new THREE.Vector3(0, 1, 0).applyQuaternion(ring.root.quaternion),
+      radius: OUTER * ring.root.scale.x
+    };
+  };
+
+  /** Shades the slice turned so far: from in-plane angle `startRad` (from u) through `deltaRad`. */
+  const setSlice = (index, startRad, deltaRad) => {
+    const ring = rings[index];
+    if (!ring) return;
+    ring.slice.geometry.dispose();
+    const length = Math.min(Math.abs(deltaRad), Math.PI * 2);
+    ring.slice.visible = length > 1e-4;
+    ring.slice.geometry = ring.slice.visible
+      ? new THREE.CircleGeometry(ROTATE_RING_INNER, 64, deltaRad >= 0 ? startRad : startRad + deltaRad, length)
+      : new THREE.BufferGeometry();
+  };
+  const clearSlices = () => {
+    for (const ring of rings) ring.slice.visible = false;
+  };
+
+  // Same screen-size factor TransformControls uses for its gizmo
+  const updateScale = (camera) => {
+    if (!group.visible) return;
+    const factor =
+      group.position.distanceTo(camera.position) *
+      Math.min((1.9 * Math.tan((Math.PI * camera.fov) / 360)) / camera.zoom, 7);
+    for (const ring of rings.slice(0, shownCount)) {
+      ring.root.scale.setScalar(Math.max((factor * 0.95) / 6, ring.minRadius / OUTER));
+    }
+  };
+
+  const dispose = () => {
+    bandGeo.dispose();
+    rimGeo.dispose();
+    pickGeo.dispose();
+    tickGeo.dispose();
+    pickMaterial.dispose();
+    for (const ring of rings) {
+      ring.band.material.dispose();
+      ring.rim.material.dispose();
+      ring.ticks.material.dispose();
+      ring.slice.material.dispose();
+      ring.slice.geometry.dispose();
+    }
+  };
+
+  return {
+    group,
+    show,
+    hide,
+    pick,
+    setHover,
+    setSelected,
+    setDragging,
+    setSnap,
+    frame,
+    setSlice,
+    clearSlices,
+    updateScale,
+    isShown: () => group.visible,
+    dispose
+  };
+}
+
+/** Wraps degrees into (−180, 180]. */
+const wrapDeg = (deg) => {
+  const w = ((((deg + 180) % 360) + 360) % 360) - 180;
+  return w === -180 ? 180 : w;
+};
+
+/**
+ * HTML angle labels for the rotate rings, laid over the canvas inside `parent`. Each label is a
+ * button showing e.g. "Z 30°"; clicking it swaps in a number field. Enter calls
+ * `onSubmit(index, value)`, Esc or clicking away cancels.
+ */
+function createAngleLabels(parent, onSubmit) {
+  const layer = document.createElement('div');
+  layer.className = 'rotate-angle-layer';
+  parent.appendChild(layer);
+  const labels = []; // { el, name, text, editing }
+
+  const makeLabel = (index) => {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'rotate-angle-label';
+    const label = { el, name: '', text: '', editing: false };
+    el.addEventListener('click', () => {
+      if (label.editing) return;
+      label.editing = true;
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = 'any';
+      input.className = 'rotate-angle-input';
+      input.value = label.value ?? '0';
+      el.replaceChildren(input);
+      input.focus();
+      input.select();
+      const finish = (submit) => {
+        if (!label.editing) return;
+        label.editing = false;
+        const value = Number.parseFloat(input.value);
+        el.textContent = label.text;
+        if (submit && Number.isFinite(value)) onSubmit(index, value);
+      };
+      input.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') finish(true);
+        else if (e.key === 'Escape') finish(false);
+      });
+      input.addEventListener('blur', () => finish(false));
+    });
+    layer.appendChild(el);
+    return label;
+  };
+
+  /** `names`: one per ring ('X', 'Y', 'Z' or 'Joint'). */
+  const show = (names) => {
+    while (labels.length < names.length) labels.push(makeLabel(labels.length));
+    labels.forEach((label, i) => {
+      label.name = names[i] ?? '';
+      if (!names[i]) label.el.style.display = 'none';
+      else label.el.style.setProperty('--ring-color', `#${new THREE.Color(ROTATE_RING_COLORS[names[i]]).getHexString()}`);
+    });
+  };
+
+  const hide = () => {
+    for (const label of labels) {
+      label.name = '';
+      label.el.style.display = 'none';
+    }
+  };
+
+  const setAngle = (index, deg) => {
+    const label = labels[index];
+    if (!label) return;
+    const value = Number(wrapDeg(deg).toFixed(1));
+    label.value = String(value);
+    label.text = `${label.name === 'Joint' ? '↻' : label.name} ${value}°`;
+    if (!label.editing) label.el.textContent = label.text;
+  };
+
+  /** Places label `index` centered at canvas pixel (x, y), or hides it when `visible` is false. */
+  const place = (index, x, y, visible) => {
+    const label = labels[index];
+    if (!label || !label.name) return;
+    label.el.style.display = visible ? 'block' : 'none';
+    if (visible) label.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+  };
+
+  const dispose = () => layer.remove();
+
+  return { show, hide, setAngle, place, dispose };
+}
+
 /**
  * Computes exploded display positions for all visible instances along 'x', 'y', 'z', or 'all'
  * without mutating their underlying assembled positions.
@@ -558,6 +858,7 @@ export default function Viewport3D({
   onSelect,
   onUpdateTransform,
   onRegisterFlushMover,
+  onRegisterScreenshot,
   transformMode,
   snapPitchFactor,
   rotationSnapDeg,
@@ -566,7 +867,8 @@ export default function Viewport3D({
   explodeMode = 'off',
   focusTrigger,
   onLoadingChange,
-  onMateFeedback
+  onMateFeedback,
+  onToggleRotateRequest
 }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
@@ -588,6 +890,15 @@ export default function Viewport3D({
   const lastAlignedRef = useRef([]); // latest findAlignedOpenings result for the selected part
   const arrowOverlayRef = useRef(null);
   const arrowPlansRef = useRef([]); // mate plans behind the arrows currently shown
+  const rotateGizmoRef = useRef(null);
+  const angleLabelsRef = useRef(null);
+  // { instanceId, pivot, rings: [{ name, axis }], angles: [deg] } while Rotate-mode rings are shown
+  const rotateSetupRef = useRef(null);
+  const rotateMessageKeyRef = useRef(''); // last refusal message sent, so each is sent once per selection
+  const selectedRingRef = useRef(-1); // ring the mouse wheel turns, or -1
+  // In-progress ring drag / wheel turn / typed angle:
+  // { kind, ring, instanceId, startPos, startQuat, startAngle, ... }
+  const rotateGestureRef = useRef(null);
 
   const instancesRef = useRef(instances);
   instancesRef.current = instances;
@@ -607,6 +918,9 @@ export default function Viewport3D({
   const snapPitchFactorRef = useRef(snapPitchFactor);
   snapPitchFactorRef.current = snapPitchFactor;
 
+  const rotationSnapDegRef = useRef(rotationSnapDeg);
+  rotationSnapDegRef.current = rotationSnapDeg;
+
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
@@ -615,6 +929,9 @@ export default function Viewport3D({
 
   const onMateFeedbackRef = useRef(onMateFeedback);
   onMateFeedbackRef.current = onMateFeedback;
+
+  const onToggleRotateRequestRef = useRef(onToggleRotateRequest);
+  onToggleRotateRequestRef.current = onToggleRotateRequest;
 
   /**
    * Exact concave mesh-to-mesh intersection check using three-mesh-bvh on inward-eroded
@@ -818,7 +1135,7 @@ export default function Viewport3D({
     overlay.show(lastAlignedRef.current);
   };
 
-  /** Hides the mate direction arrows and gives the move/rotate gizmo back. */
+  /** Hides the mate direction arrows and gives the move gizmo or rotate rings back. */
   const hideMateArrows = () => {
     const arrows = arrowOverlayRef.current;
     if (!arrows?.isShown()) return;
@@ -829,6 +1146,7 @@ export default function Viewport3D({
       transform.enabled = true;
       transform.getHelper().visible = transform.object !== undefined;
     }
+    refreshRotateSetup();
   };
 
   /** Shows one large arrow per mate plan at the selected part's center and hides the gizmo. */
@@ -845,6 +1163,7 @@ export default function Viewport3D({
     if (cameraRef.current) arrows.updateScale(cameraRef.current);
     transform.enabled = false;
     transform.getHelper().visible = false;
+    refreshRotateSetup(); // hides the rotate rings while the arrows are shown
   };
 
   /**
@@ -943,6 +1262,290 @@ export default function Viewport3D({
       showMateArrows(plans, group);
     }
   };
+
+  /** Selects the ring the mouse wheel turns (-1: none, the wheel zooms again). */
+  const selectRing = (index) => {
+    if (rotateGestureRef.current?.kind === 'wheel') commitRotation();
+    selectedRingRef.current = index;
+    rotateGizmoRef.current?.setSelected(index);
+    if (orbitRef.current) orbitRef.current.enableZoom = index < 0;
+  };
+
+  /**
+   * Works out how the selected part may turn in Rotate mode and shows its rings: free -> world X/Y/Z
+   * rings through the part's center; held on one axis line -> one ring around that line; locked,
+   * Explode on, or held on several axis lines -> no rings and a message. Ring angles carry over while
+   * the same part keeps the same rings and start at 0° otherwise.
+   */
+  const refreshRotateSetup = () => {
+    const gizmo = rotateGizmoRef.current;
+    const labels = angleLabelsRef.current;
+    if (!gizmo || !labels || rotateGestureRef.current) return;
+    const selId = selectedIdRef.current;
+    const group = selId ? meshMapRef.current.get(selId) : null;
+    const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
+    const partMeta = group ? catalogMapRef.current.get(group.userData.partId) : null;
+    const prev = rotateSetupRef.current;
+
+    const clear = (message = '') => {
+      rotateSetupRef.current = null;
+      if (selectedRingRef.current >= 0) selectRing(-1);
+      gizmo.hide();
+      labels.hide();
+      const key = message ? `${selId}:${message}` : '';
+      if (message && rotateMessageKeyRef.current !== key) onMateFeedbackRef.current?.(message, true);
+      rotateMessageKeyRef.current = key;
+    };
+
+    if (transformModeRef.current !== 'rotate' || !group || !inst || !partMeta || inst.visible === false) {
+      return clear();
+    }
+    if (inst.locked) return clear('Part is locked');
+    if (explodeModeRef.current !== 'off') return clear("Can't rotate in Explode view");
+    if (arrowOverlayRef.current?.isShown() || !group.userData.localBox) return clear();
+
+    group.updateMatrixWorld();
+    const selectedFeatures = collectWorldFeatures(
+      partMeta,
+      group.matrixWorld,
+      selId,
+      getMeshMeasurements(group, partMeta)
+    );
+    const candidates = otherFeaturesRef.current.flatMap((o) => (o.instanceId === selId ? [] : o.features));
+    const { lines } = findEngagedJoints(selectedFeatures, candidates);
+    if (lines.length > 1) return clear("Can't rotate: held by pins or shafts on more than one axis");
+
+    const center = group.userData.localBox.getCenter(new THREE.Vector3()).applyMatrix4(group.matrixWorld);
+    let pivot;
+    let rings;
+    if (lines.length === 0) {
+      pivot = center;
+      rings = [
+        { name: 'X', axis: new THREE.Vector3(1, 0, 0) },
+        { name: 'Y', axis: new THREE.Vector3(0, 1, 0) },
+        { name: 'Z', axis: new THREE.Vector3(0, 0, 1) }
+      ];
+    } else {
+      const { origin, axis } = lines[0];
+      pivot = origin.clone().addScaledVector(axis, center.clone().sub(origin).dot(axis));
+      rings = [{ name: 'Joint', axis: axis.clone().normalize() }];
+    }
+
+    // Each ring goes around the whole part: its radius covers every bbox corner in the ring's plane
+    const corners = [];
+    const { min, max } = group.userData.localBox;
+    for (const x of [min.x, max.x]) {
+      for (const y of [min.y, max.y]) {
+        for (const z of [min.z, max.z]) corners.push(new THREE.Vector3(x, y, z).applyMatrix4(group.matrixWorld));
+      }
+    }
+    const minRadiusFor = (axis) =>
+      Math.max(...corners.map((c) => c.clone().sub(pivot).projectOnPlane(axis).length())) * 1.1 + 2;
+
+    const same =
+      prev &&
+      prev.instanceId === selId &&
+      prev.rings.length === rings.length &&
+      prev.rings.every((r, i) => r.axis.dot(rings[i].axis) > 0.9999) &&
+      prev.pivot.distanceTo(pivot) < 0.5;
+    const angles = same ? prev.angles : rings.map(() => 0);
+    if (!same && selectedRingRef.current >= 0) selectRing(-1);
+
+    rotateSetupRef.current = { instanceId: selId, pivot, rings, angles };
+    rotateMessageKeyRef.current = '';
+    gizmo.show(
+      pivot,
+      rings.map((r) => ({ axis: r.axis, color: ROTATE_RING_COLORS[r.name], minRadius: minRadiusFor(r.axis) }))
+    );
+    if (cameraRef.current) gizmo.updateScale(cameraRef.current);
+    gizmo.setSelected(selectedRingRef.current);
+    labels.show(rings.map((r) => r.name));
+    angles.forEach((deg, i) => labels.setAngle(i, deg));
+  };
+
+  /** Starts a turn of the selected part around ring `ring`, remembering the pose it started from. */
+  const beginRotateGesture = (kind, ring, extra = {}) => {
+    const setup = rotateSetupRef.current;
+    const group = setup ? meshMapRef.current.get(setup.instanceId) : null;
+    if (!group) return null;
+    rotateGestureRef.current = {
+      kind,
+      ring,
+      instanceId: setup.instanceId,
+      startPos: group.position.clone(),
+      startQuat: group.quaternion.clone(),
+      startAngle: setup.angles[ring],
+      ...extra
+    };
+    return rotateGestureRef.current;
+  };
+
+  /**
+   * Turns the selected part so ring `ring` reads `totalDeg`: around the ring's axis through the pivot,
+   * starting from the gesture's start pose (not incrementally, so snapping never adds up error).
+   */
+  const turnSelectedTo = (ring, totalDeg) => {
+    const setup = rotateSetupRef.current;
+    const gesture = rotateGestureRef.current;
+    const group = setup ? meshMapRef.current.get(setup.instanceId) : null;
+    if (!group || !gesture) return;
+    const q = new THREE.Quaternion().setFromAxisAngle(
+      setup.rings[ring].axis,
+      THREE.MathUtils.degToRad(totalDeg - gesture.startAngle)
+    );
+    group.position.copy(gesture.startPos).sub(setup.pivot).applyQuaternion(q).add(setup.pivot);
+    group.quaternion.copy(q).multiply(gesture.startQuat);
+    group.updateMatrixWorld();
+    setup.angles[ring] = totalDeg;
+    angleLabelsRef.current?.setAngle(ring, totalDeg);
+
+    const inst = instancesRef.current.find((i) => i.instanceId === setup.instanceId);
+    const partMeta = catalogMapRef.current.get(group.userData.partId);
+    const isColliding = checkGroupCollision(group, false);
+    group.userData.isIntersecting = isColliding;
+    applyGroupAppearance(group, {
+      baseColor: inst?.color || partMeta?.defaultColor,
+      isSelected: true,
+      isIntersecting: isColliding
+    });
+    updateAlignedHoleHighlights();
+  };
+
+  /** Saves the turned pose like a drag release; the instance sync then works out the rings again. */
+  const commitRotation = () => {
+    const gesture = rotateGestureRef.current;
+    rotateGestureRef.current = null;
+    if (gesture?.wheelTimer) clearTimeout(gesture.wheelTimer);
+    rotateGizmoRef.current?.setDragging(-1);
+    rotateGizmoRef.current?.clearSlices();
+    const group = gesture ? meshMapRef.current.get(gesture.instanceId) : null;
+    if (!group) return;
+    const isColliding = checkGroupCollision(group, false);
+    group.userData.isIntersecting = isColliding;
+    onUpdateTransformRef.current(gesture.instanceId, {
+      position: [
+        Number(group.position.x.toFixed(3)),
+        Number(group.position.y.toFixed(3)),
+        Number(group.position.z.toFixed(3))
+      ],
+      rotation: [
+        Number(THREE.MathUtils.radToDeg(group.rotation.x).toFixed(2)),
+        Number(THREE.MathUtils.radToDeg(group.rotation.y).toFixed(2)),
+        Number(THREE.MathUtils.radToDeg(group.rotation.z).toFixed(2))
+      ],
+      isIntersecting: isColliding
+    });
+  };
+
+  /** Typed angle on a ring label: turn so the label reads `value` (exact, not snapped), then save. */
+  const turnRingToTypedAngle = (ring, value) => {
+    const setup = rotateSetupRef.current;
+    if (!setup || rotateGestureRef.current || !setup.rings[ring]) return;
+    const current = setup.angles[ring];
+    if (!beginRotateGesture('type', ring)) return;
+    turnSelectedTo(ring, current + (value - wrapDeg(current)));
+    commitRotation();
+  };
+
+  /**
+   * Puts the right gizmo on the selected part: the Move arrows (TransformControls) in Move mode, the
+   * rotate rings in Rotate mode; neither while exploded, for locked parts, or for hidden parts.
+   */
+  const syncGizmos = () => {
+    const transform = transformRef.current;
+    if (!transform) return;
+    if (rotateGestureRef.current?.kind === 'wheel' && transformModeRef.current !== 'rotate') commitRotation();
+    const selId = selectedIdRef.current;
+    const group = selId ? meshMapRef.current.get(selId) : null;
+    const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
+    const canMove =
+      transformModeRef.current === 'translate' &&
+      explodeModeRef.current === 'off' &&
+      group &&
+      inst &&
+      inst.visible !== false &&
+      !inst.locked;
+    if (canMove) {
+      if (transform.object !== group) transform.attach(group);
+    } else {
+      transform.detach();
+    }
+    refreshRotateSetup();
+  };
+
+  // Expose a screenshot renderer to App.jsx for the MCP server's capture_screenshot tool. Everything
+  // happens in one task (render, read the canvas, restore), so the user never sees a frame of it.
+  useEffect(() => {
+    if (!onRegisterScreenshot) return;
+    onRegisterScreenshot(({ view = 'iso', width = 1024, height = 768, focusInstanceId } = {}) => {
+      const renderer = rendererRef.current;
+      const scene = sceneRef.current;
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      if (!renderer || !scene || !camera || !container) return null;
+
+      // Frame the whole assembly (or one part) from a fixed direction per standard view
+      const VIEW_DIRS = { iso: [1, 0.75, 1], front: [1, 0, 0], side: [0, 0, 1], top: [0, 1, 0] };
+      const shotCamera = camera.clone();
+      shotCamera.aspect = width / height;
+      if (view !== 'current') {
+        const box = new THREE.Box3();
+        const focus = focusInstanceId ? meshMapRef.current.get(focusInstanceId) : null;
+        if (focus) box.setFromObject(focus);
+        else for (const g of meshMapRef.current.values()) if (g.visible) box.expandByObject(g);
+        if (!box.isEmpty()) {
+          const center = box.getCenter(new THREE.Vector3());
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z, 40);
+          const dir = new THREE.Vector3(...(VIEW_DIRS[view] || VIEW_DIRS.iso)).normalize();
+          shotCamera.position.copy(center).addScaledVector(dir, maxDim * 2.1 * Math.max(1, height / width));
+          // Looking straight down, +X is up in the picture (a robot facing +X has its front at the top)
+          if (view === 'top') shotCamera.up.set(1, 0, 0);
+          else shotCamera.up.set(0, 1, 0);
+          shotCamera.lookAt(center);
+        }
+      }
+      shotCamera.updateProjectionMatrix();
+
+      // Leave out gizmos, hole highlights, mate arrows, rotate rings and the selection tint
+      const overlays = [
+        transformRef.current?.getHelper?.(),
+        holeOverlayRef.current?.group,
+        arrowOverlayRef.current?.group,
+        rotateGizmoRef.current?.group
+      ].filter(Boolean);
+      const wasVisible = overlays.map((o) => o.visible);
+      overlays.forEach((o) => {
+        o.visible = false;
+      });
+      const selId = selectedIdRef.current;
+      const selGroup = selId ? meshMapRef.current.get(selId) : null;
+      const selInst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
+      const selAppearance = selGroup && {
+        baseColor: selInst?.color || catalogMapRef.current.get(selGroup.userData.partId)?.defaultColor,
+        isIntersecting: Boolean(selGroup.userData.isIntersecting)
+      };
+      if (selGroup) applyGroupAppearance(selGroup, { ...selAppearance, isSelected: false });
+
+      const pixelRatio = renderer.getPixelRatio();
+      let png;
+      try {
+        renderer.setPixelRatio(1);
+        renderer.setSize(width, height, false);
+        renderer.render(scene, shotCamera);
+        png = renderer.domElement.toDataURL('image/png').split(',')[1];
+      } finally {
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        overlays.forEach((o, i) => {
+          o.visible = wasVisible[i];
+        });
+        if (selGroup) applyGroupAppearance(selGroup, { ...selAppearance, isSelected: true });
+        renderer.render(scene, camera);
+      }
+      return png;
+    });
+  }, [onRegisterScreenshot]);
 
   // Expose a contact-aware nudge/move resolver to App.jsx for the Inspector -X/+X/-Y/+Y/-Z/+Z buttons
   useEffect(() => {
@@ -1093,6 +1696,14 @@ export default function Viewport3D({
     const arrowOverlay = createMateArrowOverlay();
     scene.add(arrowOverlay.group);
     arrowOverlayRef.current = arrowOverlay;
+
+    // Rotate-mode rings and their angle labels (typed angles turn the part)
+    const rotateGizmo = createRotateGizmo();
+    rotateGizmo.setSnap(rotationSnapDegRef.current || 0);
+    scene.add(rotateGizmo.group);
+    rotateGizmoRef.current = rotateGizmo;
+    const angleLabels = createAngleLabels(container, (ring, value) => turnRingToTypedAngle(ring, value));
+    angleLabelsRef.current = angleLabels;
 
     // OrbitControls
     const orbit = new OrbitControls(camera, renderer.domElement);
@@ -1257,6 +1868,109 @@ export default function Viewport3D({
       pointerDownPos.set(e.clientX, e.clientY);
     };
 
+    const projectToCanvas = (point) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const ndc = point.clone().project(camera);
+      return new THREE.Vector2(((ndc.x + 1) / 2) * rect.width, ((1 - ndc.y) / 2) * rect.height);
+    };
+
+    // A left press on a rotate ring starts turning (capture phase, ahead of OrbitControls, which is
+    // switched off for the drag). The angle comes from the pointer on the ring's plane; when the
+    // plane is seen nearly edge-on, from the pointer's travel along the ring's on-screen tangent.
+    let ringClickHandled = false; // the bubbling pointerup of a ring press must not change selection
+    const handleRingPointerDown = (e) => {
+      if (e.button !== 0 || !rotateSetupRef.current || rotateGestureRef.current) return;
+      setRayFromEvent(e);
+      const hit = rotateGizmo.pick(raycaster);
+      if (!hit) return;
+      const setup = rotateSetupRef.current;
+      const { axis, u, v, radius } = rotateGizmo.frame(hit.index);
+      const edgeOn = Math.abs(raycaster.ray.direction.dot(axis)) < 0.2;
+      // Measure from where the pointer meets the ring's plane (the picker's surface sits off it)
+      const planeHit = edgeOn
+        ? null
+        : raycaster.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(axis, setup.pivot), new THREE.Vector3());
+      const pressDir = (planeHit ?? hit.point).clone().sub(setup.pivot).projectOnPlane(axis).normalize();
+      const extra = {
+        pressX: e.clientX,
+        pressY: e.clientY,
+        moved: false,
+        edgeOn,
+        pressDir,
+        startRad: Math.atan2(pressDir.dot(v), pressDir.dot(u)),
+        prevRaw: 0,
+        turnedRad: 0
+      };
+      if (edgeOn) {
+        // Positive turns move the press point along axis × radius; measure pixels along that
+        const tangent = new THREE.Vector3().crossVectors(axis, pressDir);
+        const a = projectToCanvas(hit.point);
+        const b = projectToCanvas(hit.point.clone().addScaledVector(tangent, radius));
+        const screen = b.sub(a);
+        extra.pxPerRad = Math.max(screen.length(), 40);
+        extra.screenTangent = screen.normalize();
+      }
+      if (!beginRotateGesture('drag', hit.index, extra)) return;
+      orbit.enabled = false;
+      renderer.domElement.setPointerCapture?.(e.pointerId);
+      rotateGizmo.setDragging(hit.index);
+      renderer.domElement.style.cursor = 'grabbing';
+    };
+
+    const ringPlane = new THREE.Plane();
+    const ringPoint = new THREE.Vector3();
+    const handleRingDragMove = (e) => {
+      const gesture = rotateGestureRef.current;
+      const setup = rotateSetupRef.current;
+      if (!setup) return;
+      if (Math.hypot(e.clientX - gesture.pressX, e.clientY - gesture.pressY) > 5) gesture.moved = true;
+      if (!gesture.moved) return;
+      const { axis } = rotateGizmo.frame(gesture.ring);
+      if (gesture.edgeOn) {
+        gesture.turnedRad =
+          ((e.clientX - gesture.pressX) * gesture.screenTangent.x +
+            (e.clientY - gesture.pressY) * gesture.screenTangent.y) /
+          gesture.pxPerRad;
+      } else {
+        setRayFromEvent(e);
+        ringPlane.setFromNormalAndCoplanarPoint(axis, setup.pivot);
+        if (!raycaster.ray.intersectPlane(ringPlane, ringPoint)) return;
+        const dir = ringPoint.sub(setup.pivot).normalize();
+        const raw = Math.atan2(
+          axis.dot(new THREE.Vector3().crossVectors(gesture.pressDir, dir)),
+          gesture.pressDir.dot(dir)
+        );
+        // Unwrap across ±180° so turns past half a circle keep counting
+        let delta = raw - gesture.prevRaw;
+        if (delta > Math.PI) delta -= Math.PI * 2;
+        if (delta < -Math.PI) delta += Math.PI * 2;
+        gesture.turnedRad += delta;
+        gesture.prevRaw = raw;
+      }
+      const step = rotationSnapDegRef.current;
+      const total = gesture.startAngle + THREE.MathUtils.radToDeg(gesture.turnedRad);
+      const snapped = step > 0 ? Math.round(total / step) * step : total;
+      turnSelectedTo(gesture.ring, snapped);
+      rotateGizmo.setSlice(gesture.ring, gesture.startRad, THREE.MathUtils.degToRad(snapped - gesture.startAngle));
+    };
+
+    // Release: a drag saves the turn; a click without movement selects/unselects the ring instead
+    const handleRingPointerUp = (e) => {
+      const gesture = rotateGestureRef.current;
+      if (e.button !== 0 || gesture?.kind !== 'drag') return;
+      renderer.domElement.releasePointerCapture?.(e.pointerId);
+      orbit.enabled = true;
+      renderer.domElement.style.cursor = 'grab';
+      ringClickHandled = true;
+      if (gesture.moved) {
+        commitRotation();
+        return;
+      }
+      rotateGestureRef.current = null;
+      rotateGizmo.setDragging(-1);
+      selectRing(selectedRingRef.current === gesture.ring ? -1 : gesture.ring);
+    };
+
     const setRayFromEvent = (e) => {
       const rect = renderer.domElement.getBoundingClientRect();
       const mouse = new THREE.Vector2(
@@ -1298,11 +2012,24 @@ export default function Viewport3D({
     };
 
     const handlePointerUp = (e) => {
-      if (e.button !== 0) return;
-      if (transform.dragging || wasDraggingRef.current) return;
       const dx = e.clientX - pointerDownPos.x;
       const dy = e.clientY - pointerDownPos.y;
+      // Right-click (not a right-drag pan) on the selected part, even behind another: Move <-> Rotate
+      if (e.button === 2) {
+        const selId = selectedIdRef.current;
+        if (Math.hypot(dx, dy) <= 5 && selId && pickPartsAt(e).includes(selId)) {
+          onToggleRotateRequestRef.current?.();
+        }
+        return;
+      }
+      if (e.button !== 0) return;
+      if (ringClickHandled) {
+        ringClickHandled = false;
+        return;
+      }
+      if (transform.dragging || wasDraggingRef.current) return;
       if (Math.hypot(dx, dy) > 5) return;
+      if (selectedRingRef.current >= 0) selectRing(-1); // a click off the rings unselects the ring
 
       // While mate arrows are shown, a click either picks an arrow or dismisses them
       if (arrowOverlay.isShown()) {
@@ -1332,6 +2059,17 @@ export default function Viewport3D({
     };
 
     const handlePointerMove = (e) => {
+      if (rotateGestureRef.current?.kind === 'drag') {
+        handleRingDragMove(e);
+        return;
+      }
+      if (rotateGizmo.isShown() && !arrowOverlay.isShown()) {
+        setRayFromEvent(e);
+        const index = rotateGizmo.pick(raycaster)?.index ?? -1;
+        rotateGizmo.setHover(index);
+        renderer.domElement.style.cursor = index >= 0 ? 'grab' : '';
+        return;
+      }
       if (!arrowOverlay.isShown()) return;
       setRayFromEvent(e);
       const index = arrowOverlay.pick(raycaster);
@@ -1348,6 +2086,10 @@ export default function Viewport3D({
       if (transform.object && transform.axis && !GIZMO_CENTER_AXES.has(transform.axis)) return;
       if (arrowOverlay.isShown()) return;
       if (performance.now() - lastArrowClickAt < 600) return; // second click of an arrow double-click
+      if (rotateGizmo.isShown()) {
+        setRayFromEvent(e);
+        if (rotateGizmo.pick(raycaster)) return; // double-clicking a ring handle never mates
+      }
       const selId = selectedIdRef.current;
       // The selected part may be behind another part; anywhere under the pointer counts
       if (!selId || !pickPartsAt(e).includes(selId)) return;
@@ -1355,20 +2097,88 @@ export default function Viewport3D({
       handleMateRequest();
     };
 
-    // Capture phase, so Esc only dismisses the arrows and doesn't reach App's deselect handler
+    // Capture phase, so Esc only dismisses the arrows (or unselects the wheel ring) and doesn't reach
+    // App's deselect handler. Esc in an angle field is handled by the field itself.
     const handleKeyDownCapture = (e) => {
-      if (e.key !== 'Escape' || !arrowOverlay.isShown()) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      hideMateArrows();
-      renderer.domElement.style.cursor = '';
+      if (e.key !== 'Escape' || e.target?.tagName === 'INPUT') return;
+      if (arrowOverlay.isShown()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        hideMateArrows();
+        renderer.domElement.style.cursor = '';
+      } else if (selectedRingRef.current >= 0) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        selectRing(-1);
+      }
     };
 
+    // With a ring selected, the wheel turns the part one snap step (5° when Free) per notch instead
+    // of zooming; saved 300 ms after the last notch. Capture phase, ahead of OrbitControls' zoom.
+    const WHEEL_NOTCH = 100; // deltaY of one mouse-wheel notch in pixel mode; trackpad deltas add up
+    let wheelAccum = 0;
+    const handleWheelCapture = (e) => {
+      const ring = selectedRingRef.current;
+      const setup = rotateSetupRef.current;
+      if (ring < 0 || !setup || rotateGestureRef.current?.kind === 'drag') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const unit = e.deltaMode === 1 ? WHEEL_NOTCH / 3 : e.deltaMode === 2 ? WHEEL_NOTCH * 3 : 1;
+      wheelAccum -= e.deltaY * unit; // scrolling up turns the positive way around the axis
+      const notches = Math.trunc(wheelAccum / WHEEL_NOTCH);
+      if (notches === 0) return;
+      wheelAccum -= notches * WHEEL_NOTCH;
+      const gesture = rotateGestureRef.current ?? beginRotateGesture('wheel', ring);
+      if (!gesture || gesture.ring !== ring) return;
+      const snap = rotationSnapDegRef.current;
+      const step = snap > 0 ? snap : 5;
+      let total = setup.angles[ring] + notches * step;
+      if (snap > 0) total = Math.round(total / step) * step;
+      turnSelectedTo(ring, total);
+      clearTimeout(gesture.wheelTimer);
+      gesture.wheelTimer = setTimeout(commitRotation, 300);
+    };
+
+    const handleContextMenu = (e) => e.preventDefault();
+
+    renderer.domElement.addEventListener('pointerdown', handleRingPointerDown, true);
+    renderer.domElement.addEventListener('pointerup', handleRingPointerUp, true);
     renderer.domElement.addEventListener('pointerdown', handlePointerDown);
     renderer.domElement.addEventListener('pointerup', handlePointerUp);
     renderer.domElement.addEventListener('pointermove', handlePointerMove);
     renderer.domElement.addEventListener('dblclick', handleDoubleClick);
+    renderer.domElement.addEventListener('wheel', handleWheelCapture, { capture: true, passive: false });
+    container.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('keydown', handleKeyDownCapture, true);
+
+    // Each label sits just outside its ring, at the ring point furthest toward a per-ring screen
+    // direction (so the X/Y/Z labels don't pile up where the rings cross)
+    const LABEL_SCREEN_DIRS = { X: [1, -0.4], Y: [-1, 0.5], Z: [0.3, -1], Joint: [0.6, -0.8] };
+    const placeAngleLabels = () => {
+      const setup = rotateSetupRef.current;
+      if (!setup || !rotateGizmo.isShown()) return;
+      const pivotPx = projectToCanvas(setup.pivot);
+      setup.rings.forEach((ring, i) => {
+        const { u, v, radius } = rotateGizmo.frame(i);
+        const [px, py] = LABEL_SCREEN_DIRS[ring.name];
+        let best = null;
+        let bestScore = -Infinity;
+        for (let k = 0; k < 24; k++) {
+          const a = (k / 24) * Math.PI * 2;
+          const point = setup.pivot.clone().addScaledVector(u, Math.cos(a) * radius).addScaledVector(v, Math.sin(a) * radius);
+          const screen = projectToCanvas(point);
+          const score = (screen.x - pivotPx.x) * px + (screen.y - pivotPx.y) * py;
+          if (score > bestScore) {
+            bestScore = score;
+            best = screen;
+          }
+        }
+        const out = best.clone().sub(pivotPx);
+        if (out.lengthSq() > 1e-6) best.addScaledVector(out.normalize(), 22);
+        const inFront = setup.pivot.clone().project(camera).z < 1;
+        angleLabels.place(i, best.x, best.y, inFront);
+      });
+    };
 
     const resizeObserver = new ResizeObserver(() => {
       if (!container) return;
@@ -1386,6 +2196,8 @@ export default function Viewport3D({
       animFrameId = requestAnimationFrame(animate);
       orbit.update();
       arrowOverlay.updateScale(camera);
+      rotateGizmo.updateScale(camera);
+      placeAngleLabels();
       renderer.render(scene, camera);
     };
     animate();
@@ -1393,36 +2205,45 @@ export default function Viewport3D({
     return () => {
       cancelAnimationFrame(animFrameId);
       resizeObserver.disconnect();
+      renderer.domElement.removeEventListener('pointerdown', handleRingPointerDown, true);
+      renderer.domElement.removeEventListener('pointerup', handleRingPointerUp, true);
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       renderer.domElement.removeEventListener('pointermove', handlePointerMove);
       renderer.domElement.removeEventListener('dblclick', handleDoubleClick);
+      renderer.domElement.removeEventListener('wheel', handleWheelCapture, { capture: true });
+      container.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('keydown', handleKeyDownCapture, true);
       cancelPendingSelect();
+      clearTimeout(rotateGestureRef.current?.wheelTimer);
+      rotateGestureRef.current = null;
       transform.dispose();
       orbit.dispose();
       holeOverlay.dispose();
       arrowOverlay.dispose();
+      rotateGizmo.dispose();
+      angleLabels.dispose();
       renderer.dispose();
     };
   }, []);
 
-  // Sync TransformControls mode & snapping settings
+  // Sync snapping settings. TransformControls only ever moves (Rotate mode uses the ring gizmo).
   useEffect(() => {
     const transform = transformRef.current;
     if (!transform) return;
-    transform.setMode(transformMode);
-
     // Keep TransformControls raw translation unsnapped so our custom world-grid + BVH flush-boundary
     // solver in `objectChange` can stop smoothly at 0.25P (3.175mm) flush faces before penetration.
     transform.setTranslationSnap(null);
+    rotateGizmoRef.current?.setSnap(rotationSnapDeg > 0 ? rotationSnapDeg : 0);
+  }, [snapPitchFactor, rotationSnapDeg]);
 
-    if (rotationSnapDeg && rotationSnapDeg > 0) {
-      transform.setRotationSnap(THREE.MathUtils.degToRad(rotationSnapDeg));
-    } else {
-      transform.setRotationSnap(null);
-    }
-  }, [transformMode, snapPitchFactor, rotationSnapDeg]);
+  // Switch between the Move gizmo and the rotate rings; entering Rotate mode starts every ring at 0°
+  useEffect(() => {
+    if (!transformRef.current) return;
+    hideMateArrows();
+    rotateSetupRef.current = null;
+    syncGizmos();
+  }, [transformMode]);
 
   // Sync Grid visibility
   useEffect(() => {
@@ -1560,6 +2381,7 @@ export default function Viewport3D({
             // Mesh is now available: re-place highlight rings on the measured surfaces
             rebuildOtherFeatures();
             updateAlignedHoleHighlights();
+            refreshRotateSetup();
           })
           .catch((err) => {
             console.error('Failed to load GLB for part:', partMeta.name, err);
@@ -1571,7 +2393,8 @@ export default function Viewport3D({
 
       group.visible = inst.visible !== false;
       const displayPos = explodedPosMap.get(inst.instanceId) || inst.position;
-      if (!transform.dragging || transform.object !== group) {
+      const isBeingTurned = rotateGestureRef.current?.instanceId === inst.instanceId;
+      if ((!transform.dragging || transform.object !== group) && !isBeingTurned) {
         group.position.set(displayPos[0], displayPos[1], displayPos[2]);
         group.rotation.set(
           THREE.MathUtils.degToRad(inst.rotation[0]),
@@ -1609,25 +2432,12 @@ export default function Viewport3D({
       }
     });
 
-    // Attach or detach TransformControls (disable gizmo while exploded to prevent offset confusion)
-    if (explodeMode === 'off' && selectedId && meshMapRef.current.has(selectedId)) {
-      const targetGroup = meshMapRef.current.get(selectedId);
-      const selectedInst = instances.find((i) => i.instanceId === selectedId);
-      if (selectedInst && selectedInst.visible !== false && !selectedInst.locked) {
-        if (transform.object !== targetGroup) {
-          transform.attach(targetGroup);
-        }
-      } else {
-        transform.detach();
-      }
-    } else {
-      transform.detach();
-    }
-
     // Any scene change (selection, Explode, hide, server sync, a committed mate) makes shown mate
     // plans stale, so dismiss the arrows
     hideMateArrows();
     rebuildOtherFeatures();
+    // Move gizmo or rotate rings (none while exploded, to prevent offset confusion)
+    syncGizmos();
     updateAlignedHoleHighlights();
   }, [instances, selectedId, catalogMap, showConnectors, explodeMode]);
 

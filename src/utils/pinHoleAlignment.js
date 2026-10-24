@@ -216,6 +216,94 @@ export function measureOpeningSurfaces(partMeta, raycast) {
   return surfaces;
 }
 
+export const DEPTH_PROBE_RADIUS_FRACTION = 0.5; // off-axis depth rays sit at half the rim radius
+export const DEPTH_THROUGH_SLACK_MM = 0.5; // open to within this much of the full length counts as through
+export const DEPTH_MIN_OPEN_MM = 1.0; // shallower than this from a face means that face is closed (e.g. the Smart Motor's ~0.4 mm back marks)
+
+/**
+ * Measures how deep each opening really is from each of its faces, by casting five rays along the
+ * axis (one on it, four at half the rim radius) from outside the part into the opening, from both
+ * sides; the median first hit gives the depth from that face. `raycast(originArr, dirArr)` returns
+ * the distance to the part's surface in part-local mm, or null on a miss (a miss = open all the way).
+ * Faces come from `surfaces` (measureOpeningSurfaces) when given, else the catalog extent.
+ * Returns Map(featureId -> { fromLo, fromHi, length }) in mm; a side with no usable ray is left out.
+ */
+export function measureOpeningDepths(partMeta, raycast, surfaces = null) {
+  const depths = new Map();
+  const bbox = partMeta?.bbox;
+  if (!bbox) return depths;
+
+  for (const f of getLocalFeatures(partMeta)) {
+    if (OPENINGS_BY_INSERT[f.kind]) continue; // inserts keep their extent
+    const axis = new THREE.Vector3(...f.axis);
+    const t0 = dot3(f.origin, f.axis);
+    const [bLo, bHi] = bboxRangeAlong(bbox, f.axis);
+    const faceLo = surfaces?.get(f.featureId)?.lo ?? f.tMin;
+    const faceHi = surfaces?.get(f.featureId)?.hi ?? f.tMax;
+    const length = faceHi - faceLo;
+    if (!(length > 0)) continue;
+    const u = new THREE.Vector3()
+      .crossVectors(axis, Math.abs(axis.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0))
+      .normalize();
+    const v = new THREE.Vector3().crossVectors(axis, u);
+    const r = (f.radiusMm ?? 0) * DEPTH_PROBE_RADIUS_FRACTION;
+    const offsets = [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]];
+
+    // Depth of open space from the face on `side` (+1: from faceHi going -axis), or undefined
+    const depthFrom = (side) => {
+      const tStart = side > 0 ? bHi + SURFACE_PROBE_START_MM : bLo - SURFACE_PROBE_START_MM;
+      const dir = axis.clone().multiplyScalar(-side).toArray();
+      const face = side > 0 ? faceHi : faceLo;
+      const found = [];
+      for (const [a, b] of offsets) {
+        const start = new THREE.Vector3(...f.origin)
+          .addScaledVector(axis, tStart - t0)
+          .addScaledVector(u, a)
+          .addScaledVector(v, b);
+        const d = raycast(start.toArray(), dir);
+        if (d == null) {
+          found.push(length);
+          continue;
+        }
+        const t = tStart - side * d;
+        // A hit before the face means something overhangs the entrance: no reading from this ray
+        if (side > 0 ? t > face + SURFACE_PROBE_ACCEPT_MM : t < face - SURFACE_PROBE_ACCEPT_MM) continue;
+        found.push(Math.min(Math.max(side > 0 ? face - t : t - face, 0), length));
+      }
+      if (found.length === 0) return undefined;
+      found.sort((x, y) => x - y);
+      return found[Math.floor(found.length / 2)];
+    };
+
+    const entry = { length };
+    const lo = depthFrom(-1);
+    const hi = depthFrom(1);
+    if (lo !== undefined) entry.fromLo = lo;
+    if (hi !== undefined) entry.fromHi = hi;
+    depths.set(f.featureId, entry);
+  }
+  return depths;
+}
+
+/**
+ * Open spans of an opening along its axis (absolute t) from its measured depths: one through span,
+ * or a blind span from each face that is open. [{ suffix, lo, hi, through }]; suffix '@lo' / '@hi'
+ * only when the opening splits into two blind openings.
+ */
+function openingSpans(lo, hi, through, depth) {
+  if (!depth) return [{ suffix: '', lo, hi, through }];
+  const full = depth.length - DEPTH_THROUGH_SLACK_MM;
+  if ((depth.fromLo ?? 0) >= full || (depth.fromHi ?? 0) >= full) {
+    return [{ suffix: '', lo, hi, through: depth.fromLo !== undefined && depth.fromHi !== undefined ? true : through }];
+  }
+  const spans = [];
+  if ((depth.fromHi ?? 0) > DEPTH_MIN_OPEN_MM) spans.push({ suffix: '@hi', lo: hi - depth.fromHi, hi, through: false });
+  if ((depth.fromLo ?? 0) > DEPTH_MIN_OPEN_MM) spans.push({ suffix: '@lo', lo, hi: lo + depth.fromLo, through: false });
+  if (spans.length === 0) return [{ suffix: '', lo, hi, through }];
+  if (spans.length === 1) spans[0].suffix = '';
+  return spans;
+}
+
 export const PIN_END_PROBE_RAYS = 8;
 export const PIN_END_PROBE_START_RADIUS_MM = 4.5; // radial rays start this far from the pin axis
 export const PIN_END_PROBE_INSET_MM = 1.5; // radial probe sits this far in from the pin end
@@ -304,37 +392,44 @@ export function measurePinEnds(partMeta, raycastHit) {
  * and for openings the rim radius at the face (`radiusMm`) and whether it goes through (`through`).
  * `measured.surfaces` (from measureOpeningSurfaces) replaces an opening's extent with its measured
  * mesh faces; `measured.pinEnds` (from measurePinEnds) sets which pin ends stick out
- * (`freeAtStart` / `freeAtEnd` for the `start` / `end` points; both true when not measured).
+ * (`freeAtStart` / `freeAtEnd` for the `start` / `end` points; both true when not measured);
+ * `measured.depths` (from measureOpeningDepths) cuts an opening down to its really open part, and
+ * splits one listed as through but blocked inside into two blind openings, `<id>@lo` and `<id>@hi`.
  */
 export function collectWorldFeatures(partMeta, matrixWorld, instanceId, measured = null) {
   const surfaces = measured?.surfaces;
   const pinEnds = measured?.pinEnds;
   const result = [];
+  const depths = measured?.depths;
   for (const f of getLocalFeatures(partMeta)) {
-    const origin = new THREE.Vector3(...f.origin);
-    const axis = new THREE.Vector3(...f.axis);
     const t0 = dot3(f.origin, f.axis);
-    const measured = surfaces?.get(f.featureId);
-    const tMin = measured ? measured.lo : f.tMin;
-    const tMax = measured ? measured.hi : f.tMax;
-    const start = origin.clone().addScaledVector(axis, tMin - t0).applyMatrix4(matrixWorld);
-    const end = origin.clone().addScaledVector(axis, tMax - t0).applyMatrix4(matrixWorld);
-    origin.applyMatrix4(matrixWorld);
-    axis.transformDirection(matrixWorld);
-    result.push({
-      instanceId,
-      featureId: f.featureId,
-      kind: f.kind,
-      origin,
-      axis,
-      start,
-      end,
-      radiusMm: f.radiusMm,
-      through: f.through,
-      ...(f.kind === 'pin'
-        ? { freeAtStart: pinEnds?.get(f.featureId)?.lo ?? true, freeAtEnd: pinEnds?.get(f.featureId)?.hi ?? true }
-        : {})
-    });
+    const measuredFaces = surfaces?.get(f.featureId);
+    const isOpening = !OPENINGS_BY_INSERT[f.kind];
+    const spans = isOpening
+      ? openingSpans(measuredFaces ? measuredFaces.lo : f.tMin, measuredFaces ? measuredFaces.hi : f.tMax, f.through, depths?.get(f.featureId))
+      : [{ suffix: '', lo: f.tMin, hi: f.tMax }];
+    for (const span of spans) {
+      const origin = new THREE.Vector3(...f.origin);
+      const axis = new THREE.Vector3(...f.axis);
+      const start = origin.clone().addScaledVector(axis, span.lo - t0).applyMatrix4(matrixWorld);
+      const end = origin.clone().addScaledVector(axis, span.hi - t0).applyMatrix4(matrixWorld);
+      origin.applyMatrix4(matrixWorld);
+      axis.transformDirection(matrixWorld);
+      result.push({
+        instanceId,
+        featureId: f.featureId + span.suffix,
+        kind: f.kind,
+        origin,
+        axis,
+        start,
+        end,
+        radiusMm: f.radiusMm,
+        through: isOpening ? span.through : f.through,
+        ...(f.kind === 'pin'
+          ? { freeAtStart: pinEnds?.get(f.featureId)?.lo ?? true, freeAtEnd: pinEnds?.get(f.featureId)?.hi ?? true }
+          : {})
+      });
+    }
   }
   return result;
 }
@@ -357,6 +452,32 @@ const projectRange = (a, b, origin, axis) => {
   return ta <= tb ? [ta, tb] : [tb, ta];
 };
 
+/** True when two axis lines are parallel within 2° and within 0.25 mm of each other. */
+function linesCoincide(originA, axisA, originB, axisB) {
+  if (Math.abs(axisA.dot(axisB)) < PARALLEL_MIN_DOT) return false;
+  _v.subVectors(originB, originA);
+  const along = _v.dot(axisA);
+  return _v.lengthSq() - along * along <= MAX_LINE_DISTANCE_MM * MAX_LINE_DISTANCE_MM;
+}
+
+/**
+ * When `insert` and `opening` share an axis line, returns their spans along the insert's axis
+ * ({ iMin, iMax, oMin, oMax }) and how much they overlap (`overlap`, negative = gap). Otherwise null.
+ */
+function coaxialSpans(insert, opening) {
+  if (!linesCoincide(insert.origin, insert.axis, opening.origin, opening.axis)) return null;
+  const [iMin, iMax] = projectRange(insert.start, insert.end, insert.origin, insert.axis);
+  const [oMin, oMax] = projectRange(opening.start, opening.end, insert.origin, insert.axis);
+  return { iMin, iMax, oMin, oMax, overlap: Math.min(iMax, oMax) - Math.max(iMin, oMin) };
+}
+
+/** Insert/opening roles for a selected and an other feature, or null when they don't fit together. */
+function pairRoles(s, o) {
+  if (OPENINGS_BY_INSERT[s.kind]?.has(o.kind)) return { insert: s, opening: o };
+  if (OPENINGS_BY_INSERT[o.kind]?.has(s.kind)) return { insert: o, opening: s };
+  return null;
+}
+
 /**
  * When `opening` lines up with `insert` and the insert is still outside it, returns
  * { face, farFace, outward }: the world points of the opening's face toward the insert and its
@@ -364,16 +485,9 @@ const projectRange = (a, b, origin, axis) => {
  * Otherwise null.
  */
 function facesIfAlignedAndOutside(insert, opening) {
-  if (Math.abs(insert.axis.dot(opening.axis)) < PARALLEL_MIN_DOT) return null;
-
-  _v.subVectors(opening.origin, insert.origin);
-  const along = _v.dot(insert.axis);
-  const perpSq = _v.lengthSq() - along * along;
-  if (perpSq > MAX_LINE_DISTANCE_MM * MAX_LINE_DISTANCE_MM) return null;
-
-  const [iMin, iMax] = projectRange(insert.start, insert.end, insert.origin, insert.axis);
-  const [oMin, oMax] = projectRange(opening.start, opening.end, insert.origin, insert.axis);
-  const overlap = Math.min(iMax, oMax) - Math.max(iMin, oMin);
+  const spans = coaxialSpans(insert, opening);
+  if (!spans) return null;
+  const { iMin, iMax, oMin, oMax, overlap } = spans;
   if (overlap > OUTSIDE_OVERLAP_ALLOWANCE_MM || -overlap > MAX_AXIAL_GAP_MM) return null;
 
   // The insert sits entirely on one side of the opening; pick the opening end on that side.
@@ -410,17 +524,9 @@ export function findAlignedOpenings(selectedFeatures, otherFeatures) {
   for (const s of selectedFeatures) {
     for (const o of otherFeatures) {
       if (s.instanceId === o.instanceId) continue;
-      let insert = null;
-      let opening = null;
-      if (OPENINGS_BY_INSERT[s.kind]?.has(o.kind)) {
-        insert = s;
-        opening = o;
-      } else if (OPENINGS_BY_INSERT[o.kind]?.has(s.kind)) {
-        insert = o;
-        opening = s;
-      } else {
-        continue;
-      }
+      const roles = pairRoles(s, o);
+      if (!roles) continue;
+      const { insert, opening } = roles;
       const key = `${opening.instanceId}:${opening.featureId}`;
       if (hits.has(key)) continue;
       const faces = facesIfAlignedAndOutside(insert, opening);
@@ -446,6 +552,48 @@ export function findAlignedOpenings(selectedFeatures, otherFeatures) {
     insertStart: insert.start,
     insertEnd: insert.end
   }));
+}
+
+/**
+ * The selected part's engaged joints: pairs where one part's pin/shaft sits inside the other's
+ * opening (same pairing and axis rules as findAlignedOpenings, axial overlap above
+ * OUTSIDE_OVERLAP_ALLOWANCE_MM, i.e. exactly the pairs facesIfAlignedAndOutside rejects as already
+ * inside). Pairs on the same axis line are merged. Returns { lines: [{ origin, axis, pairs }] } with
+ * `axis` pointing the same way for every pair of a line; each pair is { insert, opening }.
+ */
+export function findEngagedJoints(selectedFeatures, otherFeatures) {
+  const lines = [];
+  for (const pair of findSeatedPairs(selectedFeatures, otherFeatures)) {
+    const s = pair.featureA;
+    let line = lines.find((l) => linesCoincide(l.origin, l.axis, s.origin, s.axis));
+    if (!line) {
+      line = { origin: s.origin.clone(), axis: s.axis.clone(), pairs: [] };
+      lines.push(line);
+    }
+    line.pairs.push({ insert: pair.insert, opening: pair.opening });
+  }
+  return { lines };
+}
+
+/**
+ * Every pin/shaft-in-opening pair between features of `featuresA` and of `featuresB` (different
+ * parts) that is seated: matching kinds, axes within 2° and 0.25 mm, and overlapping along the axis
+ * by more than OUTSIDE_OVERLAP_ALLOWANCE_MM. [{ insert, opening, overlapMm, featureA }], where
+ * `featureA` is whichever of the two came from `featuresA`.
+ */
+export function findSeatedPairs(featuresA, featuresB) {
+  const pairs = [];
+  for (const a of featuresA) {
+    for (const b of featuresB) {
+      if (a.instanceId === b.instanceId) continue;
+      const roles = pairRoles(a, b);
+      if (!roles) continue;
+      const spans = coaxialSpans(roles.insert, roles.opening);
+      if (!spans || spans.overlap <= OUTSIDE_OVERLAP_ALLOWANCE_MM) continue;
+      pairs.push({ ...roles, overlapMm: spans.overlap, featureA: a });
+    }
+  }
+  return pairs;
 }
 
 const maxAlong = (a, b, dir) => Math.max(a.dot(dir), b.dot(dir));
