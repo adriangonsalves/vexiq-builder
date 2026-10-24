@@ -7,7 +7,12 @@ Lets the user finish a pin or shaft joint with a double-click once the aligned-h
 ## Requirements
 
 ### Requirement: Mate directions come from the current highlights
-The system SHALL derive the possible mate directions for the selected part from exactly the pin/shaft-to-opening pairs that the aligned-hole highlighting currently shows. Each pair gives one direction of travel for the selected part along the pair's shared axis: toward the opening when the selected part holds the pin or shaft, and toward the pin or shaft when the selected part holds the opening. Directions within 2° of each other SHALL count as one direction, and all pairs in that direction mate together in one move.
+The system SHALL derive the possible mate directions for the selected part from exactly the pairs that the aligned-hole highlighting currently shows: pin/shaft-to-opening pairs and hole-to-hole pairs. Each pair gives one direction of travel for the selected part along the pair's shared axis:
+- toward the opening when the selected part holds the pin or shaft;
+- toward the pin or shaft when the selected part holds the opening;
+- toward the other part's hole for a hole-to-hole pair.
+
+Directions within 2° of each other SHALL count as one direction, and all pairs in that direction mate together in one move.
 
 #### Scenario: Pin above a beam
 - **WHEN** the selected Connector Pin lines up with one beam hole below it
@@ -29,8 +34,12 @@ The system SHALL derive the possible mate directions for the selected part from 
 - **WHEN** no highlights are showing for the selected part
 - **THEN** there are no mate directions
 
+#### Scenario: Beam over a beam
+- **WHEN** the selected 1x6 Beam's holes line up with another beam's holes 4 mm below it
+- **THEN** there is one mate direction, pointing down toward the other beam
+
 ### Requirement: Double-click mates in the only direction
-When the user double-clicks the selected part and it has exactly one mate direction, the system SHALL mate it in that direction immediately. The double-click counts when the selected part is anywhere under the pointer, including behind another part. When the selected part is under the pointer but another part is in front, a single click SHALL wait one double-click interval (about 350 ms) before selecting the front part, so the two clicks of a double-click don't move the selection away. Double-clicking SHALL NOT mate when the part is locked, when Explode view is on, or when the double-click lands on a gizmo arrow, plane or ring handle. When the selected part has no mate directions, a double-click SHALL start hole picking (see hole-pick-insert) if the part has at least one pin, peg or shaft, and otherwise SHALL leave the part where it is and show a message.
+When the user double-clicks the selected part and it has exactly one mate direction, the system SHALL mate it in that direction immediately. The double-click counts when the selected part is anywhere under the pointer, including behind another part. When the selected part is under the pointer but another part is in front, a single click SHALL wait one double-click interval (about 350 ms) before selecting the front part, so the two clicks of a double-click don't move the selection away. Double-clicking SHALL NOT mate when the part is locked, when Explode view is on, or when the double-click lands on a gizmo arrow, plane or ring handle. When the selected part has no mate directions, a double-click SHALL start hole picking (see hole-pick-insert) if the part has at least one pin, peg or shaft, and otherwise SHALL leave the part where it is and show a message. When the part's only mate direction comes from hole-to-hole pairs alone, and the part has pins, pegs or shafts that line up with nothing, a double-click SHALL NOT mate immediately. Instead it SHALL show the direction's arrow (see "Arrows to choose between several directions") and start hole picking at the same time, so the user can either stack along the holes or insert the pins elsewhere.
 
 #### Scenario: Double-click a lined-up pin
 - **WHEN** the user double-clicks a selected pin that lines up with one beam hole
@@ -56,8 +65,12 @@ When the user double-clicks the selected part and it has exactly one mate direct
 - **WHEN** the user double-clicks a selected beam (no pins, pegs or shafts) that has no mate directions
 - **THEN** nothing moves and a message says nothing is lined up to mate with
 
+#### Scenario: Holes lined up, pins not
+- **WHEN** the user double-clicks a selected corner connector whose flange holes line up with a beam's holes but whose pegs line up with nothing
+- **THEN** nothing moves yet: an arrow shows the stacking direction, and hole picking starts for the pegs
+
 ### Requirement: Arrows to choose between several directions
-When the user double-clicks the selected part and it has more than one mate direction, the system SHALL NOT move the part. Instead it SHALL show one large arrow per mate direction, starting at the part and pointing the way it would move, visible through other parts, and SHALL hide the move/rotate gizmo while the arrows are shown. Hovering an arrow SHALL highlight it. Clicking an arrow SHALL mate in that direction and remove the arrows. Pressing Esc, clicking anywhere other than an arrow, starting a drag, or changing the selection SHALL remove the arrows without moving anything.
+When the user double-clicks the selected part and it has more than one mate direction, or one direction that comes from hole-to-hole pairs alone while its pins line up with nothing (see "Double-click mates in the only direction"), the system SHALL NOT move the part. Instead it SHALL show one large arrow per mate direction, starting at the part and pointing the way it would move, visible through other parts, and SHALL hide the move/rotate gizmo while the arrows are shown. Hovering an arrow SHALL highlight it. Clicking an arrow SHALL mate in that direction and remove the arrows. Pressing Esc, clicking anywhere other than an arrow, starting a drag, or changing the selection SHALL remove the arrows without moving anything. When hole picking runs alongside the arrows, clicking a highlighted hole SHALL insert the part there and remove the arrows. Clicking an arrow SHALL end picking, and Esc or a click on neither SHALL end both.
 
 #### Scenario: Two directions
 - **WHEN** the user double-clicks a corner connector with mate directions +X and +Z
@@ -74,6 +87,14 @@ When the user double-clicks the selected part and it has more than one mate dire
 #### Scenario: Click elsewhere
 - **WHEN** arrows are showing and the user clicks on another part or empty space
 - **THEN** the arrows disappear and nothing moves (the click selects or deselects as usual)
+
+#### Scenario: Pins and holes lined up in different directions
+- **WHEN** a selected corner connector's pegs line up with one beam's holes and its flange holes line up with another beam's holes, in a different direction
+- **THEN** a double-click shows two arrows, one per direction, and nothing moves until one is clicked
+
+#### Scenario: Arrow and picking together
+- **WHEN** the arrow for stacking along the holes is shown with hole picking for the pegs, and the user clicks a highlighted hole elsewhere
+- **THEN** the part is inserted into that hole by its peg, and the arrow goes away
 
 ### Requirement: The move stops at contact
 Mating SHALL first shift the selected part sideways by the small offset (at most the 0.25 mm alignment tolerance) that puts the pin or shaft exactly on the opening's axis, using the nearest lined-up pair in that direction. It SHALL then move the part straight along the direction until it first touches another part, and stop at the touching position (the same flush-contact boundary the drag uses, including its 0.25 × pitch flush seat). It SHALL keep looking for contact for as long as the pin or shaft is still inside one of the lined-up openings (until its trailing end would leave the far face of the farthest one), even after its leading end has come out the far side. The saved position MUST NOT overlap any part: if rounding the position puts it into contact, the part is backed off along the move until it is clear. The part SHALL NOT be rotated.
@@ -123,3 +144,14 @@ A completed mate SHALL update the part's position the same way releasing a drag 
 #### Scenario: Server sync
 - **WHEN** a mate completes
 - **THEN** the new position is sent to the assembly server just like a drag release
+
+### Requirement: Stacking parts by their holes
+Mating along a direction that has hole-to-hole pairs SHALL apply the same sideways correction (at most 0.25 mm) as other mates. It SHALL then move the selected part along the direction until it first touches another part, and stop there, using the same contact and flush rules as other mates. Without contact, it SHALL stop when the selected part's hole face reaches the other part's hole face. A direction that also has pin/shaft pairs SHALL use the longest travel among its pairs, as today. A completed stack SHALL be saved like any mate, with the message "Stacked on <part>" when the direction had only hole-to-hole pairs.
+
+#### Scenario: Corner connector onto a beam
+- **WHEN** the user double-clicks a selected corner connector whose holes line up with a beam's holes 5 mm away
+- **THEN** it moves 5 mm along the hole axis and stops with its face flat on the beam, not overlapping, and the message says "Stacked on 2x12 Beam #1"
+
+#### Scenario: Ready to pin
+- **WHEN** a beam has been stacked onto another beam this way
+- **THEN** a connector pin moved over one of the shared holes highlights both beams' holes and mates through both

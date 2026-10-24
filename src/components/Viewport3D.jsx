@@ -18,6 +18,7 @@ import {
   measureOpeningPassRadii,
   measureOpeningSurfaces,
   measurePinEnds,
+  mateAction,
   measureShaftProfiles,
   openFaces,
   planMates,
@@ -301,6 +302,7 @@ function createHoleHighlightOverlay() {
   return { group, show, dispose };
 }
 
+const TOUCH_PROBE_MM = 2 * COLLISION_EROSION_MM + 0.15; // closer than this (~0.9 mm) counts as touching
 const PICK_COLOR = 0x22d3ee; // cyan: the hovered hole and the preview while picking a hole
 const PICK_TAKEN_COLOR = 0x9ca3af; // grey: a hovered hole that already has a part in it
 
@@ -1326,6 +1328,28 @@ export default function Viewport3D({
   };
 
   /**
+   * Hole-to-hole pairs only count while the two parts are apart: a hole's face often sits recessed
+   * in its part, so the faces of stacked parts' holes never meet. Drops the hole pairs of every
+   * direction in which moving the part TOUCH_PROBE_MM toward the other part already touches
+   * something. The probe must exceed the collision meshes' contact tolerance (0.38 mm shrink per
+   * part, so up to 0.76 mm of overlap goes unseen), or a part sitting flush would never count.
+   */
+  const dropTouchingHolePairs = (group, aligned) => {
+    if (!aligned.some((a) => a.pairKind === 'hole')) return aligned;
+    const saved = group.position.clone();
+    const touching = [];
+    for (const a of aligned) {
+      if (a.pairKind !== 'hole' || touching.some((d) => d.dot(a.outward) >= 0.9994)) continue;
+      group.position.copy(saved).addScaledVector(a.outward, -TOUCH_PROBE_MM);
+      if (checkGroupCollision(group, false)) touching.push(a.outward);
+    }
+    group.position.copy(saved);
+    group.updateMatrixWorld(true);
+    if (touching.length === 0) return aligned;
+    return aligned.filter((a) => a.pairKind !== 'hole' || !touching.some((d) => d.dot(a.outward) >= 0.9994));
+  };
+
+  /**
    * Highlights (see-through) every opening lined up with the selected part's pins/shafts, and the
    * selected part's openings lined up with other parts' pins/shafts, while the insert is still outside.
    */
@@ -1368,7 +1392,7 @@ export default function Viewport3D({
       if (reachBox && other.box && !reachBox.intersectsBox(other.box)) continue;
       for (const f of other.features) candidates.push(f);
     }
-    lastAlignedRef.current = findAlignedOpenings(selectedFeatures, candidates);
+    lastAlignedRef.current = dropTouchingHolePairs(group, findAlignedOpenings(selectedFeatures, candidates));
     overlay.show(lastAlignedRef.current);
   };
 
@@ -1379,7 +1403,7 @@ export default function Viewport3D({
     arrows.hide();
     arrowPlansRef.current = [];
     const transform = transformRef.current;
-    if (transform) {
+    if (transform && !pickModeRef.current) {
       transform.enabled = true;
       transform.getHelper().visible = transform.object !== undefined;
     }
@@ -1477,6 +1501,7 @@ export default function Viewport3D({
       feedback(message);
       return;
     }
+    const stacked = plan.pairs.length > 0 && plan.pairs.every((p) => p.pairKind === 'hole');
 
     const partnerIds = new Set(
       plan.pairs.map((p) => (p.insertInstanceId === selId ? p.instanceId : p.insertInstanceId))
@@ -1484,7 +1509,7 @@ export default function Viewport3D({
     const labels = [...partnerIds].map(
       (id) => instancesRef.current.find((i) => i.instanceId === id)?.label || id
     );
-    feedback(`Mated with ${labels.join(', ')}`);
+    feedback(`${stacked ? 'Stacked on' : 'Mated with'} ${labels.join(', ')}`);
   };
 
   // --- Hole picking (openspec: hole-pick-insert) -----------------------------------------------------
@@ -1500,7 +1525,8 @@ export default function Viewport3D({
       return;
     }
     const name = pickLabelOf(pick.selId);
-    let text = `Pick a hole for ${name}: point at a hole, click to insert, Esc to cancel`;
+    const arrowHint = pick.alongsideArrows ? ', or click the arrow to stack along the lined-up holes' : '';
+    let text = `Pick a hole for ${name}: point at a hole, click to insert${arrowHint}, Esc to cancel`;
     let tone = 'info';
     if (pick.hovered?.taken) {
       text = 'That hole already has a part in it';
@@ -1510,7 +1536,7 @@ export default function Viewport3D({
       tone = 'warning';
     } else if (pick.hovered) {
       const fit = pick.fits[pick.fitIndex];
-      text = `${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length} · ${fit.green} of ${fit.total} pins in holes. Click to insert, wheel or R for other fits, Esc to cancel`;
+      text = `${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length} · ${fit.green} of ${fit.total} pins in holes. Click to insert, wheel or R for other fits${arrowHint}, Esc to cancel`;
     }
     if (pick.message) {
       text = pick.message;
@@ -1537,7 +1563,7 @@ export default function Viewport3D({
    * gathers every open face of every other part's openings that one of its inserts fits.
    * Returns false (nothing started) for parts without inserts.
    */
-  const startPick = () => {
+  const startPick = ({ alongsideArrows = false } = {}) => {
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     const partMeta = group ? catalogMapRef.current.get(group.userData.partId) : null;
@@ -1565,7 +1591,8 @@ export default function Viewport3D({
       hovered: null,
       fits: [],
       fitIndex: 0,
-      message: null
+      message: null,
+      alongsideArrows
     };
     const transform = transformRef.current;
     if (transform) {
@@ -1580,8 +1607,10 @@ export default function Viewport3D({
 
   /** Leaves hole picking without changing the part, and gives the gizmo back. */
   const endPick = () => {
-    if (!pickModeRef.current) return;
+    const pick = pickModeRef.current;
+    if (!pick) return;
     pickModeRef.current = null;
+    if (pick.alongsideArrows) hideMateArrows();
     pickOverlayRef.current?.clear();
     const transform = transformRef.current;
     if (transform) {
@@ -1707,13 +1736,21 @@ export default function Viewport3D({
       return;
     }
     const plans = planMates(lastAlignedRef.current, selId);
-    if (plans.length === 0) {
+    // Only its holes line up (hole to hole) while its own pins/shafts line up with nothing: offer the
+    // stacking arrow and hole picking for the pins together, instead of stacking straight away
+    const partMeta = catalogMapRef.current.get(group.userData.partId);
+    const hasInserts = getLocalFeatures(partMeta).some((f) => f.kind === 'pin' || f.kind === 'shaft');
+    const action = mateAction(plans, hasInserts);
+    if (action === 'none') {
+      feedback('Nothing lined up to mate with', true);
+    } else if (action === 'pick') {
       // Nothing lined up: a part with pins or shafts can pick any hole instead
-      if (!startPick()) feedback('Nothing lined up to mate with', true);
-    } else if (plans.length === 1) {
+      startPick();
+    } else if (action === 'mate') {
       mateSelected(plans[0]);
     } else {
       showMateArrows(plans, group);
+      if (action === 'arrows+pick') startPick({ alongsideArrows: true });
     }
   };
 
@@ -2344,6 +2381,11 @@ export default function Viewport3D({
             isIntersecting: isColliding
           });
         }
+      }
+      if (!event.value) {
+        // Always clear after any drag ends, even when the part was detached mid-drag (selection
+        // changed, an undo, or the scene replaced by MCP or another tab); a stuck flag made every
+        // later click in the viewport be ignored
         setTimeout(() => {
           wasDraggingRef.current = false;
         }, 30);
@@ -2361,6 +2403,8 @@ export default function Viewport3D({
 
     const handlePointerDown = (e) => {
       pointerDownPos.set(e.clientX, e.clientY);
+      // A new press that isn't grabbing the gizmo starts clean, so a missed drag end can't block clicks
+      if (!transform.dragging) wasDraggingRef.current = false;
     };
 
     const projectToCanvas = (point) => {
@@ -2525,6 +2569,18 @@ export default function Viewport3D({
       if (pickModeRef.current) {
         // Picking: a click inserts into the hovered hole (or leaves); a drag just turns the camera
         if (Math.hypot(dx, dy) <= 5) {
+          // With the stacking arrow shown alongside, a click on the arrow mates along it instead
+          if (arrowOverlay.isShown()) {
+            setRayFromEvent(e);
+            const index = arrowOverlay.pick(raycaster);
+            const plan = index >= 0 ? arrowPlansRef.current[index] : null;
+            if (plan) {
+              endPick();
+              lastArrowClickAt = performance.now();
+              mateSelected(plan);
+              return;
+            }
+          }
           const rect = renderer.domElement.getBoundingClientRect();
           updatePickHover(e.clientX - rect.left, e.clientY - rect.top);
           pickClick();
@@ -2566,6 +2622,10 @@ export default function Viewport3D({
     let pickHoverAt = null;
     const handlePointerMove = (e) => {
       if (pickModeRef.current) {
+        if (arrowOverlay.isShown()) {
+          setRayFromEvent(e);
+          arrowOverlay.setHover(arrowOverlay.pick(raycaster));
+        }
         const rect = renderer.domElement.getBoundingClientRect();
         pickHoverAt = [e.clientX - rect.left, e.clientY - rect.top];
         if (!pickHoverFrame) {

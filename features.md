@@ -51,6 +51,7 @@
     - Apart from that settle, the pull only moves the part along the axes being dragged.
     - It works at any angle, because it uses the real hole lines, not the grid. Plates turned in their own plane or tilted on another axis snap the same way.
     - Dragged axes that run along the hole's line stay on the pitch grid, so a shaft can still be slid in and out in steps.
+    - **Holes pull onto holes too:** a hole of the moving part pulls onto a hole of another part when a shaft would fit both (pin holes, shaft bores, the Smart Motor's drive socket, rubber collar holes). This lines up a corner connector or a beam against a beam, a gear's bore over a beam hole, or a motor's socket over a beam hole for an axle through the beam. The same 3.5 mm / 2 pitch / 1 mm settle rules apply.
     - Hold **`Alt`** while dragging to move without hole snapping.
   - **Shaft caps don't pass through holes:**
     - Collision meshes are shrunk `0.38 mm` per part so pins and shafts fit their holes. That hid small overlaps, such as a capped shaft's cap (radius about `2.37 mm`) in a beam hole (about `2.10 mm`).
@@ -82,6 +83,10 @@
 - **Double-Click Mating:**
   - With rings showing, **double-click the selected part** (it can be behind another part) to finish the joint: it is shifted sideways onto the hole's axis (at most `0.25 mm`), then moved straight along the axis until it touches the receiving part (pin cap or shoulder on the face, shaft at the bottom of the motor socket), using the same flush-contact stop as dragging. It keeps going while the pin or shaft is still in the holes, so a pin goes all the way in even after its tip comes out the far side. The saved position is checked so the part never ends up overlapping. It is never rotated.
   - Works both ways: a pin or shaft goes into the lined-up holes, or a beam, gear, or motor moves onto lined-up pins and shafts. Holes lined up in the same direction mate together.
+  - **Holes lined up with holes** (hole to hole, when a shaft would fit both) also get rings while the parts are apart. Double-clicking **stacks** the part along the hole axis until it rests on the other part ("Stacked on …"), ready to pin. The rings go away once the parts touch (closer than about `0.9 mm`, the collision check's contact tolerance).
+  - **A part with both pins and holes:**
+    - When its pins and its holes line up in different directions, double-click shows one arrow per direction.
+    - When only its holes line up and its pins line up with nothing, double-click shows the stacking arrow and starts hole picking for the pins at the same time. Click the arrow to stack, or point at any hole and click to insert the part by a pin there. `Esc` or an empty click cancels both.
   - If nothing is touched while the pin or shaft is in the holes (a plain shaft through beams and gears, a gear onto a shaft), the part stops when the leading end is flush with the far face of the last lined-up hole.
   - Parts that can mate in more than one direction (e.g. the **Triple 2x Wide, 2x2 Corner Connector**, with pins on `+X`, `+Z` and `−Z`) show **one large orange arrow per direction** instead, and the gizmo hides. **Click an arrow** to mate that way; `Esc`, clicking elsewhere, or a selection change cancels.
   - The result is saved and synced like a drag release, and a message appears in the Inspector ("Mated with …", "Nothing lined up to mate with", "Part is locked", "Can't mate: already touching another part").

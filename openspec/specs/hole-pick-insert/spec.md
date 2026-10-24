@@ -7,7 +7,7 @@ Lets the user insert the selected pin, peg or shaft part into any hole in the mo
 ## Requirements
 
 ### Requirement: Starting and leaving hole picking
-Hole picking SHALL start when the user double-clicks a selected part that has no mate directions and has at least one pin, peg or shaft (see pin-mating). It SHALL NOT start for a locked part or in Explode view (the existing messages apply).
+Hole picking SHALL start when the user double-clicks a selected part that has no mate directions and has at least one pin, peg or shaft (see pin-mating). It SHALL also start, alongside the mate arrows, when the part's mate directions come only from hole-to-hole pairs and its pins, pegs or shafts line up with nothing. Then clicking an arrow mates along it and ends picking, and clicking a highlighted hole inserts and removes the arrows. It SHALL NOT start for a locked part or in Explode view (the existing messages apply).
 While picking:
 - a banner SHALL name the part and the controls (point at a hole, wheel or `R` for other fits, click to insert, `Esc` to cancel);
 - the move/rotate gizmo SHALL be hidden;
@@ -23,6 +23,10 @@ Picking SHALL end without changing anything when the user presses `Esc`, clicks 
 #### Scenario: Cancel
 - **WHEN** the user is picking and presses `Esc`
 - **THEN** the banner and preview go away, the gizmo comes back, and the history has no new step
+
+#### Scenario: Picking alongside an arrow
+- **WHEN** a corner connector whose holes line up with a beam (pegs lined up with nothing) is double-clicked
+- **THEN** the picking banner appears together with the stacking arrow
 
 ### Requirement: Hovering a hole
 While picking, the system SHALL highlight the one hole under or nearest the cursor, within about 24 screen pixels of one of its faces, that at least one of the selected part's pins, pegs or shafts fits, using the same fit rules as the hole highlights:

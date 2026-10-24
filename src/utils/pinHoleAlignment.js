@@ -600,17 +600,36 @@ function pairRoles(s, o) {
   return null;
 }
 
+// Gap the facing faces of two lined-up holes must have for them to count as apart (not stacked)
+const HOLE_APART_MIN_MM = 0.05;
+
+/**
+ * Hole-to-hole pair of a selected part's opening `s` and another part's opening `o`: they pair when
+ * a shaft fits both (an axle could run through both: pin holes, shaft bores, the motor's drive
+ * socket, rubber collar holes). The selected hole takes the insert role. Null otherwise.
+ */
+function holeRoles(s, o) {
+  const shaftFits = OPENINGS_BY_INSERT.shaft;
+  if (!shaftFits.has(s.kind) || !shaftFits.has(o.kind)) return null;
+  return { insert: s, opening: o, hole: true };
+}
+
+/** Pin/shaft-to-opening roles, or else hole-to-hole roles (design.md §1 of hole-to-hole-alignment). */
+const pairOf = (s, o) => pairRoles(s, o) ?? holeRoles(s, o);
+
 /**
  * When `opening` lines up with `insert` and the insert is still outside it, returns
  * { face, farFace, outward }: the world points of the opening's face toward the insert and its
  * opposite face, and the unit axis direction pointing from the opening out toward the insert.
  * Otherwise null.
  */
-function facesIfAlignedAndOutside(insert, opening) {
+function facesIfAlignedAndOutside(insert, opening, hole = false) {
   const spans = coaxialSpans(insert, opening);
   if (!spans) return null;
   const { iMin, iMax, oMin, oMax, overlap } = spans;
-  if (overlap > OUTSIDE_OVERLAP_ALLOWANCE_MM || -overlap > MAX_AXIAL_GAP_MM) return null;
+  // Two holes count while apart (faces not touching); a pin/shaft while outside the opening
+  if (hole ? -overlap <= HOLE_APART_MIN_MM : overlap > OUTSIDE_OVERLAP_ALLOWANCE_MM) return null;
+  if (-overlap > MAX_AXIAL_GAP_MM) return null;
 
   // The insert sits entirely on one side of the opening; pick the opening end on that side.
   const insertAbove = iMin + iMax > oMin + oMax;
@@ -646,16 +665,18 @@ export function findAlignedOpenings(selectedFeatures, otherFeatures) {
   for (const s of selectedFeatures) {
     for (const o of otherFeatures) {
       if (s.instanceId === o.instanceId) continue;
-      const roles = pairRoles(s, o);
+      const roles = pairOf(s, o);
       if (!roles) continue;
-      const { insert, opening } = roles;
+      const { insert, opening, hole = false } = roles;
       const key = `${opening.instanceId}:${opening.featureId}`;
-      if (hits.has(key)) continue;
-      const faces = facesIfAlignedAndOutside(insert, opening);
-      if (faces) hits.set(key, { opening, insert, ...faces });
+      // One result per opening; a pin/shaft pairing wins over a hole-to-hole one
+      if (hits.has(key) && (hole || !hits.get(key).hole)) continue;
+      const faces = facesIfAlignedAndOutside(insert, opening, hole);
+      if (faces) hits.set(key, { opening, insert, hole, ...faces });
     }
   }
-  return [...hits.values()].map(({ opening, insert, face, farFace, outward }) => ({
+  return [...hits.values()].map(({ opening, insert, hole, face, farFace, outward }) => ({
+    pairKind: hole ? 'hole' : 'insert',
     instanceId: opening.instanceId,
     featureId: opening.featureId,
     kind: opening.kind,
@@ -792,7 +813,7 @@ export function findHoleSnap(
   for (const s of selectedFeatures) {
     for (const o of otherFeatures) {
       if (s.instanceId === o.instanceId) continue;
-      const roles = pairRoles(s, o);
+      const roles = pairOf(s, o);
       if (!roles) continue;
       if (Math.abs(s.axis.dot(o.axis)) < PARALLEL_MIN_DOT) continue;
       const axis = o.axis;
@@ -822,7 +843,8 @@ const minAlong = (a, b, dir) => Math.min(a.dot(dir), b.dot(dir));
  *    on axis;
  *  - travelMm: how far to go when nothing is touched: until the pin/shaft's leading end is flush with
  *    the far face of the farthest opening (relative to the opening, the insert moves along v, so
- *    travel = max_v(opening) − max_v(insert));
+ *    travel = max_v(opening) − max_v(insert)); for a hole-to-hole pair (pairKind 'hole'), until the
+ *    two holes' faces meet, which also bounds sweepMm (the parts stack flush);
  *  - sweepMm: how far to keep looking for contact: as long as the pin/shaft is still in an opening,
  *    i.e. until its trailing end reaches the far face (sweep = max_v(opening) − min_v(insert)). A pin's
  *    shoulder or cap meets the face well inside this range; a plain shaft finds nothing and stops at
@@ -846,10 +868,13 @@ export function planMates(alignedOpenings, selectedId) {
     for (const pair of plan.pairs) {
       const holdsInsert = pair.insertInstanceId === selectedId;
       const v = plan.direction.clone().multiplyScalar(holdsInsert ? 1 : -1);
+      // Two holes stack: go until the faces meet. A pin/shaft goes on into the opening.
+      const faceGap = minAlong(pair.start, pair.end, v) - maxAlong(pair.insertStart, pair.insertEnd, v);
       const travel =
-        maxAlong(pair.start, pair.end, v) - maxAlong(pair.insertStart, pair.insertEnd, v);
+        pair.pairKind === 'hole' ? faceGap : maxAlong(pair.start, pair.end, v) - maxAlong(pair.insertStart, pair.insertEnd, v);
       plan.travelMm = Math.max(plan.travelMm, travel);
-      const sweep = maxAlong(pair.start, pair.end, v) - minAlong(pair.insertStart, pair.insertEnd, v);
+      const sweep =
+        pair.pairKind === 'hole' ? faceGap : maxAlong(pair.start, pair.end, v) - minAlong(pair.insertStart, pair.insertEnd, v);
       plan.sweepMm = Math.max(plan.sweepMm, sweep);
 
       const gap = minAlong(pair.start, pair.end, v) - maxAlong(pair.insertStart, pair.insertEnd, v);
@@ -1079,3 +1104,16 @@ export function listInsertFits({ partMeta, measured = null, instanceId, hovered,
 
 /** True when an insert of `insertKind` ('pin' / 'shaft') fits an opening of `openingKind`. */
 export const insertFitsOpening = (insertKind, openingKind) => Boolean(OPENINGS_BY_INSERT[insertKind]?.has(openingKind));
+
+/**
+ * What a double-click on the selected part does, from its mate plans (planMates) and whether it has
+ * pins/pegs/shafts of its own: 'mate' (one direction, mate now), 'arrows' (choose a direction),
+ * 'arrows+pick' (its only lined-up pairs are hole to hole: offer stacking arrows and hole picking for
+ * its pins together), 'pick' (nothing lined up: pick a hole) or 'none' (nothing to do).
+ */
+export function mateAction(plans, hasInserts) {
+  if (plans.length === 0) return hasInserts ? 'pick' : 'none';
+  const holesOnly = plans.every((p) => p.pairs.every((pair) => pair.pairKind === 'hole'));
+  if (hasInserts && holesOnly) return 'arrows+pick';
+  return plans.length === 1 ? 'mate' : 'arrows';
+}

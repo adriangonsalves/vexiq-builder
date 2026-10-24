@@ -21,7 +21,8 @@ import {
   measureOpeningDepths,
   measureOpeningSurfaces,
   measurePinEnds,
-  planMates
+  planMates,
+  mateAction
 } from '../src/utils/pinHoleAlignment.js';
 
 let failures = 0;
@@ -839,6 +840,100 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   } else {
     check('pick: found a part with pins pointing two ways for the parallel-only check', false);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Hole-to-hole alignment (hole-to-hole-alignment)
+// ---------------------------------------------------------------------------
+{
+  const inst = (id, name, position, rotation = [0, 0, 0]) => ({ instanceId: id, label: id, partId: part(name).id, position, rotation });
+  const X = new THREE.Vector3(1, 0, 0);
+  const beam = inst('beam', '2x12 Beam', [0, 0, 0]); // holes along Z, top face z = 3.05
+  const beamF = worldFeaturesFor(beam);
+  // 2x2 corner connector turned so its holes point down at the beam; its lowest point is 6.2 below its origin
+  const cc = (x, gapMm) => inst('cc', '2x Wide, 2x2 Corner Connector', [x, 0, 3.05 + gapMm + 6.2], [90, 0, 0]);
+
+  // 1.1 rings
+  let al = findAlignedOpenings(worldFeaturesFor(cc(6.35, 5)), beamF);
+  check(
+    'hole-to-hole: corner connector 5 mm above a beam: its two lined-up holes ring the beam holes, on the face toward it',
+    al.length === 2 && al.every((a) => a.pairKind === 'hole' && a.outward.z > 0.999 && a.face.z > 0),
+    JSON.stringify(al.map((a) => [a.pairKind, a.featureId, a.insertFeatureId, a.face.z.toFixed(2)]))
+  );
+  const pushedIn = inst('cc', '2x Wide, 2x2 Corner Connector', [6.35, 0, 6.2], [90, 0, 0]);
+  check('  holes that overlap along the axis (pushed into each other) are not offered', findAlignedOpenings(worldFeaturesFor(pushedIn), beamF).every((a) => a.pairKind !== 'hole'));
+  check('  holes of the same part never pair', findAlignedOpenings(beamF, beamF).length === 0);
+  const motorAt = (dx, gapMm) => inst('motor', 'VEX IQ Smart Motor', [25.4 + 9.525 + dx, 0, 3.05 + gapMm], [-90, 0, 0]); // socket facing down
+  al = findAlignedOpenings(worldFeaturesFor(motorAt(0, 4)), beamF);
+  check(
+    'hole-to-hole: a Smart Motor 4 mm above a beam lines its drive socket up with a beam hole (and its mounting holes too)',
+    al.some((a) => a.insertFeatureId === 'motor_drive_socket' && a.featureId === 'hole_22' && a.pairKind === 'hole') && al.length > 1,
+    JSON.stringify(al.map((a) => [a.featureId, a.insertFeatureId]))
+  );
+  check(
+    '  pin/shaft cases keep pairKind "insert"',
+    findAlignedOpenings(worldFeaturesFor(inst('pin', '0x2 Connector Pin', [25.4, 0, 12])), beamF).every((a) => a.pairKind === 'insert')
+  );
+
+  // 1.2 drag pull
+  const snapX = (sel) => findHoleSnap(worldFeaturesFor(sel), beamF, [X]);
+  let snap = snapX(cc(6.35 + 2, 1));
+  check('hole-to-hole snap: corner connector 2 mm off along X, 1 mm above: pulled onto the beam holes', snap && near(snap.offset.x, -2) && near(snap.offset.y, 0) && near(snap.offset.z, 0), JSON.stringify(snap?.offset));
+  const lower = inst('lower', '1x6 Beam', [0, 0, 0]);
+  const upper = inst('upper', '1x6 Beam', [1.5, 0, 6.1 + 3]);
+  snap = findHoleSnap(worldFeaturesFor(upper), worldFeaturesFor(lower), [X]);
+  check('hole-to-hole snap: a 1x6 Beam 1.5 mm off over another, faces 3 mm apart: pulled into line', snap && near(snap.offset.x, -1.5), JSON.stringify(snap?.offset));
+  snap = snapX(inst('gear', '36 Tooth Gear', [25.4 + 3, 0, 3.05 + 3.175 + 2]));
+  check('hole-to-hole snap: a 36T gear bore 3 mm from a beam hole line: pulled onto it', snap && near(snap.offset.x, -3), JSON.stringify(snap?.offset));
+  snap = snapX(motorAt(3, 3));
+  check('hole-to-hole snap: a Smart Motor 3 mm off with its socket over a beam hole: pulled so the socket lines up', snap && near(snap.offset.x, -3), JSON.stringify(snap?.offset));
+
+  // 1.3 stacking plans
+  const start = cc(6.35, 5);
+  const plans = planMates(findAlignedOpenings(worldFeaturesFor(start), beamF), 'cc');
+  check('hole-to-hole plan: one direction, straight down at the beam', plans.length === 1 && plans[0].direction.z < -0.999 && plans[0].pairs.length === 2, JSON.stringify(plans.map((p) => p.direction.toArray())));
+  // Run it like mateSelected: step until contact (or travel), the part must end flush on the beam
+  const at = (d) => ({ ...start, position: [start.position[0], start.position[1], start.position[2] - d] });
+  let d = 0;
+  while (d < plans[0].sweepMm && !checkCandidateCollision(at(d + 0.05), [beam]).isIntersecting) d += 0.05;
+  // Contact is found on the shrunk collision meshes (0.38 mm per part), so flat faces register within 0.76 mm, as for pin caps
+  check('  stacking stops with the connector resting on the beam (5 mm down, within the 0.76 mm contact tolerance), not overlapping', d >= 5 - 0.06 && d <= 5.76 && !checkCandidateCollision(at(d), [beam]).isIntersecting, `${d.toFixed(2)} mm`);
+  // A direction with both kinds of pair keeps the longer travel
+  const pinPair = { pairKind: 'insert', insertInstanceId: 'cc', outward: new THREE.Vector3(0, 0, 1), start: new THREE.Vector3(0, 0, -3), end: new THREE.Vector3(0, 0, 3), insertStart: new THREE.Vector3(5, 0, 8), insertEnd: new THREE.Vector3(5, 0, 18), origin: new THREE.Vector3(0, 0, 0), insertOrigin: new THREE.Vector3(5, 0, 13), insertAxis: new THREE.Vector3(0, 0, 1) };
+  const holePair = { ...pinPair, pairKind: 'hole', insertStart: new THREE.Vector3(0, 0, 6), insertEnd: new THREE.Vector3(0, 0, 9), insertOrigin: new THREE.Vector3(0, 0, 7.5) };
+  const mixed = planMates([pinPair, holePair], 'cc');
+  check('  a direction with a pin pair and a hole pair gets one plan with the longer travel', mixed.length === 1 && near(mixed[0].travelMm, 11) && near(mixed[0].sweepMm, 21), JSON.stringify(mixed.map((p) => [p.travelMm, p.sweepMm])));
+}
+
+// ---------------------------------------------------------------------------
+// What double-click does when pins and holes line up (mateAction)
+// ---------------------------------------------------------------------------
+{
+  const inst = (id, name, position, rotation = [0, 0, 0]) => ({ instanceId: id, label: id, partId: part(name).id, position, rotation });
+  const ccName = '2x Wide, 2x2 Corner Connector';
+  const hasPins = getLocalFeatures(part(ccName)).some((f) => f.kind === 'pin');
+  const beam = inst('beam', '2x12 Beam', [0, 0, 0]);
+  // Holes over the beam, pegs pointing sideways at nothing
+  const cc = inst('cc', ccName, [6.35, 0, 3.05 + 5 + 6.2], [90, 0, 0]);
+  const ccF = worldFeaturesFor(cc);
+  let plans = planMates(findAlignedOpenings(ccF, worldFeaturesFor(beam)), 'cc');
+  check('double-click: corner connector with only its holes lined up -> stacking arrow plus hole picking', mateAction(plans, hasPins) === 'arrows+pick', `${mateAction(plans, hasPins)} (${plans.length} plans)`);
+  // Also a second beam standing in front of its pegs (pegs point -Y), holes along Y, 4 mm away
+  const pegs = ccF.filter((f) => f.kind === 'pin');
+  // A beam turned upright (Rx 90: its holes run along Y) whose +6.35 row holes sit on the pegs' lines,
+  // its face 4 mm beyond the peg tips
+  const tipY = Math.min(...pegs.flatMap((f) => [f.start.y, f.end.y]));
+  const wall = inst('wall', '2x12 Beam', [0, tipY - 4 - 3.05, pegs[0].origin.z - 6.35], [90, 0, 0]);
+  const wallHoleNear = worldFeaturesFor(wall).some((h) => h.kind === 'pin_hole' && Math.abs(h.axis.y) > 0.99 && Math.hypot(h.origin.x - pegs[0].origin.x, h.origin.z - pegs[0].origin.z) < 0.01);
+  plans = planMates(findAlignedOpenings(ccF, [...worldFeaturesFor(beam), ...worldFeaturesFor(wall)]), 'cc');
+  check(
+    'double-click: pegs lined up with one beam and holes with another (different directions) -> two arrows',
+    wallHoleNear && plans.length === 2 && mateAction(plans, hasPins) === 'arrows',
+    JSON.stringify({ wallHoleNear, plans: plans.map((p) => [p.direction.toArray().map((v) => +v.toFixed(2)), p.pairs.map((x) => x.pairKind)]) })
+  );
+  check('double-click: a lone pin lined up with one hole -> mate now', mateAction(planMates(findAlignedOpenings(worldFeaturesFor(inst('pin', '0x2 Connector Pin', [25.4, 0, 12])), worldFeaturesFor(beam)), 'pin'), true) === 'mate');
+  check('double-click: a beam over a beam (no pins) -> stack now', mateAction(planMates(findAlignedOpenings(worldFeaturesFor(inst('b2', '2x12 Beam', [0, 0, 10])), worldFeaturesFor(beam)), 'b2'), false) === 'mate');
+  check('double-click: nothing lined up -> pick (with pins) or nothing (without)', mateAction([], true) === 'pick' && mateAction([], false) === 'none');
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);

@@ -12293,9 +12293,2065 @@
             }
           }
         ]
+      },
+      {
+        "id": "step-mvmykd6n-fmea6h",
+        "parentId": "step-mvmwl9qk-j2fo2z",
+        "at": 1792880175551,
+        "source": "app",
+        "label": "Delete 2x20 Beam #1",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 0,
+            "part": {
+              "instanceId": "inst-1792873593503-mtgt",
+              "partId": "2x20-beam-228-2500-030-173",
+              "label": "2x20 Beam #1",
+              "position": [
+                47.625,
+                12.7,
+                -3.175
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                47.625,
+                12.7,
+                -3.175
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmykh88-dtjegn",
+        "parentId": "step-mvmykd6n-fmea6h",
+        "at": 1792880180792,
+        "source": "app",
+        "label": "Duplicate 2x18 Beam #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 15,
+            "part": {
+              "instanceId": "inst-1792880180792-tlib",
+              "partId": "2x18-beam-228-2500-029-172",
+              "label": "2x18 Beam #1 (Copy)",
+              "position": [
+                190.5,
+                12.7,
+                -120.65
+              ],
+              "rotation": [
+                0,
+                90,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmykr6u-2yn1k8",
+        "parentId": "step-mvmykh88-dtjegn",
+        "at": 1792880193702,
+        "source": "app",
+        "label": "Rotate 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "rotation": [
+                0,
+                90,
+                0
+              ]
+            },
+            "after": {
+              "rotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyku84-e75e0w",
+        "parentId": "step-mvmykr6u-2yn1k8",
+        "at": 1792880197636,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                190.5,
+                12.7,
+                -120.65
+              ]
+            },
+            "after": {
+              "position": [
+                234.95,
+                -101.6,
+                -63.5
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmykvym-vibg1a",
+        "parentId": "step-mvmyku84-e75e0w",
+        "at": 1792880199886,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                234.95,
+                -101.6,
+                -63.5
+              ]
+            },
+            "after": {
+              "position": [
+                152.4,
+                -101.6,
+                -63.5
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmykxfe-eyvz84",
+        "parentId": "step-mvmykvym-vibg1a",
+        "at": 1792880201786,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                152.4,
+                -101.6,
+                -63.5
+              ]
+            },
+            "after": {
+              "position": [
+                57.15,
+                -57.15,
+                -63.5
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmykyp0-k3l9rk",
+        "parentId": "step-mvmykxfe-eyvz84",
+        "at": 1792880203428,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                57.15,
+                -57.15,
+                -63.5
+              ]
+            },
+            "after": {
+              "position": [
+                57.15,
+                -31.75,
+                -63.5
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyl3kp-7j7cns",
+        "parentId": "step-mvmykyp0-k3l9rk",
+        "at": 1792880209753,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                57.15,
+                -31.75,
+                -63.5
+              ]
+            },
+            "after": {
+              "position": [
+                57.15,
+                -31.75,
+                -111321.85
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyoomv-cxmpc6",
+        "parentId": "step-mvmykr6u-2yn1k8",
+        "at": 1792880377015,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                190.5,
+                12.7,
+                -120.65
+              ]
+            },
+            "after": {
+              "position": [
+                190.5,
+                12.7,
+                25.4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyoqez-qf6swi",
+        "parentId": "step-mvmyoomv-cxmpc6",
+        "at": 1792880379323,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                190.5,
+                12.7,
+                25.4
+              ]
+            },
+            "after": {
+              "position": [
+                47.625,
+                12.7,
+                25.4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyp4fm-3frvlt",
+        "parentId": "step-mvmyoqez-qf6swi",
+        "at": 1792880397490,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                47.625,
+                12.7,
+                25.4
+              ]
+            },
+            "after": {
+              "position": [
+                53.627,
+                12.7,
+                25.4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyp8r6-c7gc9g",
+        "parentId": "step-mvmyp4fm-3frvlt",
+        "at": 1792880403090,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                53.627,
+                12.7,
+                25.4
+              ]
+            },
+            "after": {
+              "position": [
+                53.627,
+                12.7,
+                14.552
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmypak1-sj1k24",
+        "parentId": "step-mvmyp8r6-c7gc9g",
+        "at": 1792880405425,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                53.627,
+                12.7,
+                14.552
+              ]
+            },
+            "after": {
+              "position": [
+                34.652,
+                12.7,
+                14.552
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmypbii-5xccah",
+        "parentId": "step-mvmypak1-sj1k24",
+        "at": 1792880406666,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                34.652,
+                12.7,
+                14.552
+              ]
+            },
+            "after": {
+              "position": [
+                34.652,
+                12.7,
+                -3.448
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmypi3z-wab52x",
+        "parentId": "step-mvmypbii-5xccah",
+        "at": 1792880415215,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                34.652,
+                12.7,
+                -3.448
+              ]
+            },
+            "after": {
+              "position": [
+                43.547,
+                4.381,
+                23.951
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyplc6-4z4vl8",
+        "parentId": "step-mvmypi3z-wab52x",
+        "at": 1792880419398,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                43.547,
+                4.381,
+                23.951
+              ]
+            },
+            "after": {
+              "position": [
+                43.547,
+                9.139,
+                23.951
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmypmg8-dc1ob7",
+        "parentId": "step-mvmyplc6-4z4vl8",
+        "at": 1792880420840,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                43.547,
+                9.139,
+                23.951
+              ]
+            },
+            "after": {
+              "position": [
+                43.547,
+                14.617,
+                23.951
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmypsla-ly7xsh",
+        "parentId": "step-mvmypmg8-dc1ob7",
+        "at": 1792880428798,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                43.547,
+                14.617,
+                23.951
+              ]
+            },
+            "after": {
+              "position": [
+                43.547,
+                14.617,
+                24.542
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmypudm-j1qu0h",
+        "parentId": "step-mvmypsla-ly7xsh",
+        "at": 1792880431114,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                43.547,
+                14.617,
+                24.542
+              ]
+            },
+            "after": {
+              "position": [
+                34.788,
+                14.617,
+                24.542
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmypwt6-2kzi6a",
+        "parentId": "step-mvmypudm-j1qu0h",
+        "at": 1792880434266,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                34.788,
+                14.617,
+                24.542
+              ]
+            },
+            "after": {
+              "position": [
+                34.788,
+                9.418,
+                24.542
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmypxm2-m4ho4u",
+        "parentId": "step-mvmypwt6-2kzi6a",
+        "at": 1792880435306,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                34.788,
+                9.418,
+                24.542
+              ]
+            },
+            "after": {
+              "position": [
+                34.788,
+                9.414,
+                24.542
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyq07d-9hbcgk",
+        "parentId": "step-mvmypxm2-m4ho4u",
+        "at": 1792880438665,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                34.788,
+                9.414,
+                24.542
+              ]
+            },
+            "after": {
+              "position": [
+                34.788,
+                2.92,
+                24.542
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyq5vb-q1v50g",
+        "parentId": "step-mvmyq07d-9hbcgk",
+        "at": 1792880446007,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                34.788,
+                2.92,
+                24.542
+              ]
+            },
+            "after": {
+              "position": [
+                34.788,
+                14.538,
+                24.542
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyqb0h-oweh8u",
+        "parentId": "step-mvmyq5vb-q1v50g",
+        "at": 1792880452673,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                34.788,
+                14.538,
+                24.542
+              ]
+            },
+            "after": {
+              "position": [
+                34.788,
+                14.538,
+                12.716
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyqd5b-zrj9pw",
+        "parentId": "step-mvmyqb0h-oweh8u",
+        "at": 1792880455439,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                34.788,
+                14.538,
+                12.716
+              ]
+            },
+            "after": {
+              "position": [
+                31.239,
+                14.538,
+                12.716
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyqfan-ejxem6",
+        "parentId": "step-mvmyqd5b-zrj9pw",
+        "at": 1792880458223,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                31.239,
+                14.538,
+                12.716
+              ]
+            },
+            "after": {
+              "position": [
+                31.239,
+                13.404,
+                12.716
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyqgml-ykuhcn",
+        "parentId": "step-mvmyqfan-ejxem6",
+        "at": 1792880459949,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                31.239,
+                13.404,
+                12.716
+              ]
+            },
+            "after": {
+              "position": [
+                34.652,
+                12.7,
+                12.716
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyqmo7-bec396",
+        "parentId": "step-mvmyqgml-ykuhcn",
+        "at": 1792880467783,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                34.652,
+                12.7,
+                12.716
+              ]
+            },
+            "after": {
+              "position": [
+                1.629,
+                12.7,
+                12.716
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyqsrx-5xa4h9",
+        "parentId": "step-mvmyqmo7-bec396",
+        "at": 1792880475693,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                1.629,
+                12.7,
+                12.716
+              ]
+            },
+            "after": {
+              "position": [
+                9.252,
+                12.7,
+                12.716
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyqv34-v50m5p",
+        "parentId": "step-mvmyqsrx-5xa4h9",
+        "at": 1792880478688,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                9.252,
+                12.7,
+                12.716
+              ]
+            },
+            "after": {
+              "position": [
+                9.252,
+                12.7,
+                -3.784
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyr5ta-whxr8y",
+        "parentId": "step-mvmyqv34-v50m5p",
+        "at": 1792880492590,
+        "source": "app",
+        "label": "Duplicate 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 16,
+            "part": {
+              "instanceId": "inst-1792880492590-gobg",
+              "partId": "2x18-beam-228-2500-029-172",
+              "label": "2x18 Beam #1 (Copy) (Copy)",
+              "position": [
+                21.952,
+                12.7,
+                -3.784
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyrcf9-n9dz3o",
+        "parentId": "step-mvmyqv34-v50m5p",
+        "at": 1792880501157,
+        "source": "app",
+        "label": "Add 1x4 Low Profile End Lock Beam #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 16,
+            "part": {
+              "instanceId": "inst-1792880501157-mq0t",
+              "partId": "1x4-low-profile-end-lock-beam-228-2500-1548-56",
+              "label": "1x4 Low Profile End Lock Beam #1",
+              "position": [
+                -25.4,
+                12.7,
+                76.19999999999999
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyreo1-a6e487",
+        "parentId": "step-mvmyrcf9-n9dz3o",
+        "at": 1792880504065,
+        "source": "app",
+        "label": "Move 1x4 Low Profile End Lock Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880501157-mq0t",
+            "name": "1x4 Low Profile End Lock Beam #1",
+            "before": {
+              "position": [
+                -25.4,
+                12.7,
+                76.19999999999999
+              ]
+            },
+            "after": {
+              "position": [
+                -88.108,
+                12.7,
+                76.2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyrj4w-fbc9mm",
+        "parentId": "step-mvmyreo1-a6e487",
+        "at": 1792880509856,
+        "source": "app",
+        "label": "Move 1x4 Low Profile End Lock Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880501157-mq0t",
+            "name": "1x4 Low Profile End Lock Beam #1",
+            "before": {
+              "position": [
+                -88.108,
+                12.7,
+                76.2
+              ]
+            },
+            "after": {
+              "position": [
+                -88.108,
+                12.7,
+                3.556
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyrp5k-v6inz2",
+        "parentId": "step-mvmyrj4w-fbc9mm",
+        "at": 1792880517656,
+        "source": "app",
+        "label": "Move 1x4 Low Profile End Lock Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880501157-mq0t",
+            "name": "1x4 Low Profile End Lock Beam #1",
+            "before": {
+              "position": [
+                -88.108,
+                12.7,
+                3.556
+              ]
+            },
+            "after": {
+              "position": [
+                -73.298,
+                12.7,
+                3.556
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyry96-mu1i2h",
+        "parentId": "step-mvmyrp5k-v6inz2",
+        "at": 1792880529450,
+        "source": "app",
+        "label": "Delete 1x4 Low Profile End Lock Beam #1",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 16,
+            "part": {
+              "instanceId": "inst-1792880501157-mq0t",
+              "partId": "1x4-low-profile-end-lock-beam-228-2500-1548-56",
+              "label": "1x4 Low Profile End Lock Beam #1",
+              "position": [
+                -73.298,
+                12.7,
+                3.556
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -73.298,
+                12.7,
+                3.556
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmys1pf-ge7nqf",
+        "parentId": "step-mvmyry96-mu1i2h",
+        "at": 1792880533923,
+        "source": "app",
+        "label": "Add 1x6 Smooth Beam #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 16,
+            "part": {
+              "instanceId": "inst-1792880533923-ezwl",
+              "partId": "1x6-smooth-beam-228-2500-323-65",
+              "label": "1x6 Smooth Beam #1",
+              "position": [
+                -25.4,
+                12.7,
+                76.19999999999999
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmys6hf-bzvkek",
+        "parentId": "step-mvmys1pf-ge7nqf",
+        "at": 1792880540115,
+        "source": "app",
+        "label": "Move 1x6 Smooth Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880533923-ezwl",
+            "name": "1x6 Smooth Beam #1",
+            "before": {
+              "position": [
+                -25.4,
+                12.7,
+                76.19999999999999
+              ]
+            },
+            "after": {
+              "position": [
+                -25.4,
+                12.7,
+                76.2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmys9at-4v602c",
+        "parentId": "step-mvmys6hf-bzvkek",
+        "at": 1792880543765,
+        "source": "app",
+        "label": "Move 1x6 Smooth Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880533923-ezwl",
+            "name": "1x6 Smooth Beam #1",
+            "before": {
+              "position": [
+                -25.4,
+                12.7,
+                76.2
+              ]
+            },
+            "after": {
+              "position": [
+                -25.4,
+                15.049,
+                76.2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmysbmd-lsfetc",
+        "parentId": "step-mvmys9at-4v602c",
+        "at": 1792880546773,
+        "source": "app",
+        "label": "Move 1x6 Smooth Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880533923-ezwl",
+            "name": "1x6 Smooth Beam #1",
+            "before": {
+              "position": [
+                -25.4,
+                15.049,
+                76.2
+              ]
+            },
+            "after": {
+              "position": [
+                -25.4,
+                15.049,
+                41.044
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmysgfa-i35owy",
+        "parentId": "step-mvmysbmd-lsfetc",
+        "at": 1792880552998,
+        "source": "app",
+        "label": "Move 1x6 Smooth Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880533923-ezwl",
+            "name": "1x6 Smooth Beam #1",
+            "before": {
+              "position": [
+                -25.4,
+                15.049,
+                41.044
+              ]
+            },
+            "after": {
+              "position": [
+                -17.123,
+                14.647,
+                41.044
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmysjvd-g59v8p",
+        "parentId": "step-mvmysgfa-i35owy",
+        "at": 1792880557465,
+        "source": "app",
+        "label": "Move 1x6 Smooth Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880533923-ezwl",
+            "name": "1x6 Smooth Beam #1",
+            "before": {
+              "position": [
+                -17.123,
+                14.647,
+                41.044
+              ]
+            },
+            "after": {
+              "position": [
+                -17.123,
+                14.647,
+                15.779
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmysoyh-uqenma",
+        "parentId": "step-mvmysjvd-g59v8p",
+        "at": 1792880564057,
+        "source": "app",
+        "label": "Move 1x6 Smooth Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880533923-ezwl",
+            "name": "1x6 Smooth Beam #1",
+            "before": {
+              "position": [
+                -17.123,
+                14.647,
+                15.779
+              ]
+            },
+            "after": {
+              "position": [
+                -16.148,
+                6.35,
+                15.779
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmysqv4-6xh3y0",
+        "parentId": "step-mvmysoyh-uqenma",
+        "at": 1792880566528,
+        "source": "app",
+        "label": "Move 1x6 Smooth Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880533923-ezwl",
+            "name": "1x6 Smooth Beam #1",
+            "before": {
+              "position": [
+                -16.148,
+                6.35,
+                15.779
+              ]
+            },
+            "after": {
+              "position": [
+                -16.148,
+                6.35,
+                2.279
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyvtus-mdadjc",
+        "parentId": "step-mvmysqv4-6xh3y0",
+        "at": 1792880710372,
+        "source": "app",
+        "label": "Add Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 17,
+            "part": {
+              "instanceId": "inst-1792880710372-03zt",
+              "partId": "large-chassis-corner-connector-228-2500-126-386",
+              "label": "Large Chassis Corner Connector #1",
+              "position": [
+                9.252,
+                6.35,
+                2.279
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyvwzj-ibzyfx",
+        "parentId": "step-mvmyvtus-mdadjc",
+        "at": 1792880714431,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                9.252,
+                6.35,
+                2.279
+              ]
+            },
+            "after": {
+              "position": [
+                9.252,
+                6.35,
+                -3.388
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyvxsp-a1ajew",
+        "parentId": "step-mvmyvwzj-ibzyfx",
+        "at": 1792880715481,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                9.252,
+                6.35,
+                -3.388
+              ]
+            },
+            "after": {
+              "position": [
+                9.252,
+                6.35,
+                -38.222
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmywy3d-vxk679",
+        "parentId": "step-mvmyvxsp-a1ajew",
+        "at": 1792880762521,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                9.252,
+                6.35,
+                -38.222
+              ]
+            },
+            "after": {
+              "position": [
+                -73.748,
+                6.35,
+                -38.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyx17t-588xdm",
+        "parentId": "step-mvmywy3d-vxk679",
+        "at": 1792880766569,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                -73.748,
+                6.35,
+                -38.1
+              ]
+            },
+            "after": {
+              "position": [
+                15.841,
+                6.35,
+                -38.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyx5y6-p9krs5",
+        "parentId": "step-mvmyx17t-588xdm",
+        "at": 1792880772702,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                15.841,
+                6.35,
+                -38.1
+              ]
+            },
+            "after": {
+              "position": [
+                27.553,
+                6.35,
+                -38.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyxs13-ylaeqj",
+        "parentId": "step-mvmyx5y6-p9krs5",
+        "at": 1792880801319,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                27.553,
+                6.35,
+                -38.1
+              ]
+            },
+            "after": {
+              "position": [
+                40.253,
+                6.35,
+                -38.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyy27r-q7olhy",
+        "parentId": "step-mvmyxs13-ylaeqj",
+        "at": 1792880814519,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                40.253,
+                6.35,
+                -38.1
+              ]
+            },
+            "after": {
+              "position": [
+                37.078,
+                3.175,
+                -38.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyy8av-gwxu0u",
+        "parentId": "step-mvmyy27r-q7olhy",
+        "at": 1792880822407,
+        "source": "app",
+        "label": "Insert Large Chassis Corner Connector #1 into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                37.078,
+                3.175,
+                -38.1
+              ]
+            },
+            "after": {
+              "position": [
+                15.602,
+                0,
+                -6.686
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyysq1-zsr6b1",
+        "parentId": "step-mvmyy8av-gwxu0u",
+        "at": 1792880848873,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                15.602,
+                0,
+                -6.686
+              ]
+            },
+            "after": {
+              "position": [
+                15.602,
+                0,
+                -28.911
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyzk1y-i9chae",
+        "parentId": "step-mvmyysq1-zsr6b1",
+        "at": 1792880884294,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                15.602,
+                0,
+                -28.911
+              ]
+            },
+            "after": {
+              "position": [
+                15.602,
+                0,
+                -35.261
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyztdd-vg16xf",
+        "parentId": "step-mvmyzk1y-i9chae",
+        "at": 1792880896369,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                15.602,
+                0,
+                -35.261
+              ]
+            },
+            "after": {
+              "position": [
+                155.849,
+                0,
+                -35.261
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyzxuh-s2xj1y",
+        "parentId": "step-mvmyztdd-vg16xf",
+        "at": 1792880902169,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                155.849,
+                0,
+                -35.261
+              ]
+            },
+            "after": {
+              "position": [
+                41.002,
+                0,
+                -35.261
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmyzyz8-k54y06",
+        "parentId": "step-mvmyzxuh-s2xj1y",
+        "at": 1792880903636,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                41.002,
+                0,
+                -35.261
+              ]
+            },
+            "after": {
+              "position": [
+                41.002,
+                0,
+                -6.761
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmz007n-8y644x",
+        "parentId": "step-mvmyzyz8-k54y06",
+        "at": 1792880905235,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                41.002,
+                0,
+                -6.761
+              ]
+            },
+            "after": {
+              "position": [
+                41.002,
+                0,
+                -57.561
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmz09dr-261mas",
+        "parentId": "step-mvmz007n-8y644x",
+        "at": 1792880917119,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                41.002,
+                0,
+                -57.561
+              ]
+            },
+            "after": {
+              "position": [
+                145.777,
+                0,
+                -57.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmz0adi-dkx7qv",
+        "parentId": "step-mvmz09dr-261mas",
+        "at": 1792880918406,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                145.777,
+                0,
+                -57.15
+              ]
+            },
+            "after": {
+              "position": [
+                168.777,
+                0,
+                -57.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmz5vfj-ztk83y",
+        "parentId": "step-mvmz0adi-dkx7qv",
+        "at": 1792881178975,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                168.777,
+                0,
+                -57.15
+              ]
+            },
+            "after": {
+              "position": [
+                108.452,
+                0,
+                -57.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmz5wau-3v8ke4",
+        "parentId": "step-mvmz5vfj-ztk83y",
+        "at": 1792881180102,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                108.452,
+                0,
+                -57.15
+              ]
+            },
+            "after": {
+              "position": [
+                95.752,
+                82.55,
+                -38.1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmzexpv-idjgar",
+        "parentId": "step-mvmz5wau-3v8ke4",
+        "at": 1792881601843,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                95.752,
+                82.55,
+                -38.1
+              ]
+            },
+            "after": {
+              "position": [
+                95.752,
+                -15.875,
+                -53.975
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmzf4g9-d97nfw",
+        "parentId": "step-mvmzexpv-idjgar",
+        "at": 1792881610569,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                95.752,
+                -15.875,
+                -53.975
+              ]
+            },
+            "after": {
+              "position": [
+                95.752,
+                -3.175,
+                -53.975
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmzf7u8-3r0mrk",
+        "parentId": "step-mvmzf4g9-d97nfw",
+        "at": 1792881614960,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                95.752,
+                -3.175,
+                -53.975
+              ]
+            },
+            "after": {
+              "position": [
+                156.077,
+                -3.175,
+                -53.975
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmzfbsl-ifuyon",
+        "parentId": "step-mvmzf7u8-3r0mrk",
+        "at": 1792881620085,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                156.077,
+                -3.175,
+                -53.975
+              ]
+            },
+            "after": {
+              "position": [
+                152.902,
+                0,
+                -57.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmzfnjj-bkdwqq",
+        "parentId": "step-mvmzfbsl-ifuyon",
+        "at": 1792881635311,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                152.902,
+                0,
+                -57.15
+              ]
+            },
+            "after": {
+              "position": [
+                168.402,
+                0,
+                -57.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmzg6qy-cswqkd",
+        "parentId": "step-mvmzfbsl-ifuyon",
+        "at": 1792881660202,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                152.902,
+                0,
+                -57.15
+              ]
+            },
+            "after": {
+              "position": [
+                168.402,
+                0,
+                -57.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmzgcwr-tiffyq",
+        "parentId": "step-mvmzfbsl-ifuyon",
+        "at": 1792881668187,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                152.902,
+                0,
+                -57.15
+              ]
+            },
+            "after": {
+              "position": [
+                168.402,
+                0,
+                -57.15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvmzgihl-m3lclq",
+        "parentId": "step-mvmzfbsl-ifuyon",
+        "at": 1792881675417,
+        "source": "app",
+        "label": "Insert Large Chassis Corner Connector #1 into 2x18 Beam #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                152.902,
+                0,
+                -57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ]
+            },
+            "after": {
+              "position": [
+                174.896,
+                12.7,
+                -63.5
+              ],
+              "rotation": [
+                0,
+                0,
+                90
+              ]
+            }
+          }
+        ]
       }
     ],
-    "headId": "step-mvmwl9qk-j2fo2z",
+    "headId": "step-mvmzgihl-m3lclq",
     "activeChild": {
       "root": "step-mvm1cbpd-8kprhe",
       "step-mvm1cbpd-8kprhe": "step-mvmho6hy-13n0rx",
@@ -12514,16 +14570,81 @@
       "step-mvmv8o2r-ah6wbd": "step-mvmv8qzy-fdj86b",
       "step-mvmv8qzy-fdj86b": "step-mvmv8u41-3x31fa",
       "step-mvmv8u41-3x31fa": "step-mvmwl9qk-j2fo2z",
-      "step-mvmwl9qk-j2fo2z": "step-mvmwlgi4-8idgzc",
+      "step-mvmwl9qk-j2fo2z": "step-mvmykd6n-fmea6h",
       "step-mvmwlgi4-8idgzc": "step-mvmwlkqw-k4m835",
-      "step-mvmwlkqw-k4m835": "step-mvmwlm4f-2jinqg"
+      "step-mvmwlkqw-k4m835": "step-mvmwlm4f-2jinqg",
+      "step-mvmykd6n-fmea6h": "step-mvmykh88-dtjegn",
+      "step-mvmykh88-dtjegn": "step-mvmykr6u-2yn1k8",
+      "step-mvmykr6u-2yn1k8": "step-mvmyoomv-cxmpc6",
+      "step-mvmyku84-e75e0w": "step-mvmykvym-vibg1a",
+      "step-mvmykvym-vibg1a": "step-mvmykxfe-eyvz84",
+      "step-mvmykxfe-eyvz84": "step-mvmykyp0-k3l9rk",
+      "step-mvmykyp0-k3l9rk": "step-mvmyl3kp-7j7cns",
+      "step-mvmyoomv-cxmpc6": "step-mvmyoqez-qf6swi",
+      "step-mvmyoqez-qf6swi": "step-mvmyp4fm-3frvlt",
+      "step-mvmyp4fm-3frvlt": "step-mvmyp8r6-c7gc9g",
+      "step-mvmyp8r6-c7gc9g": "step-mvmypak1-sj1k24",
+      "step-mvmypak1-sj1k24": "step-mvmypbii-5xccah",
+      "step-mvmypbii-5xccah": "step-mvmypi3z-wab52x",
+      "step-mvmypi3z-wab52x": "step-mvmyplc6-4z4vl8",
+      "step-mvmyplc6-4z4vl8": "step-mvmypmg8-dc1ob7",
+      "step-mvmypmg8-dc1ob7": "step-mvmypsla-ly7xsh",
+      "step-mvmypsla-ly7xsh": "step-mvmypudm-j1qu0h",
+      "step-mvmypudm-j1qu0h": "step-mvmypwt6-2kzi6a",
+      "step-mvmypwt6-2kzi6a": "step-mvmypxm2-m4ho4u",
+      "step-mvmypxm2-m4ho4u": "step-mvmyq07d-9hbcgk",
+      "step-mvmyq07d-9hbcgk": "step-mvmyq5vb-q1v50g",
+      "step-mvmyq5vb-q1v50g": "step-mvmyqb0h-oweh8u",
+      "step-mvmyqb0h-oweh8u": "step-mvmyqd5b-zrj9pw",
+      "step-mvmyqd5b-zrj9pw": "step-mvmyqfan-ejxem6",
+      "step-mvmyqfan-ejxem6": "step-mvmyqgml-ykuhcn",
+      "step-mvmyqgml-ykuhcn": "step-mvmyqmo7-bec396",
+      "step-mvmyqmo7-bec396": "step-mvmyqsrx-5xa4h9",
+      "step-mvmyqsrx-5xa4h9": "step-mvmyqv34-v50m5p",
+      "step-mvmyqv34-v50m5p": "step-mvmyrcf9-n9dz3o",
+      "step-mvmyrcf9-n9dz3o": "step-mvmyreo1-a6e487",
+      "step-mvmyreo1-a6e487": "step-mvmyrj4w-fbc9mm",
+      "step-mvmyrj4w-fbc9mm": "step-mvmyrp5k-v6inz2",
+      "step-mvmyrp5k-v6inz2": "step-mvmyry96-mu1i2h",
+      "step-mvmyry96-mu1i2h": "step-mvmys1pf-ge7nqf",
+      "step-mvmys1pf-ge7nqf": "step-mvmys6hf-bzvkek",
+      "step-mvmys6hf-bzvkek": "step-mvmys9at-4v602c",
+      "step-mvmys9at-4v602c": "step-mvmysbmd-lsfetc",
+      "step-mvmysbmd-lsfetc": "step-mvmysgfa-i35owy",
+      "step-mvmysgfa-i35owy": "step-mvmysjvd-g59v8p",
+      "step-mvmysjvd-g59v8p": "step-mvmysoyh-uqenma",
+      "step-mvmysoyh-uqenma": "step-mvmysqv4-6xh3y0",
+      "step-mvmysqv4-6xh3y0": "step-mvmyvtus-mdadjc",
+      "step-mvmyvtus-mdadjc": "step-mvmyvwzj-ibzyfx",
+      "step-mvmyvwzj-ibzyfx": "step-mvmyvxsp-a1ajew",
+      "step-mvmyvxsp-a1ajew": "step-mvmywy3d-vxk679",
+      "step-mvmywy3d-vxk679": "step-mvmyx17t-588xdm",
+      "step-mvmyx17t-588xdm": "step-mvmyx5y6-p9krs5",
+      "step-mvmyx5y6-p9krs5": "step-mvmyxs13-ylaeqj",
+      "step-mvmyxs13-ylaeqj": "step-mvmyy27r-q7olhy",
+      "step-mvmyy27r-q7olhy": "step-mvmyy8av-gwxu0u",
+      "step-mvmyy8av-gwxu0u": "step-mvmyysq1-zsr6b1",
+      "step-mvmyysq1-zsr6b1": "step-mvmyzk1y-i9chae",
+      "step-mvmyzk1y-i9chae": "step-mvmyztdd-vg16xf",
+      "step-mvmyztdd-vg16xf": "step-mvmyzxuh-s2xj1y",
+      "step-mvmyzxuh-s2xj1y": "step-mvmyzyz8-k54y06",
+      "step-mvmyzyz8-k54y06": "step-mvmz007n-8y644x",
+      "step-mvmz007n-8y644x": "step-mvmz09dr-261mas",
+      "step-mvmz09dr-261mas": "step-mvmz0adi-dkx7qv",
+      "step-mvmz0adi-dkx7qv": "step-mvmz5vfj-ztk83y",
+      "step-mvmz5vfj-ztk83y": "step-mvmz5wau-3v8ke4",
+      "step-mvmz5wau-3v8ke4": "step-mvmzexpv-idjgar",
+      "step-mvmzexpv-idjgar": "step-mvmzf4g9-d97nfw",
+      "step-mvmzf4g9-d97nfw": "step-mvmzf7u8-3r0mrk",
+      "step-mvmzf7u8-3r0mrk": "step-mvmzfbsl-ifuyon",
+      "step-mvmzfbsl-ifuyon": "step-mvmzgihl-m3lclq"
     },
-    "rev": 301
+    "rev": 385
   },
-  "selectedId": null,
+  "selectedId": "inst-1792880710372-03zt",
   "viewport": {
-    "transformMode": "rotate",
-    "snapPitchFactor": 0.5,
+    "transformMode": "translate",
+    "snapPitchFactor": 0.25,
     "rotationSnapDeg": 15,
     "showGrid": true,
     "showConnectors": false,
@@ -12531,35 +14652,6 @@
     "focusTrigger": 0
   },
   "instances": [
-    {
-      "instanceId": "inst-1792873593503-mtgt",
-      "partId": "2x20-beam-228-2500-030-173",
-      "label": "2x20 Beam #1",
-      "position": [
-        47.625,
-        12.7,
-        -3.175
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        47.625,
-        12.7,
-        -3.175
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
-    },
     {
       "instanceId": "inst-1792873620500-31hi",
       "partId": "2x20-beam-228-2500-030-173",
@@ -12986,8 +15078,95 @@
       "color": "#f8fafc",
       "visible": true,
       "locked": false
+    },
+    {
+      "instanceId": "inst-1792880180792-tlib",
+      "partId": "2x18-beam-228-2500-029-172",
+      "label": "2x18 Beam #1 (Copy)",
+      "position": [
+        9.252,
+        12.7,
+        -3.784
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        9.252,
+        12.7,
+        -3.784
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#64748b",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792880533923-ezwl",
+      "partId": "1x6-smooth-beam-228-2500-323-65",
+      "label": "1x6 Smooth Beam #1",
+      "position": [
+        -16.148,
+        6.35,
+        2.279
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        -16.148,
+        6.35,
+        2.279
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#64748b",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792880710372-03zt",
+      "partId": "large-chassis-corner-connector-228-2500-126-386",
+      "label": "Large Chassis Corner Connector #1",
+      "position": [
+        174.896,
+        12.7,
+        -63.5
+      ],
+      "rotation": [
+        0,
+        0,
+        90
+      ],
+      "lastValidPosition": [
+        174.896,
+        12.7,
+        -63.5
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        90
+      ],
+      "isIntersecting": false,
+      "color": "#f8fafc",
+      "visible": true,
+      "locked": false
     }
   ],
-  "updatedAt": "2026-10-24T21:21:26.673Z",
-  "historyRev": 301
+  "updatedAt": "2026-10-24T22:41:15.532Z",
+  "historyRev": 385
 }
