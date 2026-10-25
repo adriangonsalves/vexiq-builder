@@ -1075,10 +1075,10 @@ export function listInsertFits({ partMeta, measured = null, instanceId, hovered,
         for (const w of world) {
           if (!OPENINGS_BY_INSERT[w.kind] || w === anchor) continue;
           if (Math.abs(w.axis.dot(n)) < PARALLEL_MIN_DOT) continue;
-          const green = candidates.some((o) => pairRoles(w, o)?.insert === w && linesCoincide(w.origin, w.axis, o.origin, o.axis));
+          const match = candidates.find((o) => pairRoles(w, o)?.insert === w && linesCoincide(w.origin, w.axis, o.origin, o.axis));
           // Where its axis meets the face plane
           const p = w.origin.clone();
-          markers.push({ featureId: w.featureId, green, point: p.addScaledVector(n, -p.clone().sub(face.point).dot(n)) });
+          markers.push({ featureId: w.featureId, green: Boolean(match), opening: match ?? null, point: p.addScaledVector(n, -p.clone().sub(face.point).dot(n)) });
         }
         const travelMm = PICK_GAP_MM + depth;
         fits.push({
@@ -1116,4 +1116,11 @@ export function mateAction(plans, hasInserts) {
   const holesOnly = plans.every((p) => p.pairs.every((pair) => pair.pairKind === 'hole'));
   if (hasInserts && holesOnly) return 'arrows+pick';
   return plans.length === 1 ? 'mate' : 'arrows';
+}
+
+/** The holes a fit's pins go into: the hovered one, then each green marker's (for lighting them up). */
+export function holesFilledByFit(fit, hovered) {
+  const holes = [hovered.opening];
+  for (const m of fit?.markers || []) if (m.green && m.opening && !holes.includes(m.opening)) holes.push(m.opening);
+  return holes;
 }

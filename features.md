@@ -99,6 +99,13 @@
   - **Click** to insert. The part is turned and placed, then pushed in until it touches, exactly like double-click mating (a shaft cap stops on the hole's lip). It is saved as one history step, "Insert … into …", so one undo restores it. Something in the way just outside the hole gives "The way in is blocked".
   - `Esc`, clicking where no hole is ringed, selecting another part, changing Move/Rotate or Explode, or the part being moved by undo or MCP ends picking without changes.
   - Parts without pins or shafts (beams, plates) still get "Nothing lined up to mate with". Picking a beam onto pins already in the model is a planned follow-up.
+- **Quick copy insert (Ctrl/Cmd + double-click a hole):**
+  - With a part that has pins, pegs or shafts selected, **hold Ctrl** (or **Cmd** on macOS) and point near a hole on any other part. The same hover and fits as hole picking are shown: a see-through copy at the best fit, green/red pin markers, and a **cyan ring on every hole the copy's pins would go into** (both holes for a two-peg corner connector). A hole that already has a part in it rings grey. The gizmo stays; a short status line names the part and the fit.
+  - The **mouse wheel** steps through other fits. `R` isn't used, because Ctrl+R / Cmd+R reloads the browser.
+  - **Ctrl/Cmd + double-click** adds a new copy, pushed in until it touches like a hole-picking insert. The original doesn't move and stays selected, so more copies can be stamped straight away. Each copy is named after its catalog part with the next free number ("0x2 Connector Pin #7"), keeps the original's color, and is one history step, "Insert copy of … into …".
+  - A taken hole ("That hole already has a part in it") or a blocked way in ("The way in is blocked") adds nothing.
+  - The double-click is read from the two presses, so it works on macOS where Ctrl+click arrives as a right-click. Clicks with Ctrl/Cmd held during the preview never change the selection or switch Move/Rotate, and a Ctrl/Cmd double-click never mates.
+  - Letting go of the key, leaving the window, changing the selection or Explode ends the preview without changes. It doesn't run during a drag, hole picking or while mate arrows are shown.
 - **Real-Time Concave Mesh Collision Detection (`three-mesh-bvh`):**
   - Uses inward-eroded (`0.38 mm` clearance) concave triangle meshes so pins and shafts pass cleanly through `4.8 mm` holes without false-positive bounding-box collisions, while true solid-body intersections are flagged immediately.
   - Intersecting parts render in **transparent grey** (`opacity: 0.42`) with a top HUD warning and a one-click **Revert Pose / Cancel Placement** button.

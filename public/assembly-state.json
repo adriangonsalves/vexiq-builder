@@ -1,5 +1,648 @@
 {
   "version": "1.0",
+  "selectedId": "inst-1792874083401-ayt9",
+  "viewport": {
+    "transformMode": "translate",
+    "snapPitchFactor": 0.25,
+    "rotationSnapDeg": 15,
+    "showGrid": true,
+    "showConnectors": false,
+    "explodeMode": "off",
+    "focusTrigger": 0
+  },
+  "instances": [
+    {
+      "instanceId": "inst-1792873620500-31hi",
+      "partId": "2x20-beam-228-2500-030-173",
+      "label": "2x20 Beam #1 (Copy)",
+      "position": [
+        47.625,
+        12.7,
+        -238.125
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        47.625,
+        12.7,
+        -238.125
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#64748b",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792873646909-2g63",
+      "partId": "2x18-beam-228-2500-029-172",
+      "label": "2x18 Beam #1",
+      "position": [
+        177.8,
+        12.7,
+        -120.65
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "lastValidPosition": [
+        177.8,
+        12.7,
+        -120.65
+      ],
+      "lastValidRotation": [
+        0,
+        90,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#64748b",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792873972877-rw3x",
+      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
+      "label": "2x Wide, 2x2 Corner Connector #1",
+      "position": [
+        174.899,
+        19.05,
+        -12.7
+      ],
+      "rotation": [
+        -90,
+        90,
+        0
+      ],
+      "lastValidPosition": [
+        174.899,
+        19.05,
+        -12.7
+      ],
+      "lastValidRotation": [
+        -90,
+        90,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#f8fafc",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874083401-ayt9",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #1",
+      "position": [
+        155.575,
+        19.05,
+        -6.273
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        155.575,
+        19.05,
+        -6.273
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874128344-42qb",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #1 (Copy)",
+      "position": [
+        168.275,
+        19.05,
+        -6.273
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "lastValidPosition": null,
+      "lastValidRotation": null,
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874131738-p3f1",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #1 (Copy) (Copy)",
+      "position": [
+        155.575,
+        6.35,
+        -6.273
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        155.575,
+        6.35,
+        -6.273
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874139952-iwxm",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #1 (Copy) (Copy) (Copy)",
+      "position": [
+        168.275,
+        6.35,
+        -6.273
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        168.275,
+        6.35,
+        -6.273
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874159470-o8pb",
+      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
+      "label": "2x Wide, 2x2 Corner Connector #1 (Copy)",
+      "position": [
+        174.898,
+        6.35,
+        -228.6
+      ],
+      "rotation": [
+        90,
+        90,
+        0
+      ],
+      "lastValidPosition": [
+        174.898,
+        6.35,
+        -228.6
+      ],
+      "lastValidRotation": [
+        90,
+        90,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#f8fafc",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874320451-3ajm",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #5",
+      "position": [
+        168.275,
+        6.35,
+        -234.627
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        168.275,
+        6.35,
+        -234.627
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874400221-72jr",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #5 (Copy)",
+      "position": [
+        168.275,
+        19.05,
+        -235.027
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        168.275,
+        19.05,
+        -235.027
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874405206-hb9x",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #5 (Copy) (Copy)",
+      "position": [
+        155.575,
+        19.05,
+        -235.027
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        155.575,
+        19.05,
+        -235.027
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874415355-2ifl",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #5 (Copy) (Copy) (Copy)",
+      "position": [
+        155.575,
+        6.35,
+        -235.027
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        155.575,
+        6.35,
+        -235.027
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874440330-fj6o",
+      "partId": "2x18-beam-228-2500-029-172",
+      "label": "2x18 Beam #1 (Copy)",
+      "position": [
+        -82.55,
+        12.7,
+        -120.65
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "lastValidPosition": [
+        -82.55,
+        12.7,
+        -120.65
+      ],
+      "lastValidRotation": [
+        0,
+        90,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#64748b",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874493954-sxhu",
+      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
+      "label": "2x Wide, 2x2 Corner Connector #1 (Copy)",
+      "position": [
+        -79.648,
+        19.05,
+        -228.6
+      ],
+      "rotation": [
+        90,
+        -90,
+        0
+      ],
+      "lastValidPosition": [
+        -79.648,
+        19.05,
+        -228.6
+      ],
+      "lastValidRotation": [
+        90,
+        -90,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#f8fafc",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792874576536-1o5z",
+      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
+      "label": "2x Wide, 2x2 Corner Connector #1 (Copy) (Copy)",
+      "position": [
+        -79.648,
+        6.35,
+        -12.7
+      ],
+      "rotation": [
+        -90,
+        -90,
+        0
+      ],
+      "lastValidPosition": [
+        -79.648,
+        6.35,
+        -12.7
+      ],
+      "lastValidRotation": [
+        -90,
+        -90,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#f8fafc",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792880180792-tlib",
+      "partId": "2x18-beam-228-2500-029-172",
+      "label": "2x18 Beam #1 (Copy)",
+      "position": [
+        34.652,
+        12.7,
+        -3.784
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        34.652,
+        12.7,
+        -3.784
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#64748b",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792880533923-ezwl",
+      "partId": "1x6-smooth-beam-228-2500-323-65",
+      "label": "1x6 Smooth Beam #1",
+      "position": [
+        -16.148,
+        6.35,
+        2.279
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        -16.148,
+        6.35,
+        2.279
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#64748b",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792880710372-03zt",
+      "partId": "large-chassis-corner-connector-228-2500-126-386",
+      "label": "Large Chassis Corner Connector #1",
+      "position": [
+        95.752,
+        -15.875,
+        -53.975
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        95.752,
+        -15.875,
+        -53.975
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#f8fafc",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792884614691-hw2b",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #9",
+      "position": [
+        -73.298,
+        6.35,
+        -6.883
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        -73.298,
+        6.35,
+        -6.883
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792884615899-e3c6",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #10",
+      "position": [
+        -73.298,
+        19.05,
+        -6.882
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        -73.298,
+        19.05,
+        -6.882
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792884616859-2nrd",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #11",
+      "position": [
+        -60.598,
+        19.05,
+        -6.882
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        -60.598,
+        19.05,
+        -6.882
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1792884617843-hzx2",
+      "partId": "0x2-connector-pin-228-2500-086-8",
+      "label": "0x2 Connector Pin #12",
+      "position": [
+        -60.598,
+        6.35,
+        -6.882
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        -60.598,
+        6.35,
+        -6.882
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#2563eb",
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "updatedAt": "2026-10-25T14:08:56.485Z",
   "history": {
     "version": 1,
     "base": [],
@@ -14349,9 +14992,541 @@
             }
           }
         ]
+      },
+      {
+        "id": "step-mvn14fp3-uh4hln",
+        "parentId": "step-mvmzgihl-m3lclq",
+        "at": 1792884471159,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 18,
+            "part": {
+              "instanceId": "inst-1792884471158-n201",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #9",
+              "position": [
+                104.502,
+                19.05,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                104.502,
+                19.05,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn14j86-9zcx17",
+        "parentId": "step-mvn14fp3-uh4hln",
+        "at": 1792884475734,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 19,
+            "part": {
+              "instanceId": "inst-1792884475734-9oux",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #10",
+              "position": [
+                104.502,
+                6.35,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                104.502,
+                6.35,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn14k7i-49ywnh",
+        "parentId": "step-mvn14j86-9zcx17",
+        "at": 1792884477006,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 20,
+            "part": {
+              "instanceId": "inst-1792884477005-6nnj",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #11",
+              "position": [
+                117.202,
+                6.35,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                117.202,
+                6.35,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn14l0x-880so8",
+        "parentId": "step-mvn14k7i-49ywnh",
+        "at": 1792884478065,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 21,
+            "part": {
+              "instanceId": "inst-1792884478064-dnfe",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #12",
+              "position": [
+                117.202,
+                19.05,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                117.202,
+                19.05,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn156tq-4qb2y3",
+        "parentId": "step-mvmzfbsl-ifuyon",
+        "at": 1792884506318,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 (Copy) (Copy) into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 18,
+            "part": {
+              "instanceId": "inst-1792884506318-v2dl",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #9",
+              "position": [
+                -73.298,
+                6.35,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -73.298,
+                6.35,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn159rg-o7f7fq",
+        "parentId": "step-mvn156tq-4qb2y3",
+        "at": 1792884510124,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 (Copy) (Copy) into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 19,
+            "part": {
+              "instanceId": "inst-1792884510124-d8sk",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #10",
+              "position": [
+                -60.598,
+                6.35,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -60.598,
+                6.35,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn15aq7-bqca4n",
+        "parentId": "step-mvn159rg-o7f7fq",
+        "at": 1792884511375,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 (Copy) (Copy) into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 20,
+            "part": {
+              "instanceId": "inst-1792884511375-0l2r",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #11",
+              "position": [
+                -60.598,
+                19.05,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -60.598,
+                19.05,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn15bic-phpw1x",
+        "parentId": "step-mvn15aq7-bqca4n",
+        "at": 1792884512388,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 (Copy) (Copy) into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 21,
+            "part": {
+              "instanceId": "inst-1792884512387-yijf",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #12",
+              "position": [
+                -73.298,
+                19.05,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -73.298,
+                19.05,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn176n5-o2u7n3",
+        "parentId": "step-mvmzexpv-idjgar",
+        "at": 1792884599393,
+        "source": "app",
+        "label": "Move 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880180792-tlib",
+            "name": "2x18 Beam #1 (Copy)",
+            "before": {
+              "position": [
+                9.252,
+                12.7,
+                -3.784
+              ]
+            },
+            "after": {
+              "position": [
+                34.652,
+                12.7,
+                -3.784
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn17ig3-pzy3tj",
+        "parentId": "step-mvn176n5-o2u7n3",
+        "at": 1792884614691,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 18,
+            "part": {
+              "instanceId": "inst-1792884614691-hw2b",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #9",
+              "position": [
+                -73.298,
+                6.35,
+                -6.883
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -73.298,
+                6.35,
+                -6.883
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn17jdn-208g2q",
+        "parentId": "step-mvn17ig3-pzy3tj",
+        "at": 1792884615899,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 19,
+            "part": {
+              "instanceId": "inst-1792884615899-e3c6",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #10",
+              "position": [
+                -73.298,
+                19.05,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -73.298,
+                19.05,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn17k4b-3yx9tb",
+        "parentId": "step-mvn17jdn-208g2q",
+        "at": 1792884616859,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 20,
+            "part": {
+              "instanceId": "inst-1792884616859-2nrd",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #11",
+              "position": [
+                -60.598,
+                19.05,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -60.598,
+                19.05,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvn17kvn-2s17z5",
+        "parentId": "step-mvn17k4b-3yx9tb",
+        "at": 1792884617843,
+        "source": "app",
+        "label": "Insert copy of 0x2 Connector Pin #1 into 2x18 Beam #1 (Copy)",
+        "ops": [
+          {
+            "op": "add",
+            "index": 21,
+            "part": {
+              "instanceId": "inst-1792884617843-hzx2",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #12",
+              "position": [
+                -60.598,
+                6.35,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -60.598,
+                6.35,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
       }
     ],
-    "headId": "step-mvmzgihl-m3lclq",
+    "headId": "step-mvn17kvn-2s17z5",
     "activeChild": {
       "root": "step-mvm1cbpd-8kprhe",
       "step-mvm1cbpd-8kprhe": "step-mvmho6hy-13n0rx",
@@ -14634,539 +15809,23 @@
       "step-mvmz0adi-dkx7qv": "step-mvmz5vfj-ztk83y",
       "step-mvmz5vfj-ztk83y": "step-mvmz5wau-3v8ke4",
       "step-mvmz5wau-3v8ke4": "step-mvmzexpv-idjgar",
-      "step-mvmzexpv-idjgar": "step-mvmzf4g9-d97nfw",
+      "step-mvmzexpv-idjgar": "step-mvn176n5-o2u7n3",
       "step-mvmzf4g9-d97nfw": "step-mvmzf7u8-3r0mrk",
       "step-mvmzf7u8-3r0mrk": "step-mvmzfbsl-ifuyon",
-      "step-mvmzfbsl-ifuyon": "step-mvmzgihl-m3lclq"
+      "step-mvmzfbsl-ifuyon": "step-mvn156tq-4qb2y3",
+      "step-mvmzgihl-m3lclq": "step-mvn14fp3-uh4hln",
+      "step-mvn14fp3-uh4hln": "step-mvn14j86-9zcx17",
+      "step-mvn14j86-9zcx17": "step-mvn14k7i-49ywnh",
+      "step-mvn14k7i-49ywnh": "step-mvn14l0x-880so8",
+      "step-mvn156tq-4qb2y3": "step-mvn159rg-o7f7fq",
+      "step-mvn159rg-o7f7fq": "step-mvn15aq7-bqca4n",
+      "step-mvn15aq7-bqca4n": "step-mvn15bic-phpw1x",
+      "step-mvn176n5-o2u7n3": "step-mvn17ig3-pzy3tj",
+      "step-mvn17ig3-pzy3tj": "step-mvn17jdn-208g2q",
+      "step-mvn17jdn-208g2q": "step-mvn17k4b-3yx9tb",
+      "step-mvn17k4b-3yx9tb": "step-mvn17kvn-2s17z5"
     },
-    "rev": 385
+    "rev": 410
   },
-  "selectedId": "inst-1792880710372-03zt",
-  "viewport": {
-    "transformMode": "translate",
-    "snapPitchFactor": 0.25,
-    "rotationSnapDeg": 15,
-    "showGrid": true,
-    "showConnectors": false,
-    "explodeMode": "off",
-    "focusTrigger": 0
-  },
-  "instances": [
-    {
-      "instanceId": "inst-1792873620500-31hi",
-      "partId": "2x20-beam-228-2500-030-173",
-      "label": "2x20 Beam #1 (Copy)",
-      "position": [
-        47.625,
-        12.7,
-        -238.125
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        47.625,
-        12.7,
-        -238.125
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792873646909-2g63",
-      "partId": "2x18-beam-228-2500-029-172",
-      "label": "2x18 Beam #1",
-      "position": [
-        177.8,
-        12.7,
-        -120.65
-      ],
-      "rotation": [
-        0,
-        90,
-        0
-      ],
-      "lastValidPosition": [
-        177.8,
-        12.7,
-        -120.65
-      ],
-      "lastValidRotation": [
-        0,
-        90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792873972877-rw3x",
-      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
-      "label": "2x Wide, 2x2 Corner Connector #1",
-      "position": [
-        174.899,
-        19.05,
-        -12.7
-      ],
-      "rotation": [
-        -90,
-        90,
-        0
-      ],
-      "lastValidPosition": [
-        174.899,
-        19.05,
-        -12.7
-      ],
-      "lastValidRotation": [
-        -90,
-        90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#f8fafc",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874083401-ayt9",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #1",
-      "position": [
-        155.575,
-        19.05,
-        -6.273
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        155.575,
-        19.05,
-        -6.273
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874128344-42qb",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #1 (Copy)",
-      "position": [
-        168.275,
-        19.05,
-        -6.273
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": null,
-      "lastValidRotation": null,
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874131738-p3f1",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #1 (Copy) (Copy)",
-      "position": [
-        155.575,
-        6.35,
-        -6.273
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        155.575,
-        6.35,
-        -6.273
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874139952-iwxm",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #1 (Copy) (Copy) (Copy)",
-      "position": [
-        168.275,
-        6.35,
-        -6.273
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        168.275,
-        6.35,
-        -6.273
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874159470-o8pb",
-      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
-      "label": "2x Wide, 2x2 Corner Connector #1 (Copy)",
-      "position": [
-        174.898,
-        6.35,
-        -228.6
-      ],
-      "rotation": [
-        90,
-        90,
-        0
-      ],
-      "lastValidPosition": [
-        174.898,
-        6.35,
-        -228.6
-      ],
-      "lastValidRotation": [
-        90,
-        90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#f8fafc",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874320451-3ajm",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #5",
-      "position": [
-        168.275,
-        6.35,
-        -234.627
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        168.275,
-        6.35,
-        -234.627
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874400221-72jr",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #5 (Copy)",
-      "position": [
-        168.275,
-        19.05,
-        -235.027
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        168.275,
-        19.05,
-        -235.027
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874405206-hb9x",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #5 (Copy) (Copy)",
-      "position": [
-        155.575,
-        19.05,
-        -235.027
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        155.575,
-        19.05,
-        -235.027
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874415355-2ifl",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #5 (Copy) (Copy) (Copy)",
-      "position": [
-        155.575,
-        6.35,
-        -235.027
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        155.575,
-        6.35,
-        -235.027
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874440330-fj6o",
-      "partId": "2x18-beam-228-2500-029-172",
-      "label": "2x18 Beam #1 (Copy)",
-      "position": [
-        -82.55,
-        12.7,
-        -120.65
-      ],
-      "rotation": [
-        0,
-        90,
-        0
-      ],
-      "lastValidPosition": [
-        -82.55,
-        12.7,
-        -120.65
-      ],
-      "lastValidRotation": [
-        0,
-        90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874493954-sxhu",
-      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
-      "label": "2x Wide, 2x2 Corner Connector #1 (Copy)",
-      "position": [
-        -79.648,
-        19.05,
-        -228.6
-      ],
-      "rotation": [
-        90,
-        -90,
-        0
-      ],
-      "lastValidPosition": [
-        -79.648,
-        19.05,
-        -228.6
-      ],
-      "lastValidRotation": [
-        90,
-        -90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#f8fafc",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874576536-1o5z",
-      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
-      "label": "2x Wide, 2x2 Corner Connector #1 (Copy) (Copy)",
-      "position": [
-        -79.648,
-        6.35,
-        -12.7
-      ],
-      "rotation": [
-        -90,
-        -90,
-        0
-      ],
-      "lastValidPosition": [
-        -79.648,
-        6.35,
-        -12.7
-      ],
-      "lastValidRotation": [
-        -90,
-        -90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#f8fafc",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792880180792-tlib",
-      "partId": "2x18-beam-228-2500-029-172",
-      "label": "2x18 Beam #1 (Copy)",
-      "position": [
-        9.252,
-        12.7,
-        -3.784
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        9.252,
-        12.7,
-        -3.784
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792880533923-ezwl",
-      "partId": "1x6-smooth-beam-228-2500-323-65",
-      "label": "1x6 Smooth Beam #1",
-      "position": [
-        -16.148,
-        6.35,
-        2.279
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        -16.148,
-        6.35,
-        2.279
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792880710372-03zt",
-      "partId": "large-chassis-corner-connector-228-2500-126-386",
-      "label": "Large Chassis Corner Connector #1",
-      "position": [
-        174.896,
-        12.7,
-        -63.5
-      ],
-      "rotation": [
-        0,
-        0,
-        90
-      ],
-      "lastValidPosition": [
-        174.896,
-        12.7,
-        -63.5
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        90
-      ],
-      "isIntersecting": false,
-      "color": "#f8fafc",
-      "visible": true,
-      "locked": false
-    }
-  ],
-  "updatedAt": "2026-10-24T22:41:15.532Z",
-  "historyRev": 385
+  "historyRev": 410
 }

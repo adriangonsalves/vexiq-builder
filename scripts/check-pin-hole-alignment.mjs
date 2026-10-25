@@ -22,7 +22,8 @@ import {
   measureOpeningSurfaces,
   measurePinEnds,
   planMates,
-  mateAction
+  mateAction,
+  holesFilledByFit
 } from '../src/utils/pinHoleAlignment.js';
 
 let failures = 0;
@@ -934,6 +935,27 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   check('double-click: a lone pin lined up with one hole -> mate now', mateAction(planMates(findAlignedOpenings(worldFeaturesFor(inst('pin', '0x2 Connector Pin', [25.4, 0, 12])), worldFeaturesFor(beam)), 'pin'), true) === 'mate');
   check('double-click: a beam over a beam (no pins) -> stack now', mateAction(planMates(findAlignedOpenings(worldFeaturesFor(inst('b2', '2x12 Beam', [0, 0, 10])), worldFeaturesFor(beam)), 'b2'), false) === 'mate');
   check('double-click: nothing lined up -> pick (with pins) or nothing (without)', mateAction([], true) === 'pick' && mateAction([], false) === 'none');
+}
+
+// ---------------------------------------------------------------------------
+// Quick copy-insert: holes a fit fills (holesFilledByFit)
+// ---------------------------------------------------------------------------
+{
+  const inst = (id, name, position, rotation = [0, 0, 0]) => ({ instanceId: id, label: id, partId: part(name).id, position, rotation });
+  const beamF = worldFeaturesFor(inst('beam', '2x12 Beam', [0, 0, 0]));
+  const opening = beamF.find((f) => f.featureId === 'hole_31');
+  const face = openFaces(opening).find((f) => f.outward.z > 0);
+  const fitsFor = (name) =>
+    listInsertFits({ partMeta: part(name), measured: getPartMeasurements(part(name)), instanceId: 'sel', hovered: { opening, face }, receivingQuaternion: new THREE.Quaternion(), otherFeatures: beamF, currentQuaternion: new THREE.Quaternion() });
+  const ccBest = fitsFor('2x Wide, 2x2 Corner Connector')[0];
+  const ccHoles = holesFilledByFit(ccBest, { opening, face });
+  check(
+    'copy-insert: a corner connector\'s best fit fills 2 beam holes, the hovered one and its pattern neighbour 12.7 mm away',
+    ccHoles.length === 2 && ccHoles[0] === opening && near(ccHoles[1].origin.distanceTo(opening.origin), 12.7, 0.01),
+    JSON.stringify(ccHoles.map((h) => h.featureId))
+  );
+  const pinHoles = holesFilledByFit(fitsFor('0x2 Connector Pin')[0], { opening, face });
+  check('copy-insert: a single pin fills 1 hole', pinHoles.length === 1 && pinHoles[0] === opening);
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);

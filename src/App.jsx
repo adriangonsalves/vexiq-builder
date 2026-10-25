@@ -667,6 +667,36 @@ export default function App() {
     setSelectedId(copy.instanceId);
   };
 
+  // Ctrl/Cmd+double-click on a hole in the viewport: add a copy of a part seated in it, as one history
+  // step, keeping the original selected. Returns the copy's id.
+  const handleInsertCopy = (sourceId, pose, receivingLabel) => {
+    if (previewRef.current) return null;
+    const source = instances.find((i) => i.instanceId === sourceId);
+    const part = source ? catalogMap.get(source.partId) : null;
+    if (!source || !part) return null;
+    const labels = new Set(instances.map((i) => i.label));
+    let n = instances.filter((i) => i.partId === part.id).length + 1;
+    while (labels.has(`${part.name} #${n}`)) n++;
+    const copy = {
+      instanceId: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      partId: part.id,
+      label: `${part.name} #${n}`,
+      position: pose.position,
+      rotation: pose.rotation,
+      lastValidPosition: [...pose.position],
+      lastValidRotation: [...pose.rotation],
+      isIntersecting: false,
+      color: source.color || part.defaultColor,
+      visible: true,
+      locked: false
+    };
+    setInstances((prev) => [...prev, copy], {
+      label: `Insert copy of ${source.label} into ${receivingLabel}`
+    });
+    setActionFeedback({ message: `Inserted ${copy.label} into ${receivingLabel}`, isError: false });
+    return copy.instanceId;
+  };
+
   const handleDeleteSelected = () => {
     if (!selectedId) return;
     setInstances((prev) => prev.filter((i) => i.instanceId !== selectedId));
@@ -1253,6 +1283,7 @@ export default function App() {
             onToggleRotateRequest={preview ? noop : handleToggleRotateRequest}
             collisionRecheck={preview ? undefined : build.recheck}
             onPickStatus={setPickStatus}
+            onInsertCopy={preview ? noop : handleInsertCopy}
           />
 
           <div className="viewport-hud-top">
@@ -1335,6 +1366,9 @@ export default function App() {
                 </span>
                 <span title="Dragging snaps a pin or shaft onto a nearby hole's line; hold Alt to drag without it">
                   <kbd className="kbd">Alt</kbd> Drag w/o Hole Snap
+                </span>
+                <span title="With a part that has pins selected, hold Ctrl/Cmd to light the holes a copy would fill; double-click a hole to insert a copy">
+                  <kbd className="kbd">Ctrl/Cmd</kbd> + double-click: insert a copy
                 </span>
                 <span>
                   <kbd className="kbd">E</kbd> Rotate
