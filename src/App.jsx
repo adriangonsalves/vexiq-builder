@@ -1477,8 +1477,7 @@ export default function App() {
                   </div>
                   <div className="part-meta">
                     <span>{part.partNumber}</span>
-                    <span>•</span>
-                    <span>{part.connectorCount} holes/axes</span>
+                    <span className="part-meta-count">{part.connectorCount} holes/axes</span>
                   </div>
                 </div>
                 <span className="part-add-badge">+ Add</span>

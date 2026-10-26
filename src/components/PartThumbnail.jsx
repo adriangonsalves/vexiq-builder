@@ -5,10 +5,25 @@ import { loadPartAsset } from '../utils/geometryCache.js';
 const thumbnailDataUrlCache = new Map(); // "partId|defaultColor" -> string (dataURL)
 const thumbKey = (part) => `${part.id}|${part.defaultColor}`;
 
-// Near-white parts (connectors) lose their shape under the studio lights: draw them with stronger,
-// denser outlines and a less shiny surface so they read clearly against the dark card.
+export const THUMB_PX = 72; // shown size; rendered at 2x so it stays sharp on high-density screens
+const THUMB_RENDER_PX = THUMB_PX * 2;
+
+// Thumbnails sit on a light tile, and every part gets dark outlines, which contrast with the tile and
+// with the part: dark parts (beams, plates, gears) are lifted to a mid tone so both their shading and
+// the outlines show; near-white parts (connectors) get denser outlines and a less shiny surface.
+// The 3D view keeps the real colors.
 const LIGHT_PART_LUMINANCE = 0.85; // linear luminance; #f8fafc ≈ 0.94, Metal/Silver #e2e8f0 ≈ 0.77
-const isLightColor = (color) => color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722 > LIGHT_PART_LUMINANCE;
+const luminance = (color) => color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722;
+const MIN_THUMB_LIGHTNESS = 0.4; // HSL lightness; #1f2937 is 0.17, #374151 0.25, #64748b 0.39
+const THUMB_FILL = 0.95; // share of the tile the part's longest projected half-extent reaches
+
+/** The color a part is drawn with in its thumbnail: very dark colors lifted to a readable mid tone. */
+function thumbnailColor(hex) {
+  const color = new THREE.Color(hex || '#64748b');
+  const hsl = color.getHSL({ h: 0, s: 0, l: 0 });
+  if (hsl.l < MIN_THUMB_LIGHTNESS) color.setHSL(hsl.h, hsl.s, MIN_THUMB_LIGHTNESS);
+  return color;
+}
 let sharedThumbRenderer = null;
 let sharedThumbScene = null;
 let sharedThumbCamera = null;
@@ -21,19 +36,24 @@ function getThumbnailStudio() {
       alpha: true,
       preserveDrawingBuffer: true
     });
-    sharedThumbRenderer.setSize(112, 112);
+    sharedThumbRenderer.setSize(THUMB_RENDER_PX, THUMB_RENDER_PX);
     sharedThumbRenderer.setPixelRatio(1);
 
     sharedThumbScene = new THREE.Scene();
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+    // Studio light with a clear key from the viewer's side, so faces turned toward and away from it
+    // read as different shades
+    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
     sharedThumbScene.add(ambient);
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x64748b, 0.35);
+    sharedThumbScene.add(hemi);
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
     keyLight.position.set(80, 120, 100);
     sharedThumbScene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.65);
+    const fillLight = new THREE.DirectionalLight(0xdbeafe, 0.4);
     fillLight.position.set(-80, -60, -70);
     sharedThumbScene.add(fillLight);
 
@@ -67,26 +87,27 @@ function renderPartToDataUrl(part, geometries, localBox) {
     }
   }
 
-  const partColor = new THREE.Color(part.defaultColor || '#64748b');
-  const light = isLightColor(partColor);
+  const original = new THREE.Color(part.defaultColor || '#64748b');
+  const light = luminance(original) > LIGHT_PART_LUMINANCE;
+  const partColor = thumbnailColor(part.defaultColor);
 
   const mat = new THREE.MeshStandardMaterial({
     color: partColor,
-    roughness: light ? 0.55 : 0.35,
-    metalness: 0.15
+    roughness: light ? 0.6 : 0.45,
+    metalness: 0.1
   });
 
   const edgeMat = new THREE.LineBasicMaterial({
     color: 0x0f172a,
     transparent: true,
-    opacity: light ? 0.85 : 0.35
+    opacity: light ? 0.9 : 0.7
   });
 
   for (const geo of geometries) {
     const mesh = new THREE.Mesh(geo, mat);
     group.add(mesh);
 
-    const edgeGeo = new THREE.EdgesGeometry(geo, light ? 25 : 35);
+    const edgeGeo = new THREE.EdgesGeometry(geo, 25);
     const edges = new THREE.LineSegments(edgeGeo, edgeMat);
     edges.name = '__thumb_edges__';
     group.add(edges);
@@ -101,9 +122,26 @@ function renderPartToDataUrl(part, geometries, localBox) {
     size.set(20, 20, 20);
   }
 
-  const maxDim = Math.max(size.x, size.y, size.z, 6);
-  const dist = maxDim * 1.75;
+  // Frame by how big the part looks from this angle (not its longest side), so short parts aren't
+  // cut off and long racks aren't tiny: the nearest distance at which every box corner fits
   const viewDir = new THREE.Vector3(1.0, 0.78, 1.15).normalize();
+  camera.position.copy(center).add(viewDir);
+  camera.lookAt(center);
+  camera.updateMatrixWorld();
+  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+  const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+  const reach = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * THUMB_FILL;
+  const half = size.clone().multiplyScalar(0.5).max(new THREE.Vector3(3, 3, 3));
+  let dist = 0;
+  for (const sx of [-1, 1]) {
+    for (const sy of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        const offset = new THREE.Vector3(sx * half.x, sy * half.y, sz * half.z);
+        const across = Math.max(Math.abs(offset.dot(right)), Math.abs(offset.dot(up)));
+        dist = Math.max(dist, across / reach + offset.dot(viewDir));
+      }
+    }
+  }
 
   camera.position.copy(center).addScaledVector(viewDir, dist);
   camera.lookAt(center);
@@ -183,8 +221,8 @@ export default function PartThumbnail({ part, index }) {
         <img
           src={dataUrl}
           alt={part.name}
-          width={52}
-          height={52}
+          width={THUMB_PX}
+          height={THUMB_PX}
           className="part-thumb-img"
           {...imgProps}
         />

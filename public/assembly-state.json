@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "selectedId": "inst-1792874083401-ayt9",
+  "selectedId": null,
   "viewport": {
     "transformMode": "translate",
     "snapPitchFactor": 0.25,
@@ -8,7 +8,17 @@
     "showGrid": true,
     "showConnectors": false,
     "explodeMode": "off",
-    "focusTrigger": 0
+    "focusTrigger": 1,
+    "projection": "perspective",
+    "viewLayout": "stereo",
+    "stereoCrossEyed": false,
+    "stereoDepth": 3,
+    "viewAlongTrigger": {
+      "dir": null,
+      "n": 0
+    },
+    "shadows": true,
+    "ambientOcclusion": true
   },
   "instances": [
     {
@@ -501,9 +511,9 @@
       "partId": "large-chassis-corner-connector-228-2500-126-386",
       "label": "Large Chassis Corner Connector #1",
       "position": [
-        95.752,
-        -15.875,
-        -53.975
+        140.202,
+        63.5,
+        -139.7
       ],
       "rotation": [
         0,
@@ -511,9 +521,9 @@
         0
       ],
       "lastValidPosition": [
-        95.752,
-        -15.875,
-        -53.975
+        140.202,
+        63.5,
+        -139.7
       ],
       "lastValidRotation": [
         0,
@@ -640,9 +650,96 @@
       "color": "#2563eb",
       "visible": true,
       "locked": false
+    },
+    {
+      "instanceId": "inst-1793056423734-zsf6",
+      "partId": "48-tooth-gear-228-2500-228-335",
+      "label": "48 Tooth Gear #1",
+      "position": [
+        60.052,
+        12.7,
+        2.566
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        60.052,
+        12.7,
+        2.566
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#374151",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1793056463034-iyvv",
+      "partId": "24-tooth-gear-228-2500-227-314",
+      "label": "24 Tooth Gear #1",
+      "position": [
+        97.664,
+        11.528,
+        1.309
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        97.664,
+        11.528,
+        1.309
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#16a34a",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "instanceId": "inst-1793057019402-1lt9",
+      "partId": "3x-pitch-standoff-228-2500-069-189",
+      "label": "3x Pitch Standoff #1",
+      "position": [
+        21.952,
+        12.7,
+        -6.62
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "lastValidPosition": [
+        21.952,
+        12.7,
+        -6.62
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ],
+      "isIntersecting": false,
+      "color": "#475569",
+      "visible": true,
+      "locked": false
     }
   ],
-  "updatedAt": "2026-10-25T14:08:56.485Z",
+  "updatedAt": "2026-10-26T23:28:15.296Z",
   "history": {
     "version": 1,
     "base": [],
@@ -15524,9 +15621,1027 @@
             }
           }
         ]
+      },
+      {
+        "id": "step-mvpvgkgq-qf0tul",
+        "parentId": "step-mvn17kvn-2s17z5",
+        "at": 1793056358042,
+        "source": "app",
+        "label": "Add 40 Tooth Ratchet #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793056358041-lz70",
+              "partId": "40-tooth-ratchet-228-2500-1410-331",
+              "label": "40 Tooth Ratchet #1",
+              "position": [
+                0,
+                12.7,
+                101.6
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvgmtg-u0pxar",
+        "parentId": "step-mvpvgkgq-qf0tul",
+        "at": 1793056361092,
+        "source": "app",
+        "label": "Delete 40 Tooth Ratchet #1",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793056358041-lz70",
+              "partId": "40-tooth-ratchet-228-2500-1410-331",
+              "label": "40 Tooth Ratchet #1",
+              "position": [
+                0,
+                12.7,
+                101.6
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvgr58-96v0ra",
+        "parentId": "step-mvpvgmtg-u0pxar",
+        "at": 1793056366700,
+        "source": "app",
+        "label": "Add 40 Tooth Ratchet #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793056366700-ugee",
+              "partId": "40-tooth-ratchet-228-2500-1410-331",
+              "label": "40 Tooth Ratchet #1",
+              "position": [
+                60.052,
+                12.7,
+                -3.784
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvgv6d-3hgi0a",
+        "parentId": "step-mvpvgr58-96v0ra",
+        "at": 1793056371925,
+        "source": "app",
+        "label": "Move 40 Tooth Ratchet #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056366700-ugee",
+            "name": "40 Tooth Ratchet #1",
+            "before": {
+              "position": [
+                60.052,
+                12.7,
+                -3.784
+              ]
+            },
+            "after": {
+              "position": [
+                60.052,
+                12.7,
+                -0.609
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvgwf1-6lccim",
+        "parentId": "step-mvpvgv6d-3hgi0a",
+        "at": 1793056373533,
+        "source": "app",
+        "label": "Move 40 Tooth Ratchet #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056366700-ugee",
+            "name": "40 Tooth Ratchet #1",
+            "before": {
+              "position": [
+                60.052,
+                12.7,
+                -0.609
+              ]
+            },
+            "after": {
+              "position": [
+                60.052,
+                12.7,
+                2.566
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvhf12-lhnf3b",
+        "parentId": "step-mvpvgwf1-6lccim",
+        "at": 1793056397654,
+        "source": "app",
+        "label": "Delete 40 Tooth Ratchet #1",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793056366700-ugee",
+              "partId": "40-tooth-ratchet-228-2500-1410-331",
+              "label": "40 Tooth Ratchet #1",
+              "position": [
+                60.052,
+                12.7,
+                2.566
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                60.052,
+                12.7,
+                2.566
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvhn87-2sdi3g",
+        "parentId": "step-mvpvhf12-lhnf3b",
+        "at": 1793056408279,
+        "source": "app",
+        "label": "Add 48 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793056408279-qgrg",
+              "partId": "48-tooth-gear-228-2500-228-335",
+              "label": "48 Tooth Gear #1",
+              "position": [
+                0,
+                12.7,
+                101.6
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvhpie-a8qobf",
+        "parentId": "step-mvpvhn87-2sdi3g",
+        "at": 1793056411238,
+        "source": "app",
+        "label": "Delete 48 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793056408279-qgrg",
+              "partId": "48-tooth-gear-228-2500-228-335",
+              "label": "48 Tooth Gear #1",
+              "position": [
+                0,
+                12.7,
+                101.6
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvhz5i-qxlics",
+        "parentId": "step-mvpvhpie-a8qobf",
+        "at": 1793056423734,
+        "source": "app",
+        "label": "Add 48 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793056423734-zsf6",
+              "partId": "48-tooth-gear-228-2500-228-335",
+              "label": "48 Tooth Gear #1",
+              "position": [
+                60.052,
+                12.7,
+                -3.784
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvi1jl-9juqs6",
+        "parentId": "step-mvpvhz5i-qxlics",
+        "at": 1793056426833,
+        "source": "app",
+        "label": "Move 48 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056423734-zsf6",
+            "name": "48 Tooth Gear #1",
+            "before": {
+              "position": [
+                60.052,
+                12.7,
+                -3.784
+              ]
+            },
+            "after": {
+              "position": [
+                60.052,
+                12.7,
+                2.566
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvics0-w7ujie",
+        "parentId": "step-mvpvi1jl-9juqs6",
+        "at": 1793056441392,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                95.752,
+                -15.875,
+                -53.975
+              ]
+            },
+            "after": {
+              "position": [
+                95.752,
+                -15.875,
+                -139.7
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvipa0-ndkq98",
+        "parentId": "step-mvpvics0-w7ujie",
+        "at": 1793056457592,
+        "source": "app",
+        "label": "Add 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 23,
+            "part": {
+              "instanceId": "inst-1793056457592-b6yw",
+              "partId": "24-tooth-gear-228-2500-227-314",
+              "label": "24 Tooth Gear #1",
+              "position": [
+                25.4,
+                12.7,
+                101.6
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpviree-n5sbov",
+        "parentId": "step-mvpvipa0-ndkq98",
+        "at": 1793056460342,
+        "source": "app",
+        "label": "Delete 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 23,
+            "part": {
+              "instanceId": "inst-1793056457592-b6yw",
+              "partId": "24-tooth-gear-228-2500-227-314",
+              "label": "24 Tooth Gear #1",
+              "position": [
+                25.4,
+                12.7,
+                101.6
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvith6-va8coq",
+        "parentId": "step-mvpviree-n5sbov",
+        "at": 1793056463034,
+        "source": "app",
+        "label": "Add 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 23,
+            "part": {
+              "instanceId": "inst-1793056463034-iyvv",
+              "partId": "24-tooth-gear-228-2500-227-314",
+              "label": "24 Tooth Gear #1",
+              "position": [
+                60.052,
+                12.7,
+                -3.784
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvixp1-uwdmjd",
+        "parentId": "step-mvpvith6-va8coq",
+        "at": 1793056468501,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                60.052,
+                12.7,
+                -3.784
+              ]
+            },
+            "after": {
+              "position": [
+                104.502,
+                6.35,
+                -8.876
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvj3mg-lwooue",
+        "parentId": "step-mvpvixp1-uwdmjd",
+        "at": 1793056476184,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                104.502,
+                6.35,
+                -8.876
+              ]
+            },
+            "after": {
+              "position": [
+                104.502,
+                6.35,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvjdm9-xcmpxf",
+        "parentId": "step-mvpvj3mg-lwooue",
+        "at": 1793056489137,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                104.502,
+                6.35,
+                1.309
+              ]
+            },
+            "after": {
+              "position": [
+                98.374,
+                10.27,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvjj4k-dl3rkz",
+        "parentId": "step-mvpvjdm9-xcmpxf",
+        "at": 1793056496276,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                98.374,
+                10.27,
+                1.309
+              ]
+            },
+            "after": {
+              "position": [
+                98.241,
+                11.722,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvjw9g-oqt9aw",
+        "parentId": "step-mvpvjj4k-dl3rkz",
+        "at": 1793056513300,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                98.241,
+                11.722,
+                1.309
+              ]
+            },
+            "after": {
+              "position": [
+                98.152,
+                12.7,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvjx8a-btihsx",
+        "parentId": "step-mvpvjw9g-oqt9aw",
+        "at": 1793056514554,
+        "source": "app",
+        "label": "Move back 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                98.152,
+                12.7,
+                1.309
+              ]
+            },
+            "after": {
+              "position": [
+                98.241,
+                11.722,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvk541-2ivxnm",
+        "parentId": "step-mvpvjx8a-btihsx",
+        "at": 1793056524769,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                98.241,
+                11.722,
+                1.309
+              ]
+            },
+            "after": {
+              "position": [
+                110.041,
+                12.443,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvkcbm-gfbuto",
+        "parentId": "step-mvpvk541-2ivxnm",
+        "at": 1793056534114,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                110.041,
+                12.443,
+                1.309
+              ]
+            },
+            "after": {
+              "position": [
+                112.124,
+                12.562,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvkptp-9z7qyo",
+        "parentId": "step-mvpvkcbm-gfbuto",
+        "at": 1793056551613,
+        "source": "app",
+        "label": "Move Large Chassis Corner Connector #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1792880710372-03zt",
+            "name": "Large Chassis Corner Connector #1",
+            "before": {
+              "position": [
+                95.752,
+                -15.875,
+                -139.7
+              ]
+            },
+            "after": {
+              "position": [
+                140.202,
+                63.5,
+                -139.7
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvkv02-u4prdp",
+        "parentId": "step-mvpvkptp-9z7qyo",
+        "at": 1793056558322,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                112.124,
+                12.562,
+                1.309
+              ]
+            },
+            "after": {
+              "position": [
+                104.502,
+                6.35,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvmk1s-agi4sb",
+        "parentId": "step-mvpvkv02-u4prdp",
+        "at": 1793056637440,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                104.502,
+                6.35,
+                1.309
+              ]
+            },
+            "after": {
+              "position": [
+                99.281,
+                6.35,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvmly6-cebwhe",
+        "parentId": "step-mvpvmk1s-agi4sb",
+        "at": 1793056639902,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                99.281,
+                6.35,
+                1.309
+              ]
+            },
+            "after": {
+              "position": [
+                97.359,
+                7.31,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvmpki-gkxso7",
+        "parentId": "step-mvpvmly6-cebwhe",
+        "at": 1793056644594,
+        "source": "app",
+        "label": "Move 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "position": [
+                97.359,
+                7.31,
+                1.309
+              ]
+            },
+            "after": {
+              "position": [
+                97.664,
+                11.528,
+                1.309
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvmzm9-ipgd7v",
+        "parentId": "step-mvpvmpki-gkxso7",
+        "at": 1793056657617,
+        "source": "app",
+        "label": "Recolor 24 Tooth Gear #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793056463034-iyvv",
+            "name": "24 Tooth Gear #1",
+            "before": {
+              "color": "#374151"
+            },
+            "after": {
+              "color": "#16a34a"
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvuqru-099v0m",
+        "parentId": "step-mvpvmzm9-ipgd7v",
+        "at": 1793057019402,
+        "source": "app",
+        "label": "Add 3x Pitch Standoff #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 24,
+            "part": {
+              "instanceId": "inst-1793057019402-1lt9",
+              "partId": "3x-pitch-standoff-228-2500-069-189",
+              "label": "3x Pitch Standoff #1",
+              "position": [
+                50.8,
+                12.7,
+                101.6
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#475569",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvuwgi-i80gzm",
+        "parentId": "step-mvpvuqru-099v0m",
+        "at": 1793057026770,
+        "source": "app",
+        "label": "Move 3x Pitch Standoff #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793057019402-1lt9",
+            "name": "3x Pitch Standoff #1",
+            "before": {
+              "position": [
+                50.8,
+                12.7,
+                101.6
+              ]
+            },
+            "after": {
+              "position": [
+                76.2,
+                -50.8,
+                -111.125
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvv5k1-bq39km",
+        "parentId": "step-mvpvuwgi-i80gzm",
+        "at": 1793057038561,
+        "source": "app",
+        "label": "Move 3x Pitch Standoff #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793057019402-1lt9",
+            "name": "3x Pitch Standoff #1",
+            "before": {
+              "position": [
+                76.2,
+                -50.8,
+                -111.125
+              ]
+            },
+            "after": {
+              "position": [
+                63.5,
+                -25.4,
+                -25.4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvvlru-h1ypw0",
+        "parentId": "step-mvpvv5k1-bq39km",
+        "at": 1793057059578,
+        "source": "app",
+        "label": "Move 3x Pitch Standoff #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793057019402-1lt9",
+            "name": "3x Pitch Standoff #1",
+            "before": {
+              "position": [
+                63.5,
+                -25.4,
+                -25.4
+              ]
+            },
+            "after": {
+              "position": [
+                28.302,
+                6.35,
+                -25.4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvvpr4-dm4ztf",
+        "parentId": "step-mvpvvlru-h1ypw0",
+        "at": 1793057064736,
+        "source": "app",
+        "label": "Move 3x Pitch Standoff #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793057019402-1lt9",
+            "name": "3x Pitch Standoff #1",
+            "before": {
+              "position": [
+                28.302,
+                6.35,
+                -25.4
+              ]
+            },
+            "after": {
+              "position": [
+                21.952,
+                12.7,
+                -25.4
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "step-mvpvvrt1-tuxzj8",
+        "parentId": "step-mvpvvpr4-dm4ztf",
+        "at": 1793057067397,
+        "source": "app",
+        "label": "Move 3x Pitch Standoff #1",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793057019402-1lt9",
+            "name": "3x Pitch Standoff #1",
+            "before": {
+              "position": [
+                21.952,
+                12.7,
+                -25.4
+              ]
+            },
+            "after": {
+              "position": [
+                21.952,
+                12.7,
+                -6.62
+              ]
+            }
+          }
+        ]
       }
     ],
-    "headId": "step-mvn17kvn-2s17z5",
+    "headId": "step-mvpvvrt1-tuxzj8",
     "activeChild": {
       "root": "step-mvm1cbpd-8kprhe",
       "step-mvm1cbpd-8kprhe": "step-mvmho6hy-13n0rx",
@@ -15823,9 +16938,43 @@
       "step-mvn176n5-o2u7n3": "step-mvn17ig3-pzy3tj",
       "step-mvn17ig3-pzy3tj": "step-mvn17jdn-208g2q",
       "step-mvn17jdn-208g2q": "step-mvn17k4b-3yx9tb",
-      "step-mvn17k4b-3yx9tb": "step-mvn17kvn-2s17z5"
+      "step-mvn17k4b-3yx9tb": "step-mvn17kvn-2s17z5",
+      "step-mvn17kvn-2s17z5": "step-mvpvgkgq-qf0tul",
+      "step-mvpvgkgq-qf0tul": "step-mvpvgmtg-u0pxar",
+      "step-mvpvgmtg-u0pxar": "step-mvpvgr58-96v0ra",
+      "step-mvpvgr58-96v0ra": "step-mvpvgv6d-3hgi0a",
+      "step-mvpvgv6d-3hgi0a": "step-mvpvgwf1-6lccim",
+      "step-mvpvgwf1-6lccim": "step-mvpvhf12-lhnf3b",
+      "step-mvpvhf12-lhnf3b": "step-mvpvhn87-2sdi3g",
+      "step-mvpvhn87-2sdi3g": "step-mvpvhpie-a8qobf",
+      "step-mvpvhpie-a8qobf": "step-mvpvhz5i-qxlics",
+      "step-mvpvhz5i-qxlics": "step-mvpvi1jl-9juqs6",
+      "step-mvpvi1jl-9juqs6": "step-mvpvics0-w7ujie",
+      "step-mvpvics0-w7ujie": "step-mvpvipa0-ndkq98",
+      "step-mvpvipa0-ndkq98": "step-mvpviree-n5sbov",
+      "step-mvpviree-n5sbov": "step-mvpvith6-va8coq",
+      "step-mvpvith6-va8coq": "step-mvpvixp1-uwdmjd",
+      "step-mvpvixp1-uwdmjd": "step-mvpvj3mg-lwooue",
+      "step-mvpvj3mg-lwooue": "step-mvpvjdm9-xcmpxf",
+      "step-mvpvjdm9-xcmpxf": "step-mvpvjj4k-dl3rkz",
+      "step-mvpvjj4k-dl3rkz": "step-mvpvjw9g-oqt9aw",
+      "step-mvpvjw9g-oqt9aw": "step-mvpvjx8a-btihsx",
+      "step-mvpvjx8a-btihsx": "step-mvpvk541-2ivxnm",
+      "step-mvpvk541-2ivxnm": "step-mvpvkcbm-gfbuto",
+      "step-mvpvkcbm-gfbuto": "step-mvpvkptp-9z7qyo",
+      "step-mvpvkptp-9z7qyo": "step-mvpvkv02-u4prdp",
+      "step-mvpvkv02-u4prdp": "step-mvpvmk1s-agi4sb",
+      "step-mvpvmk1s-agi4sb": "step-mvpvmly6-cebwhe",
+      "step-mvpvmly6-cebwhe": "step-mvpvmpki-gkxso7",
+      "step-mvpvmpki-gkxso7": "step-mvpvmzm9-ipgd7v",
+      "step-mvpvmzm9-ipgd7v": "step-mvpvuqru-099v0m",
+      "step-mvpvuqru-099v0m": "step-mvpvuwgi-i80gzm",
+      "step-mvpvuwgi-i80gzm": "step-mvpvv5k1-bq39km",
+      "step-mvpvv5k1-bq39km": "step-mvpvvlru-h1ypw0",
+      "step-mvpvvlru-h1ypw0": "step-mvpvvpr4-dm4ztf",
+      "step-mvpvvpr4-dm4ztf": "step-mvpvvrt1-tuxzj8"
     },
-    "rev": 410
+    "rev": 444
   },
-  "historyRev": 410
+  "historyRev": 444
 }
