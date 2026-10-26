@@ -21,7 +21,7 @@
   - Interactive category filter pills with part counts.
   - Instant search by part name, VEX part number (`228-2500-...`), or category.
   - On-demand WebGL thumbnail rendering ([`src/components/PartThumbnail.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/PartThumbnail.jsx)) with viewport visibility deferral (`content-visibility: auto`).
-  - Near-white parts (connectors) are drawn with stronger, denser outlines so their shape reads on the dark card; a thumbnail is redrawn whenever its part's default color changes.
+  - 72 px thumbnails (rendered at 2x) on a light tile, framed to each part's size as seen from the thumbnail angle (short parts aren't cropped, long racks aren't tiny). Very dark parts are lifted to a mid tone in thumbnails only (the 3D view keeps real colors) and every part gets dark outlines, extra dense on near-white connectors, so holes and edges read. A thumbnail is redrawn whenever its part's default color changes. Long part names wrap to two lines.
 - **4,137 BVH-Verified Semantic Connection Ports:**
   - Every part is indexed with typed, raycast-verified local connection ports:
     - `pin_hole` (Cyan) — $\varnothing 4.8\text{ mm}$ round pin holes with through/blind classification and axial span `spanMm`.
