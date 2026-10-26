@@ -24,8 +24,12 @@ CAD tools solve this with orthographic views, one-click axis views, several view
   - The two images line up at the target, so the target appears at screen depth.
   - By default the left image is the left eye's view (parallel viewing, phone VR viewers). A **Cross-eyed** toggle swaps the images, because when crossing your eyes the right eye looks at the left image.
   - Stereo always uses perspective.
-  - Orbit, pan, zoom and clicking to select work in either half. Move/Rotate editing, mating and hole picking are off while stereo is on, and come back when it is turned off.
-- **Saving and MCP.** Projection, layout, cross-eyed and stereo depth are saved with the other viewport settings and restored on load. They don't create history steps. `configure_viewport` gains:
+  - Stereo is a full workbench: moving with snapping, Rotate mode, mating, hole picking and Ctrl-copy all work in whichever half the pointer is over. The gizmo and other aids are drawn in both pictures, so they are seen in depth.
+- **Hide side panels.** A toolbar toggle hides the parts library and Inspector, so the viewport (and the stereo pair, without full screen) takes the full width.
+  - A **Full screen** button fills the whole screen with the pair, hiding everything else, for easier viewing. `Esc` leaves it.
+- **Shadows (optional).** A Shadows toggle, off by default, makes the main light cast soft, subtle shadows. Parts shade each other, and the build casts a faint shadow on the ground under it, so surfaces look less flat. It shows in every view and layout.
+- **Ambient occlusion (optional).** A separate AO toggle, off by default, darkens creases and inside corners where faces meet. It works alone or with Shadows, so the two can be compared before deciding whether to keep both.
+- **Saving and MCP.** AO, shadows, projection, layout, cross-eyed and stereo depth are saved with the other viewport settings and restored on load. They don't create history steps. `configure_viewport` gains:
   - `projection`, `viewLayout`, `stereoCrossEyed` and `stereoDepth`;
   - a one-shot `viewAlong` (e.g. `"+x"`, `"-y"`) that turns the user's camera like the axis keys.
 - **Out of scope:**
@@ -42,7 +46,10 @@ CAD tools solve this with orthographic views, one-click axis views, several view
   - the clickable view cube;
   - saving the view settings and setting them over MCP.
 - `four-view-layout`: the large working view plus three view-only orthographic X/Y/Z views: framing, zoom and pan, and what is drawn in them.
-- `stereo-view`: side-by-side stereo pairs, separation that follows the distance, the depth setting, the cross-eyed swap, and what input works while stereo is on.
+- `stereo-view`: side-by-side stereo pairs, separation that follows the distance, the depth setting, the cross-eyed swap, distraction-free full screen, and what input works while stereo is on.
+
+- `render-ambient-occlusion`: the optional ambient occlusion effect that darkens creases and inside corners, toggled separately from shadows; saved and set over MCP.
+- `render-shadows`: the optional shadow pass (what casts and receives, the ground shadow, subtlety, following changes, every view), saved and set over MCP.
 
 ### Modified Capabilities
 (none: the history spec already says viewport settings don't create steps, and the new settings fall under it)

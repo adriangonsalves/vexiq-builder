@@ -428,6 +428,46 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
 }
 
 // ---------------------------------------------------------------------------
+// View options (openspec: view-options): projection, layout, stereo, viewAlong
+// ---------------------------------------------------------------------------
+{
+  writeState({ ...emptyState(), instances: [mk('Beam', '1x6 Beam', [0, 0, 0])] });
+  let res = await call('configure_viewport', { projection: 'orthographic', viewLayout: 'four', stereoCrossEyed: true, stereoDepth: 2, shadows: true, ambientOcclusion: true });
+  const stepsBefore = (readState().history?.steps || []).length; // the first write adds "Starting assembly"
+  let vp = readState().viewport;
+  check(
+    'configure_viewport saves projection, layout, cross-eyed, depth, shadows and AO',
+    !res.isError && vp.projection === 'orthographic' && vp.viewLayout === 'four' && vp.stereoCrossEyed === true && vp.stereoDepth === 2 && vp.shadows === true && vp.ambientOcclusion === true,
+    JSON.stringify(vp)
+  );
+  await call('configure_viewport', { showGrid: false });
+  vp = readState().viewport;
+  check('other viewport calls keep the view options', vp.projection === 'orthographic' && vp.viewLayout === 'four' && vp.stereoDepth === 2 && vp.shadows === true && vp.ambientOcclusion === true, JSON.stringify(vp));
+  res = await call('configure_viewport', { viewAlong: '+y' });
+  const first = readState().viewport.viewAlongTrigger;
+  await call('configure_viewport', { viewAlong: '+y' });
+  const second = readState().viewport.viewAlongTrigger;
+  check('viewAlong turns the camera once per call (the trigger counts up)', first?.dir === '+y' && second?.dir === '+y' && second.n === first.n + 1, JSON.stringify([first, second]));
+  check('view options add no history steps', (readState().history?.steps || []).length === stepsBefore);
+  const bad = [
+    [{ projection: 'fisheye' }, /projection must be one of: perspective, orthographic/],
+    [{ viewLayout: 'quad' }, /viewLayout must be one of: single, four, stereo/],
+    [{ viewAlong: 'up' }, /viewAlong must be one of: \+x, -x, \+y, -y, \+z, -z/],
+    [{ stereoDepth: 5 }, /stereoDepth must be a number from 0.25 to 3/],
+    [{ stereoCrossEyed: 'yes' }, /stereoCrossEyed must be true or false/],
+    [{ shadows: 'on' }, /shadows must be true or false/],
+    [{ ambientOcclusion: 1 }, /ambientOcclusion must be true or false/]
+  ];
+  const vpBefore = JSON.stringify(readState().viewport);
+  const refused = [];
+  for (const [args, message] of bad) {
+    const r = await call('configure_viewport', args);
+    if (!(r.isError && message.test(r.data?.error || ''))) refused.push(`${JSON.stringify(args)} -> ${JSON.stringify(r.data)}`);
+  }
+  check('bad view options are refused with the allowed values, and nothing is saved', refused.length === 0 && JSON.stringify(readState().viewport) === vpBefore, refused.join(' | '));
+}
+
+// ---------------------------------------------------------------------------
 // 5.1 appSync on every change
 // ---------------------------------------------------------------------------
 {

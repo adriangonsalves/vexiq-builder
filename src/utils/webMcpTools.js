@@ -1,5 +1,10 @@
 const VEX_PITCH_MM = 12.7;
 const TRANSFORM_MODES = ['translate', 'rotate'];
+const VIEW_OPTIONS = {
+  projection: ['perspective', 'orthographic'],
+  viewLayout: ['single', 'four', 'stereo'],
+  viewAlong: ['+x', '-x', '+y', '-y', '+z', '-z']
+};
 const CLEAR_MODES = ['empty', 'starter'];
 
 /**
@@ -139,7 +144,7 @@ export function registerVexIqWebMcpTools(contextRef) {
     {
       name: 'configure_viewport',
       description:
-        'Updates the active 3D gizmo mode, grid visibility, hole axis overlay, or camera framing.',
+        'Updates the active 3D gizmo mode, grid visibility, hole axis overlay, camera framing, or view options (projection, layout, stereo, a camera turn along an axis).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -160,16 +165,33 @@ export function registerVexIqWebMcpTools(contextRef) {
           focusCamera: {
             type: 'boolean',
             description: 'Whether to center the camera on the scene.'
-          }
+          },
+          projection: { type: 'string', enum: VIEW_OPTIONS.projection, description: 'Main view projection.' },
+          viewLayout: { type: 'string', enum: VIEW_OPTIONS.viewLayout, description: 'Single view, four-view, or side-by-side stereo.' },
+          stereoCrossEyed: { type: 'boolean', description: 'Swap the stereo pictures for cross-eyed viewing.' },
+          stereoDepth: { type: 'number', minimum: 0.25, maximum: 3, description: 'Stereo depth (1 by default).' },
+          viewAlong: { type: 'string', enum: VIEW_OPTIONS.viewAlong, description: 'Turn the camera once to look from that side.' },
+          shadows: { type: 'boolean', description: 'Soft shadows from the main light (off by default).' },
+          ambientOcclusion: { type: 'boolean', description: 'Darken creases and inside corners (off by default).' }
         }
       },
-      execute({ transformMode = 'translate', showGrid, showConnectors, focusCamera } = {}) {
+      execute({ transformMode = 'translate', showGrid, showConnectors, focusCamera, projection, viewLayout, stereoCrossEyed, stereoDepth, viewAlong, shadows, ambientOcclusion } = {}) {
         const ctx = contextRef.current;
         if (!ctx) return { error: 'Application context is not ready.' };
         if (transformMode && !TRANSFORM_MODES.includes(transformMode)) {
           return { error: 'Unsupported transform mode.', supportedModes: TRANSFORM_MODES };
         }
-        ctx.configureViewport({ transformMode, showGrid, showConnectors, focusCamera });
+        for (const [key, value] of Object.entries({ projection, viewLayout, viewAlong })) {
+          if (value !== undefined && !VIEW_OPTIONS[key].includes(value)) {
+            return { error: `${key} must be one of: ${VIEW_OPTIONS[key].join(', ')}.` };
+          }
+        }
+        if (stereoDepth !== undefined && !(Number(stereoDepth) >= 0.25 && Number(stereoDepth) <= 3)) {
+          return { error: 'stereoDepth must be a number from 0.25 to 3.' };
+        }
+        if (shadows !== undefined && typeof shadows !== 'boolean') return { error: 'shadows must be true or false.' };
+        if (ambientOcclusion !== undefined && typeof ambientOcclusion !== 'boolean') return { error: 'ambientOcclusion must be true or false.' };
+        ctx.configureViewport({ transformMode, showGrid, showConnectors, focusCamera, projection, viewLayout, stereoCrossEyed, stereoDepth, viewAlong, shadows, ambientOcclusion });
         return { ok: true };
       },
       annotations: { readOnlyHint: false }

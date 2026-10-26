@@ -264,7 +264,7 @@ const TOOLS = [
   {
     name: 'configure_viewport',
     description:
-      'Configure the 3D viewport controls, selection, VEX Pitch snap settings, hole-axis overlay, and camera focus.',
+      'Configure the 3D viewport controls, selection, VEX Pitch snap settings, hole-axis overlay, camera focus, and view options: soft shadows, ambient occlusion, perspective/orthographic projection, the layout (single view, four-view with front/top/side views, side-by-side stereo), stereo cross-eyed and depth, and a one-shot camera turn along an axis.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -301,6 +301,39 @@ const TOOLS = [
         focusCamera: {
           type: 'boolean',
           description: 'If true, triggers the 3D camera to frame the selected part or entire assembly.'
+        },
+        projection: {
+          type: 'string',
+          enum: ['perspective', 'orthographic'],
+          description: "Main view projection. Stereo always draws in perspective and keeps this for later."
+        },
+        viewLayout: {
+          type: 'string',
+          enum: ['single', 'four', 'stereo'],
+          description: "'four': the working view plus view-only front (X), top (Y) and side (Z) views. 'stereo': side-by-side stereo pair (view only, no editing)."
+        },
+        stereoCrossEyed: {
+          type: 'boolean',
+          description: 'Swap the stereo pictures for cross-eyed viewing (false: parallel viewing / phone VR viewers).'
+        },
+        stereoDepth: {
+          type: 'number',
+          minimum: 0.25,
+          maximum: 3,
+          description: 'Stereo depth: scales the eye separation (distance to target / 30). 1 by default.'
+        },
+        ambientOcclusion: {
+          type: 'boolean',
+          description: 'Ambient occlusion: darkens creases and inside corners where faces meet; separate from shadows (off by default).'
+        },
+        shadows: {
+          type: 'boolean',
+          description: 'Soft shadows from the main light: parts shade each other and the build casts a faint ground shadow (off by default).'
+        },
+        viewAlong: {
+          type: 'string',
+          enum: ['+x', '-x', '+y', '-y', '+z', '-z'],
+          description: "Turn the user's camera once to look from that side ('+x' front, '+y' top with +X up, '+z' side), like the 1/2/3 keys."
         }
       }
     }
@@ -969,8 +1002,31 @@ async function executeTool(name, args = {}) {
   }
 
   if (name === 'configure_viewport') {
+    const allowed = {
+      projection: ['perspective', 'orthographic'],
+      viewLayout: ['single', 'four', 'stereo'],
+      viewAlong: ['+x', '-x', '+y', '-y', '+z', '-z']
+    };
+    for (const [key, values] of Object.entries(allowed)) {
+      if (args[key] !== undefined && !values.includes(args[key])) {
+        return { isError: true, error: `${key} must be one of: ${values.join(', ')} (got ${JSON.stringify(args[key])}).` };
+      }
+    }
+    if (args.stereoDepth !== undefined && !(Number(args.stereoDepth) >= 0.25 && Number(args.stereoDepth) <= 3)) {
+      return { isError: true, error: `stereoDepth must be a number from 0.25 to 3 (got ${JSON.stringify(args.stereoDepth)}).` };
+    }
+    if (args.ambientOcclusion !== undefined && typeof args.ambientOcclusion !== 'boolean') {
+      return { isError: true, error: `ambientOcclusion must be true or false (got ${JSON.stringify(args.ambientOcclusion)}).` };
+    }
+    if (args.shadows !== undefined && typeof args.shadows !== 'boolean') {
+      return { isError: true, error: `shadows must be true or false (got ${JSON.stringify(args.shadows)}).` };
+    }
+    if (args.stereoCrossEyed !== undefined && typeof args.stereoCrossEyed !== 'boolean') {
+      return { isError: true, error: `stereoCrossEyed must be true or false (got ${JSON.stringify(args.stereoCrossEyed)}).` };
+    }
     const state = readAssemblyState();
     const prevVp = state.viewport || {};
+    const prevAlong = prevVp.viewAlongTrigger || { dir: null, n: 0 };
     const nextViewport = {
       transformMode: args.transformMode ?? prevVp.transformMode ?? 'translate',
       snapPitchFactor:
@@ -981,7 +1037,15 @@ async function executeTool(name, args = {}) {
       showConnectors:
         args.showConnectors !== undefined ? Boolean(args.showConnectors) : prevVp.showConnectors ?? true,
       explodeMode: args.explodeMode ?? prevVp.explodeMode ?? 'off',
-      focusTrigger: args.focusCamera ? (prevVp.focusTrigger || 0) + 1 : prevVp.focusTrigger || 0
+      focusTrigger: args.focusCamera ? (prevVp.focusTrigger || 0) + 1 : prevVp.focusTrigger || 0,
+      projection: args.projection ?? prevVp.projection ?? 'perspective',
+      viewLayout: args.viewLayout ?? prevVp.viewLayout ?? 'single',
+      stereoCrossEyed: args.stereoCrossEyed ?? prevVp.stereoCrossEyed ?? false,
+      stereoDepth: args.stereoDepth !== undefined ? Number(args.stereoDepth) : prevVp.stereoDepth ?? 1,
+      shadows: args.shadows ?? prevVp.shadows ?? false,
+      ambientOcclusion: args.ambientOcclusion ?? prevVp.ambientOcclusion ?? false,
+      // A one-shot turn: the app turns the camera when the count goes up
+      viewAlongTrigger: args.viewAlong ? { dir: args.viewAlong, n: (prevAlong.n || 0) + 1 } : prevAlong
     };
 
     const nextSelectedId =

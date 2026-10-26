@@ -84,6 +84,19 @@ The cube SHALL be shown in single and four-view layouts. It SHALL NOT be shown i
 - **WHEN** the user clicks a part just outside the cube's area
 - **THEN** that part is selected as usual
 
+### Requirement: Hide side panels
+A toolbar toggle SHALL hide and show the two side panels (the parts library on the left and the Inspector on the right), so the viewport takes the full width under the toolbar. It SHALL work in every layout: Single, four-view, and Stereo, without needing full screen. The viewport, its panes and the stereo pair SHALL resize at once, and the camera SHALL keep its view.
+
+The choice SHALL be remembered in this browser across reloads. It is not part of the saved build. When the panels are hidden, the toggle SHALL remain in the toolbar to bring them back.
+
+#### Scenario: Wide stereo without full screen
+- **WHEN** Stereo is on and the user clicks the hide-panels toggle
+- **THEN** both side panels disappear, the stereo pair spreads across the full width under the toolbar, and editing still works
+
+#### Scenario: Panels come back
+- **WHEN** the panels are hidden and the user clicks the toggle again
+- **THEN** the parts library and Inspector are back, and the viewport shrinks to fit between them
+
 ### Requirement: View settings saved and set over MCP
 These settings SHALL be saved with the other viewport settings and restored when the build loads:
 - the projection;

@@ -3,6 +3,10 @@ import * as THREE from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { loadPartAsset } from '../utils/geometryCache.js';
 import {
   MAX_AXIAL_GAP_MM,
@@ -303,6 +307,80 @@ function createHoleHighlightOverlay() {
   return { group, show, dispose };
 }
 
+/**
+ * World size that keeps an overlay at a constant size on screen at `position`: the same factor
+ * TransformControls uses for its gizmo, for perspective and orthographic cameras.
+ */
+function gizmoScaleFactor(camera, position) {
+  if (camera.isOrthographicCamera) return (camera.top - camera.bottom) / camera.zoom;
+  return position.distanceTo(camera.position) * Math.min((1.9 * Math.tan((Math.PI * camera.fov) / 360)) / camera.zoom, 7);
+}
+
+const SHADOW_MAP_SIZE = 4096; // shadow-map texels per side
+
+/** The 8 corners of a box. */
+function boxCorners(box) {
+  const out = [];
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) out.push(new THREE.Vector3(x, y, z));
+  return out;
+}
+
+/** Axis-aligned bounds of `points` after `matrix` (e.g. into a light's view space). */
+function lightSpaceBounds(points, matrix) {
+  const b = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+  const v = new THREE.Vector3();
+  for (const p of points) {
+    v.copy(p).applyMatrix4(matrix);
+    b.minX = Math.min(b.minX, v.x);
+    b.maxX = Math.max(b.maxX, v.x);
+    b.minY = Math.min(b.minY, v.y);
+    b.maxY = Math.max(b.maxY, v.y);
+    b.minZ = Math.min(b.minZ, v.z);
+    b.maxZ = Math.max(b.maxZ, v.z);
+  }
+  return b;
+}
+
+/**
+ * Corners of `cam`'s view, cut to the depths where `scenePoints` lie (so a far plane 5 m away
+ * doesn't swamp the region), or null when the scene is behind the camera.
+ */
+function viewFrustumCorners(cam, scenePoints) {
+  cam.updateMatrixWorld();
+  const origin = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
+  const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).normalize();
+  const up = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1).normalize();
+  const forward = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 2).normalize().negate();
+  const depths = scenePoints.map((p) => p.clone().sub(origin).dot(forward));
+  const far = Math.max(...depths);
+  if (cam.isPerspectiveCamera && far <= cam.near) return null;
+  const near = cam.isPerspectiveCamera ? Math.max(cam.near, Math.min(...depths)) : Math.min(...depths);
+  const corners = [];
+  for (const d of [near, far]) {
+    const hh = cam.isPerspectiveCamera ? (d * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))) / cam.zoom : (cam.top - cam.bottom) / 2 / cam.zoom;
+    const hw = cam.isPerspectiveCamera ? hh * cam.aspect : (cam.right - cam.left) / 2 / cam.zoom;
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+      corners.push(origin.clone().addScaledVector(forward, d).addScaledVector(right, sx * hw).addScaledVector(up, sy * hh));
+    }
+  }
+  return corners;
+}
+
+/** Fits a camera's frustum to a pane's shape (orthographic: keeps its view height at zoom 1). */
+function fitCameraToPane(cam, pane) {
+  const aspect = pane.width / pane.height;
+  if (cam.isPerspectiveCamera) {
+    cam.aspect = aspect;
+  } else {
+    const h = cam.userData.viewHeight;
+    cam.top = h / 2;
+    cam.bottom = -h / 2;
+    cam.left = (-h * aspect) / 2;
+    cam.right = (h * aspect) / 2;
+  }
+  cam.updateProjectionMatrix();
+}
+
 const TOUCH_PROBE_MM = 2 * COLLISION_EROSION_MM + 0.15; // closer than this (~0.9 mm) counts as touching
 const PICK_COLOR = 0x22d3ee; // cyan: the hovered hole and the preview while picking a hole
 const PICK_TAKEN_COLOR = 0x9ca3af; // grey: a hovered hole that already has a part in it
@@ -487,13 +565,10 @@ function createMateArrowOverlay() {
     arrows.forEach((arrow, i) => arrow.material.color.setHex(i === index ? ARROW_HOVER_COLOR : ARROW_COLOR));
   };
 
-  // Same screen-size factor TransformControls uses for its gizmo
   const updateScale = (camera) => {
     if (!group.visible) return;
     for (const arrow of arrows.slice(0, shownCount)) {
-      const factor =
-        arrow.root.position.distanceTo(camera.position) *
-        Math.min((1.9 * Math.tan((Math.PI * camera.fov) / 360)) / camera.zoom, 7);
+      const factor = gizmoScaleFactor(camera, arrow.root.position);
       arrow.root.scale.setScalar((factor * 0.95) / 4);
     }
   };
@@ -674,12 +749,9 @@ function createRotateGizmo() {
     for (const ring of rings) ring.slice.visible = false;
   };
 
-  // Same screen-size factor TransformControls uses for its gizmo
   const updateScale = (camera) => {
     if (!group.visible) return;
-    const factor =
-      group.position.distanceTo(camera.position) *
-      Math.min((1.9 * Math.tan((Math.PI * camera.fov) / 360)) / camera.zoom, 7);
+    const factor = gizmoScaleFactor(camera, group.position);
     for (const ring of rings.slice(0, shownCount)) {
       ring.root.scale.setScalar(Math.max((factor * 0.95) / 6, ring.minRadius / OUTER));
     }
@@ -723,6 +795,117 @@ const wrapDeg = (deg) => {
   const w = ((((deg + 180) % 360) + 360) % 360) - 180;
   return w === -180 ? 180 : w;
 };
+
+const VIEW_CUBE_PX = 110; // on-screen size of the view cube's square
+const VIEW_CUBE_RIGHT = 12; // gap to the main view's right edge
+const VIEW_CUBE_TOP = 60; // below the top HUD pills
+const VIEW_CUBE_LABELS = {
+  '1,0,0': ['+X', 'Front'],
+  '-1,0,0': ['−X', 'Back'],
+  '0,1,0': ['+Y', 'Top'],
+  '0,-1,0': ['−Y', 'Bottom'],
+  '0,0,1': ['+Z', ''],
+  '0,0,-1': ['−Z', '']
+};
+
+/**
+ * The clickable view cube: its own scene and orthographic camera, drawn over the main view's
+ * top-right corner. The cube's shell is split into 26 regions (6 faces, 12 edges, 8 corners); each
+ * region's `direction` (the sum of its face normals) is the view a click turns the camera to.
+ */
+function createViewCube() {
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-1.75, 1.75, 1.75, -1.75, 0.1, 20);
+  // Soft light from over the viewer's shoulder, so the faces read as a solid
+  scene.add(new THREE.AmbientLight(0xffffff, 1.9));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
+  keyLight.position.set(0.6, 1, 1);
+  camera.add(keyLight);
+  scene.add(camera);
+  const colors = { face: 0xe2e8f0, edge: 0xb6c2d1, corner: 0x8796ab, hover: 0x22d3ee };
+  const regions = [];
+  const disposables = [];
+  const span = (c) => (c === 0 ? [1.4, 0] : [0.3, 0.85 * c]); // [size, center] along one axis
+  for (const i of [-1, 0, 1]) {
+    for (const j of [-1, 0, 1]) {
+      for (const k of [-1, 0, 1]) {
+        const zeros = [i, j, k].filter((c) => c === 0).length;
+        if (zeros === 3) continue;
+        const kind = zeros === 2 ? 'face' : zeros === 1 ? 'edge' : 'corner';
+        const [sx, cx] = span(i);
+        const [sy, cy] = span(j);
+        const [sz, cz] = span(k);
+        const geo = new THREE.BoxGeometry(sx, sy, sz);
+        const mat = new THREE.MeshLambertMaterial({ color: colors[kind] });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(cx, cy, cz);
+        mesh.userData = { kind, direction: new THREE.Vector3(i, j, k).normalize() };
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x475569 }));
+        mesh.add(edges);
+        scene.add(mesh);
+        regions.push(mesh);
+        disposables.push(geo, mat, edges.geometry, edges.material);
+      }
+    }
+  }
+  // Labels on the faces; top and bottom read with +X up, like the top and bottom views
+  for (const [key, [axisText, name]] of Object.entries(VIEW_CUBE_LABELS)) {
+    const normal = new THREE.Vector3(...key.split(',').map(Number));
+    const up = Math.abs(normal.y) > 0.5 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `bold ${name ? 40 : 52}px system-ui, sans-serif`;
+    ctx.fillText(axisText, 64, name ? 50 : 64);
+    if (name) {
+      ctx.font = '600 26px system-ui, sans-serif';
+      ctx.fillText(name, 64, 90);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
+    const geo = new THREE.PlaneGeometry(1.4, 1.4);
+    const label = new THREE.Mesh(geo, mat);
+    label.position.copy(normal).multiplyScalar(1.002);
+    const right = new THREE.Vector3().crossVectors(up, normal);
+    label.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, normal));
+    label.raycast = () => {}; // clicks go to the face region under it
+    scene.add(label);
+    disposables.push(texture, mat, geo);
+  }
+
+  const raycaster = new THREE.Raycaster();
+  let hovered = -1;
+  return {
+    scene,
+    camera,
+    /** Turns the cube to match the main camera's view direction. */
+    sync(mainCamera) {
+      camera.quaternion.copy(mainCamera.quaternion);
+      camera.position.set(0, 0, 6).applyQuaternion(mainCamera.quaternion);
+      camera.updateMatrixWorld();
+    },
+    /** Region index under a point given in the cube square's NDC, or -1. */
+    pick(ndc) {
+      raycaster.setFromCamera(ndc, camera);
+      const hit = raycaster.intersectObjects(regions, false)[0];
+      return hit ? regions.indexOf(hit.object) : -1;
+    },
+    direction: (index) => regions[index].userData.direction.clone(),
+    setHover(index) {
+      if (index === hovered) return;
+      if (hovered >= 0) regions[hovered].material.color.setHex(colors[regions[hovered].userData.kind]);
+      hovered = index;
+      if (index >= 0) regions[index].material.color.setHex(colors.hover);
+    },
+    dispose() {
+      for (const d of disposables) d.dispose();
+    }
+  };
+}
 
 /**
  * HTML angle labels for the rotate rings, laid over the canvas inside `parent`. Each label is a
@@ -1028,11 +1211,38 @@ export default function Viewport3D({
   onToggleRotateRequest,
   collisionRecheck,
   onPickStatus,
-  onInsertCopy
+  onInsertCopy,
+  projection = 'perspective',
+  viewLayout = 'single',
+  stereoCrossEyed = false,
+  stereoDepth = 1,
+  viewAlongTrigger,
+  immersive = false,
+  shadows = false,
+  ambientOcclusion = false
 }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
+  const panesRef = useRef(null); // { main } pane rectangles, CSS px within the viewport
+  const applyLayoutRef = useRef(null); // () => void: resize the canvas and panes
+  const renderFrameRef = useRef(null); // () => void: draw every pane now
+  const updateShadowsRef = useRef(null); // () => void: fit the shadow light and redraw its map
+  const inputElRef = useRef(null); // the element over the main view that takes pointer input
+  const activateCameraRef = useRef(null); // (camera) => void, set up with the controls
+  // The camera pointer input is judged from: the main camera, or in stereo the working half's eye
+  const pointerCameraRef = useRef(() => cameraRef.current);
+  const perspCameraRef = useRef(null);
+  const miniViewsRef = useRef([]); // four-view small views: [{ camera, el, auto, rect, ... }]
+  const orthoCameraRef = useRef(null); // height of its view at zoom 1 in userData.viewHeight
+  const shadowsRef = useRef(shadows);
+  shadowsRef.current = shadows;
+  const aoRef = useRef(ambientOcclusion);
+  aoRef.current = ambientOcclusion;
+  const viewLayoutRef = useRef(viewLayout);
+  viewLayoutRef.current = viewLayout;
+  const stereoRef = useRef({ crossEyed: stereoCrossEyed, depth: stereoDepth });
+  stereoRef.current = { crossEyed: stereoCrossEyed, depth: stereoDepth };
   const rendererRef = useRef(null);
   const orbitRef = useRef(null);
   const transformRef = useRef(null);
@@ -1542,6 +1752,83 @@ export default function Viewport3D({
     feedback(`${stacked ? 'Stacked on' : 'Mated with'} ${labels.join(', ')}`);
   };
 
+  // --- View options (openspec: view-options) --------------------------------------------------------
+
+  /** Zooms an orthographic camera to show what a perspective camera shows from `distance` away. */
+  const setOrthoViewDistance = (ortho, distance) => {
+    const halfFov = THREE.MathUtils.degToRad(perspCameraRef.current.fov / 2);
+    ortho.zoom = ortho.userData.viewHeight / (2 * distance * Math.tan(halfFov));
+    ortho.updateProjectionMatrix();
+  };
+
+  /**
+   * Makes the main view perspective or orthographic, keeping the orbit target, the view direction
+   * and the size of things at the target's depth.
+   */
+  const switchProjection = (kind) => {
+    const persp = perspCameraRef.current;
+    const ortho = orthoCameraRef.current;
+    const orbit = orbitRef.current;
+    const from = cameraRef.current;
+    const to = kind === 'orthographic' ? ortho : persp;
+    if (!persp || !ortho || !orbit || from === to) return;
+    const target = orbit.target;
+    const halfFov = THREE.MathUtils.degToRad(persp.fov / 2);
+    const offset = from.position.clone().sub(target);
+    if (to === ortho) {
+      ortho.userData.viewHeight = 2 * offset.length() * Math.tan(halfFov);
+      ortho.zoom = 1;
+      ortho.position.copy(from.position);
+    } else {
+      const distance = ortho.userData.viewHeight / ortho.zoom / (2 * Math.tan(halfFov));
+      persp.position.copy(target).addScaledVector(offset.normalize(), distance);
+    }
+    to.up.copy(from.up);
+    to.quaternion.copy(from.quaternion);
+    const panes = panesRef.current;
+    if (panes) fitCameraToPane(to, panes.main);
+    activateCameraRef.current?.(to);
+  };
+
+  const VIEW_ANIM_MS = 300;
+  const viewAnimRef = useRef(0); // rAF id of the running camera turn
+
+  /**
+   * Turns the main camera to look from `direction` (world, from the target toward the camera) over
+   * VIEW_ANIM_MS, about the orbit target, keeping the distance (orthographic: the zoom). Looking
+   * straight up or down sits just off the pole so +X ends up at the top of the picture.
+   */
+  const animateViewTo = (direction) => {
+    const cam = cameraRef.current;
+    const orbit = orbitRef.current;
+    if (!cam || !orbit) return;
+    const end = direction.clone().normalize();
+    if (Math.abs(end.y) > 0.999) end.set(-1e-4 * Math.sign(end.y), Math.sign(end.y), 0).normalize();
+    const target = orbit.target.clone();
+    const offset = cam.position.clone().sub(target);
+    const distance = offset.length();
+    const start = offset.normalize();
+    const turn = new THREE.Quaternion().setFromUnitVectors(start, end);
+    const step = new THREE.Quaternion();
+    cancelAnimationFrame(viewAnimRef.current);
+    const damping = orbit.enableDamping;
+    orbit.enableDamping = false; // leftover orbit momentum would fight the turn
+    const t0 = performance.now();
+    const tick = () => {
+      const t = Math.min(1, (performance.now() - t0) / VIEW_ANIM_MS);
+      const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+      step.identity().slerp(turn, eased);
+      const dir = t < 1 ? start.clone().applyQuaternion(step) : end;
+      const active = cameraRef.current;
+      active.position.copy(target).addScaledVector(dir, distance);
+      active.lookAt(target);
+      orbit.update();
+      if (t < 1) viewAnimRef.current = requestAnimationFrame(tick);
+      else orbit.enableDamping = damping;
+    };
+    tick();
+  };
+
   // --- Hole picking (openspec: hole-pick-insert) -----------------------------------------------------
 
   const PICK_HOVER_PX = 24;
@@ -1722,7 +2009,7 @@ export default function Viewport3D({
       transform.enabled = true;
       transform.getHelper().visible = transform.object !== undefined;
     }
-    if (rendererRef.current) rendererRef.current.domElement.style.cursor = '';
+    if (inputElRef.current) inputElRef.current.style.cursor = '';
     if (pick.kind === 'pick') refreshRotateSetup();
     emitPickStatus();
   };
@@ -1734,10 +2021,11 @@ export default function Viewport3D({
    */
   const updatePickHover = (canvasX, canvasY) => {
     const pick = pickModeRef.current;
-    const camera = cameraRef.current;
-    const renderer = rendererRef.current;
-    if (!pick || !camera || !renderer) return;
-    const rect = renderer.domElement.getBoundingClientRect();
+    const camera = pointerCameraRef.current(); // in stereo, the working half's eye
+    const inputEl = inputElRef.current;
+    if (!pick || !camera || !inputEl) return;
+    const rect = inputEl.getBoundingClientRect();
+    const eye = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld); // stereo eyes don't keep .position
     const near = [];
     const ndc = new THREE.Vector3();
     for (const c of pick.candidates) {
@@ -1747,7 +2035,7 @@ export default function Viewport3D({
       const sy = ((1 - ndc.y) / 2) * rect.height;
       const screen = Math.hypot(sx - canvasX, sy - canvasY);
       if (screen > PICK_HOVER_PX) continue;
-      near.push({ c, screen, depth: camera.position.distanceTo(c.face.point) });
+      near.push({ c, screen, depth: eye.distanceTo(c.face.point) });
     }
     near.sort((a, b) => a.depth - b.depth);
     const front = near.filter((n) => n.depth <= near[0]?.depth + 2).sort((a, b) => a.screen - b.screen)[0]?.c ?? null;
@@ -1776,8 +2064,8 @@ export default function Viewport3D({
           });
       pick.fitIndex = 0;
     }
-    if (pick.kind === 'copy') renderer.domElement.style.cursor = pick.hovered ? 'copy' : '';
-    else renderer.domElement.style.cursor = pick.hovered ? 'pointer' : 'crosshair';
+    if (pick.kind === 'copy') inputEl.style.cursor = pick.hovered ? 'copy' : '';
+    else inputEl.style.cursor = pick.hovered ? 'pointer' : 'crosshair';
     renderPick();
   };
 
@@ -1970,7 +2258,13 @@ export default function Viewport3D({
       rotateMessageKeyRef.current = key;
     };
 
-    if (transformModeRef.current !== 'rotate' || !group || !inst || !partMeta || inst.visible === false) {
+    if (
+      transformModeRef.current !== 'rotate' ||
+      !group ||
+      !inst ||
+      !partMeta ||
+      inst.visible === false
+    ) {
       return clear();
     }
     if (inst.locked) return clear('Part is locked');
@@ -2159,8 +2453,10 @@ export default function Viewport3D({
 
       // Frame the whole assembly (or one part) from a fixed direction per standard view
       const VIEW_DIRS = { iso: [1, 0.75, 1], front: [1, 0, 0], side: [0, 0, 1], top: [0, 1, 0] };
-      const shotCamera = camera.clone();
-      shotCamera.aspect = width / height;
+      // 'current' is the main view's own camera (orthographic when set; one picture, even in stereo);
+      // the standard views always use perspective
+      const shotCamera = (view === 'current' ? camera : perspCameraRef.current).clone();
+      fitCameraToPane(shotCamera, { width, height });
       if (view !== 'current') {
         const box = new THREE.Box3();
         const focus = focusInstanceId ? meshMapRef.current.get(focusInstanceId) : null;
@@ -2205,16 +2501,18 @@ export default function Viewport3D({
       try {
         renderer.setPixelRatio(1);
         renderer.setSize(width, height, false);
+        renderer.setScissorTest(false); // the frame loop draws panes with a scissor
+        updateShadowsRef.current?.();
         renderer.render(scene, shotCamera);
         png = renderer.domElement.toDataURL('image/png').split(',')[1];
       } finally {
         renderer.setPixelRatio(pixelRatio);
-        renderer.setSize(container.clientWidth, container.clientHeight);
+        applyLayoutRef.current?.();
         overlays.forEach((o, i) => {
           o.visible = wasVisible[i];
         });
         if (selGroup) applyGroupAppearance(selGroup, { ...selAppearance, isSelected: true });
-        renderer.render(scene, camera);
+        renderFrameRef.current?.();
       }
       return png;
     });
@@ -2329,7 +2627,13 @@ export default function Viewport3D({
       5000
     );
     camera.position.set(220, 170, 240);
-    cameraRef.current = camera;
+    cameraRef.current = camera; // the active camera: every handler reads it from here
+    perspCameraRef.current = camera;
+    // Orthographic twin, posed from the perspective camera on a switch. Its near/far reach behind
+    // the camera, so zooming in never clips the parts in front.
+    const orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, -5000, 5000);
+    orthoCamera.userData.viewHeight = 200;
+    orthoCameraRef.current = orthoCamera;
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -2341,7 +2645,14 @@ export default function Viewport3D({
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
+    renderer.domElement.classList.add('viewport-gl');
     rendererRef.current = renderer;
+    // Every pointer event lands on this layer over the main view (the canvas takes none), so the
+    // controls and all pointer math measure against the main view's own area
+    const inputEl = document.createElement('div');
+    inputEl.className = 'viewport-input';
+    container.appendChild(inputEl);
+    inputElRef.current = inputEl;
 
     // Studio CAD Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
@@ -2354,6 +2665,40 @@ export default function Viewport3D({
     const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.1);
     dirLight1.position.set(180, 300, 220);
     scene.add(dirLight1);
+    // Optional shadows from this key light (openspec: view-options, render-shadows). Only its share
+    // of the light is blocked, and only partly, so shadowed faces stay readable.
+    const KEY_LIGHT_DIR = dirLight1.position.clone().normalize();
+    dirLight1.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+    dirLight1.shadow.intensity = 0.75;
+    scene.add(dirLight1.target);
+    // A soft floor patch under the build for the shadow to fall on (the background is black, so a
+    // shadow on nothing wouldn't show): dark slate, fading out toward its edge
+    const floorFade = (() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+      gradient.addColorStop(0, '#fff');
+      gradient.addColorStop(0.55, '#bbb');
+      gradient.addColorStop(1, '#000');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 256, 256);
+      return new THREE.CanvasTexture(canvas);
+    })();
+    const shadowGround = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshLambertMaterial({ color: 0x2a3a52, alphaMap: floorFade, transparent: true, depthWrite: false })
+    );
+    shadowGround.rotation.x = -Math.PI / 2;
+    shadowGround.receiveShadow = true;
+    shadowGround.visible = false;
+    scene.add(shadowGround);
+    // With shadows on, a little less flat fill light and a little more key light, for contrast
+    const LIGHT_LEVELS = {
+      off: { ambient: 0.65, hemi: 0.65, key: 1.1 },
+      on: { ambient: 0.5, hemi: 0.55, key: 1.35 }
+    };
+    renderer.shadowMap.autoUpdate = false; // drawn once per frame, however many panes there are
 
     const dirLight2 = new THREE.DirectionalLight(0x93c5fd, 0.55);
     dirLight2.position.set(-200, -120, -160);
@@ -2400,7 +2745,7 @@ export default function Viewport3D({
     angleLabelsRef.current = angleLabels;
 
     // OrbitControls
-    const orbit = new OrbitControls(camera, renderer.domElement);
+    const orbit = new OrbitControls(camera, inputEl);
     orbit.enableDamping = true;
     orbit.dampingFactor = 0.08;
     orbit.maxDistance = 2500;
@@ -2408,7 +2753,7 @@ export default function Viewport3D({
     orbitRef.current = orbit;
 
     // TransformControls
-    const transform = new TransformControls(camera, renderer.domElement);
+    const transform = new TransformControls(camera, inputEl);
     transform.setSize(0.95);
     enhanceTranslatePlaneHandles(transform);
 
@@ -2578,6 +2923,14 @@ export default function Viewport3D({
     scene.add(gizmoHelper);
     transformRef.current = transform;
 
+    // Makes `cam` the active camera: the controls, ray casts and overlay sizing all follow it
+    activateCameraRef.current = (cam) => {
+      cameraRef.current = cam;
+      orbit.object = cam;
+      transform.camera = pointerCameraRef.current();
+      orbit.update();
+    };
+
     // Click raycasting for part selection
     const raycaster = new THREE.Raycaster();
     const pointerDownPos = new THREE.Vector2();
@@ -2590,8 +2943,8 @@ export default function Viewport3D({
     };
 
     const projectToCanvas = (point) => {
-      const rect = renderer.domElement.getBoundingClientRect();
-      const ndc = point.clone().project(camera);
+      const rect = inputEl.getBoundingClientRect();
+      const ndc = point.clone().project(pointerCameraRef.current());
       return new THREE.Vector2(((ndc.x + 1) / 2) * rect.width, ((1 - ndc.y) / 2) * rect.height);
     };
 
@@ -2634,9 +2987,9 @@ export default function Viewport3D({
       }
       if (!beginRotateGesture('drag', hit.index, extra)) return;
       orbit.enabled = false;
-      renderer.domElement.setPointerCapture?.(e.pointerId);
+      inputEl.setPointerCapture?.(e.pointerId);
       rotateGizmo.setDragging(hit.index);
-      renderer.domElement.style.cursor = 'grabbing';
+      inputEl.style.cursor = 'grabbing';
     };
 
     const ringPlane = new THREE.Plane();
@@ -2680,9 +3033,9 @@ export default function Viewport3D({
     const handleRingPointerUp = (e) => {
       const gesture = rotateGestureRef.current;
       if (e.button !== 0 || gesture?.kind !== 'drag') return;
-      renderer.domElement.releasePointerCapture?.(e.pointerId);
+      inputEl.releasePointerCapture?.(e.pointerId);
       orbit.enabled = true;
-      renderer.domElement.style.cursor = 'grab';
+      inputEl.style.cursor = 'grab';
       ringClickHandled = true;
       if (gesture.moved) {
         commitRotation();
@@ -2693,13 +3046,14 @@ export default function Viewport3D({
       selectRing(selectedRingRef.current === gesture.ring ? -1 : gesture.ring);
     };
 
+    // The input layer covers the main view, or in stereo the working half, so this is the same for all
     const setRayFromEvent = (e) => {
-      const rect = renderer.domElement.getBoundingClientRect();
+      const rect = inputEl.getBoundingClientRect();
       const mouse = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1
       );
-      raycaster.setFromCamera(mouse, camera);
+      raycaster.setFromCamera(mouse, pointerCameraRef.current());
     };
 
     // Instance ids of the visible parts under the pointer, nearest first
@@ -2751,7 +3105,7 @@ export default function Viewport3D({
         return;
       }
       lastCopyClick = null;
-      const rect = renderer.domElement.getBoundingClientRect();
+      const rect = inputEl.getBoundingClientRect();
       updatePickHover(e.clientX - rect.left, e.clientY - rect.top);
       copyInsert();
     };
@@ -2793,7 +3147,7 @@ export default function Viewport3D({
               return;
             }
           }
-          const rect = renderer.domElement.getBoundingClientRect();
+          const rect = inputEl.getBoundingClientRect();
           updatePickHover(e.clientX - rect.left, e.clientY - rect.top);
           pickClick();
         }
@@ -2833,7 +3187,7 @@ export default function Viewport3D({
     let pickHoverFrame = 0;
     let pickHoverAt = null;
     const handlePointerMove = (e) => {
-      const rect = renderer.domElement.getBoundingClientRect();
+      const rect = inputEl.getBoundingClientRect();
       copyPointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       // The copy preview follows Ctrl/Cmd (a missed keyup ends it here) and steps aside for a drag
       const modifier = e.ctrlKey || e.metaKey;
@@ -2861,20 +3215,21 @@ export default function Viewport3D({
         setRayFromEvent(e);
         const index = rotateGizmo.pick(raycaster)?.index ?? -1;
         rotateGizmo.setHover(index);
-        renderer.domElement.style.cursor = index >= 0 ? 'grab' : '';
+        inputEl.style.cursor = index >= 0 ? 'grab' : '';
         return;
       }
       if (!arrowOverlay.isShown()) return;
       setRayFromEvent(e);
       const index = arrowOverlay.pick(raycaster);
       arrowOverlay.setHover(index);
-      renderer.domElement.style.cursor = index >= 0 ? 'pointer' : '';
+      inputEl.style.cursor = index >= 0 ? 'pointer' : '';
     };
 
     // The gizmo's center grab area ('XYZ' in move mode, 'XYZE' in rotate mode) covers small parts, and
     // pressing it starts a zero-length drag; only arrow/plane/ring handles or a real move block a mate.
     const GIZMO_CENTER_AXES = new Set(['XYZ', 'XYZE']);
     const handleDoubleClick = (e) => {
+      if (performance.now() - lastCubeClickAt < 600) return; // clicks on the view cube
       if (e.ctrlKey || e.metaKey) return; // Ctrl/Cmd+double-click inserts a copy, never mates
       if (pickModeRef.current) return; // picking: single clicks insert
       if (transform.dragging) return;
@@ -2918,7 +3273,7 @@ export default function Viewport3D({
         e.preventDefault();
         e.stopImmediatePropagation();
         hideMateArrows();
-        renderer.domElement.style.cursor = '';
+        inputEl.style.cursor = '';
       } else if (selectedRingRef.current >= 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -2983,20 +3338,79 @@ export default function Viewport3D({
       altKeyRef.current = e.altKey;
     };
 
-    renderer.domElement.addEventListener('pointerdown', trackAltKey, true);
-    renderer.domElement.addEventListener('pointermove', trackAltKey, true);
-    renderer.domElement.addEventListener('pointerdown', handleRingPointerDown, true);
-    renderer.domElement.addEventListener('pointerup', handleRingPointerUp, true);
-    renderer.domElement.addEventListener('pointerdown', handlePointerDown);
-    renderer.domElement.addEventListener('pointerup', handlePointerUp);
-    renderer.domElement.addEventListener('pointermove', handlePointerMove);
-    renderer.domElement.addEventListener('dblclick', handleDoubleClick);
-    renderer.domElement.addEventListener('wheel', handleWheelCapture, { capture: true, passive: false });
+    // View cube over the main view's top-right corner (not in stereo, small views or screenshots)
+    const viewCube = createViewCube();
+    const cubeShown = () => viewLayoutRef.current !== 'stereo';
+    const cubeRect = (main) => ({
+      x: main.x + main.width - VIEW_CUBE_RIGHT - VIEW_CUBE_PX,
+      y: main.y + VIEW_CUBE_TOP,
+      width: VIEW_CUBE_PX,
+      height: VIEW_CUBE_PX
+    });
+    /** The pointer in the cube square's NDC, or null outside the square. */
+    const cubeNdc = (e) => {
+      const main = panesRef.current?.main;
+      if (!main) return null;
+      const r = inputEl.getBoundingClientRect();
+      const x = (e.clientX - r.left - (main.width - VIEW_CUBE_RIGHT - VIEW_CUBE_PX)) / VIEW_CUBE_PX;
+      const y = (e.clientY - r.top - VIEW_CUBE_TOP) / VIEW_CUBE_PX;
+      if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+      return new THREE.Vector2(x * 2 - 1, 1 - y * 2);
+    };
+    // A press on the cube itself is the cube's (capture phase, ahead of the gizmo, rings, orbit and
+    // selection); a press in its square but off the cube falls through to the parts behind
+    let cubePress = null; // { index, x, y }
+    let lastCubeClickAt = -Infinity;
+    const handleCubePointerDown = (e) => {
+      if (!cubeShown() || e.button !== 0) return;
+      const ndc = cubeNdc(e);
+      const index = ndc ? viewCube.pick(ndc) : -1;
+      if (index < 0) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      cubePress = { index, x: e.clientX, y: e.clientY };
+    };
+    const handleCubePointerUp = (e) => {
+      if (!cubePress) return;
+      e.stopImmediatePropagation();
+      const press = cubePress;
+      cubePress = null;
+      lastCubeClickAt = performance.now();
+      if (Math.hypot(e.clientX - press.x, e.clientY - press.y) <= 5) animateViewTo(viewCube.direction(press.index));
+    };
+    let cubeHovered = false;
+    const handleCubePointerMove = (e) => {
+      if (e.buttons !== 0 && !cubePress) return; // an orbit or drag passing over the cube
+      const ndc = cubeShown() ? cubeNdc(e) : null;
+      const index = ndc ? viewCube.pick(ndc) : -1;
+      viewCube.setHover(index);
+      if (index >= 0) {
+        cubeHovered = true;
+        inputEl.style.cursor = 'pointer';
+        e.stopImmediatePropagation(); // no hole hover or gizmo highlight under the cube
+      } else if (cubeHovered) {
+        cubeHovered = false;
+        inputEl.style.cursor = '';
+      }
+    };
+    inputEl.addEventListener('pointerdown', handleCubePointerDown, true);
+    inputEl.addEventListener('pointerup', handleCubePointerUp, true);
+    inputEl.addEventListener('pointermove', handleCubePointerMove, true);
+
+    inputEl.addEventListener('pointerdown', trackAltKey, true);
+    inputEl.addEventListener('pointermove', trackAltKey, true);
+    inputEl.addEventListener('pointerdown', handleRingPointerDown, true);
+    inputEl.addEventListener('pointerup', handleRingPointerUp, true);
+    inputEl.addEventListener('pointerdown', handlePointerDown);
+    inputEl.addEventListener('pointerup', handlePointerUp);
+    inputEl.addEventListener('pointermove', handlePointerMove);
+    inputEl.addEventListener('dblclick', handleDoubleClick);
+    inputEl.addEventListener('wheel', handleWheelCapture, { capture: true, passive: false });
     container.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('keydown', handleKeyDownCapture, true);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('blur', handleWindowBlur);
-    renderer.domElement.addEventListener('pointerleave', handlePointerLeave);
+    inputEl.addEventListener('pointerleave', handlePointerLeave);
 
     // Each label sits just outside its ring, at the ring point furthest toward a per-ring screen
     // direction (so the X/Y/Z labels don't pile up where the rings cross)
@@ -3022,50 +3436,497 @@ export default function Viewport3D({
         }
         const out = best.clone().sub(pivotPx);
         if (out.lengthSq() > 1e-6) best.addScaledVector(out.normalize(), 22);
-        const inFront = setup.pivot.clone().project(camera).z < 1;
-        angleLabels.place(i, best.x, best.y, inFront);
+        const inFront = setup.pivot.clone().project(pointerCameraRef.current()).z < 1;
+        // projectToCanvas is relative to the input layer; the labels sit in the whole viewport
+        const main = panesRef.current?.main ?? { x: 0, y: 0 };
+        angleLabels.place(i, best.x + main.x, best.y + main.y, inFront);
       });
     };
 
-    const resizeObserver = new ResizeObserver(() => {
-      if (!container) return;
+    // Four-view layout: three view-only orthographic views beside the main view, each framing the
+    // visible parts until zoomed or panned (openspec: view-options, four-view-layout)
+    const miniViews = [
+      { name: 'X · Front', dir: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, 1, 0) },
+      { name: 'Y · Top', dir: new THREE.Vector3(0, 1, 0), up: new THREE.Vector3(1, 0, 0) },
+      { name: 'Z · Side', dir: new THREE.Vector3(0, 0, 1), up: new THREE.Vector3(0, 1, 0) }
+    ].map((view) => {
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -5000, 5000);
+      camera.up.copy(view.up);
+      camera.userData.viewHeight = 200;
+      const el = document.createElement('div');
+      el.className = 'viewport-mini';
+      el.style.display = 'none';
+      const label = document.createElement('span');
+      label.className = 'viewport-mini-label';
+      label.textContent = view.name;
+      el.appendChild(label);
+      container.appendChild(el);
+      return { ...view, camera, el, auto: true, rect: null };
+    });
+    miniViewsRef.current = miniViews;
+    const MINI_GAP = 4;
+    const MINI_GAP_COLOR = new THREE.Color(0x334155);
+    const CLEAR_COLOR = new THREE.Color(0x000000);
+
+    /** Frames a small view on all visible parts (a 10% margin), looking along its direction. */
+    const frameMiniView = (view) => {
+      const box = new THREE.Box3();
+      for (const g of meshMapRef.current.values()) if (g.visible) box.expandByObject(g);
+      const cam = view.camera;
+      const aspect = view.rect.width / view.rect.height;
+      let center = new THREE.Vector3();
+      let height = 200;
+      if (!box.isEmpty()) {
+        const right = new THREE.Vector3().crossVectors(view.up, view.dir); // screen right
+        const corners = [];
+        for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+        const across = corners.map((c) => c.dot(right));
+        const along = corners.map((c) => c.dot(view.up));
+        const w = Math.max(...across) - Math.min(...across);
+        const h = Math.max(...along) - Math.min(...along);
+        center = box.getCenter(new THREE.Vector3());
+        height = Math.max(h, w / aspect, 20) * 1.1;
+      }
+      cam.position.copy(center).addScaledVector(view.dir, 1000);
+      cam.lookAt(center);
+      cam.zoom = 1;
+      cam.userData.viewHeight = height;
+      fitCameraToPane(cam, view.rect);
+    };
+
+    // Stereo: two half-width pictures from eyes beside the main (perspective) camera, meeting at the
+    // orbit target; the gap between the eyes follows the distance (openspec: view-options, stereo-view)
+    const stereoCam = new THREE.StereoCamera();
+    /** [left picture's camera, right picture's camera]: swapped for cross-eyed viewing. */
+    const stereoEyes = () => (stereoRef.current.crossEyed ? [stereoCam.cameraR, stereoCam.cameraL] : [stereoCam.cameraL, stereoCam.cameraR]);
+    const updateStereo = () => {
+      const cam = perspCameraRef.current;
+      cam.updateMatrixWorld();
+      cam.focus = Math.max(cam.position.distanceTo(orbit.target), 1);
+      stereoCam.eyeSep = (cam.focus / 30) * stereoRef.current.depth;
+      stereoCam.update(cam);
+      for (const eye of [stereoCam.cameraL, stereoCam.cameraR]) {
+        // StereoCamera sets only matrixWorld and projectionMatrix; ray casts, projections and AO
+        // need the inverses, and the gizmo sizes itself from fov
+        eye.projectionMatrixInverse.copy(eye.projectionMatrix).invert();
+        eye.matrixWorldInverse.copy(eye.matrixWorld).invert();
+        eye.fov = cam.fov;
+      }
+    };
+    updateStereo(); // valid eyes before the first frame
+
+    // Stereo workbench: the input layer covers the working half (0 left, 1 right picture) and every
+    // pointer path judges from that picture's eye. The half under a free pointer becomes the working one.
+    let stereoSide = 0;
+    pointerCameraRef.current = () => (panesRef.current?.stereo ? stereoEyes()[stereoSide] : cameraRef.current);
+    const placeWorkingHalf = () => {
+      const panes = panesRef.current;
+      if (!panes?.stereo) return;
+      panes.main = panes.stereo[stereoSide];
+      placeEl(inputEl, panes.main);
+      transform.camera = pointerCameraRef.current();
+    };
+    const handleStereoSideMove = (e) => {
+      const panes = panesRef.current;
+      if (!panes?.stereo || e.buttons !== 0) return;
+      if (transform.dragging || rotateGestureRef.current) return; // never mid-gesture
+      const r = container.getBoundingClientRect();
+      const side = e.clientX - r.left >= panes.stereo[1].x ? 1 : 0;
+      if (side === stereoSide) return;
+      stereoSide = side;
+      placeWorkingHalf();
+    };
+    container.addEventListener('pointermove', handleStereoSideMove, true);
+
+    // Pane rectangles in CSS px within the viewport: { main, minis, stereo } (the main view takes the input layer)
+    const computePanes = (w, h) => {
+      if (viewLayoutRef.current === 'stereo') {
+        const half = Math.floor(w / 2);
+        const stereo = [
+          { x: 0, y: 0, width: half, height: h },
+          { x: half, y: 0, width: w - half, height: h }
+        ];
+        return { main: stereo[stereoSide], minis: [], stereo };
+      }
+      if (viewLayoutRef.current === 'four') {
+        const mainWidth = Math.round(w * 0.7);
+        const sideX = mainWidth + MINI_GAP;
+        const sideHeight = Math.floor((h - 2 * MINI_GAP) / 3);
+        return {
+          main: { x: 0, y: 0, width: mainWidth, height: h },
+          minis: [0, 1, 2].map((i) => ({
+            x: sideX,
+            y: i * (sideHeight + MINI_GAP),
+            width: w - sideX,
+            height: i === 2 ? h - 2 * (sideHeight + MINI_GAP) : sideHeight
+          }))
+        };
+      }
+      return { main: { x: 0, y: 0, width: w, height: h }, minis: [] };
+    };
+
+    const placeEl = (el, rect) =>
+      Object.assign(el.style, { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+
+    // Sizes the canvas to the viewport, puts the input layer over the main pane and fits the
+    // active camera to the main pane's shape; places and fits the small views
+    const applyLayout = () => {
       const w = container.clientWidth;
       const h = container.clientHeight;
       if (w === 0 || h === 0) return;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      const panes = computePanes(w, h);
+      panesRef.current = panes;
+      placeEl(inputEl, panes.main);
+      fitCameraToPane(cameraRef.current, panes.main);
+      transform.camera = pointerCameraRef.current();
+      miniViews.forEach((view, i) => {
+        view.rect = panes.minis[i] ?? null;
+        view.el.style.display = view.rect ? 'block' : 'none';
+        if (!view.rect) return;
+        placeEl(view.el, view.rect);
+        fitCameraToPane(view.camera, view.rect);
+      });
+    };
+
+    // Small views: the wheel zooms about the pointer and a drag pans; either stops auto-framing
+    const miniPointAt = (view, e) => {
+      const r = view.el.getBoundingClientRect();
+      return { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: 1 - ((e.clientY - r.top) / r.height) * 2 };
+    };
+    const miniAxes = (view) => {
+      const right = new THREE.Vector3().setFromMatrixColumn(view.camera.matrixWorld, 0);
+      const up = new THREE.Vector3().setFromMatrixColumn(view.camera.matrixWorld, 1);
+      return { right, up };
+    };
+    const miniCleanups = miniViews.map((view) => {
+      const onWheel = (e) => {
+        e.preventDefault();
+        const cam = view.camera;
+        const { right, up } = miniAxes(view);
+        const p = miniPointAt(view, e);
+        const halfW = (cam.right - cam.left) / 2;
+        const halfH = (cam.top - cam.bottom) / 2;
+        const oldZoom = cam.zoom;
+        const newZoom = THREE.MathUtils.clamp(oldZoom * Math.exp(-e.deltaY * 0.0015), 0.05, 200);
+        // Keep the point under the pointer where it is
+        const k = 1 / oldZoom - 1 / newZoom;
+        cam.position.addScaledVector(right, p.x * halfW * k).addScaledVector(up, p.y * halfH * k);
+        cam.zoom = newZoom;
+        cam.updateProjectionMatrix();
+        view.auto = false;
+      };
+      let drag = null;
+      const onDown = (e) => {
+        drag = { x: e.clientX, y: e.clientY };
+        view.el.setPointerCapture?.(e.pointerId);
+      };
+      const onMove = (e) => {
+        if (!drag) return;
+        const cam = view.camera;
+        const { right, up } = miniAxes(view);
+        const r = view.el.getBoundingClientRect();
+        const perPx = (cam.top - cam.bottom) / cam.zoom / r.height;
+        cam.position.addScaledVector(right, -(e.clientX - drag.x) * perPx).addScaledVector(up, (e.clientY - drag.y) * perPx);
+        drag = { x: e.clientX, y: e.clientY };
+        view.auto = false;
+      };
+      const onUp = (e) => {
+        drag = null;
+        view.el.releasePointerCapture?.(e.pointerId);
+      };
+      view.el.addEventListener('wheel', onWheel, { passive: false });
+      view.el.addEventListener('pointerdown', onDown);
+      view.el.addEventListener('pointermove', onMove);
+      view.el.addEventListener('pointerup', onUp);
+      return () => {
+        view.el.removeEventListener('wheel', onWheel);
+        view.el.removeEventListener('pointerdown', onDown);
+        view.el.removeEventListener('pointermove', onMove);
+        view.el.removeEventListener('pointerup', onUp);
+        view.el.remove();
+      };
     });
+    applyLayoutRef.current = applyLayout;
+
+    const resizeObserver = new ResizeObserver(applyLayout);
     resizeObserver.observe(container);
+    applyLayout();
+
+    // Interactive overlays: drawn only in the main pane
+    const editOverlays = () =>
+      [transform.getHelper(), rotateGizmo.group, arrowOverlay.group, pickOverlay.group, holeOverlay.group];
+
+    /** Points the renderer's viewport and scissor at one pane (CSS px within the canvas). */
+    const setPane = (rect) => {
+      const y = container.clientHeight - rect.y - rect.height; // WebGL counts up from the bottom
+      renderer.setViewport(rect.x, y, rect.width, rect.height);
+      renderer.setScissor(rect.x, y, rect.width, rect.height);
+      renderer.setScissorTest(true);
+    };
+
+    // Ambient occlusion (openspec: view-options, render-ambient-occlusion): per pane slot a composer
+    // RenderPass -> GTAOPass -> OutputPass that draws into the pane, with the overlays left out
+    const aoSlots = new Map(); // slot name -> { composer, renderPass, aoPass, width, height, pixelRatio }
+    const depthOnlyMaterial = new THREE.MeshBasicMaterial({ colorWrite: false });
+    const aoSlotFor = (slot, rect, cam) => {
+      let entry = aoSlots.get(slot);
+      if (!entry) {
+        // Multisampled, like the plain path, so edges stay smooth with AO on
+        const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
+        const renderPass = new RenderPass(scene, cam);
+        const aoPass = new GTAOPass(scene, cam, rect.width, rect.height);
+        // Scene units are mm: darkening reaches a few mm out from a corner
+        aoPass.updateGtaoMaterial({ radius: 4, distanceExponent: 1, thickness: 2, scale: 1.6, samples: 16 });
+        aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+        composer.addPass(renderPass);
+        composer.addPass(aoPass);
+        composer.addPass(new OutputPass());
+        entry = { composer, renderPass, aoPass, width: 0, height: 0, pixelRatio: 0 };
+        aoSlots.set(slot, entry);
+      }
+      entry.renderPass.camera = cam;
+      entry.aoPass.camera = cam;
+      // The AO shaders are compiled for one camera type; switch them when the pane's camera changes
+      const perspective = cam.isPerspectiveCamera ? 1 : 0;
+      for (const material of [entry.aoPass.gtaoMaterial, entry.aoPass.depthRenderMaterial]) {
+        if (material.defines.PERSPECTIVE_CAMERA !== perspective) {
+          material.defines.PERSPECTIVE_CAMERA = perspective;
+          material.needsUpdate = true;
+        }
+      }
+      const pixelRatio = renderer.getPixelRatio();
+      if (entry.width !== rect.width || entry.height !== rect.height || entry.pixelRatio !== pixelRatio) {
+        entry.composer.setPixelRatio(pixelRatio);
+        entry.composer.setSize(rect.width, rect.height);
+        Object.assign(entry, { width: rect.width, height: rect.height, pixelRatio });
+      }
+      return entry;
+    };
+
+    /**
+     * One pane with ambient occlusion: the scene without overlays through the AO composer, then (when
+     * overlays belong here) the scene's depth refilled and the overlays drawn on top, so overlays that
+     * ignore depth still show through parts and depth-tested ones are still hidden behind them.
+     */
+    const renderViewAO = (rect, cam, slot, overlays) => {
+      const shown = editOverlays().filter((o) => o.visible);
+      shown.forEach((o) => {
+        o.visible = false;
+      });
+      setPane(rect);
+      aoSlotFor(slot, rect, cam).composer.render();
+      if (!overlays || shown.length === 0) {
+        shown.forEach((o) => {
+          o.visible = true;
+        });
+        return;
+      }
+      setPane(rect);
+      renderer.autoClear = false;
+      renderer.clearDepth();
+      const floorShown = shadowGround.visible;
+      shadowGround.visible = false; // the faded floor patch never hid anything
+      scene.overrideMaterial = depthOnlyMaterial;
+      renderer.render(scene, cam);
+      scene.overrideMaterial = null;
+      shadowGround.visible = floorShown;
+      const content = [partsRoot, gridGroup, axesHelper, explodeLinesGroup, shadowGround];
+      const contentShown = content.map((o) => o.visible);
+      content.forEach((o) => {
+        o.visible = false;
+      });
+      shown.forEach((o) => {
+        o.visible = true;
+      });
+      renderer.render(scene, cam);
+      content.forEach((o, i) => {
+        o.visible = contentShown[i];
+      });
+      renderer.autoClear = true;
+    };
+
+    /** Draws `cam`'s view into one pane, optionally without the overlays; `slot` names the pane for AO. */
+    const renderView = (rect, cam, { overlays = true, slot = 'main' } = {}) => {
+      if (aoRef.current) {
+        renderViewAO(rect, cam, slot, overlays);
+        return;
+      }
+      setPane(rect);
+      if (overlays) {
+        renderer.render(scene, cam);
+        return;
+      }
+      const hidden = editOverlays().filter((o) => o.visible);
+      hidden.forEach((o) => {
+        o.visible = false;
+      });
+      renderer.render(scene, cam);
+      hidden.forEach((o) => {
+        o.visible = true;
+      });
+    };
+
+    /** Draws every pane of the current layout. */
+    /**
+     * Shadows on: fits the key light's shadow camera and the ground under the visible parts' bounding
+     * sphere and asks for one shadow-map draw this frame. Off: no shadow-casting light at all.
+     */
+    const shadowBox = new THREE.Box3();
+    const shadowSphere = new THREE.Sphere();
+    const lightView = new THREE.OrthographicCamera(); // stands in for the shadow camera's pose
+    const updateShadows = () => {
+      const on = shadowsRef.current;
+      const levels = on ? LIGHT_LEVELS.on : LIGHT_LEVELS.off;
+      ambientLight.intensity = levels.ambient;
+      hemiLight.intensity = levels.hemi;
+      dirLight1.intensity = levels.key;
+      dirLight1.castShadow = on;
+      shadowGround.visible = on;
+      if (!on) return;
+      shadowBox.makeEmpty();
+      for (const g of meshMapRef.current.values()) if (g.visible) shadowBox.expandByObject(g);
+      if (shadowBox.isEmpty()) {
+        shadowGround.visible = false;
+        return;
+      }
+      shadowBox.getBoundingSphere(shadowSphere);
+      const r = Math.max(shadowSphere.radius, 20);
+      const center = shadowSphere.center;
+      shadowGround.position.set(center.x, shadowBox.min.y - 0.05, center.z);
+      shadowGround.scale.set(3.6 * r, 3.6 * r, 1);
+      dirLight1.target.position.copy(center);
+      dirLight1.target.updateMatrixWorld();
+      dirLight1.position.copy(center).addScaledVector(KEY_LIGHT_DIR, 2 * r);
+
+      // Everything that casts or receives: the build plus the floor patch under it
+      const half = 1.8 * r;
+      const floorY = shadowGround.position.y;
+      const scenePoints = boxCorners(shadowBox);
+      for (const [dx, dz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+        scenePoints.push(new THREE.Vector3(center.x + dx * half, floorY, center.z + dz * half));
+      }
+      // Light space: the same pose the shadow camera takes (at the light, looking at the target)
+      lightView.position.copy(dirLight1.position);
+      lightView.lookAt(center);
+      lightView.updateMatrixWorld();
+      const toLight = lightView.matrixWorldInverse.copy(lightView.matrixWorld).invert();
+      const full = lightSpaceBounds(scenePoints, toLight);
+      // Single and Stereo: only the part of the scene inside the main view needs a shadow map, so
+      // zooming in gives finer shadows. Four-view's small views show everything, so it keeps all.
+      let region = full;
+      if (viewLayoutRef.current !== 'four') {
+        const corners = viewFrustumCorners(cameraRef.current, scenePoints);
+        if (corners) {
+          const seen = lightSpaceBounds(corners, toLight);
+          // A margin; wider in stereo, whose eyes sit a little to each side of the main camera
+          const margin = viewLayoutRef.current === 'stereo' ? 0.1 : 0.05;
+          const pad = margin * Math.max(seen.maxX - seen.minX, seen.maxY - seen.minY);
+          const minX = Math.max(full.minX, seen.minX - pad);
+          const maxX = Math.min(full.maxX, seen.maxX + pad);
+          const minY = Math.max(full.minY, seen.minY - pad);
+          const maxY = Math.min(full.maxY, seen.maxY + pad);
+          if (minX < maxX && minY < maxY) region = { ...full, minX, maxX, minY, maxY };
+        }
+      }
+      // Steady as the camera moves: the size goes in quarter-octave steps and the center snaps to
+      // whole shadow-map texels, so shadow edges don't shimmer while orbiting or zooming
+      const rawSize = Math.max(region.maxX - region.minX, region.maxY - region.minY, 10);
+      const size = 2 ** (Math.ceil(Math.log2(rawSize) * 4) / 4);
+      const texel = size / SHADOW_MAP_SIZE;
+      const cx = Math.round((region.minX + region.maxX) / 2 / texel) * texel;
+      const cy = Math.round((region.minY + region.maxY) / 2 / texel) * texel;
+      const cam = dirLight1.shadow.camera;
+      cam.left = cx - size / 2;
+      cam.right = cx + size / 2;
+      cam.bottom = cy - size / 2;
+      cam.top = cy + size / 2;
+      // Depth covers every caster, on screen or not (z is negative in front of the light)
+      cam.near = Math.max(0.1, -full.maxZ - 1);
+      cam.far = -full.minZ + 1;
+      cam.updateProjectionMatrix();
+      dirLight1.shadow.bias = -0.0002;
+      dirLight1.shadow.normalBias = texel * 0.75; // a smaller lift off the surface: less light leaking into inside corners
+      renderer.shadowMap.needsUpdate = true;
+    };
+    updateShadowsRef.current = updateShadows;
+
+    const renderFrame = () => {
+      updateShadows();
+      const active = cameraRef.current;
+      arrowOverlay.updateScale(active);
+      rotateGizmo.updateScale(active);
+      placeAngleLabels();
+      const panes = panesRef.current;
+      if (!panes) return;
+      if (panes.minis.length > 0) {
+        // The gaps between panes show this color; each pane then clears its own area
+        renderer.setScissorTest(false);
+        renderer.setClearColor(MINI_GAP_COLOR);
+        renderer.clear();
+        renderer.setClearColor(CLEAR_COLOR);
+      }
+      if (panes.stereo) {
+        updateStereo();
+        const eyes = stereoEyes();
+        // Overlays in both pictures, so the gizmo, rings and previews are seen in depth
+        panes.stereo.forEach((rect, i) => renderView(rect, eyes[i], { slot: `stereo${i}` }));
+        return;
+      }
+      renderView(panes.main, active);
+      miniViews.forEach((view, i) => {
+        if (!view.rect) return;
+        if (view.auto) frameMiniView(view);
+        renderView(view.rect, view.camera, { overlays: false, slot: `mini${i}` });
+      });
+      if (cubeShown()) {
+        // Over the main view without clearing it: only the depth is reset
+        viewCube.sync(active);
+        setPane(cubeRect(panes.main));
+        renderer.autoClear = false;
+        renderer.clearDepth();
+        renderer.render(viewCube.scene, viewCube.camera);
+        renderer.autoClear = true;
+      }
+    };
+    renderFrameRef.current = renderFrame;
 
     let animFrameId;
     const animate = () => {
       animFrameId = requestAnimationFrame(animate);
       orbit.update();
-      arrowOverlay.updateScale(camera);
-      rotateGizmo.updateScale(camera);
-      placeAngleLabels();
-      renderer.render(scene, camera);
+      renderFrame();
     };
     animate();
 
     return () => {
       cancelAnimationFrame(animFrameId);
       resizeObserver.disconnect();
-      renderer.domElement.removeEventListener('pointerdown', handleRingPointerDown, true);
-      renderer.domElement.removeEventListener('pointerup', handleRingPointerUp, true);
-      renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
-      renderer.domElement.removeEventListener('pointerup', handlePointerUp);
-      renderer.domElement.removeEventListener('pointermove', handlePointerMove);
-      renderer.domElement.removeEventListener('dblclick', handleDoubleClick);
-      renderer.domElement.removeEventListener('wheel', handleWheelCapture, { capture: true });
+      inputEl.removeEventListener('pointerdown', handleRingPointerDown, true);
+      inputEl.removeEventListener('pointerup', handleRingPointerUp, true);
+      inputEl.removeEventListener('pointerdown', handlePointerDown);
+      inputEl.removeEventListener('pointerup', handlePointerUp);
+      inputEl.removeEventListener('pointermove', handlePointerMove);
+      inputEl.removeEventListener('dblclick', handleDoubleClick);
+      inputEl.removeEventListener('wheel', handleWheelCapture, { capture: true });
       container.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('keydown', handleKeyDownCapture, true);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleWindowBlur);
-      renderer.domElement.removeEventListener('pointerleave', handlePointerLeave);
-      renderer.domElement.removeEventListener('pointerdown', trackAltKey, true);
-      renderer.domElement.removeEventListener('pointermove', trackAltKey, true);
+      inputEl.removeEventListener('pointerleave', handlePointerLeave);
+      inputEl.removeEventListener('pointerdown', trackAltKey, true);
+      inputEl.removeEventListener('pointermove', trackAltKey, true);
+      container.removeEventListener('pointermove', handleStereoSideMove, true);
+      inputEl.removeEventListener('pointerdown', handleCubePointerDown, true);
+      inputEl.removeEventListener('pointerup', handleCubePointerUp, true);
+      inputEl.removeEventListener('pointermove', handleCubePointerMove, true);
+      viewCube.dispose();
+      for (const { composer, aoPass } of aoSlots.values()) {
+        aoPass.dispose();
+        composer.dispose();
+      }
+      depthOnlyMaterial.dispose();
+      miniCleanups.forEach((cleanup) => cleanup());
       cancelPendingSelect();
       clearTimeout(rotateGestureRef.current?.wheelTimer);
       rotateGestureRef.current = null;
@@ -3196,6 +4057,8 @@ export default function Viewport3D({
 
             geometries.forEach((geo) => {
               const mesh = new THREE.Mesh(geo, material);
+              mesh.castShadow = true; // only matters while the Shadows option is on
+              mesh.receiveShadow = true;
               mesh.userData.instanceId = inst.instanceId;
               mesh.userData.isPartMesh = true;
               group.add(mesh);
@@ -3374,13 +4237,48 @@ export default function Viewport3D({
       const dir = camera.position.clone().sub(orbit.target).normalize();
       orbit.target.copy(center);
       camera.position.copy(center).addScaledVector(dir, maxDim * 2.1);
+      if (camera.isOrthographicCamera) setOrthoViewDistance(camera, maxDim * 2.1);
       orbit.update();
+      for (const view of miniViewsRef.current) view.auto = true; // the small views frame everything again
     } else {
       orbit.target.set(0, 0, 0);
       camera.position.set(220, 170, 240);
+      if (camera.isOrthographicCamera) setOrthoViewDistance(camera, camera.position.length());
       orbit.update();
     }
   }, [focusTrigger]);
 
-  return <div ref={containerRef} className="viewport-canvas" />;
+  // One-shot camera turn along an axis (keys 1/2/3, MCP viewAlong)
+  useEffect(() => {
+    const dir = viewAlongTrigger?.dir;
+    if (!dir) return;
+    const axis = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }[dir[1]];
+    if (!axis) return;
+    animateViewTo(new THREE.Vector3(...axis).multiplyScalar(dir[0] === '-' ? -1 : 1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewAlongTrigger]);
+
+  // Panes for the layout (single, four-view, stereo)
+  useEffect(() => {
+    applyLayoutRef.current?.();
+    syncGizmos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewLayout]);
+
+  // Perspective or orthographic main view (stereo always draws in perspective)
+  useEffect(() => {
+    switchProjection(viewLayout === 'stereo' ? 'perspective' : projection);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projection, viewLayout]);
+
+  return (
+    <>
+      <div ref={containerRef} className={`viewport-canvas${immersive ? ' viewport-immersive' : ''}`} />
+      {immersive && (
+        <div className="immersive-hint" role="status">
+          Esc to exit full screen
+        </div>
+      )}
+    </>
+  );
 }

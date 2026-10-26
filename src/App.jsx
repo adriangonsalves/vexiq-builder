@@ -2,11 +2,19 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Box,
+  Columns2,
+  Cuboid,
+  Glasses,
+  LayoutGrid,
+  Square,
+  Sun,
   Compass,
+  Contrast,
   Copy,
   Crosshair,
   Download,
   Expand,
+  Fullscreen,
   Eye,
   EyeOff,
   Grid,
@@ -15,6 +23,8 @@ import {
   Lock,
   Maximize2,
   Move,
+  PanelLeftClose,
+  PanelLeftOpen,
   Radio,
   Redo2,
   RotateCcw,
@@ -67,6 +77,11 @@ const TIMELINE_KEY = 'vexiq_history_timeline_visible';
 // This tab's id: its own saves come back over SSE and are skipped; other tabs' saves are taken
 const TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const EXPLODE_MODES = ['off', 'x', 'y', 'z', 'all'];
+const PROJECTIONS = ['perspective', 'orthographic'];
+const VIEW_LAYOUTS = ['single', 'four', 'stereo'];
+const VIEW_DIRECTIONS = ['+x', '-x', '+y', '-y', '+z', '-z'];
+const PANELS_HIDDEN_KEY = 'vexiq.panelsHidden';
+const clampStereoDepth =(v) => Math.min(3, Math.max(0.25, Number(v) || 1));
 
 export default function App() {
   const [catalog, setCatalog] = useState([]);
@@ -84,6 +99,30 @@ export default function App() {
   const [showConnectors, setShowConnectors] = useState(true);
   const [explodeMode, setExplodeMode] = useState('off'); // 'off' | 'x' | 'y' | 'z' | 'all'
   const [focusTrigger, setFocusTrigger] = useState(0);
+  // View options (openspec: view-options); saved with the viewport settings, never history steps
+  const [projection, setProjection] = useState('perspective');
+  const [viewLayout, setViewLayout] = useState('single');
+  const [stereoCrossEyed, setStereoCrossEyed] = useState(false);
+  const [stereoDepth, setStereoDepth] = useState(1);
+  const [viewAlongTrigger, setViewAlongTrigger] = useState({ dir: null, n: 0 }); // one-shot camera turn
+  const [immersive, setImmersive] = useState(false); // stereo full screen (not saved)
+  // Side panels hidden for a wide view: a per-browser preference, not part of the build
+  const [panelsHidden, setPanelsHidden] = useState(() => {
+    try {
+      return window.localStorage.getItem(PANELS_HIDDEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PANELS_HIDDEN_KEY, panelsHidden ? '1' : '0');
+    } catch {
+      // storage unavailable: the choice just isn't remembered
+    }
+  }, [panelsHidden]);
+  const [shadows, setShadows] = useState(false); // optional soft shadows (render-shadows)
+  const [ambientOcclusion, setAmbientOcclusion] = useState(false); // optional AO (render-ambient-occlusion)
   const [isLoadingMesh, setIsLoadingMesh] = useState(false);
   const [mcpConnected, setMcpConnected] = useState(false);
 
@@ -140,6 +179,25 @@ export default function App() {
       const recorded = recordStep(b.history, b.instances, next, { source, label: meta.label, mergeKey: meta.mergeKey });
       return { instances: next, history: recorded.history };
     });
+  }, []);
+
+  /**
+   * Takes the view options from a saved or pushed viewport. A new `viewAlongTrigger` turns the camera
+   * only when `turnCamera` is set (an MCP push), never when a saved file is opened.
+   */
+  const applyViewOptions = useCallback((vp, { turnCamera = false } = {}) => {
+    if (PROJECTIONS.includes(vp.projection)) setProjection(vp.projection);
+    if (VIEW_LAYOUTS.includes(vp.viewLayout)) setViewLayout(vp.viewLayout);
+    if (vp.stereoCrossEyed !== undefined) setStereoCrossEyed(Boolean(vp.stereoCrossEyed));
+    if (vp.stereoDepth !== undefined) setStereoDepth(clampStereoDepth(vp.stereoDepth));
+    if (vp.shadows !== undefined) setShadows(Boolean(vp.shadows));
+    if (vp.ambientOcclusion !== undefined) setAmbientOcclusion(Boolean(vp.ambientOcclusion));
+    const trigger = vp.viewAlongTrigger;
+    if (trigger && Number.isFinite(trigger.n)) {
+      setViewAlongTrigger((prev) =>
+        trigger.n === prev.n ? prev : { dir: turnCamera && VIEW_DIRECTIONS.includes(trigger.dir) ? trigger.dir : null, n: trigger.n }
+      );
+    }
   }, []);
 
   /** Takes parts (and history, when present) that came from the server: MCP, smart actions, startup. */
@@ -284,6 +342,7 @@ export default function App() {
             if (serverState.viewport.explodeMode) {
               setExplodeMode(serverState.viewport.explodeMode);
             }
+            applyViewOptions(serverState.viewport);
           }
         } else {
           const starter = buildStarterAssembly(catalogData);
@@ -335,6 +394,7 @@ export default function App() {
             if (vp.showConnectors !== undefined) setShowConnectors(vp.showConnectors);
             if (vp.explodeMode !== undefined) setExplodeMode(vp.explodeMode);
             if (vp.focusTrigger !== undefined) setFocusTrigger(vp.focusTrigger);
+            applyViewOptions(vp, { turnCamera: true });
           }
         }
       } catch {
@@ -385,7 +445,14 @@ export default function App() {
           showGrid,
           showConnectors,
           explodeMode,
-          focusTrigger
+          focusTrigger,
+          projection,
+          viewLayout,
+          stereoCrossEyed,
+          stereoDepth,
+          viewAlongTrigger,
+          shadows,
+          ambientOcclusion
         },
         instances
       })
@@ -425,7 +492,14 @@ export default function App() {
     showGrid,
     showConnectors,
     explodeMode,
-    focusTrigger
+    focusTrigger,
+    projection,
+    viewLayout,
+    stereoCrossEyed,
+    stereoDepth,
+    viewAlongTrigger,
+    shadows,
+    ambientOcclusion
   ]);
 
   const catalogMap = useMemo(() => {
@@ -767,13 +841,27 @@ export default function App() {
       showGrid: sg,
       showConnectors: sc,
       explodeMode: em,
-      focusCamera
+      focusCamera,
+      projection: pj,
+      viewLayout: vl,
+      stereoCrossEyed: sx,
+      stereoDepth: sd,
+      viewAlong,
+      shadows: sh,
+      ambientOcclusion: ao
     }) => {
       if (tm) setTransformMode(tm);
       if (sg !== undefined) setShowGrid(Boolean(sg));
       if (sc !== undefined) setShowConnectors(Boolean(sc));
       if (em && EXPLODE_MODES.includes(em)) setExplodeMode(em);
       if (focusCamera) setFocusTrigger((c) => c + 1);
+      if (PROJECTIONS.includes(pj)) setProjection(pj);
+      if (VIEW_LAYOUTS.includes(vl)) setViewLayout(vl);
+      if (sx !== undefined) setStereoCrossEyed(Boolean(sx));
+      if (sd !== undefined) setStereoDepth(clampStereoDepth(sd));
+      if (VIEW_DIRECTIONS.includes(viewAlong)) turnViewAlong(viewAlong);
+      if (sh !== undefined) setShadows(Boolean(sh));
+      if (ao !== undefined) setAmbientOcclusion(Boolean(ao));
     },
     resetAssembly: (mode) => {
       setExplodeMode('off');
@@ -792,9 +880,40 @@ export default function App() {
     return registerVexIqWebMcpTools(webMcpContextRef);
   }, []);
 
+  // Turns the camera to look along an axis ('+x' looks from the +X side), once
+  const turnViewAlong = (dir) => setViewAlongTrigger((prev) => ({ dir, n: prev.n + 1 }));
+
+  // Stereo full screen: the viewport covers the window (and the screen, when the browser allows it)
+  const enterImmersive = () => {
+    setImmersive(true);
+    document.documentElement.requestFullscreen?.().catch(() => {
+      // Refused (e.g. inside a frame): the viewport still covers the whole window
+    });
+  };
+  useEffect(() => {
+    if (immersive && viewLayout !== 'stereo') setImmersive(false);
+  }, [immersive, viewLayout]);
+  useEffect(() => {
+    if (!immersive && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  }, [immersive]);
+  useEffect(() => {
+    // The browser's own Esc (or F11) leaves full screen: drop the overlay too
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) setImmersive(false);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
   // Global keyboard shortcuts for 3D Modeler
   useEffect(() => {
     const onKeyDown = (e) => {
+      // Esc in full screen only leaves full screen (no deselect, no Explode change)
+      if (immersive && e.key === 'Escape') {
+        e.preventDefault();
+        setImmersive(false);
+        return;
+      }
       const active = document.activeElement;
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(active?.tagName) || active?.isContentEditable) {
         return;
@@ -812,6 +931,19 @@ export default function App() {
         e.preventDefault();
         handleRedo();
         return;
+      }
+      // View keys only move the camera, so they also work while a past point is shown
+      if (!mod && !e.altKey) {
+        if (key === 'p') {
+          setProjection((prev) => (prev === 'perspective' ? 'orthographic' : 'perspective'));
+          return;
+        }
+        const axis = { Digit1: 'x', Digit2: 'y', Digit3: 'z' }[e.code];
+        if (axis) {
+          e.preventDefault();
+          turnViewAlong(`${e.shiftKey ? '-' : '+'}${axis}`);
+          return;
+        }
       }
       // Nothing else edits or selects while a past point is shown
       if (previewRef.current) return;
@@ -921,7 +1053,14 @@ export default function App() {
               showGrid,
               showConnectors,
               explodeMode,
-              focusTrigger
+              focusTrigger,
+              projection,
+              viewLayout,
+              stereoCrossEyed,
+              stereoDepth,
+              viewAlongTrigger,
+              shadows,
+              ambientOcclusion
             },
             instances
           },
@@ -1119,12 +1258,105 @@ export default function App() {
             </button>
             <button
               type="button"
+              className={`btn ${shadows ? 'active' : ''}`}
+              onClick={() => setShadows((v) => !v)}
+              title="Soft shadows from the main light, so surfaces look less flat"
+            >
+              <Sun size={14} />
+              Shadows
+            </button>
+            <button
+              type="button"
+              className={`btn ${ambientOcclusion ? 'active' : ''}`}
+              onClick={() => setAmbientOcclusion((v) => !v)}
+              title="Ambient occlusion: darken creases and inside corners where faces meet (separate from Shadows)"
+            >
+              <Contrast size={14} />
+              AO
+            </button>
+            <button
+              type="button"
               className="btn"
               onClick={() => setFocusTrigger((c) => c + 1)}
               title="Frame Selected or All Parts (Shortcut: F)"
             >
               <Maximize2 size={14} />
               Focus
+            </button>
+          </div>
+
+          <div className="toolbar-group" role="group" aria-label="View">
+            <button
+              type="button"
+              className={`btn ${projection === 'orthographic' ? 'active' : ''}`}
+              onClick={() => setProjection((p) => (p === 'perspective' ? 'orthographic' : 'perspective'))}
+              title={
+                viewLayout === 'stereo'
+                  ? 'Stereo always uses perspective; this applies when you leave Stereo (Shortcut: P)'
+                  : 'Switch between perspective and orthographic (Shortcut: P)'
+              }
+            >
+              <Cuboid size={14} />
+              {projection === 'orthographic' ? 'Ortho' : 'Persp'}
+            </button>
+            {[
+              { value: 'single', label: 'Single', icon: Square, title: 'One view' },
+              { value: 'four', label: '4-View', icon: LayoutGrid, title: 'Working view plus front, top and side views' },
+              { value: 'stereo', label: 'Stereo', icon: Glasses, title: 'Side-by-side stereo pair (work in either picture)' }
+            ].map(({ value, label, icon: Icon, title }) => (
+              <button
+                key={value}
+                type="button"
+                className={`btn ${viewLayout === value ? 'active' : ''}`}
+                onClick={() => setViewLayout(value)}
+                title={title}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
+            {viewLayout === 'stereo' && (
+              <>
+                <button
+                  type="button"
+                  className={`btn ${stereoCrossEyed ? 'active' : ''}`}
+                  onClick={() => setStereoCrossEyed((v) => !v)}
+                  title="Swap the images for cross-eyed viewing (off: parallel viewing or a phone VR viewer)"
+                >
+                  <Columns2 size={14} />
+                  Cross-eyed
+                </button>
+                <label className="toolbar-slider" title="Stereo depth: how far apart the two eye positions are">
+                  Depth
+                  <input
+                    type="range"
+                    min="0.25"
+                    max="3"
+                    step="0.25"
+                    value={stereoDepth}
+                    onChange={(e) => setStereoDepth(clampStereoDepth(e.target.value))}
+                  />
+                  <span>{stereoDepth.toFixed(2)}×</span>
+                </label>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={enterImmersive}
+                  title="Fill the screen with the stereo pair, nothing else (Esc to exit)"
+                >
+                  <Fullscreen size={14} />
+                  Full screen
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className={`btn ${panelsHidden ? 'active' : ''}`}
+              onClick={() => setPanelsHidden((v) => !v)}
+              title={panelsHidden ? 'Show the parts library and Inspector' : 'Hide the side panels for a wide view'}
+            >
+              {panelsHidden ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+              {panelsHidden ? 'Panels' : 'Wide'}
             </button>
           </div>
         </div>
@@ -1184,7 +1416,7 @@ export default function App() {
       </header>
 
       {/* Main 3-Column Modeler Layout */}
-      <div className="workspace-grid">
+      <div className={`workspace-grid${panelsHidden ? ' panels-hidden' : ''}`}>
         {/* Left Sidebar: 478-Part VEX IQ Catalog with 3D Thumbnails */}
         <aside className="panel panel-left">
           <div className="panel-header">
@@ -1262,7 +1494,7 @@ export default function App() {
         </aside>
 
         {/* Center 3D Viewport */}
-        <main className="viewport-container">
+        <main className={`viewport-container layout-${viewLayout}`}>
           <Viewport3D
             instances={preview ? preview.parts : instances}
             catalogMap={catalogMap}
@@ -1275,6 +1507,14 @@ export default function App() {
             snapPitchFactor={snapPitchFactor}
             rotationSnapDeg={rotationSnapDeg}
             showGrid={showGrid}
+            projection={projection}
+            viewLayout={viewLayout}
+            stereoCrossEyed={stereoCrossEyed}
+            stereoDepth={stereoDepth}
+            viewAlongTrigger={viewAlongTrigger}
+            immersive={immersive}
+            shadows={shadows}
+            ambientOcclusion={ambientOcclusion}
             showConnectors={showConnectors}
             explodeMode={explodeMode}
             focusTrigger={focusTrigger}
@@ -1381,6 +1621,14 @@ export default function App() {
                 </span>
                 <span>
                   <kbd className="kbd">F</kbd> Focus
+                </span>
+                <span>
+                  <kbd className="kbd">P</kbd> Persp / Ortho
+                </span>
+                <span title="Shift looks from the opposite side">
+                  <kbd className="kbd">1</kbd>
+                  <kbd className="kbd">2</kbd>
+                  <kbd className="kbd">3</kbd> Front / Top / Side
                 </span>
                 <span>
                   <kbd className="kbd">Esc</kbd> Un-Explode / Cancel

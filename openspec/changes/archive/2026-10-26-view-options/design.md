@@ -57,10 +57,29 @@ There is one `OrthographicCamera` per small view, with fixed directions (+X, +Y 
 - **Each frame:** `focus = distance to orbit target`, `eyeSep = focus / 30 · stereoDepth`, and the perspective camera's aspect is set to the half-pane aspect before the update.
 - **Swap:** left half = `cameraL` and right half = `cameraR`, or the other way round with Cross-eyed.
 - **Projection:** stereo always uses the perspective camera. The saved projection is untouched and is reapplied when the layout leaves stereo.
-- **Input:** `inputEl` covers both halves. OrbitControls works across it, since orbit and pan don't depend on the pointer's position, and zoom is about the target.
-- **Selecting:** a click is converted to the NDC of the half it falls in, and ray-cast with that half's eye camera.
-- **Editing off:** on entering stereo, the transform is detached and `transform.enabled` set to false, rotate rings and the view cube are hidden, and the double-click, right-click and Ctrl paths return early with a status message. Leaving stereo calls `syncGizmos()`.
+- **Input (working half):** `inputEl` covers one half, the working half. That makes every existing pointer path work unchanged in stereo, as long as it asks for the *pointer camera* (the working half's eye) instead of the main camera. TransformControls also builds its pointer from `inputEl`'s rect.
+  - **The pointer camera** covers: ray casts (`setRayFromEvent`), `projectToCanvas` for ring drags and angle labels, the hole-pick and copy hover, and `transform.camera`.
+  - **OrbitControls** keeps driving the central perspective camera that the eyes follow.
+  - **Eye cameras:** they come from `StereoCamera` with `matrixAutoUpdate` off. Their world position is read from `matrixWorld`, never from `.position`. Their `fov` is copied from the main camera so the gizmo has the same size in both eyes, and `projectionMatrixInverse` is refreshed each frame.
+  - **Switching halves:** a `pointermove` on the container, with no button held and no drag, ring turn or other gesture under way, moves `inputEl` (and the pointer camera) to the other half. Moving `inputEl` only changes its style, not the canvas size, so nothing flickers.
+- **Overlays:** they are drawn in both halves, so the gizmo, rings and previews are seen in depth. Angle labels are placed in the working half, offset by its position in the viewport.
+- *Earlier version:* stereo was view-only. `inputEl` covered both halves, clicks were mapped per half, and editing was turned off. It was replaced at the user's request for a full workbench in stereo.
+
+### 5b. Hide side panels
+App holds a `panelsHidden` flag, remembered in `localStorage` (wrapped in try/catch, since the store can be unavailable). It adds `panels-hidden` to `.workspace-grid`: one column, with both `.panel`s `display: none`. The viewport's ResizeObserver resizes the canvas and panes. The toggle sits in the toolbar's View group, so it is always reachable.
 - *Alternative:* toe-in (two cameras turned toward the target). Rejected: vertical parallax at the edges causes eye strain. The off-axis setup in StereoCamera avoids it.
+
+### 5a. Stereo full screen
+App holds an `immersive` flag. It is not saved, and it is cleared whenever the layout leaves stereo.
+- **Entering:** turning it on adds `viewport-immersive` to the viewport element (`position: fixed; inset: 0; z-index` above everything). It also calls `document.documentElement.requestFullscreen()`, ignoring a refusal.
+  - The fixed overlay covers the toolbar, panels, timeline, HUD pills and shortcuts bar, which are all outside the viewport element. So distraction-free works even where the browser refuses full screen.
+  - The canvas and panes follow through the existing ResizeObserver.
+- **Leaving:**
+  - `fullscreenchange` back to no element clears the flag. In real full screen, the browser handles `Esc` that way.
+  - In the window-only fallback, App's `Esc` handler clears it first and returns, so `Esc` doesn't deselect.
+  - Clearing the flag calls `document.exitFullscreen()` when still in full screen.
+- **Hint:** an App-rendered pill above the overlay, with a CSS fade-out after 3 s.
+- *Alternative:* full screen on the viewport element alone. Rejected: when the browser refuses it, nothing would be hidden. The overlay gives the same result either way.
 
 ### 6. View cube in its own scene
 A small `Scene` holds the cube: 26 region meshes (6 faces, 12 edges, 8 corners), built from a beveled box split into regions, with canvas-texture labels. It has its own orthographic camera.
@@ -83,6 +102,37 @@ App state gains `projection`, `viewLayout`, `stereoCrossEyed` and `stereoDepth`,
 - **'current':** renders only the main pane's camera at the requested size. The aspect or ortho frustum is adapted to the image, and stereo is ignored (a single perspective image).
 - **Standard views:** unchanged.
 - **During capture:** the view cube is hidden.
+
+### 9. Shadows
+The key light (`dirLight1`, from above at the front right) casts a shadow map. The renderer already has `shadowMap.enabled` and `PCFSoftShadowMap`.
+- **Turning it on:** sets `dirLight1.castShadow`, and shows a floor patch at the lowest visible part's bottom.
+  - The patch is a dark slate Lambert plane with a radial alpha fade, receiving shadows. An invisible `ShadowMaterial` catcher was tried first, but the viewport background is black, so a shadow on it didn't show.
+  - It also shifts the light levels slightly: ambient 0.65→0.5, hemisphere 0.65→0.55, key 1.1→1.35. This adds contrast between faces.
+  - Turning it off restores all of this. Three recompiles the part materials when the number of shadow-casting lights changes, so "off" is exactly the old picture.
+- **What casts and receives:** part meshes get `castShadow` and `receiveShadow` when they are created. No overlay mesh sets `castShadow`, so overlays never cast. Overlays drawn with `depthTest: false` don't receive either.
+- **Subtlety:** only the key light (1.1) is blocked. Ambient (0.65), hemisphere (0.65) and the blue fill (0.55) still light shadowed areas, and `shadow.intensity` is 0.75 on top of that.
+- **Fit:** each frame with shadows on, the light sits on its direction at 2R from the center of the visible parts' bounding sphere, and the floor patch moves with it. The 4096² shadow map then covers:
+  - **Single and Stereo:** only what the main view sees. The main camera's view volume is cut to the depths where the build and floor lie, mapped into light space, and intersected with the light-space bounds of the build plus floor, with a 5% margin (10% in stereo, for the offset eyes). Zooming in therefore gives finer shadows.
+  - **Four-view:** the whole build plus floor, since its small views show everything.
+  - **Depth:** the depth range always covers every caster, so parts off screen still cast into view.
+  - **Steadiness:** the area's size goes in quarter-octave steps and its center snaps to whole texels, so shadow edges don't shimmer while orbiting or zooming.
+- **Offset:** `bias` is −0.0002 and `normalBias` is 0.75 texel. This is about half the first version's 1.5 texels at 2048. It keeps flat faces free of speckles while narrowing the lit gap that the offset leaves where a wall meets a floor (e.g. at the base of a hole's ring).
+- **Multi-pane cost:** `shadowMap.autoUpdate = false`, and `needsUpdate = true` once per frame before the first pane, so four-view and stereo draw the map once, not once per pane. Screenshots set `needsUpdate` before rendering.
+- *Alternative:* screen-space ambient occlusion (GTAO). It shades creases well, but it is a post-process per pane, interacts with the scissor panes and the depth-test-off overlays, and costs much more. Shadow maps answer the "flat" look and stay simple. AO can follow later as its own option.
+
+### 10. Ambient occlusion
+three's `GTAOPass`, run through an `EffectComposer` (`RenderPass` → `GTAOPass` → `OutputPass`) per pane slot: main, the three small views and the two stereo halves.
+- **Composers:** each slot's composer is created on first use and resized when its pane changes size. It renders into the pane: the last pass draws to the screen with the renderer's viewport and scissor set to the pane.
+- **Per pane:**
+  - the pass camera is set to that pane's camera;
+  - the `PERSPECTIVE_CAMERA` define is switched, with a material recompile, when the pane's camera type changes;
+  - the stereo eyes get fresh `projectionMatrixInverse` each frame.
+- **Overlays:** they are hidden during the composer render, so they neither cause nor get darkening. A depth-only pass of the scene content (parts, grid, floor) then refills the pane's depth buffer, and the overlays are drawn on top. Overlays that ignore depth (gizmo, rings, arrows, hole rings) still draw through parts, and the depth-tested see-through preview is still hidden behind parts.
+- **What causes darkening:** GTAO only draws meshes into its normal/depth buffer, so grid, edge and trace lines never darken anything.
+- **Settings** in scene units (mm): radius about 4 mm, thickness about 2 mm, 16 samples, denoised. Tuned by eye on beams and connectors.
+- **Off:** the plain `renderView` path, so off is exactly the old picture.
+- **Screenshots:** stay on the plain path (no AO), to keep them simple and fast.
+- *Alternative:* SSAOPass. It is older, noisier and needs more tuning. GTAO is three's current recommended pass and includes denoising.
 
 ## Risks / Trade-offs
 
