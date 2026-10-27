@@ -8,16 +8,25 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { loadPartAsset } from '../utils/geometryCache.js';
+import { hubMatrix } from '../utils/motorHub.js';
+import { isMeshingGear, meshTurn, worldToothed } from '../utils/gearMeshing.js';
+import { squareFitRoll } from '../utils/shaftGroups.js';
+import { settlePlacement } from '../utils/placementFit.js';
 import {
+  HOLE_SNAP_AXIAL_REACH_MM,
   MAX_AXIAL_GAP_MM,
+  PARALLEL_MIN_DOT,
   collectWorldFeatures,
   findAlignedOpenings,
   findEngagedJoints,
   findHoleSnap,
   findTooWideInserts,
   getLocalFeatures,
+  boreTargets,
   insertFitsOpening,
+  isBorePart,
   isOpeningTaken,
+  listBoreFits,
   listInsertFits,
   measureOpeningPassRadii,
   measureOpeningSurfaces,
@@ -33,6 +42,8 @@ import {
 const VEX_PITCH_MM = 12.7; // 1x VEX IQ Pitch = 0.5 inch = 12.7 mm
 const HOLE_HIGHLIGHT_COLOR = 0xf97316; // orange: distinct from Axes overlay, selection, collision & gizmo colors
 const COLLISION_EROSION_MM = 0.38; // collision meshes are eroded inward by this much (see geometryCache.js)
+const _pieceMatrix = new THREE.Matrix4();
+const _pieceInverse = new THREE.Matrix4();
 
 const openingSurfaceCache = new Map(); // partId -> Map(featureId -> { lo, hi }) measured on the mesh
 const pinEndCache = new Map(); // partId -> Map(featureId -> { lo, hi }) which pin ends stick out
@@ -1351,6 +1362,23 @@ export default function Viewport3D({
     return crossing;
   };
 
+  /**
+   * Poses a Smart Motor's hub pieces (render and collision) at `deg` about its socket axis
+   * (openspec square-shaft-fit). No-op for parts without a hub.
+   */
+  const applyHubAngle = (group, deg = 0) => {
+    const hub = group?.userData.hub;
+    if (!hub) return;
+    const angle = Number(deg) || 0;
+    if (hub.angle === angle) return;
+    hub.angle = angle;
+    const m = hubMatrix(hub.frame, angle);
+    for (const obj of hub.objects) m.decompose(obj.position, obj.quaternion, obj.scale);
+    const locals = (group.userData.collisionLocalMatrices ||= []);
+    for (const i of hub.collisionIndices) locals[i] = angle ? m.clone() : null;
+    group.updateMatrixWorld(true);
+  };
+
   const checkGroupCollision = (targetGroup, useAssembledPositions = false) => {
     if (!targetGroup || !targetGroup.visible) return false;
     const colGeosA = targetGroup.userData.collisionGeometries;
@@ -1391,17 +1419,23 @@ export default function Viewport3D({
       if (!worldBoxA.intersectsBox(worldBoxB)) continue;
 
       matrixBtoA.multiplyMatrices(invMatrixA, otherGroup.matrixWorld);
+      // A turned motor hub's collision piece is posed by its own local matrix inside its group
+      const localsA = targetGroup.userData.collisionLocalMatrices;
+      const localsB = otherGroup.userData.collisionLocalMatrices;
 
-      for (const geoA of colGeosA) {
-        if (!geoA.boundsTree) continue;
-        for (const geoB of colGeosB) {
-          if (geoA.boundsTree.intersectsGeometry(geoB, matrixBtoA)) {
-            collided = true;
-            break;
+      colGeosA.forEach((geoA, i) => {
+        if (collided || !geoA.boundsTree) return;
+        colGeosB.forEach((geoB, j) => {
+          if (collided) return;
+          let m = matrixBtoA;
+          if (localsA?.[i] || localsB?.[j]) {
+            m = _pieceMatrix.copy(matrixBtoA);
+            if (localsA?.[i]) m.premultiply(_pieceInverse.copy(localsA[i]).invert());
+            if (localsB?.[j]) m.multiply(localsB[j]);
           }
-        }
-        if (collided) break;
-      }
+          if (geoA.boundsTree.intersectsGeometry(geoB, m)) collided = true;
+        });
+      });
       // The shrunk meshes miss small overlaps, like a shaft's cap inside a hole it can't pass
       if (!collided && (isShaftGroup(targetGroup) || isShaftGroup(otherGroup))) {
         if (featuresA === undefined) featuresA = worldFeaturesOfGroup(targetGroup);
@@ -1516,6 +1550,167 @@ export default function Viewport3D({
    * another part (any angle). Returns the snapped position, with dragged axes that run along the
    * hole's line taken from `gridPos`, or null when nothing is close enough.
    */
+  // --- Gear meshing and square fits (openspec gear-meshing, square-shaft-fit; design.md §5) ----------
+
+  /** Gears and racks in world space (as posed in the scene), except `excludeId`. */
+  const toothedNeighbours = (excludeId) => {
+    const list = [];
+    for (const [id, g] of meshMapRef.current.entries()) {
+      if (id === excludeId || !g.visible) continue;
+      const toothed = worldToothed(catalogMapRef.current.get(g.userData.partId), g.position, g.quaternion, id);
+      if (toothed) list.push(toothed);
+    }
+    return list;
+  };
+
+  /** Turns a scene object by `deg` about the world line through `point` along `axis`. */
+  const turnObjectAbout = (obj, axis, point, deg) => {
+    const pivot = point.clone();
+    const rad = THREE.MathUtils.degToRad(deg);
+    obj.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, rad));
+    obj.position.sub(pivot).applyAxisAngle(axis, rad).add(pivot);
+    obj.updateMatrixWorld(true);
+  };
+
+  /**
+   * While dragging: a spur gear in mesh range turns to mesh (so tooth clashes don't hold it short of
+   * the hole it is pulled onto), and a square axle on a square hole's line rolls onto its flats. A
+   * dragged part has left its shaft group, so only it turns.
+   */
+  const liveFitWhileDragging = (obj, partMeta) => {
+    const id = obj.userData.instanceId;
+    if (isMeshingGear(partMeta)) {
+      const turn = meshTurn(worldToothed(partMeta, obj.position, obj.quaternion, id), toothedNeighbours(id));
+      if (turn && Math.abs(turn.turnDeg) >= 0.005) turnObjectAbout(obj, turn.axis, obj.position, turn.turnDeg);
+      return;
+    }
+    if (partMeta?.fastenerSpecs?.shape !== 'square') return;
+    obj.updateMatrixWorld(true);
+    const shaft = collectWorldFeatures(partMeta, obj.matrixWorld, id, getMeshMeasurements(obj, partMeta)).find(
+      (f) => f.kind === 'shaft' && f.flatDir
+    );
+    if (!shaft) return;
+    let best = null;
+    for (const other of otherFeaturesRef.current) {
+      // A Smart Motor's hub turns to the axle instead (on release)
+      const hasHub = Boolean(catalogMapRef.current.get(meshMapRef.current.get(other.instanceId)?.userData.partId)?.hubSpecs);
+      for (const f of other.features) {
+        if (!f.flatDir || (f.kind !== 'shaft_bore' && f.kind !== 'shaft_socket') || (hasHub && f.kind === 'shaft_socket')) continue;
+        if (Math.abs(f.axis.dot(shaft.axis)) < PARALLEL_MIN_DOT) continue;
+        const d = f.origin.clone().sub(shaft.origin);
+        const along = d.dot(shaft.axis);
+        if (d.lengthSq() - along * along > 0.25 * 0.25) continue;
+        if (!best || Math.abs(along) < best.along) best = { f, along: Math.abs(along) };
+      }
+    }
+    if (!best) return;
+    const deg = squareFitRoll(shaft, best.f);
+    if (Math.abs(deg) >= 0.01) turnObjectAbout(obj, shaft.axis, shaft.origin, deg);
+  };
+
+  /** A group's pose as stored on instances (mm to 0.001, degrees to 0.01). */
+  const groupPose = (group) => ({
+    position: group.position.toArray().map((v) => Number(v.toFixed(3))),
+    rotation: [group.rotation.x, group.rotation.y, group.rotation.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2)))
+  });
+
+  /**
+   * The placement step (placementFit.js) for `placedId` at `placedPose`, against the parts as saved.
+   * With `copyOf`, the placed part is a new copy of that part (id '__copy__', label '{copy}'), and
+   * the original stays where it is.
+   */
+  const settleInstances = (placedId, placedPose, { receivingId = null, copyOf = null } = {}) => {
+    if (explodeModeRef.current !== 'off') return { patches: [], messages: [] };
+    let list = instancesRef.current.map((i) => (i.instanceId === placedId ? { ...i, ...placedPose } : i));
+    let id = placedId;
+    if (copyOf) {
+      const src = instancesRef.current.find((i) => i.instanceId === copyOf);
+      if (!src) return { patches: [], messages: [] };
+      id = '__copy__';
+      list = [...instancesRef.current, { ...src, instanceId: id, label: '{copy}', ...placedPose, socketAngleDeg: 0, visible: true }];
+    }
+    return settlePlacement({
+      placedId: id,
+      instances: list,
+      receivingId,
+      partOf: (i) => catalogMapRef.current.get(i.partId),
+      featuresOf: (i) => {
+        const meta = catalogMapRef.current.get(i.partId);
+        const g = meshMapRef.current.get(i.instanceId === '__copy__' ? copyOf : i.instanceId);
+        const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...i.rotation.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ'));
+        const matrix = new THREE.Matrix4().compose(new THREE.Vector3(...i.position), q, new THREE.Vector3(1, 1, 1));
+        return collectWorldFeatures(meta, matrix, i.instanceId, g ? getMeshMeasurements(g, meta) : null);
+      }
+    });
+  };
+
+  /** Sets a group to a pose patch's position and rotation (degrees). */
+  const poseGroup = (group, patch) => {
+    group.position.set(...patch.position);
+    group.rotation.set(...patch.rotation.map((d) => THREE.MathUtils.degToRad(d)));
+    group.updateMatrixWorld(true);
+  };
+
+  /**
+   * Before a part is pushed in (mate, pick, copy) from where it is along `direction` for up to
+   * `travelMm`: turns it as the placement step would, so its teeth or flats don't stop it short. A
+   * gear takes the turn at the first point of its path where it meshes (sliding down an axle past
+   * another gear), anything else the turn at the end of its travel. Moves the group by the same
+   * shift when the turn is about a line off its origin. Returns that shift.
+   */
+  const preTurnForPlacement = (group, direction, travelMm, options = {}, sweepMm = travelMm) => {
+    const id = group.userData.instanceId;
+    const placedId = options.copyOf ? '__copy__' : id;
+    const start = group.position.clone();
+    const settleAt = (d) => {
+      group.position.copy(start).addScaledVector(direction, d);
+      group.updateMatrixWorld(true);
+      return { at: group.position.clone(), settled: settleInstances(id, groupPose(group), options) };
+    };
+    const STEP_MM = 1.5;
+    const travel = Math.max(0, travelMm);
+    let chosen = null;
+    if (isMeshingGear(catalogMapRef.current.get(group.userData.partId))) {
+      // The whole push: it goes on past the travel limit while still in an opening
+      const reach = Math.max(travel, sweepMm ?? 0);
+      for (let d = 0; d <= reach && !chosen; d += Math.max(STEP_MM, reach / 40)) {
+        const probe = settleAt(d);
+        if (probe.settled.mesh) chosen = probe;
+      }
+    }
+    chosen ||= settleAt(travel);
+    group.position.copy(start);
+    group.updateMatrixWorld(true);
+    const own = chosen.settled.patches.find((p) => p.instanceId === placedId && p.rotation);
+    if (!own) return new THREE.Vector3();
+    const shift = new THREE.Vector3(...own.position).sub(chosen.at);
+    poseGroup(group, { position: start.clone().add(shift).toArray(), rotation: own.rotation });
+    return shift;
+  };
+
+  /**
+   * Commits a part that just landed (drag release, mate, pick) with the placement step's turns as
+   * one history step. Returns the step's notes (meshes, conflicts, hub turns).
+   */
+  const commitPlacement = (group, { label, receivingId = null, settle = true } = {}) => {
+    const id = group.userData.instanceId;
+    const inst = instancesRef.current.find((i) => i.instanceId === id);
+    const settled = settle ? settleInstances(id, groupPose(group), { receivingId }) : { patches: [], messages: [] };
+    const own = settled.patches.find((p) => p.instanceId === id);
+    if (own?.position) poseGroup(group, own);
+    const isIntersecting = checkGroupCollision(group, false);
+    group.userData.isIntersecting = isIntersecting;
+    const extraPatches = settled.patches.filter((p) => p.instanceId !== id);
+    const notes = settled.messages;
+    const stepLabel = notes.length ? `${label || `Move ${inst?.label || id}`}. ${notes.join('. ')}` : label;
+    onUpdateTransformRef.current(
+      id,
+      { ...groupPose(group), isIntersecting, ...(own && 'socketAngleDeg' in own ? { socketAngleDeg: own.socketAngleDeg } : {}) },
+      stepLabel || extraPatches.length ? { ...(stepLabel ? { label: stepLabel } : {}), ...(extraPatches.length ? { extraPatches } : {}) } : undefined
+    );
+    return notes;
+  };
+
   const snapDragToHoles = (obj, partMeta, rawPos, gridPos) => {
     const transform = transformRef.current;
     const letters = (transform?.axis || '').replace(/[^XYZ]/g, '');
@@ -1534,7 +1729,8 @@ export default function Viewport3D({
       getMeshMeasurements(obj, partMeta)
     );
     if (selectedFeatures.length === 0) return null;
-    const reachBox = worldPartBox(partMeta, obj.matrixWorld)?.expandByScalar(VEX_PITCH_MM);
+    // As far as the pull reaches along a hole's line
+    const reachBox = worldPartBox(partMeta, obj.matrixWorld)?.expandByScalar(HOLE_SNAP_AXIAL_REACH_MM);
     const candidates = [];
     for (const other of otherFeaturesRef.current) {
       if (reachBox && other.box && !reachBox.intersectsBox(other.box)) continue;
@@ -1703,7 +1899,7 @@ export default function Viewport3D({
    * plan's travel limit (leading end flush with the far face). Commits like a drag release, after
    * making sure the rounded position is clear.
    */
-  const mateSelected =(plan, { label, message } = {}) => {
+  const mateSelected = (plan, { label, message, receivingId: receivingIdArg = null } = {}) => {
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     if (!group || !plan) return;
@@ -1718,38 +1914,25 @@ export default function Viewport3D({
       return;
     }
 
+    const partnerOf = (p) => (p.insertInstanceId === selId ? p.instanceId : p.insertInstanceId);
+    const receivingId = receivingIdArg ?? (plan.pairs[0] ? partnerOf(plan.pairs[0]) : null);
+    // Turn to mesh / fit before the push, as at the end of the travel
+    start.add(preTurnForPlacement(group, plan.direction, plan.travelMm, { receivingId }, plan.sweepMm));
     const final = sweepToContact(group, start, plan.direction, plan.travelMm, plan.sweepMm);
-
-    onUpdateTransformRef.current(
-      selId,
-      {
-        position: [
-          Number(final.x.toFixed(3)),
-          Number(final.y.toFixed(3)),
-          Number(final.z.toFixed(3))
-        ],
-        rotation: [
-          Number(THREE.MathUtils.radToDeg(group.rotation.x).toFixed(2)),
-          Number(THREE.MathUtils.radToDeg(group.rotation.y).toFixed(2)),
-          Number(THREE.MathUtils.radToDeg(group.rotation.z).toFixed(2))
-        ],
-        isIntersecting: false
-      },
-      label ? { label } : undefined
-    );
+    group.position.copy(final);
+    const notes = commitPlacement(group, { label, receivingId });
+    const withNotes = (text) => [text, ...notes].join('. ');
     if (message) {
-      feedback(message);
+      feedback(withNotes(message));
       return;
     }
     const stacked = plan.pairs.length > 0 && plan.pairs.every((p) => p.pairKind === 'hole');
 
-    const partnerIds = new Set(
-      plan.pairs.map((p) => (p.insertInstanceId === selId ? p.instanceId : p.insertInstanceId))
-    );
+    const partnerIds = new Set(plan.pairs.map(partnerOf));
     const labels = [...partnerIds].map(
       (id) => instancesRef.current.find((i) => i.instanceId === id)?.label || id
     );
-    feedback(`${stacked ? 'Stacked on' : 'Mated with'} ${labels.join(', ')}`);
+    feedback(withNotes(`${stacked ? 'Stacked on' : 'Mated with'} ${labels.join(', ')}`));
   };
 
   // --- View options (openspec: view-options) --------------------------------------------------------
@@ -1834,6 +2017,9 @@ export default function Viewport3D({
   const PICK_HOVER_PX = 24;
   const pickLabelOf = (id) => instancesRef.current.find((i) => i.instanceId === id)?.label || id;
 
+  // Bore parts have no pins to count
+  const pinCount = (fit) => (fit.bore ? '' : ` · ${fit.green} of ${fit.total} pins in holes`);
+
   /** Tells App what to show in the picking banner, or null when picking ends. */
   const emitPickStatus = () => {
     const pick = pickModeRef.current;
@@ -1855,13 +2041,15 @@ export default function Viewport3D({
         text = pick.message ?? (pick.hovered.taken ? 'That hole already has a part in it' : `${name} doesn't fit this hole from this side`);
       } else if (pick.hovered) {
         const fit = pick.fits[pick.fitIndex];
-        text = `Copy ${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length} · ${fit.green} of ${fit.total} pins in holes. Ctrl/Cmd+double-click to insert a copy, wheel for other fits`;
+        text = `Copy ${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${pinCount(fit)}. Ctrl/Cmd+double-click to insert a copy, wheel for other fits`;
       }
       onPickStatusRef.current?.(text ? { text, tone } : null);
       return;
     }
     const arrowHint = pick.alongsideArrows ? ', or click the arrow to stack along the lined-up holes' : '';
-    let text = `Pick a hole for ${name}: point at a hole, click to insert${arrowHint}, Esc to cancel`;
+    let text = pick.bore
+      ? `Pick a place for ${name}: point at an axle's end or a hole, click to put it on${arrowHint}, Esc to cancel`
+      : `Pick a hole for ${name}: point at a hole, click to insert${arrowHint}, Esc to cancel`;
     let tone = 'info';
     if (pick.hovered?.taken) {
       text = 'That hole already has a part in it';
@@ -1871,7 +2059,7 @@ export default function Viewport3D({
       tone = 'warning';
     } else if (pick.hovered) {
       const fit = pick.fits[pick.fitIndex];
-      text = `${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length} · ${fit.green} of ${fit.total} pins in holes. Click to insert, wheel or R for other fits${arrowHint}, Esc to cancel`;
+      text = `${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${pinCount(fit)}. Click to insert, wheel or R for other fits${arrowHint}, Esc to cancel`;
     }
     if (pick.message) {
       text = pick.message;
@@ -1915,12 +2103,14 @@ export default function Viewport3D({
     const partMeta = group ? catalogMapRef.current.get(group.userData.partId) : null;
     if (!group || !partMeta) return null;
     const insertKinds = [...new Set(getLocalFeatures(partMeta).filter((f) => f.kind === 'pin' || f.kind === 'shaft').map((f) => f.kind))];
-    if (insertKinds.length === 0) return null;
+    // A bore part (gear, hub, pulley, motor) is picked onto axle ends and hole faces instead
+    const bore = insertKinds.length === 0 && isBorePart(partMeta);
+    if (insertKinds.length === 0 && !bore) return null;
 
     rebuildOtherFeatures();
     const others = otherFeaturesRef.current.flatMap((o) => o.features);
-    const candidates = [];
-    for (const f of others) {
+    const candidates = bore ? boreTargets(others) : [];
+    for (const f of bore ? [] : others) {
       if (!insertKinds.some((k) => insertFitsOpening(k, f.kind))) continue;
       for (const face of openFaces(f)) candidates.push({ opening: f, face });
     }
@@ -1928,7 +2118,10 @@ export default function Viewport3D({
       kind,
       selId,
       partMeta,
+      bore,
       measured: getMeshMeasurements(group, partMeta),
+      // Gears and racks a gear preview meshes with (a copy also meshes with the original)
+      meshNeighbours: isMeshingGear(partMeta) ? toothedNeighbours(kind === 'copy' ? null : selId) : null,
       startPosition: group.position.clone(),
       startQuaternion: group.quaternion.clone(),
       transformMode: transformModeRef.current,
@@ -1946,7 +2139,7 @@ export default function Viewport3D({
   const openingKey = (opening) => `${opening.instanceId}:${opening.featureId}`;
   /** Taken for the copy preview: a part is seated in it, or a copy was just inserted there. */
   const isCopyHoleTaken = (pick, opening) =>
-    pick.insertedKeys?.has(openingKey(opening)) || isOpeningTaken(opening, pick.others);
+    opening.kind !== 'shaft' && (pick.insertedKeys?.has(openingKey(opening)) || isOpeningTaken(opening, pick.others));
 
   /**
    * Starts hole picking for the selected part when it has pins, pegs or shafts: hides the gizmo and
@@ -2051,16 +2244,18 @@ export default function Viewport3D({
       const receiving = meshMapRef.current.get(front.opening.instanceId);
       const receivingQuaternion = receiving ? receiving.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
       pick.hovered = { ...front, taken };
+      const listFits = pick.bore ? listBoreFits : listInsertFits;
       pick.fits = taken
         ? []
-        : listInsertFits({
+        : listFits({
             partMeta: pick.partMeta,
             measured: pick.measured,
             instanceId: pick.selId,
             hovered: front,
             receivingQuaternion,
             otherFeatures: pick.others,
-            currentQuaternion: pick.startQuaternion
+            currentQuaternion: pick.startQuaternion,
+            meshNeighbours: pick.meshNeighbours
           });
       pick.fitIndex = 0;
     }
@@ -2112,10 +2307,11 @@ export default function Viewport3D({
       return;
     }
     const label = `Insert ${pickLabelOf(pick.selId)} into ${pickLabelOf(pick.hovered.opening.instanceId)}`;
+    const receivingInstanceId = pick.hovered.opening.instanceId;
     endPick();
     mateSelected(
       { lateral: new THREE.Vector3(), direction: fit.direction, travelMm: fit.travelMm, sweepMm: fit.sweepMm, pairs: [] },
-      { label, message: label.replace(/^Insert/, 'Inserted') }
+      { label, message: label.replace(/^Insert/, 'Inserted'), receivingId: receivingInstanceId }
     );
   };
 
@@ -2124,7 +2320,7 @@ export default function Viewport3D({
    * group is posed at the fit, checked for a clear way in, pushed in like mating, then put back.
    * Returns { position, rotation } (mm, degrees), or null when the way in is blocked.
    */
-  const computeCopyPose = (group, fit) => {
+  const computeCopyPose = (group, fit, receivingId = null) => {
     const oldPosition = group.position.clone();
     const oldQuaternion = group.quaternion.clone();
     group.position.copy(fit.position);
@@ -2132,14 +2328,19 @@ export default function Viewport3D({
     group.updateMatrixWorld(true);
     let pose = null;
     if (!checkGroupCollision(group, false)) {
-      const final = sweepToContact(group, fit.position.clone(), fit.direction, fit.travelMm, fit.sweepMm);
+      const copyOf = group.userData.instanceId;
+      const startPos = fit.position.clone();
+      startPos.add(preTurnForPlacement(group, fit.direction, fit.travelMm, { receivingId, copyOf }, fit.sweepMm));
+      const final = sweepToContact(group, startPos, fit.direction, fit.travelMm, fit.sweepMm);
+      group.position.copy(final);
+      // The placement step for the copy: its own final pose, other parts' turns and the step's notes
+      const settled = settleInstances(copyOf, groupPose(group), { receivingId, copyOf });
+      const own = settled.patches.find((p) => p.instanceId === '__copy__');
+      if (own?.position) poseGroup(group, own);
       pose = {
-        position: [Number(final.x.toFixed(3)), Number(final.y.toFixed(3)), Number(final.z.toFixed(3))],
-        rotation: [
-          Number(THREE.MathUtils.radToDeg(group.rotation.x).toFixed(2)),
-          Number(THREE.MathUtils.radToDeg(group.rotation.y).toFixed(2)),
-          Number(THREE.MathUtils.radToDeg(group.rotation.z).toFixed(2))
-        ]
+        ...groupPose(group),
+        extraPatches: settled.patches.filter((p) => p.instanceId !== '__copy__'),
+        notes: settled.messages
       };
     }
     group.position.copy(oldPosition);
@@ -2160,14 +2361,15 @@ export default function Viewport3D({
     const fit = pick.fits[pick.fitIndex];
     const group = meshMapRef.current.get(pick.selId);
     if (!fit || !group) return;
-    const pose = computeCopyPose(group, fit);
+    const pose = computeCopyPose(group, fit, pick.hovered.opening.instanceId);
     if (!pose) return refuse('The way in is blocked: something is in the way just outside that hole');
     const copyId = onInsertCopyRef.current?.(pick.selId, pose, pickLabelOf(pick.hovered.opening.instanceId));
     if (!copyId) return;
     // The filled holes show taken straight away, for as long as the copy is there
     for (const opening of holesFilledByFit(fit, pick.hovered)) pick.insertedKeys.set(openingKey(opening), copyId);
     pick.lastInsertedKey = openingKey(pick.hovered.opening);
-    pick.hovered = { ...pick.hovered, taken: true };
+    // An axle can carry more parts: it is never shown taken
+    if (pick.hovered.opening.kind !== 'shaft') pick.hovered = { ...pick.hovered, taken: true };
     pick.fits = [];
     renderPick();
   };
@@ -2210,7 +2412,9 @@ export default function Viewport3D({
     // stacking arrow and hole picking for the pins together, instead of stacking straight away
     const partMeta = catalogMapRef.current.get(group.userData.partId);
     const hasInserts = getLocalFeatures(partMeta).some((f) => f.kind === 'pin' || f.kind === 'shaft');
-    const action = mateAction(plans, hasInserts);
+    let action = mateAction(plans, hasInserts);
+    // A bore part with nothing lined up picks an axle or hole to go onto
+    if (action === 'none' && isBorePart(partMeta)) action = 'pick';
     if (action === 'none') {
       feedback('Nothing lined up to mate with', true);
     } else if (action === 'pick') {
@@ -2821,6 +3025,11 @@ export default function Viewport3D({
         }
 
         obj.position.copy(snappedPos);
+        // Turn to mesh / to fit square flats before the collision step (skipped with Alt, like snapping)
+        if (!altKeyRef.current) {
+          liveFitWhileDragging(obj, partMeta);
+          snappedPos.copy(obj.position);
+        }
         let isColliding = checkGroupCollision(obj, false);
         let blockedAt = snappedPos;
         // A whole grid step can carry a shaft's cap past a beam's lip; stop at the lip instead
@@ -2892,21 +3101,11 @@ export default function Viewport3D({
         const obj = transform.object;
         const instId = obj.userData.instanceId;
         if (instId) {
-          const isColliding = checkGroupCollision(obj, false);
-          obj.userData.isIntersecting = isColliding;
-          onUpdateTransformRef.current(instId, {
-            position: [
-              Number(obj.position.x.toFixed(3)),
-              Number(obj.position.y.toFixed(3)),
-              Number(obj.position.z.toFixed(3))
-            ],
-            rotation: [
-              Number(THREE.MathUtils.radToDeg(obj.rotation.x).toFixed(2)),
-              Number(THREE.MathUtils.radToDeg(obj.rotation.y).toFixed(2)),
-              Number(THREE.MathUtils.radToDeg(obj.rotation.z).toFixed(2))
-            ],
-            isIntersecting: isColliding
-          });
+          // A moved part goes through the placement step (square fit, mesh, hub); a hand turn in
+          // Rotate mode, or a drag with Alt held, is kept as it is
+          const settle = transformModeRef.current === 'translate' && !altKeyRef.current && dragMovedRef.current;
+          const notes = commitPlacement(obj, { settle });
+          if (notes.length) onMateFeedbackRef.current?.(notes.join('. '));
         }
       }
       if (!event.value) {
@@ -4043,11 +4242,12 @@ export default function Viewport3D({
 
         onLoadingChange?.(true);
         loadPartAsset(partMeta)
-          .then(({ geometries, collisionGeometries, localBox }) => {
+          .then(({ geometries, collisionGeometries, localBox, hub }) => {
             if (!meshMapRef.current.has(inst.instanceId)) return;
             group.userData.collisionGeometries = collisionGeometries;
             group.userData.renderGeometries = geometries;
             group.userData.localBox = localBox;
+            group.userData.hub = hub ? { ...hub, objects: [] } : null;
 
             const material = new THREE.MeshStandardMaterial({
               color: new THREE.Color(inst.color || partMeta.defaultColor),
@@ -4055,7 +4255,7 @@ export default function Viewport3D({
               metalness: 0.12
             });
 
-            geometries.forEach((geo) => {
+            geometries.forEach((geo, index) => {
               const mesh = new THREE.Mesh(geo, material);
               mesh.castShadow = true; // only matters while the Shadows option is on
               mesh.receiveShadow = true;
@@ -4072,7 +4272,10 @@ export default function Viewport3D({
               const edges = new THREE.LineSegments(edgesGeo, edgesMat);
               edges.name = '__cad_edges__';
               group.add(edges);
+              if (hub?.renderIndices.includes(index)) group.userData.hub.objects.push(mesh, edges);
             });
+            const loadedInst = instancesRef.current.find((i) => i.instanceId === inst.instanceId);
+            applyHubAngle(group, loadedInst?.socketAngleDeg);
 
             const latestInst = instancesRef.current.find(
               (i) => i.instanceId === inst.instanceId
@@ -4110,6 +4313,7 @@ export default function Viewport3D({
       }
 
       group.visible = inst.visible !== false;
+      applyHubAngle(group, inst.socketAngleDeg);
       const displayPos = explodedPosMap.get(inst.instanceId) || inst.position;
       const isBeingTurned = rotateGestureRef.current?.instanceId === inst.instanceId;
       if ((!transform.dragging || transform.object !== group) && !isBeingTurned) {

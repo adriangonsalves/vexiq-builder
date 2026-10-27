@@ -19,6 +19,10 @@ import {
   planMates
 } from '../src/utils/pinHoleAlignment.js';
 import { applyOps, diffParts, fromLegacy, loadHistory, recordStep, summarize } from '../src/utils/buildHistory.js';
+import { hubFrame, hubMatrix, splitHubTriangles } from '../src/utils/motorHub.js';
+import { isMeshingGear, meshTurn, quaternionToEulerDeg, turnQuaternion, worldToothed } from '../src/utils/gearMeshing.js';
+import { squareFitRoll } from '../src/utils/shaftGroups.js';
+import { settlePlacement, turnAboutLine } from '../src/utils/placementFit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -95,7 +99,7 @@ function readPartGlb(part) {
 const rawBvhCache = new Map(); // partId -> BufferGeometry with a BVH over the unshrunk mesh
 
 /** BVH over a part's real (unshrunk) mesh, for measurements too fine for the collision mesh. */
-function getPartRawGeometry(part) {
+export function getPartRawGeometry(part) {
   if (!rawBvhCache.has(part.id)) {
     const { pos, idx } = readPartGlb(part);
     const geo = new THREE.BufferGeometry();
@@ -147,7 +151,27 @@ export function getPartCollisionBvh(part) {
   colGeo.computeBoundingBox();
   colGeo.boundsTree = new MeshBVH(colGeo);
 
-  const entry = { colGeo, localBox: colGeo.boundingBox.clone() };
+  // The Smart Motor's drive hub turns (socketAngleDeg), so collisions use it as its own piece
+  const frame = hubFrame(part);
+  let pieces = [{ geo: colGeo, hub: false }];
+  if (frame) {
+    const split = splitHubTriangles(pos, idx, frame);
+    if (split.hub.length) {
+      pieces = [
+        { triangles: split.body, hub: false },
+        { triangles: split.hub, hub: true }
+      ].map(({ triangles, hub }) => {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', colGeo.getAttribute('position'));
+        geo.setIndex(new THREE.BufferAttribute(triangles, 1));
+        geo.computeBoundingBox();
+        geo.boundsTree = new MeshBVH(geo);
+        return { geo, hub };
+      });
+    }
+  }
+
+  const entry = { colGeo, localBox: colGeo.boundingBox.clone(), pieces, hubFrame: frame };
   bvhCache.set(part.id, entry);
   return entry;
 }
@@ -182,16 +206,29 @@ function rawRaycast(part) {
 
 const isShaftPart = (part) => getPartMeasurements(part).profiles.size > 0;
 
+/** Collision pieces of an instance, a turned motor hub with its local matrix (and its inverse). */
+function posedPieces(bvh, instance) {
+  const deg = Number(instance.socketAngleDeg) || 0;
+  return bvh.pieces.map((p) => {
+    if (!p.hub || !deg) return { geo: p.geo };
+    const local = hubMatrix(bvh.hubFrame, deg);
+    return { geo: p.geo, local, inverse: local.clone().invert() };
+  });
+}
+
 export function checkCandidateCollision(candidate, instances) {
   const { catalogById } = getCatalog();
   const partA = catalogById.get(candidate.partId);
   if (!partA) return { isIntersecting: false, collidingWith: [] };
 
-  const { colGeo: geoA, localBox: boxA } = getPartCollisionBvh(partA);
+  const bvhA = getPartCollisionBvh(partA);
+  const { localBox: boxA } = bvhA;
+  const piecesA = posedPieces(bvhA, candidate);
   const matA = buildWorldMatrix(candidate.position, candidate.rotation);
   const worldBoxA = boxA.clone().applyMatrix4(matA);
   const invMatA = matA.clone().invert();
   const matBtoA = new THREE.Matrix4();
+  const pieceMat = new THREE.Matrix4();
 
   const collidingWith = [];
   let featuresA = null; // only worked out when a shaft and a hole meet
@@ -202,14 +239,23 @@ export function checkCandidateCollision(candidate, instances) {
     const partB = catalogById.get(other.partId);
     if (!partB) continue;
 
-    const { colGeo: geoB, localBox: boxB } = getPartCollisionBvh(partB);
+    const bvhB = getPartCollisionBvh(partB);
+    const { localBox: boxB } = bvhB;
     const matB = buildWorldMatrix(other.position, other.rotation);
     const worldBoxB = boxB.clone().applyMatrix4(matB);
 
     if (!worldBoxA.intersectsBox(worldBoxB)) continue;
 
     matBtoA.multiplyMatrices(invMatA, matB);
-    let hit = geoA.boundsTree.intersectsGeometry(geoB, matBtoA);
+    const piecesB = posedPieces(bvhB, other);
+    let hit = piecesA.some((a) =>
+      piecesB.some((b) => {
+        pieceMat.copy(matBtoA);
+        if (a.inverse) pieceMat.premultiply(a.inverse);
+        if (b.local) pieceMat.multiply(b.local);
+        return a.geo.boundsTree.intersectsGeometry(b.geo, pieceMat);
+      })
+    );
     // The shrunk meshes miss small overlaps, like a shaft's cap inside a hole it can't pass
     if (!hit && (isShaftPart(partA) || isShaftPart(partB))) {
       featuresA ||= worldFeaturesFor(candidate);
@@ -1315,35 +1361,26 @@ export function buildMeshedGearTrain(state, options = {}) {
       currentPort = bestPort;
     }
 
-    // Try phase angles (starting with alternating phaseOffsetDeg) to guarantee zero collision with previous gear
-    const basePhase = i % 2 === 1 ? spec.phaseOffsetDeg || 5 : 0;
-    const candidateRolls = [basePhase, 0, spec.phaseOffsetDeg || 5, 3.75, 7.5, 15];
-    let chosenMate = null;
-    let chosenCol = null;
-
-    for (const roll of candidateRolls) {
-      const mate = computeMateTransform(gearPart, null, beamInst, currentPort.portId, {
-        axialOffsetMm: computedAxialOffset,
-        rollDeg: roll
-      });
-      const tempInst = {
-        instanceId: `inst-gear-${Date.now()}-${i}`,
-        partId: gearPart.id,
-        position: mate.position,
-        rotation: mate.rotation,
-        visible: true
+    // Each gear turns to its measured meshing turn against the previous gear (openspec gear-meshing)
+    const mate = computeMateTransform(gearPart, null, beamInst, currentPort.portId, {
+      axialOffsetMm: computedAxialOffset,
+      rollDeg: 0
+    });
+    let chosenMate = { ...mate, rollDeg: 0 };
+    const prevGear = placedGears[placedGears.length - 1]?.instance;
+    const toothedOf = (inst) => worldToothed(getCatalog().catalogById.get(inst.partId), inst.position, inst.rotation, inst.instanceId);
+    const meshed = prevGear ? meshTurn(worldToothed(gearPart, mate.position, mate.rotation), [toothedOf(prevGear)]) : null;
+    if (meshed && Math.abs(meshed.turnDeg) >= 0.005) {
+      chosenMate = {
+        ...mate,
+        rotation: quaternionToEulerDeg(turnQuaternion(mate.rotation, meshed.axis, meshed.turnDeg)),
+        rollDeg: meshed.turnDeg
       };
-      const col = checkCandidateCollision(tempInst, workingInstances);
-      if (!col.isIntersecting) {
-        chosenMate = { ...mate, rollDeg: roll };
-        chosenCol = col;
-        break;
-      }
-      if (!chosenMate) {
-        chosenMate = { ...mate, rollDeg: roll };
-        chosenCol = col;
-      }
     }
+    const chosenCol = checkCandidateCollision(
+      { instanceId: `inst-gear-${Date.now()}-${i}`, partId: gearPart.id, position: chosenMate.position, rotation: chosenMate.rotation, visible: true },
+      workingInstances
+    );
 
     const gearInst = {
       instanceId: `inst-${Date.now()}-gear-${i + 1}`,
@@ -1364,7 +1401,8 @@ export function buildMeshedGearTrain(state, options = {}) {
       beamPortId: currentPort.portId,
       rollDeg: chosenMate.rollDeg,
       teeth: spec.teeth,
-      pitchRadiusMm: spec.pitchRadiusMm
+      pitchRadiusMm: spec.pitchRadiusMm,
+      ...(prevGear ? { meshedWith: meshed ? prevGear.label : null } : {})
     });
 
     // Optional shaft insertion through this gear
@@ -1395,9 +1433,14 @@ export function buildMeshedGearTrain(state, options = {}) {
               {
                 flipAxis: flip,
                 axialOffsetMm: offset,
-                rollDeg: chosenMate.rollDeg
+                rollDeg: 0
               }
             );
+            // A square shaft turns to fit the gear's square bore
+            const shaftFeature = worldFeaturesFor({ instanceId: 'shaft', partId: shaftPart.id, ...sMate }).find((f) => f.kind === 'shaft');
+            const gearBore = worldFeaturesFor(gearInst).find((f) => f.kind === 'shaft_bore');
+            const fitDeg = squareFitRoll(shaftFeature, gearBore);
+            if (fitDeg) Object.assign(sMate, turnAboutLine(sMate, shaftFeature.axis, shaftFeature.origin, fitDeg));
             const tempS = {
               instanceId: `inst-${Date.now()}-shaft-${i + 1}`,
               partId: shaftPart.id,
@@ -1905,6 +1948,33 @@ export function summarizeAudit(audit) {
 }
 
 /**
+ * The placement step (src/utils/placementFit.js) for `placed` among `instances` (it must be one of
+ * them, at its placed pose): square fit, meshing, shaft-group turns and Smart Motor hubs, exactly as
+ * the app does. Returns its { patches, messages, squareFit, mesh }.
+ */
+export function settlePlacedInstance(placed, instances, receivingId = null) {
+  const { catalogById } = getCatalog();
+  return settlePlacement({
+    placedId: placed.instanceId,
+    instances,
+    receivingId,
+    partOf: (i) => catalogById.get(i.partId),
+    featuresOf: worldFeaturesFor
+  });
+}
+
+/** `instances` with the pose patches of a placement step applied (new objects for changed parts). */
+export function applyPosePatches(instances, patches) {
+  if (!patches?.length) return instances;
+  return instances.map((inst) => {
+    const patch = patches.find((p) => p.instanceId === inst.instanceId);
+    if (!patch) return inst;
+    const { instanceId, ...fields } = patch;
+    return { ...inst, ...fields };
+  });
+}
+
+/**
  * Places a list of parts into a copy of `state` (see the place_parts tool). Items are resolved in
  * order; an item may name an earlier item by its `ref`. Each item gives either an absolute
  * `position` / `rotation` or an `insert` (placed into an opening and pushed in until contact).
@@ -1915,7 +1985,8 @@ export function summarizeAudit(audit) {
 export function placeParts(state, items, options = {}) {
   const working = [...(state.instances || [])];
   const refs = new Map(); // ref -> instance
-  const placed = []; // { index, ref, inst, stoppedAgainst }
+  const placed = []; // { index, ref, inst, stoppedAgainst, notes, rollReplaced?, turnedOthers? }
+  const turnedIds = new Set(); // existing parts the placement step turned
   const fail = (index, ref, reason) => ({ error: { index, ref: ref ?? null, reason } });
   if (!Array.isArray(items) || items.length === 0) return fail(null, null, 'parts must be a non-empty list');
 
@@ -1948,6 +2019,7 @@ export function placeParts(state, items, options = {}) {
       locked: false
     };
     let stoppedAgainst;
+    let preTurned = false;
 
     if (item.insert) {
       const target = resolveInstance(item.insert.into);
@@ -1957,6 +2029,7 @@ export function placeParts(state, items, options = {}) {
       inst.position = pose.position;
       inst.rotation = pose.rotation;
       stoppedAgainst = pose.stoppedAgainst;
+      preTurned = pose.preTurned;
     } else {
       if (!Array.isArray(item.position) || item.position.length !== 3) {
         return fail(index, item.ref, 'give either position [x, y, z] (mm) or insert');
@@ -1968,8 +2041,31 @@ export function placeParts(state, items, options = {}) {
     }
 
     working.push(inst);
+    // The placement step: square fit, mesh, shaft groups, motor hubs (openspec gear-meshing)
+    const settled = settlePlacedInstance(inst, working, item.insert ? resolveInstance(item.insert.into)?.instanceId : null);
+    const own = settled.patches.find((p) => p.instanceId === inst.instanceId);
+    if (own) Object.assign(inst, own);
+    const others = settled.patches.filter((p) => p.instanceId !== inst.instanceId);
+    for (const patch of others) {
+      const at = working.findIndex((w) => w.instanceId === patch.instanceId);
+      const { instanceId, ...fields } = patch;
+      if (at >= 0) Object.assign((working[at] = { ...working[at] }), fields);
+      // Earlier items of this call keep pointing at their (turned) instance
+      for (const p of placed) if (p.inst.instanceId === patch.instanceId) p.inst = working[at];
+      for (const [r, v] of refs) if (v.instanceId === patch.instanceId) refs.set(r, working[at]);
+      turnedIds.add(patch.instanceId);
+    }
     if (item.ref !== undefined) refs.set(item.ref, inst);
-    placed.push({ index, ref: item.ref, inst, stoppedAgainst });
+    const rollGiven = item.insert?.rollDeg !== undefined || Array.isArray(item.rotation);
+    placed.push({
+      index,
+      ref: item.ref,
+      inst,
+      stoppedAgainst,
+      notes: settled.messages,
+      ...((own?.rotation || preTurned) && rollGiven ? { rollReplaced: true } : {}),
+      ...(others.length ? { turnedOthers: others.map((p) => working.find((w) => w.instanceId === p.instanceId)?.label || p.instanceId) } : {})
+    });
   }
 
   if (options.mirror) {
@@ -1987,6 +2083,15 @@ export function placeParts(state, items, options = {}) {
     p.inst.lastValidPosition = isIntersecting ? null : [...p.inst.position];
     p.inst.lastValidRotation = isIntersecting ? null : [...p.inst.rotation];
     p.collidingWith = collidingWith.map((c) => c.label);
+  }
+  for (const id of turnedIds) {
+    const inst = working.find((w) => w.instanceId === id);
+    if (!inst || placed.some((p) => p.inst === inst)) continue;
+    inst.isIntersecting = checkCandidateCollision(inst, working).isIntersecting;
+    if (!inst.isIntersecting) {
+      inst.lastValidPosition = [...inst.position];
+      inst.lastValidRotation = [...inst.rotation];
+    }
   }
 
   return {
@@ -2058,7 +2163,7 @@ function insertIntoOpening(part, insert, target, others, instanceId) {
   else uWorld = a;
   const q = buildAxisAlignedQuaternion(source.axis.toArray(), uWorld.toArray(), Number(insert.rollDeg) || 0);
   const euler = new THREE.Euler().setFromQuaternion(q, 'XYZ');
-  const rotation = [euler.x, euler.y, euler.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2)) + 0);
+  let rotation = [euler.x, euler.y, euler.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2)) + 0);
 
   // Start pose: on the target's axis line, leading end 1 mm outside the target feature on `side`
   const placedAt = (position) => ({ instanceId, partId: part.id, label: part.name, position, rotation, visible: true });
@@ -2089,11 +2194,31 @@ function insertIntoOpening(part, insert, target, others, instanceId) {
   if (startHit.isIntersecting) {
     return { error: `the start pose outside ${port} already touches ${startHit.collidingWith.map((c) => c.label).join(', ')}` };
   }
-
   // Keep looking for contact while the insert is still in the opening; a blind opening's measured
   // floor is a hard stop (end-on contact between the eroded meshes is only seen ~0.76 mm too deep)
   const blind = !(isInsert(source) ? targetFeature : source).through;
   const sweep = blind ? plan.travelMm : Math.max(plan.travelMm, plan.sweepMm ?? 0);
+  // Turn as the placement step will before moving in, so teeth or square flats don't stop it short:
+  // a gear at the first point of its path where it meshes, anything else at the end of its travel
+  const settleAt = (d) => {
+    const at = pos.clone().addScaledVector(plan.direction, d).toArray().map((n) => Number(n.toFixed(3)));
+    const moving = placedAt(at);
+    return { at, settled: settlePlacedInstance(moving, [...others, moving], target.instanceId) };
+  };
+  let chosen = null;
+  if (isMeshingGear(part)) {
+    for (let d = 0; d <= sweep && !chosen; d += Math.max(1.5, sweep / 40)) {
+      const probe = settleAt(d);
+      if (probe.settled.mesh) chosen = probe;
+    }
+  }
+  chosen ||= settleAt(plan.travelMm);
+  const own = chosen.settled.patches.find((p) => p.instanceId === instanceId && p.rotation);
+  if (own) {
+    rotation = own.rotation;
+    pos.add(new THREE.Vector3(...own.position).sub(new THREE.Vector3(...chosen.at)));
+  }
+
   const lastClear = pos.clone();
   let final = null;
   let stoppedAgainst = null;
@@ -2134,7 +2259,7 @@ function insertIntoOpening(part, insert, target, others, instanceId) {
     final.addScaledVector(plan.direction, -INSERT_BACK_OFF_MM);
     rounded = roundVec(final);
   }
-  return { position: rounded.toArray(), rotation, stoppedAgainst: stoppedAgainst || 'flush with far face' };
+  return { position: rounded.toArray(), rotation, stoppedAgainst: stoppedAgainst || 'flush with far face', preTurned: Boolean(own) };
 }
 const mirrorSymmetryCache = new Map(); // partId -> { axis, center } | null
 

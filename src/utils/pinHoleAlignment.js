@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { angleAbout, directionAt, refAxes, wrapDeg } from './axisFrame.js';
+import { isMeshingGear, meshTurn, worldToothed } from './gearMeshing.js';
 
 /**
  * Pin/shaft-to-opening alignment math for the viewport's aligned-hole highlights.
@@ -92,7 +94,8 @@ export function getLocalFeatures(partMeta) {
   const bbox = partMeta.bbox;
   const isCollar = COLLAR_NAME_PATTERN.test(partMeta.name || '');
 
-  const push = (featureId, kind, origin, axisRaw, range, radiusMm = OPENING_RIM_RADIUS_MM[kind], through = false) => {
+  // `square`: the measured flat angle of a square bore, socket or shaft (gear-meshing change)
+  const push = (featureId, kind, origin, axisRaw, range, radiusMm = OPENING_RIM_RADIUS_MM[kind], through = false, square = null) => {
     const axis = normalize3(axisRaw);
     const isOpening = !OPENINGS_BY_INSERT[kind];
     const extent = clampToBbox(range, bbox, axis, isOpening);
@@ -104,7 +107,8 @@ export function getLocalFeatures(partMeta) {
       axis,
       tMin: extent[0],
       tMax: extent[1],
-      ...(isOpening ? { radiusMm, through } : {})
+      ...(isOpening ? { radiusMm, through } : {}),
+      ...(Number.isFinite(square) ? { squarePhaseDeg: square } : {})
     });
   };
 
@@ -124,7 +128,8 @@ export function getLocalFeatures(partMeta) {
       } else {
         range = port.spanMm || [-Infinity, Infinity];
       }
-      push(port.portId, kind, port.origin, axis, range, OPENING_RIM_RADIUS_MM[kind], Boolean(port.through));
+      const square = port.shape === 'square' ? port.squarePhaseDeg : null;
+      push(port.portId, kind, port.origin, axis, range, OPENING_RIM_RADIUS_MM[kind], Boolean(port.through), square);
     }
 
     const fs = partMeta.fastenerSpecs;
@@ -152,7 +157,8 @@ export function getLocalFeatures(partMeta) {
         push('collar_hole', 'collar_hole', bore.origin, bore.axis, [-Infinity, Infinity], bore.radius, true);
       }
     } else if (fs && SHAFT_FASTENER_TYPES.has(fs.fastenerType)) {
-      push('shaft', 'shaft', [0, 0, 0], fs.axis || [0, 0, 1], fs.usableSpanZ || [-Infinity, Infinity]);
+      const square = fs.shape === 'square' ? fs.squarePhaseDeg : null;
+      push('shaft', 'shaft', [0, 0, 0], fs.axis || [0, 0, 1], fs.usableSpanZ || [-Infinity, Infinity], undefined, false, square);
     }
   }
 
@@ -315,13 +321,6 @@ const PASS_SECTIONS = 5; // depths probed inside each opening
 const PROFILE_STEP_MM = 0.2; // spacing of the shaft width samples
 const PROFILE_PROBE_START_MM = 6; // inward rays start this far from the shaft's axis
 
-const crossAxes = (axis) => {
-  const u = new THREE.Vector3()
-    .crossVectors(axis, Math.abs(axis.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0))
-    .normalize();
-  return [u, new THREE.Vector3().crossVectors(axis, u)];
-};
-
 /**
  * How wide a part may be to pass through each opening: at several depths, rays go out from the
  * opening's axis to its wall in PASS_PROBE_RAYS directions; a section passes up to its widest
@@ -336,7 +335,7 @@ export function measureOpeningPassRadii(partMeta, raycast) {
   for (const f of getLocalFeatures(partMeta)) {
     if (OPENINGS_BY_INSERT[f.kind] || f.kind === 'collar_hole') continue;
     const axis = new THREE.Vector3(...f.axis);
-    const [u, v] = crossAxes(axis);
+    const [u, v] = refAxes(axis);
     const t0 = dot3(f.origin, f.axis);
     const inset = Math.min(0.3, (f.tMax - f.tMin) / 4);
     let pass = Infinity;
@@ -370,7 +369,7 @@ export function measureShaftProfiles(partMeta, raycast) {
   for (const f of getLocalFeatures(partMeta)) {
     if (f.kind !== 'shaft' || !Number.isFinite(f.tMin) || !Number.isFinite(f.tMax)) continue;
     const axis = new THREE.Vector3(...f.axis);
-    const [u, v] = crossAxes(axis);
+    const [u, v] = refAxes(axis);
     const t0 = dot3(f.origin, f.axis);
     const samples = [];
     for (let t = f.tMin; t <= f.tMax + 1e-6; t += PROFILE_STEP_MM) {
@@ -533,6 +532,8 @@ export function collectWorldFeatures(partMeta, matrixWorld, instanceId, measured
       const axis = new THREE.Vector3(...f.axis);
       const start = origin.clone().addScaledVector(axis, span.lo - t0).applyMatrix4(matrixWorld);
       const end = origin.clone().addScaledVector(axis, span.hi - t0).applyMatrix4(matrixWorld);
+      // A square feature's flat direction (normal of one flat) in world space
+      const flatDir = Number.isFinite(f.squarePhaseDeg) ? directionAt(f.axis, f.squarePhaseDeg).transformDirection(matrixWorld) : null;
       origin.applyMatrix4(matrixWorld);
       axis.transformDirection(matrixWorld);
       result.push({
@@ -545,6 +546,7 @@ export function collectWorldFeatures(partMeta, matrixWorld, instanceId, measured
         end,
         radiusMm: f.radiusMm,
         through: isOpening ? span.through : f.through,
+        ...(flatDir ? { flatDir } : {}),
         ...(profiles?.has(f.featureId) ? { profile: profiles.get(f.featureId) } : {}),
         ...(passRadii?.has(f.featureId) ? { passRadius: passRadii.get(f.featureId) } : {}),
         ...(f.kind === 'pin'
@@ -744,7 +746,10 @@ export function findSeatedPairs(featuresA, featuresB) {
 // the pull also settles on axes that aren't being dragged (a part that drifted slightly off a hole
 // pattern, e.g. after snapping into a gear's turned pin hole, otherwise never lines up again).
 export const HOLE_SNAP_RADIUS_MM = 3.5;
-export const HOLE_SNAP_AXIAL_REACH_MM = 2 * VEX_PITCH_MM;
+// The same reach along the line as the hole highlights (gear-meshing change: was 2 pitch)
+export const HOLE_SNAP_AXIAL_REACH_MM = MAX_AXIAL_GAP_MM;
+// Pulls this close in length count as equal; the pair nearer along the line then wins
+const HOLE_SNAP_TIE_MM = 0.25;
 export const HOLE_SNAP_SETTLE_MM = 1.0;
 
 /**
@@ -822,10 +827,16 @@ export function findHoleSnap(
       if (_v.lengthSq() - along * along > radiusMm * radiusMm) continue; // moving can't be shorter
       const [sMin, sMax] = projectRange(s.start, s.end, o.origin, axis);
       const [oMin, oMax] = projectRange(o.start, o.end, o.origin, axis);
-      if (Math.max(oMin - sMax, sMin - oMax) > axialReachMm) continue;
+      const gap = Math.max(0, oMin - sMax, sMin - oMax);
+      if (gap > axialReachMm) continue;
       const move = moveOntoLine(s.origin, o.origin, axis, directions);
       if (!move || move.length() > radiusMm) continue;
-      if (!best || move.lengthSq() < best.offset.lengthSq()) best = { offset: move, ...roles };
+      const pull = move.length();
+      const better =
+        !best ||
+        pull < best.pull - HOLE_SNAP_TIE_MM ||
+        (Math.abs(pull - best.pull) <= HOLE_SNAP_TIE_MM && (gap < best.gap || (gap === best.gap && pull < best.pull)));
+      if (better) best = { offset: move, pull, gap, ...roles };
     }
   }
   return best;
@@ -937,9 +948,10 @@ const mostAcross = (dir, axes) => {
  * `receivingQuaternion`), plus `roll` quarter turns, or `rollRad` radians when given.
  * Returns { quaternion, position, rotationDeg, matrix, leadPoint } or null when the insert/end is unknown.
  */
-export function insertPose({ partMeta, measured = null, featureId, end, face, outward, receivingQuaternion, roll = 0, rollRad = null, gapMm = PICK_GAP_MM }) {
-  const feature = getLocalFeatures(partMeta).find((f) => f.featureId === featureId);
-  const lead = feature && insertLeadEnds(partMeta, feature, measured).find((e) => e.end === end);
+export function insertPose({ partMeta, measured = null, featureId, end, face, outward, receivingQuaternion, roll = 0, rollRad = null, gapMm = PICK_GAP_MM, lead: leadGiven = null }) {
+  const feature = leadGiven ? null : getLocalFeatures(partMeta).find((f) => f.featureId === featureId);
+  // `lead` (a bore's face, see listBoreFits) stands in for an insert's leading end
+  const lead = leadGiven || (feature && insertLeadEnds(partMeta, feature, measured).find((e) => e.end === end));
   if (!lead) return null;
   const n = outward.clone().normalize();
   const inward = n.clone().negate();
@@ -1012,7 +1024,7 @@ function spinSymmetric(partMeta, feature) {
  * [{ featureId, end, roll, quaternion, position, rotationDeg, markers, green, total, turnRad,
  *    travelMm, sweepMm }].
  */
-export function listInsertFits({ partMeta, measured = null, instanceId, hovered, receivingQuaternion, otherFeatures, currentQuaternion }) {
+export function listInsertFits({ partMeta, measured = null, instanceId, hovered, receivingQuaternion, otherFeatures, currentQuaternion, meshNeighbours = null }) {
   const { opening, face } = hovered;
   const n = face.outward.clone().normalize();
   const farFace = face.point.distanceTo(opening.start) < face.point.distanceTo(opening.end) ? opening.end : opening.start;
@@ -1038,9 +1050,13 @@ export function listInsertFits({ partMeta, measured = null, instanceId, hovered,
       // Quarter turns relative to the receiving part, plus the exact turns that put another of the
       // part's pins on a nearby matching hole (patterns that are not square to the receiving
       // part's axes, e.g. the angled face of a 30° corner connector)
-      const rollAngles = spinSymmetric(partMeta, f) ? [0] : [0, 1, 2, 3].map((q) => (q * Math.PI) / 2);
+      let rollAngles = spinSymmetric(partMeta, f) ? [0] : [0, 1, 2, 3].map((q) => (q * Math.PI) / 2);
       const basePose = insertPose(base);
-      if (basePose && rollAngles.length > 1) {
+      // A square axle into a square hole: the four rolls that line its flats up with the hole's
+      // (square-shaft-fit), instead of quarter turns from the receiving part's axes
+      const squareRoll = basePose && Number.isFinite(f.squarePhaseDeg) && opening.flatDir ? squareRollAbout(n, partMeta, basePose, f, instanceId, measured, opening) : null;
+      if (squareRoll !== null) rollAngles = [0, 1, 2, 3].map((q) => (q * Math.PI) / 2 + THREE.MathUtils.degToRad(squareRoll));
+      if (basePose && rollAngles.length > 1 && squareRoll === null) {
         const world = collectWorldFeatures(partMeta, basePose.matrix, instanceId, measured);
         const anchor = world.find((w) => w.featureId === f.featureId);
         // The part's other parallel pins and how far each is across the axis from the anchor; holes
@@ -1064,6 +1080,9 @@ export function listInsertFits({ partMeta, measured = null, instanceId, hovered,
         const roll = rollIndex < 4 ? rollIndex : 4; // 0-3: quarter turns; 4: a turn found from the hole pattern
         const pose = insertPose({ ...base, rollRad });
         if (!pose) continue;
+        // A spur gear in mesh range at its seated pose is shown at its meshing turn (gear-meshing),
+        // when it turns about the insert's own line (else the turn would take the insert off the hole)
+        if (meshNeighbours?.length && isMeshingGear(partMeta)) meshPreviewTurn(pose, partMeta, n, PICK_GAP_MM + depth + Math.max(0, f.tMax - f.tMin), meshNeighbours, f);
         const duplicate = fits.some(
           (g) => g.position.distanceTo(pose.position) < 0.01 && g.quaternion.angleTo(pose.quaternion) < THREE.MathUtils.degToRad(0.1)
         );
@@ -1100,6 +1119,127 @@ export function listInsertFits({ partMeta, measured = null, instanceId, hovered,
     }
   }
   return fits.sort((a, b) => b.green - a.green || a.turnRad - b.turnRad || a.roll - b.roll);
+}
+
+/** Roll (degrees about `n`) that lines a square insert's flats up with a square opening's, at `basePose`. */
+function squareRollAbout(n, partMeta, basePose, feature, instanceId, measured, opening) {
+  const anchor = collectWorldFeatures(partMeta, basePose.matrix, instanceId, measured).find((w) => w.featureId === feature.featureId);
+  if (!anchor?.flatDir) return null;
+  return wrapDeg(angleAbout(n, opening.flatDir) - angleAbout(n, anchor.flatDir), 90);
+}
+
+/**
+ * Turns an insert `pose` (in place) to mesh, at the first point of its way in (up to `reachMm`
+ * along -n) where it meshes. Only when the gear's axis is the insert's line (else the turn would
+ * take the insert off the hole).
+ */
+function meshPreviewTurn(pose, partMeta, n, reachMm, neighbours, feature) {
+  const gear0 = worldToothed(partMeta, pose.position, pose.quaternion);
+  if (!gear0 || Math.abs(gear0.axis.dot(n)) < PARALLEL_MIN_DOT) return;
+  const insertOrigin = new THREE.Vector3(...feature.origin).applyQuaternion(pose.quaternion).add(pose.position);
+  _v.subVectors(insertOrigin, gear0.center);
+  if (_v.lengthSq() - _v.dot(gear0.axis) ** 2 > MAX_LINE_DISTANCE_MM ** 2) return;
+  let turn = null;
+  for (let d = 0; d <= reachMm && !turn; d += Math.max(1.5, reachMm / 40)) {
+    turn = meshTurn(worldToothed(partMeta, pose.position.clone().addScaledVector(n, -d), pose.quaternion), neighbours);
+  }
+  if (!turn || Math.abs(turn.turnDeg) < 0.005) return;
+  const q = new THREE.Quaternion().setFromAxisAngle(turn.axis, THREE.MathUtils.degToRad(turn.turnDeg));
+  pose.quaternion.premultiply(q);
+  const euler = new THREE.Euler().setFromQuaternion(pose.quaternion, 'XYZ');
+  pose.rotationDeg = [euler.x, euler.y, euler.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(4)));
+  pose.matrix = new THREE.Matrix4().compose(pose.position, pose.quaternion, new THREE.Vector3(1, 1, 1));
+  pose.meshTurnDeg = turn.turnDeg;
+}
+
+// --- Hole picking for bore parts (gears, hubs, pulleys, the motor) ----------------------------------
+
+const BORE_KINDS = new Set(['shaft_bore', 'shaft_socket']);
+// A bore part pushed onto a hole's face looks this far for contact before stopping at the face
+const BORE_ONTO_FACE_SWEEP_MM = VEX_PITCH_MM;
+
+/** True for a part with no pins, pegs or shafts and at least one shaft bore or socket. */
+export function isBorePart(partMeta) {
+  const features = getLocalFeatures(partMeta);
+  return !features.some((f) => OPENINGS_BY_INSERT[f.kind]) && features.some((f) => BORE_KINDS.has(f.kind));
+}
+
+/**
+ * Targets a bore part can be picked onto among `otherFeatures`: both ends of every shaft
+ * ({ opening: shaft feature, face: { point, outward }, onShaft: true }) and every open face of
+ * openings a shaft fits ({ opening, face }).
+ */
+export function boreTargets(otherFeatures) {
+  const targets = [];
+  for (const f of otherFeatures) {
+    if (f.kind === 'shaft') {
+      const along = new THREE.Vector3().subVectors(f.end, f.start).normalize();
+      targets.push({ opening: f, face: { point: f.end.clone(), outward: along.clone() }, onShaft: true });
+      targets.push({ opening: f, face: { point: f.start.clone(), outward: along.clone().negate() }, onShaft: true });
+    } else if (insertFitsOpening('shaft', f.kind)) {
+      for (const face of openFaces(f)) targets.push({ opening: f, face });
+    }
+  }
+  return targets;
+}
+
+/**
+ * Every way a bore part can go onto `hovered` (from boreTargets): each of its shaft bores and
+ * sockets, leading with a face that can take a shaft (both faces of a through bore, a socket's open
+ * end), at the four quarter-turn rolls relative to the receiving part, or the four rolls that line
+ * square flats up when the bore and the target are both square. A gear in mesh range along its way
+ * in is shown at its meshing turn. Same result shape as listInsertFits (no markers).
+ */
+export function listBoreFits({ partMeta, measured = null, instanceId, hovered, receivingQuaternion, currentQuaternion, meshNeighbours = null }) {
+  const { opening, face } = hovered;
+  const n = face.outward.clone().normalize();
+  const onShaft = Boolean(hovered.onShaft);
+  const shaftLength = onShaft ? opening.start.distanceTo(opening.end) : 0;
+  const fits = [];
+  for (const f of getLocalFeatures(partMeta)) {
+    if (!BORE_KINDS.has(f.kind)) continue;
+    const axis = new THREE.Vector3(...f.axis);
+    const t0 = dot3(f.origin, f.axis);
+    const pointAt = (t) => new THREE.Vector3(...f.origin).addScaledVector(axis, t - t0);
+    const ends = f.kind === 'shaft_socket' ? ['hi'] : ['lo', 'hi'];
+    for (const end of ends) {
+      // The bore's face toward the target, `dir` pointing out of the part through it
+      const lead = { end, dir: end === 'hi' ? axis.clone() : axis.clone().negate(), point: pointAt(end === 'hi' ? f.tMax : f.tMin) };
+      const base = { partMeta, measured, face: face.point, outward: n, receivingQuaternion, lead };
+      const basePose = insertPose(base);
+      if (!basePose) continue;
+      const squareRoll = Number.isFinite(f.squarePhaseDeg) && opening.flatDir ? squareRollAbout(n, partMeta, basePose, f, instanceId, measured, opening) : null;
+      const offset = THREE.MathUtils.degToRad(squareRoll ?? 0);
+      const travelMm = PICK_GAP_MM + (onShaft ? shaftLength : 0);
+      const sweepMm = onShaft ? travelMm : PICK_GAP_MM + BORE_ONTO_FACE_SWEEP_MM;
+      for (let q = 0; q < 4; q++) {
+        const pose = insertPose({ ...base, rollRad: (q * Math.PI) / 2 + offset });
+        if (!pose) continue;
+        if (meshNeighbours?.length && isMeshingGear(partMeta)) meshPreviewTurn(pose, partMeta, n, sweepMm, meshNeighbours, f);
+        const duplicate = fits.some(
+          (g) => g.position.distanceTo(pose.position) < 0.01 && g.quaternion.angleTo(pose.quaternion) < THREE.MathUtils.degToRad(0.1)
+        );
+        if (duplicate) continue;
+        fits.push({
+          featureId: f.featureId,
+          end,
+          roll: q,
+          quaternion: pose.quaternion,
+          position: pose.position,
+          rotationDeg: pose.rotationDeg,
+          markers: [],
+          green: 1,
+          total: 1,
+          bore: true,
+          turnRad: currentQuaternion ? pose.quaternion.angleTo(currentQuaternion) : 0,
+          travelMm,
+          sweepMm,
+          direction: n.clone().negate()
+        });
+      }
+    }
+  }
+  return fits.sort((a, b) => a.turnRad - b.turnRad || a.roll - b.roll);
 }
 
 /** True when an insert of `insertKind` ('pin' / 'shaft') fits an opening of `openingKind`. */

@@ -28,6 +28,11 @@
     - `shaft_bore` (Pink) — Square shaft through-bores on gears, wheels, pulleys, and lock plates.
     - `shaft_socket` (Purple) — Blind square shaft sockets inside Smart Motors and Brains.
     - `pin_peg` (Yellow) — Insertable cylindrical pegs on Connector Pins and Standoffs with shoulder/cap geometry (`fastenerSpecs`).
+- **Measured gear, rack and square-shaft data** (`scripts/measure-part-geometry.mjs`, run by `npm run index-metadata`): rays cast at the real mesh every 0.25° and fitted for their repeating pattern, so the values come from the models, not the names. Angles are about each axis from a shared reference direction (`src/utils/axisFrame.js`), so the app and the MCP engine read them the same way.
+  - Spur gears (`gearSpecs`): `measured`, tooth count, tip and root radius, tooth size (`diametralPitch` 16 for high strength, 24 standard, 34 for the 34DP pair) and from it `moduleMm`, `pitchRadiusMm`, `toothSpacingMm`, the tooth phase `toothPhaseDeg` (the angle of one tooth's center), the tooth band along the axis `faceSpanMm`, and `boreShape` (square or round, e.g. the idler gear is round). Ratchets, ring gears and toothed non-gears are left unmeasured and never turn to mesh; the indexer lists them.
+  - Linear motion racks (`rackSpecs`): length direction, tooth face normal, tooth axis, tooth spacing and the offset of one tooth, tip and pitch lines, length and tooth band.
+  - Shaft bores and sockets get `shape` (`square` / `round`) and the square's flat angle `squarePhaseDeg`; square shafts get `fastenerSpecs.shape` and `squarePhaseDeg`. A bore that can't be measured counts as round.
+  - The Smart Motor gets `hubSpecs` (`radiusMm`, `faceOffsetMm`, `depthMm`): the drive hub around its square socket, the piece that turns.
 
 ---
 
@@ -46,7 +51,7 @@
   - Plane drags use the same VEX pitch snapping and BVH flush-contact detent as axis drags.
   - **Pitch steps count from where the drag started**, not from the world origin. A part that starts lined up with holes, even holes off the world grid like axles at wheel-radius height (`y = 23.87 mm`), moves in whole steps and stays on the hole pattern.
   - **Hole snapping:**
-    - While dragging, a pin, shaft or hole of the moving part that comes within `3.5 mm` of a matching hole, pin or shaft on another part is pulled onto that part's axis line. The two must be parallel within `2°` and within 2 pitch (`25.4 mm`) of each other along the line.
+    - While dragging, a pin, shaft or hole of the moving part that comes within `3.5 mm` of a matching hole, pin or shaft on another part is pulled onto that part's axis line. The two must be parallel within `2°` and within 12 pitch (`152.4 mm`) of each other along the line, the same reach as the hole rings, so a gear dragged well above a beam still snaps onto the hole below. When two pulls are within `0.25 mm` of each other, the hole nearer along the line wins.
     - A small sideways miss of up to `1 mm`, on axes not being dragged or when dragging along the hole's line, is settled too. A part that drifted slightly off a hole pattern then clicks back into its hole, for example after snapping into a gear's pin hole that's turned for meshing.
     - Apart from that settle, the pull only moves the part along the axes being dragged.
     - It works at any angle, because it uses the real hole lines, not the grid. Plates turned in their own plane or tilted on another axis snap the same way.
@@ -93,6 +98,7 @@
 - **Pick a hole (double-click with nothing lined up):**
   - Double-clicking a selected part that has pins, pegs or shafts but lines up with nothing starts **hole picking**. A cyan banner shows the controls and the gizmo hides; the camera still moves.
   - **Hover** near a hole face, within about `24 px`, to ring it in cyan. The face you point at is the side the part goes in from. A hole that already has a pin or shaft in it rings grey and says so.
+  - **Bore parts** (gears, wheel hubs, pulleys, sprockets, the Smart Motor: no pins or shafts, but a shaft bore or socket) start picking the same way. Their targets are the two ends of other parts' axles (the part slides onto the axle until it touches something) and hole faces a shaft fits (the bore lines up with the hole and the part rests on the face). The preview is turned to fit a square axle, and a gear is shown at its meshing turn when it meshes along its way in. The banner leaves out the pin count, and an axle end is never "taken". Ctrl/Cmd copy insert works for them too.
   - A **see-through cyan copy** shows the part turned onto the hole's axis whatever angle it was at, its tip `1 mm` outside the face. Its roll follows the receiving part: a pattern on a plate turned 30° is shown turned 30°.
   - Other pins pointing the same way are marked **green** (a hole lines up) or **red** (none does). The banner reads, for example, "Fit 1 of 8 · 2 of 2 pins in holes".
   - The best fit (most pins in holes, then the smallest turn) comes first. The **mouse wheel** or **`R`** / **`Shift+R`** steps through the others: which pin goes in the hole, which end leads, 90° rolls, and **pattern rolls**. A pattern roll is the exact turn that puts another pin on a parallel hole. Holes are searched out to the part's own widest pin spread across the axis and within 2 pitch along it, so hole rows that aren't square to their part (like the angled face of a 30° corner connector) can still be filled. Pins and shafts that look the same at any roll get one roll; capped shafts always lead with the uncapped end.
@@ -138,7 +144,23 @@
   - `1` / `2` / `3`: Look from +X (front) / +Y (top) / +Z (side); with `Shift`, from the opposite side
   - `Del` / `Backspace`: Delete selected part
   - `Esc`: Hide mate arrows if shown; otherwise exit Explode mode / revert intersecting part & deselect
-  - Double-click selected part: Mate with lined-up holes / pins (shows direction arrows when there is more than one way); with nothing lined up, pick any hole to insert into
+  - Double-click selected part: Mate with lined-up holes / pins (shows direction arrows when there is more than one way); with nothing lined up, pick any hole to insert into (a gear, hub or pulley: an axle end or hole to go onto)
+
+---
+
+## 2a. Gear Meshing, Square Shafts & the Motor Hub
+
+- **Gears turn to mesh** (`src/utils/gearMeshing.js`): a measured spur gear in mesh range of another gear or a rack turns about its own axis by the smallest turn (at most half a tooth) that puts its teeth in the other's gaps.
+  - Mesh range: axes parallel within 2°, tooth bands overlapping along the axis, the same tooth size, and centers within 1.0 mm of the sum of the pitch radii (for a rack: one pitch radius from its pitch line, over its length).
+  - While dragging, the gear turns continuously, so tooth clashes no longer hold it short of the hole it is pulled onto; it turns again on release. Alt (no hole snapping) also turns this off.
+  - Also on double-click mating, hole picking and Ctrl/Cmd copy insert; for these the turn is worked out where the gear first meshes along its way in, so it can slide down an axle past another gear.
+  - With several neighbours, the turn that leaves the largest error smallest wins (ties: the nearest neighbour); any neighbour still more than a quarter tooth off is named ("Couldn't mesh with 36 Tooth Gear #2 as well"). A gear held by a pin off its own axis isn't turned.
+  - Turning a gear by hand in Rotate mode is never undone: meshing only happens when a part is placed.
+- **Square axles fit square holes** (`src/utils/shaftGroups.js`): a square axle going into a square bore or socket turns by the smallest amount that lines its flats up with the hole's; a part with a square bore going onto an axle turns to fit it. When an axle passes several square holes whose flats disagree, it fits the one it was put into and a message names the others. Round bores take any angle. Hole picking and the copy preview show square axles at the four fitting turns, and a gear at its meshing turn.
+- **Shaft groups:** a square axle, every part seated on it by a square bore, and a Smart Motor hub holding it turn together. When a gear placed on a loaded axle meshes, its whole group turns (positions turn about the axle too) and parts on other axles stay put. Round-bore parts (idler gears, bearings) and pin holes aren't in groups.
+- **Smart Motor hub:** the motor's drive hub is split off its model when it loads (`src/utils/motorHub.js`) and drawn, and collided, turned by the instance's `socketAngleDeg` (0 when missing, so older saves load unchanged). An axle going into the socket keeps its angle and the hub turns to match. The angle is saved with the build, part of the history, shown by `get_assembly`, and turns with its shaft group.
+- **One step:** the placement's own move and every turn it caused (other group members, the hub) are one history step, labeled with what happened, e.g. "Move 24 Tooth Gear #1. Meshed 24 Tooth Gear #1 with 48 Tooth Gear #1 (turned −5.5°)". The same text shows as the action message.
+- The app and the MCP engine share the placement step (`src/utils/placementFit.js`), so both place parts identically. The collision meshes (shrunk 0.38 mm) can't see a square axle turned wrong in a square hole (its corners overlap only ~0.6 mm), so square fits are made by angle, not found by collision.
 
 ---
 
@@ -204,6 +226,7 @@ Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP 
     - Each item gives either a position and rotation, or an **insert**: put this part's pin, peg, shaft or bore into a hole of a placed part or of an earlier item (`ref`), and push it straight in until it touches something, like double-click mating.
     - `dryRun: true` checks a layout without saving it, and `rejectIntersecting: true` saves nothing if anything overlaps.
     - `mirror: { plane, offsetMm }` also places every item's exact mirror image, using each part's own symmetry. Left/Right are swapped in labels, and parts centered on the plane aren't doubled.
+  - **Meshing and square fits over MCP:** `place_part` and `place_parts` run the same placement step as the app (square fit, meshing, shaft-group turns, motor hub). A given `rotation` / insert `rollDeg` is replaced by the fitting or meshing turn when one applies, and the reply says so (`rotationReplaced` / `rollReplaced`); replies list `notes` (meshes, neighbours it couldn't mesh with, hub turns) and `turnedOthers`. `mesh_gear_train` spaces gears by their measured pitch radii, turns each to its meshing turn against the previous one (reported as `rollDeg` and `meshedWith`), and turns its shafts to fit the gears' square bores. `get_part_details` includes `rackSpecs` and `hubSpecs`.
   - **`get_part_details`:** returns a compact list of each part's connection points (position, axis, usable span, measured depth, through or blind, which way pegs stick out). The raw catalog record comes back only with `verbose: true`.
   - **App status:** every tool that changes the assembly reports `appSync`: `live` (the open app got it), `no-browser` (the app is running but nobody has it open) or `saved-to-file-only` (the app isn't running), with a hint.
   - **`capture_screenshot`:** returns a PNG of the 3D view rendered by the open app, either from the user's camera or a framed `iso` / `front` / `top` / `side` view. Gizmos, hole rings and the selection tint are left out, and the user's camera isn't moved. `current` is the main view's own camera (orthographic when set) as one picture, without the 4-View small views, the stereo pair or the view cube; the standard views are always perspective.

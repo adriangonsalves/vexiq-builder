@@ -83,6 +83,22 @@ const VIEW_DIRECTIONS = ['+x', '-x', '+y', '-y', '+z', '-z'];
 const PANELS_HIDDEN_KEY = 'vexiq.panelsHidden';
 const clampStereoDepth =(v) => Math.min(3, Math.max(0.25, Number(v) || 1));
 
+/** Parts with pose patches ({ instanceId, position?, rotation?, socketAngleDeg? }) applied. */
+const applyPatches = (parts, patches) => {
+  if (!patches?.length) return parts;
+  return parts.map((inst) => {
+    const patch = patches.find((p) => p.instanceId === inst.instanceId);
+    if (!patch) return inst;
+    const { instanceId, ...fields } = patch;
+    const updated = { ...inst, ...fields };
+    if (fields.position) {
+      updated.lastValidPosition = [...updated.position];
+      updated.lastValidRotation = [...updated.rotation];
+    }
+    return updated;
+  });
+};
+
 export default function App() {
   const [catalog, setCatalog] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -703,10 +719,12 @@ export default function App() {
     return newInst;
   };
 
+  // meta.extraPatches: other parts changed by the same placement (a shaft group turned to mesh, a
+  // motor hub turned to fit), recorded in the same history step
   const handleUpdateTransform = (instanceId, patch, meta = {}) => {
+    const { extraPatches = [], ...stepMeta } = meta || {};
     setInstances(
-      (prev) =>
-        prev.map((inst) => {
+      (prev) => applyPatches(prev.map((inst) => {
           if (inst.instanceId !== instanceId) return inst;
           const updated = { ...inst, ...patch };
           if (updated.isIntersecting === false) {
@@ -714,8 +732,8 @@ export default function App() {
             updated.lastValidRotation = [...updated.rotation];
           }
           return updated;
-        }),
-      meta
+        }), extraPatches),
+      stepMeta
     );
   };
 
@@ -744,6 +762,7 @@ export default function App() {
   // Ctrl/Cmd+double-click on a hole in the viewport: add a copy of a part seated in it, as one history
   // step, keeping the original selected. Returns the copy's id.
   const handleInsertCopy = (sourceId, pose, receivingLabel) => {
+    const { extraPatches = [], notes = [] } = pose;
     if (previewRef.current) return null;
     const source = instances.find((i) => i.instanceId === sourceId);
     const part = source ? catalogMap.get(source.partId) : null;
@@ -757,6 +776,7 @@ export default function App() {
       label: `${part.name} #${n}`,
       position: pose.position,
       rotation: pose.rotation,
+      ...(pose.socketAngleDeg ? { socketAngleDeg: pose.socketAngleDeg } : {}),
       lastValidPosition: [...pose.position],
       lastValidRotation: [...pose.rotation],
       isIntersecting: false,
@@ -764,10 +784,13 @@ export default function App() {
       visible: true,
       locked: false
     };
-    setInstances((prev) => [...prev, copy], {
-      label: `Insert copy of ${source.label} into ${receivingLabel}`
+    // The placement step's notes name the copy '{copy}' before it has a label
+    const noteText = notes.map((n) => n.replaceAll('{copy}', copy.label)).join('. ');
+    const withNotes = (text) => (noteText ? `${text}. ${noteText}` : text);
+    setInstances((prev) => [...applyPatches(prev, extraPatches), copy], {
+      label: withNotes(`Insert copy of ${source.label} into ${receivingLabel}`)
     });
-    setActionFeedback({ message: `Inserted ${copy.label} into ${receivingLabel}`, isError: false });
+    setActionFeedback({ message: withNotes(`Inserted ${copy.label} into ${receivingLabel}`), isError: false });
     return copy.instanceId;
   };
 

@@ -17,7 +17,8 @@ import {
 import { applyOps, diffParts, loadHistory, mergeBrowserSave, recordStep, summarize } from './src/utils/buildHistory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STATE_FILE = path.join(__dirname, 'public', 'assembly-state.json');
+// VEXIQ_STATE_PATH (as for the MCP engine) lets a test server use its own build file
+const STATE_FILE = process.env.VEXIQ_STATE_PATH || path.join(__dirname, 'public', 'assembly-state.json');
 
 /**
  * Vite plugin providing a live two-way HTTP + Server-Sent Events (SSE) bridge

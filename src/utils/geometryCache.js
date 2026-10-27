@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshBVH } from 'three-mesh-bvh';
+import { hubFrame, splitHubTriangles, subGeometry } from './motorHub.js';
 
 const loader = new GLTFLoader();
-const partAssetCache = new Map(); // partId -> Promise<{ geometries: THREE.BufferGeometry[], collisionGeometries: THREE.BufferGeometry[], localBox: THREE.Box3 }>
+// partId -> Promise<{ geometries, collisionGeometries, localBox, hub }>; `hub` is set for the Smart
+// Motor: { frame, renderIndices, collisionIndices } naming the hub pieces of each list (motorHub.js)
+const partAssetCache = new Map();
 
 /**
  * Creates a position-welded inward-eroded copy of a BufferGeometry for collision testing.
@@ -76,6 +79,8 @@ export function loadPartAsset(part) {
         const geometries = [];
         const collisionGeometries = [];
         const localBox = new THREE.Box3();
+        const frame = hubFrame(part);
+        const hub = { frame, renderIndices: [], collisionIndices: [] };
 
         gltf.scene.traverse((child) => {
           if (child.isMesh && child.geometry) {
@@ -87,14 +92,26 @@ export function loadPartAsset(part) {
             if (renderGeo.boundingBox) {
               localBox.union(renderGeo.boundingBox);
             }
-            geometries.push(renderGeo);
-
-            const colGeo = createErodedCollisionGeometry(renderGeo, 0.38);
-            collisionGeometries.push(colGeo);
+            // The Smart Motor's drive hub is split off so it can be turned (motorHub.js)
+            const split = frame ? splitHubTriangles(renderGeo.attributes.position.array, renderGeo.index?.array, frame) : null;
+            const pieces = split?.hub.length
+              ? [
+                  { geo: subGeometry(renderGeo, split.body), hub: false },
+                  { geo: subGeometry(renderGeo, split.hub), hub: true }
+                ].filter((piece) => piece.geo)
+              : [{ geo: renderGeo, hub: false }];
+            for (const piece of pieces) {
+              if (piece.hub) {
+                hub.renderIndices.push(geometries.length);
+                hub.collisionIndices.push(collisionGeometries.length);
+              }
+              geometries.push(piece.geo);
+              collisionGeometries.push(createErodedCollisionGeometry(piece.geo, 0.38));
+            }
           }
         });
 
-        resolve({ geometries, collisionGeometries, localBox });
+        resolve({ geometries, collisionGeometries, localBox, hub: hub.renderIndices.length ? hub : null });
       },
       undefined,
       (err) => reject(err)

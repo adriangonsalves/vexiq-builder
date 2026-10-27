@@ -896,7 +896,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -2015,7 +2017,9 @@
         -13.53,
         6.2
       ],
-      "totalLengthMm": 19.73
+      "totalLengthMm": 19.73,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "medium",
@@ -2709,7 +2713,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -3340,7 +3346,9 @@
         -15.72,
         2.29
       ],
-      "totalLengthMm": 18.01
+      "totalLengthMm": 18.01,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "medium",
@@ -10621,7 +10629,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 13.758,
+      "rootRadiusMm": 11.377,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 11.66,
+      "faceSpanMm": [
+        -2.93,
+        2.92
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -10658,7 +10678,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -13591,7 +13613,39 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "rackSpecs": {
+      "measured": true,
+      "diametralPitch": 24,
+      "moduleMm": 1.0583,
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        1,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "toothSpacingMm": 3.325,
+      "toothOffsetMm": -0.001,
+      "tipLineOffset": 4.004,
+      "pitchLineOffset": 2.946,
+      "lengthSpanMm": [
+        -38,
+        38
+      ],
+      "faceSpanMm": [
+        -3.2,
+        3.2
+      ]
+    }
   },
   {
     "id": "1x6-linear-motion-rack-gear-228-2500-1472-64",
@@ -13787,7 +13841,39 @@
         ],
         "verified": true
       }
-    ]
+    ],
+    "rackSpecs": {
+      "measured": true,
+      "diametralPitch": 24,
+      "moduleMm": 1.0583,
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        1,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "toothSpacingMm": 3.325,
+      "toothOffsetMm": 0.001,
+      "tipLineOffset": 4.004,
+      "pitchLineOffset": 2.946,
+      "lengthSpanMm": [
+        -35.75,
+        35.75
+      ],
+      "faceSpanMm": [
+        -3.2,
+        3.2
+      ]
+    }
   },
   {
     "id": "1x6-smooth-beam-228-2500-323-65",
@@ -23851,7 +23937,39 @@
         ],
         "verified": true
       }
-    ]
+    ],
+    "rackSpecs": {
+      "measured": true,
+      "diametralPitch": 24,
+      "moduleMm": 1.0583,
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        1,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "toothSpacingMm": 3.325,
+      "toothOffsetMm": 0,
+      "tipLineOffset": 4.004,
+      "pitchLineOffset": 2.946,
+      "lengthSpanMm": [
+        -124.65,
+        124.65
+      ],
+      "faceSpanMm": [
+        -3.2,
+        3.2
+      ]
+    }
   },
   {
     "id": "2-5x-pitch-capped-shaft-228-2500-2220-80",
@@ -23936,7 +24054,9 @@
         -29.97,
         0.8
       ],
-      "totalLengthMm": 30.77
+      "totalLengthMm": 30.77,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -24534,7 +24654,9 @@
         -11.81,
         12.61
       ],
-      "totalLengthMm": 24.42
+      "totalLengthMm": 24.42,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -24631,7 +24753,9 @@
         -23.62,
         0.8
       ],
-      "totalLengthMm": 24.42
+      "totalLengthMm": 24.42,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -25302,7 +25426,9 @@
         -27.69,
         2.29
       ],
-      "totalLengthMm": 29.97
+      "totalLengthMm": 29.97,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "medium",
@@ -25399,7 +25525,9 @@
         -14.99,
         14.99
       ],
-      "totalLengthMm": 29.97
+      "totalLengthMm": 29.97,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "medium",
@@ -25522,7 +25650,9 @@
         -18.95,
         6.2
       ],
-      "totalLengthMm": 25.15
+      "totalLengthMm": 25.15,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "medium",
@@ -25606,7 +25736,9 @@
         -11.81,
         11.81
       ],
-      "totalLengthMm": 23.62
+      "totalLengthMm": 23.62,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -25690,7 +25822,9 @@
         -11.81,
         11.81
       ],
-      "totalLengthMm": 23.62
+      "totalLengthMm": 23.62,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -26736,7 +26870,8 @@
           0,
           -0.31
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       },
       {
         "portId": "peg_3",
@@ -28169,7 +28304,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -28561,7 +28698,8 @@
           0,
           -0.31
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       },
       {
         "portId": "peg_3",
@@ -28972,7 +29110,8 @@
           0,
           -0.31
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       },
       {
         "portId": "peg_3",
@@ -31967,7 +32106,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -32049,7 +32189,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -32131,7 +32272,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -33661,7 +33803,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -33743,7 +33886,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -33825,7 +33969,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -33907,7 +34052,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -34755,7 +34901,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -35033,7 +35181,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -37059,7 +37209,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -53982,7 +54134,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -72784,7 +72938,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -72821,7 +72977,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -72876,7 +73033,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -72913,7 +73072,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -72968,7 +73128,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -73005,7 +73167,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -73060,7 +73223,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -73097,7 +73262,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -73152,7 +73318,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -73189,7 +73357,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -75291,7 +75460,9 @@
         -18.16,
         18.96
       ],
-      "totalLengthMm": 37.12
+      "totalLengthMm": 37.12,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -75388,7 +75559,9 @@
         -36.32,
         0.8
       ],
-      "totalLengthMm": 37.12
+      "totalLengthMm": 37.12,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -75864,7 +76037,9 @@
         -40.39,
         2.29
       ],
-      "totalLengthMm": 42.67
+      "totalLengthMm": 42.67,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "medium",
@@ -75961,7 +76136,9 @@
         -21.34,
         21.34
       ],
-      "totalLengthMm": 42.67
+      "totalLengthMm": 42.67,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "medium",
@@ -76045,7 +76222,9 @@
         -18.16,
         18.16
       ],
-      "totalLengthMm": 36.32
+      "totalLengthMm": 36.32,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -76129,7 +76308,9 @@
         -18.16,
         18.16
       ],
-      "totalLengthMm": 36.32
+      "totalLengthMm": 36.32,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -105151,7 +105332,9 @@
         -55.37,
         0.8
       ],
-      "totalLengthMm": 56.17
+      "totalLengthMm": 56.17,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -106904,7 +107087,9 @@
         -24.51,
         25.31
       ],
-      "totalLengthMm": 49.82
+      "totalLengthMm": 49.82,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -107001,7 +107186,9 @@
         -49.02,
         0.8
       ],
-      "totalLengthMm": 49.82
+      "totalLengthMm": 49.82,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -107610,7 +107797,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -108076,7 +108264,9 @@
         -53.09,
         2.29
       ],
-      "totalLengthMm": 55.37
+      "totalLengthMm": 55.37,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "medium",
@@ -108173,7 +108363,9 @@
         -27.69,
         27.69
       ],
-      "totalLengthMm": 55.37
+      "totalLengthMm": 55.37,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "medium",
@@ -108257,7 +108449,9 @@
         -24.51,
         24.51
       ],
-      "totalLengthMm": 49.02
+      "totalLengthMm": 49.02,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -108341,7 +108535,9 @@
         -24.51,
         24.51
       ],
-      "totalLengthMm": 49.02
+      "totalLengthMm": 49.02,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -132878,7 +133074,9 @@
         -30.86,
         31.66
       ],
-      "totalLengthMm": 62.52
+      "totalLengthMm": 62.52,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -132975,7 +133173,9 @@
         -61.72,
         0.8
       ],
-      "totalLengthMm": 62.52
+      "totalLengthMm": 62.52,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -134824,7 +135024,9 @@
         -30.86,
         30.86
       ],
-      "totalLengthMm": 61.72
+      "totalLengthMm": 61.72,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -134908,7 +135110,9 @@
         -30.86,
         30.86
       ],
-      "totalLengthMm": 61.72
+      "totalLengthMm": 61.72,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -136739,7 +136943,9 @@
         -74.42,
         0.8
       ],
-      "totalLengthMm": 75.22
+      "totalLengthMm": 75.22,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -137457,7 +137663,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -137531,7 +137738,9 @@
         -37.21,
         37.21
       ],
-      "totalLengthMm": 74.42
+      "totalLengthMm": 74.42,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -149231,7 +149440,9 @@
         -87.12,
         0.8
       ],
-      "totalLengthMm": 87.92
+      "totalLengthMm": 87.92,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -149315,7 +149526,9 @@
         -43.56,
         43.56
       ],
-      "totalLengthMm": 87.12
+      "totalLengthMm": 87.12,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -150852,13 +151065,25 @@
     "gearSpecs": {
       "gearType": "spur",
       "teeth": 8,
-      "pitchRadiusMm": 4.233,
+      "pitchRadiusMm": 6.35,
       "phaseOffsetDeg": 22.5,
       "boreAxis": [
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 16,
+      "tipRadiusMm": 7.937,
+      "rootRadiusMm": 4.366,
+      "moduleMm": 1.5875,
+      "toothSpacingMm": 4.987,
+      "toothPhaseDeg": 22.47,
+      "faceSpanMm": [
+        -2.43,
+        4.67
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -151820,7 +152045,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -151907,7 +152134,9 @@
         -99.82,
         0.8
       ],
-      "totalLengthMm": 100.62
+      "totalLengthMm": 100.62,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -151991,7 +152220,9 @@
         -49.91,
         49.91
       ],
-      "totalLengthMm": 99.82
+      "totalLengthMm": 99.82,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -152216,7 +152447,9 @@
         -112.52,
         0.8
       ],
-      "totalLengthMm": 113.32
+      "totalLengthMm": 113.32,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -152300,7 +152533,9 @@
         -56.26,
         56.26
       ],
-      "totalLengthMm": 112.52
+      "totalLengthMm": 112.52,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -152998,7 +153233,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -153085,7 +153322,9 @@
         -125.22,
         0.8
       ],
-      "totalLengthMm": 126.02
+      "totalLengthMm": 126.02,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -153169,7 +153408,9 @@
         -62.61,
         62.61
       ],
-      "totalLengthMm": 125.22
+      "totalLengthMm": 125.22,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -153817,7 +154058,9 @@
         -137.92,
         0.8
       ],
-      "totalLengthMm": 138.72
+      "totalLengthMm": 138.72,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -153901,7 +154144,9 @@
         -68.96,
         68.96
       ],
-      "totalLengthMm": 137.92
+      "totalLengthMm": 137.92,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -153993,7 +154238,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 7.408,
+      "rootRadiusMm": 5.027,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 15,
+      "faceSpanMm": [
+        -2.42,
+        2.43
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -154030,7 +154287,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -154175,7 +154434,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -154270,7 +154531,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 7.408,
+      "rootRadiusMm": 5.028,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 14.97,
+      "faceSpanMm": [
+        -2.43,
+        4.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -154394,7 +154667,9 @@
         -150.62,
         0.8
       ],
-      "totalLengthMm": 151.42
+      "totalLengthMm": 151.42,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -154600,7 +154875,9 @@
         -75.31,
         75.31
       ],
-      "totalLengthMm": 150.62
+      "totalLengthMm": 150.62,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -167261,7 +167538,9 @@
         -88.01,
         88.01
       ],
-      "totalLengthMm": 176.02
+      "totalLengthMm": 176.02,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -172055,13 +172334,25 @@
     "gearSpecs": {
       "gearType": "spur",
       "teeth": 15,
-      "pitchRadiusMm": 7.938,
+      "pitchRadiusMm": 5.603,
       "phaseOffsetDeg": 12,
       "boreAxis": [
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 34,
+      "tipRadiusMm": 6.945,
+      "rootRadiusMm": 5.416,
+      "moduleMm": 0.7471,
+      "toothSpacingMm": 2.347,
+      "toothPhaseDeg": 18,
+      "faceSpanMm": [
+        -2.43,
+        2.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -172098,7 +172389,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -172187,13 +172480,25 @@
     "gearSpecs": {
       "gearType": "spur",
       "teeth": 16,
-      "pitchRadiusMm": 8.467,
+      "pitchRadiusMm": 12.7,
       "phaseOffsetDeg": 11.25,
       "boreAxis": [
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 16,
+      "tipRadiusMm": 14.287,
+      "rootRadiusMm": 10.716,
+      "moduleMm": 1.5875,
+      "toothSpacingMm": 4.987,
+      "toothPhaseDeg": 11.24,
+      "faceSpanMm": [
+        -2.43,
+        4.67
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -172230,7 +172535,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -172325,7 +172632,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -172362,7 +172671,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -173287,7 +173598,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -173361,7 +173674,9 @@
         -100.71,
         100.71
       ],
-      "totalLengthMm": 201.42
+      "totalLengthMm": 201.42,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -174456,7 +174771,8 @@
           1.8,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       },
       {
         "portId": "hole_13",
@@ -174506,7 +174822,8 @@
           0.15,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -174638,7 +174955,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -174712,7 +175031,9 @@
         -113.41,
         113.41
       ],
-      "totalLengthMm": 226.82
+      "totalLengthMm": 226.82,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -174854,7 +175175,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -175024,7 +175347,9 @@
         -126.11,
         126.11
       ],
-      "totalLengthMm": 252.22
+      "totalLengthMm": 252.22,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -175108,7 +175433,9 @@
         -138.81,
         138.81
       ],
-      "totalLengthMm": 277.62
+      "totalLengthMm": 277.62,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -175213,7 +175540,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 13.758,
+      "rootRadiusMm": 11.377,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 7.5,
+      "faceSpanMm": [
+        -2.43,
+        2.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -175250,7 +175589,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -175443,13 +175784,25 @@
     "gearSpecs": {
       "gearType": "spur",
       "teeth": 24,
-      "pitchRadiusMm": 12.7,
+      "pitchRadiusMm": 19.05,
       "phaseOffsetDeg": 7.5,
       "boreAxis": [
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 16,
+      "tipRadiusMm": 20.637,
+      "rootRadiusMm": 17.067,
+      "moduleMm": 1.5875,
+      "toothSpacingMm": 4.987,
+      "toothPhaseDeg": 7.5,
+      "faceSpanMm": [
+        -2.42,
+        2.43
+      ],
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -175779,13 +176132,25 @@
     "gearSpecs": {
       "gearType": "spur",
       "teeth": 24,
-      "pitchRadiusMm": 12.7,
+      "pitchRadiusMm": 19.05,
       "phaseOffsetDeg": 7.5,
       "boreAxis": [
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 16,
+      "tipRadiusMm": 20.637,
+      "rootRadiusMm": 17.093,
+      "moduleMm": 1.5875,
+      "toothSpacingMm": 4.987,
+      "toothPhaseDeg": 7.49,
+      "faceSpanMm": [
+        -2.43,
+        4.67
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -175822,7 +176187,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -176017,7 +176384,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 13.758,
+      "rootRadiusMm": 11.378,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 7.5,
+      "faceSpanMm": [
+        -2.43,
+        4.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -176054,7 +176433,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -176979,7 +177360,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -177375,7 +177758,9 @@
         -151.51,
         151.51
       ],
-      "totalLengthMm": 303.02
+      "totalLengthMm": 303.02,
+      "shape": "square",
+      "squarePhaseDeg": 0
     },
     "mountingRules": {
       "massClass": "light",
@@ -179234,7 +179619,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -180259,7 +180646,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -180669,7 +181058,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -181072,7 +181463,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 20.108,
+      "rootRadiusMm": 17.735,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 10,
+      "faceSpanMm": [
+        -2.43,
+        2.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -181109,7 +181512,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -181398,13 +181803,25 @@
     "gearSpecs": {
       "gearType": "spur",
       "teeth": 36,
-      "pitchRadiusMm": 19.05,
+      "pitchRadiusMm": 13.447,
       "phaseOffsetDeg": 5,
       "boreAxis": [
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 34,
+      "tipRadiusMm": 13.447,
+      "rootRadiusMm": 11.77,
+      "moduleMm": 0.7471,
+      "toothSpacingMm": 2.347,
+      "toothPhaseDeg": 5,
+      "faceSpanMm": [
+        -2.43,
+        2.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -181441,7 +181858,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -181900,7 +182319,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 20.108,
+      "rootRadiusMm": 17.728,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 5,
+      "faceSpanMm": [
+        -2.43,
+        4.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -181937,7 +182368,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -182236,7 +182669,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 20.108,
+      "rootRadiusMm": 17.735,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 5,
+      "faceSpanMm": [
+        -2.42,
+        2.43
+      ],
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -182832,7 +183277,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -182869,7 +183316,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -184144,7 +184593,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -184834,7 +185285,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -185692,7 +186145,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 26.458,
+      "rootRadiusMm": 24.078,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 3.75,
+      "faceSpanMm": [
+        -2.43,
+        2.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -185729,7 +186194,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -186540,7 +187007,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 26.458,
+      "rootRadiusMm": 24.087,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 3.75,
+      "faceSpanMm": [
+        -2.43,
+        4.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -186577,7 +187056,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -187280,7 +187761,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 32.808,
+      "rootRadiusMm": 30.427,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 3,
+      "faceSpanMm": [
+        -2.43,
+        2.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -187317,7 +187810,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -188386,7 +188881,19 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": true,
+      "diametralPitch": 24,
+      "tipRadiusMm": 32.808,
+      "rootRadiusMm": 30.435,
+      "moduleMm": 1.0583,
+      "toothSpacingMm": 3.325,
+      "toothPhaseDeg": 3,
+      "faceSpanMm": [
+        -2.43,
+        4.42
+      ],
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -188423,7 +188930,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -189603,7 +190112,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -189640,7 +190151,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       },
       {
         "portId": "hole_1",
@@ -197300,7 +197812,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -197337,7 +197851,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -197458,7 +197974,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -206626,7 +207144,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -206663,7 +207183,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -211071,7 +211593,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -211601,7 +212125,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -213697,7 +214223,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -214252,7 +214779,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 27.11
       }
     ]
   },
@@ -214387,7 +214916,9 @@
           0.25,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -215905,7 +216436,39 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "rackSpecs": {
+      "measured": true,
+      "diametralPitch": 24,
+      "moduleMm": 1.0583,
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "normal": [
+        0,
+        1,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "toothSpacingMm": 3.325,
+      "toothOffsetMm": 0.488,
+      "tipLineOffset": 12.161,
+      "pitchLineOffset": 11.103,
+      "lengthSpanMm": [
+        -31.43,
+        32.16
+      ],
+      "faceSpanMm": [
+        55.85,
+        69.05
+      ]
+    }
   },
   {
     "id": "right-shuttle-wing-228-2500-2012-410",
@@ -217136,7 +217699,8 @@
         3.3,
         12.9
       ],
-      "totalLengthMm": 9.6
+      "totalLengthMm": 9.6,
+      "shape": "round"
     },
     "mountingRules": {
       "massClass": "light",
@@ -217285,7 +217849,8 @@
         -4.67,
         7.51
       ],
-      "totalLengthMm": 12.18
+      "totalLengthMm": 12.18,
+      "shape": "round"
     },
     "mountingRules": {
       "massClass": "light",
@@ -218420,7 +218985,8 @@
           -9,
           -1.04
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       },
       {
         "portId": "hole_5",
@@ -219096,7 +219662,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -219991,7 +220559,8 @@
         -6.35,
         6.14
       ],
-      "totalLengthMm": 12.49
+      "totalLengthMm": 12.49,
+      "shape": "round"
     },
     "mountingRules": {
       "massClass": "light",
@@ -220270,7 +220839,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -223289,7 +223860,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "square"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -223326,7 +223899,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -225522,7 +226097,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -226052,7 +226629,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       },
       {
         "portId": "hole_1",
@@ -227140,7 +227719,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -227177,7 +227758,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       },
       {
         "portId": "hole_1",
@@ -234802,7 +235384,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -234884,7 +235467,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -234966,7 +235550,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -235048,7 +235633,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       }
     ]
   },
@@ -239336,7 +239922,8 @@
           -0.35,
           3.2
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       },
       {
         "portId": "hole_1",
@@ -239411,7 +239998,8 @@
           0.35,
           3.2
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       },
       {
         "portId": "hole_3",
@@ -239461,7 +240049,9 @@
           0,
           3.12
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 5.9
       },
       {
         "portId": "hole_4",
@@ -243015,7 +243605,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 14.1
       },
       {
         "portId": "hole_1",
@@ -243292,7 +243884,12 @@
         ],
         "verified": true
       }
-    ]
+    ],
+    "hubSpecs": {
+      "radiusMm": 4,
+      "faceOffsetMm": 0.125,
+      "depthMm": 6
+    }
   },
   {
     "id": "vex-iq-touch-sensor-228-3010-507",
@@ -244064,7 +244661,9 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "square",
+        "squarePhaseDeg": 0
       }
     ]
   },
@@ -244484,7 +245083,9 @@
         0,
         0,
         1
-      ]
+      ],
+      "measured": false,
+      "boreShape": "round"
     },
     "fastenerSpecs": null,
     "mountingRules": {
@@ -244521,7 +245122,8 @@
           0,
           0
         ],
-        "verified": true
+        "verified": true,
+        "shape": "round"
       },
       {
         "portId": "hole_1",

@@ -617,6 +617,99 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
 }
 
 // ---------------------------------------------------------------------------
+// Gear meshing and square shafts (openspec gear-meshing-and-square-shafts)
+// ---------------------------------------------------------------------------
+{
+  const { worldFeaturesFor } = await import('../mcp/assembly-engine.mjs');
+  const { squareFitRoll, hubFlatDir } = await import('../src/utils/shaftGroups.js');
+
+  // get_part_details returns the measured data
+  const g24 = (await call('get_part_details', { partQuery: '24 Tooth Gear' })).data;
+  const rack = (await call('get_part_details', { partQuery: '1x6 Linear Motion Rack Gear' })).data;
+  const motorDetails = (await call('get_part_details', { partQuery: 'VEX IQ Smart Motor' })).data;
+  check(
+    'get_part_details returns measured tooth data, rack data and the motor hub',
+    g24?.gearSpecs?.measured === true && Number.isFinite(g24.gearSpecs.toothPhaseDeg) && rack?.rackSpecs?.measured === true && motorDetails?.hubSpecs?.radiusMm > 0,
+    JSON.stringify({ g: g24?.gearSpecs, r: rack?.rackSpecs, h: motorDetails?.hubSpecs })
+  );
+
+  // A 12-36-60 train along a 1x20 Beam audits with no overlaps between the gears
+  writeState(emptyState());
+  const beamId = (await call('place_part', { partQuery: '1x20 Beam', label: 'Train Beam', position: [0, 0, 0] })).data?.instance?.instanceId;
+  const firstHole = findPart('1x20 Beam').ports.filter((p) => p.type === 'pin_hole').sort((a, b) => a.origin[0] - b.origin[0])[0];
+  const train = await call('mesh_gear_train', {
+    supportBeamId: beamId,
+    startPortId: firstHole.portId,
+    gears: ['12 Tooth Gear', '36 Tooth Gear', '60 Tooth Gear'],
+    axialOffsetMm: 12.7
+  });
+  const audit = (await call('audit_assembly')).data;
+  const gearLabels = new Set((train.data?.placedGears || []).map((g) => g.instance.label));
+  const gearClashes = (audit?.collisions || []).filter((c) => gearLabels.has(c.label) && c.collidingWith.some((w) => gearLabels.has(w)));
+  check(
+    'mesh_gear_train: a 12-36-60 train meshes each gear with the previous one, and the audit finds no overlaps between them',
+    train.data?.gearsPlacedCount === 3 && gearClashes.length === 0 && train.data.placedGears.slice(1).every((g) => g.meshedWith),
+    JSON.stringify({ clashes: gearClashes, rolls: train.data?.placedGears?.map((g) => [g.rollDeg, g.meshedWith]) })
+  );
+
+  // place_parts: a 24T gear slid down an axle (rollDeg 3) beside a 48T gear: the roll is replaced
+  writeState(emptyState());
+  await call('place_parts', {
+    parts: [
+      { ref: 'axleA', partQuery: '4x Pitch Shaft', label: 'Axle A', position: [0, 0, 0] },
+      { ref: 'big', partQuery: '48 Tooth Gear', label: '48 Tooth Gear #1', position: [0, 0, 0] },
+      { ref: 'stop', partQuery: '1x2 Beam', label: 'Stop Beam', position: [38.1, 0, -6.225] },
+      { ref: 'axleB', partQuery: '4x Pitch Shaft', label: 'Axle B', position: [38.1, 0, 0] }
+    ]
+  });
+  const ids = Object.fromEntries(readState().instances.map((i) => [i.label, i.instanceId]));
+  const placedGear = await call('place_parts', {
+    parts: [{ partQuery: '24 Tooth Gear', label: '24 Tooth Gear #1', insert: { into: { instanceId: ids['Axle B'], port: 'shaft' }, fromSide: '+', rollDeg: 3 } }]
+  });
+  const gearPart = placedGear.data?.parts?.[0];
+  const savedGear = readState().instances.find((i) => i.label === '24 Tooth Gear #1');
+  const gearAudit = (await call('audit_assembly')).data;
+  const gearOverlaps = (gearAudit?.collisions || []).filter((c) => c.label === '24 Tooth Gear #1');
+  check(
+    'place_parts: a rollDeg 3 gear in mesh range is placed at its meshing turn and the reply says the roll was changed',
+    Boolean(gearPart?.rollReplaced) && (gearPart?.notes || []).some((n) => /^Meshed 24 Tooth Gear #1 with 48 Tooth Gear #1/.test(n)) && Math.abs(savedGear?.position?.[2] ?? 99) < 2 && gearOverlaps.length === 0,
+    JSON.stringify({ gearPart, pos: savedGear?.position, gearOverlaps })
+  );
+
+  // An axle turned 30° into a Smart Motor: the axle keeps its angle, the hub turns to fit it
+  writeState(emptyState());
+  const motorId = (await call('place_part', { partQuery: 'VEX IQ Smart Motor', label: 'Hub Motor', position: [0, 0, 0] })).data?.instance?.instanceId;
+  const asm0 = (await call('get_assembly')).data;
+  check('get_assembly shows a Smart Motor without a saved hub angle at socketAngleDeg 0', asm0?.instances?.find((i) => i.instanceId === motorId)?.socketAngleDeg === 0);
+  const axleRes = await call('place_parts', {
+    parts: [{ partQuery: '4x Pitch Shaft', label: 'Motor Axle', insert: { into: { instanceId: motorId, port: 'motor_drive_socket' }, rollDeg: 30 } }]
+  });
+  const afterAxle = readState();
+  const motorAfter = afterAxle.instances.find((i) => i.instanceId === motorId);
+  const axleAfter = afterAxle.instances.find((i) => i.label === 'Motor Axle');
+  const socket = worldFeaturesFor(motorAfter).find((f) => f.kind === 'shaft_socket');
+  const shaft = axleAfter && worldFeaturesFor(axleAfter).find((f) => f.kind === 'shaft');
+  const misfit = shaft ? squareFitRoll(shaft, socket, hubFlatDir(socket, motorAfter.socketAngleDeg || 0)) : null;
+  check(
+    'place_parts: an axle into a Smart Motor keeps its roll and sets the motor\'s socketAngleDeg to fit it',
+    !axleRes.data?.parts?.[0]?.rollReplaced && Number.isFinite(motorAfter?.socketAngleDeg) && motorAfter.socketAngleDeg !== 0 && Math.abs(misfit) < 0.05,
+    JSON.stringify({ reply: axleRes.data?.parts?.[0], hub: motorAfter?.socketAngleDeg, misfit })
+  );
+  const hubAngle = motorAfter?.socketAngleDeg;
+  await call('undo');
+  const undone = readState().instances.find((i) => i.instanceId === motorId);
+  await call('redo');
+  const redone = readState().instances.find((i) => i.instanceId === motorId);
+  check(
+    'undo puts the hub back at 0; redo turns it again',
+    (Number(undone?.socketAngleDeg) || 0) === 0 && redone?.socketAngleDeg === hubAngle,
+    JSON.stringify({ undone: undone?.socketAngleDeg, redone: redone?.socketAngleDeg, hubAngle })
+  );
+  const asm1 = (await call('get_assembly')).data;
+  check('get_assembly shows the turned hub angle', asm1?.instances?.find((i) => i.instanceId === motorId)?.socketAngleDeg === hubAngle);
+}
+
+// ---------------------------------------------------------------------------
 server.stdin.end();
 server.kill();
 await stopBridge().catch(() => {});

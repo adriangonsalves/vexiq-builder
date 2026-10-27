@@ -23,7 +23,8 @@ export const HISTORY_VERSION = 1;
 export const ROOT = 'root';
 export const MERGE_WINDOW_MS = 1000;
 // Fields that make up the build. isIntersecting / lastValid* are bookkeeping the viewport recomputes.
-export const BUILD_FIELDS = ['position', 'rotation', 'color', 'label', 'visible', 'locked'];
+// socketAngleDeg: a Smart Motor's drive hub angle (openspec square-shaft-fit)
+export const BUILD_FIELDS = ['position', 'rotation', 'color', 'label', 'visible', 'locked', 'socketAngleDeg'];
 export const SOURCES = ['app', 'mcp', 'assistant', 'action'];
 
 const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
@@ -32,6 +33,7 @@ const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stri
 const normalizeField = (field, value) => {
   if (field === 'visible') return value !== false;
   if (field === 'locked') return value === true;
+  if (field === 'socketAngleDeg') return Number(value) || 0;
   return value;
 };
 
@@ -79,8 +81,10 @@ export function diffParts(before = [], after = []) {
     const fieldsAfter = {};
     for (const field of BUILD_FIELDS) {
       if (!sameField(field, prev[field], part[field])) {
-        fieldsBefore[field] = clone(prev[field]);
-        fieldsAfter[field] = clone(part[field]);
+        // A missing hub angle means 0; recorded as 0 so the value survives saving (JSON drops undefined)
+        const stored = (value) => (field === 'socketAngleDeg' ? normalizeField(field, value) : value);
+        fieldsBefore[field] = clone(stored(prev[field]));
+        fieldsAfter[field] = clone(stored(part[field]));
       }
     }
     if (Object.keys(fieldsAfter).length > 0) {
@@ -257,7 +261,7 @@ const updateVerb = (op, app) => {
   const pick = (pair) => (app ? pair[1] : pair[0]);
   if (fields.length === 1 && fields[0] === 'visible') return pick(op.after.visible === false ? VERBS.visible : ['show', 'Show']);
   if (fields.length === 1 && fields[0] === 'locked') return pick(op.after.locked ? VERBS.locked : ['unlock', 'Unlock']);
-  if (fields.every((f) => f === 'position' || f === 'rotation')) {
+  if (fields.every((f) => f === 'position' || f === 'rotation' || f === 'socketAngleDeg')) {
     return pick(fields.includes('position') ? VERBS.position : VERBS.rotation);
   }
   if (fields.length === 1 && VERBS[fields[0]]) return pick(VERBS[fields[0]]);

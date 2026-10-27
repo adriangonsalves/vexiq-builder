@@ -16,7 +16,9 @@ import {
   generateOrthographicViews,
   getCatalog,
   mirrorSubassembly,
+  applyPosePatches,
   placeParts,
+  settlePlacedInstance,
   readAssemblyState,
   writeAssemblyState
 } from './assembly-engine.mjs';
@@ -87,7 +89,7 @@ const TOOLS = [
   {
     name: 'place_part',
     description:
-      'Place a VEX IQ part into the 3D workspace. Checks exact concave MeshBVH collision (allowing pins/axles through holes while detecting solid overlaps).',
+      'Place a VEX IQ part into the 3D workspace. Checks exact concave MeshBVH collision (allowing pins/axles through holes while detecting solid overlaps). A spur gear in mesh range of other gears or racks is turned to mesh (with its whole axle group when it sits on a square axle), a square axle or square-bored part is turned to fit, and a Smart Motor hub turns to an axle in its socket; the reply lists these in notes.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -437,7 +439,7 @@ const TOOLS = [
   {
     name: 'mesh_gear_train',
     description:
-      'Declaratively build a meshed gear train along a supporting beam (supportBeamId) starting at startPortId. Automatically spaces gears by their exact pitch radii (N1+N2)/24 * 12.7mm, alternates tooth-phase angles (phaseOffsetDeg) so gear teeth never collide, and optionally inserts flush shafts through each gear.',
+      'Declaratively build a meshed gear train along a supporting beam (supportBeamId) starting at startPortId. Spaces gears by their measured pitch radii, turns each gear to its measured meshing turn against the previous one so the teeth fall into each other\'s gaps, and optionally inserts flush shafts through each gear, turned to fit its square bore.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -550,7 +552,12 @@ const TOOLS = [
                     },
                     required: ['port']
                   },
-                  rollDeg: { type: 'number', default: 0, description: 'Turn around the shared axis.' },
+                  rollDeg: {
+                    type: 'number',
+                    default: 0,
+                    description:
+                      'Turn around the shared axis. Replaced by the fitting turn for a square axle in a square hole, and by the meshing turn for a spur gear in mesh range (the reply says rollReplaced).'
+                  },
                   fromSide: { type: 'string', enum: ['+', '-'], description: "Side of the target port's axis to come in from. Defaults to the open side of a blind opening, else '+'." }
                 },
                 required: ['into']
@@ -674,7 +681,9 @@ async function executeTool(name, args = {}) {
       bbox: { min: part.bbox.min, max: part.bbox.max },
       originType: part.originType || 'centered',
       gearSpecs: part.gearSpecs || null,
+      ...(part.rackSpecs ? { rackSpecs: part.rackSpecs } : {}),
       fastenerSpecs: part.fastenerSpecs || null,
+      ...(part.hubSpecs ? { hubSpecs: part.hubSpecs } : {}),
       connections: describePartConnections(part)
     };
     if (!args.verbose) return compact;
@@ -708,7 +717,9 @@ async function executeTool(name, args = {}) {
           ...inst,
           partName: part?.name || inst.partId,
           partNumber: part?.partNumber || 'UNKNOWN',
-          pitchPosition: inst.position.map((c) => Number((c / VEX_PITCH_MM).toFixed(2)))
+          pitchPosition: inst.position.map((c) => Number((c / VEX_PITCH_MM).toFixed(2))),
+          // A Smart Motor's drive hub angle (missing in older saves means 0)
+          ...(part?.hubSpecs ? { socketAngleDeg: Number(inst.socketAngleDeg) || 0 } : {})
         };
       })
     };
@@ -803,10 +814,17 @@ async function executeTool(name, args = {}) {
       locked: false
     };
 
-    const { isIntersecting, collidingWith } = checkCandidateCollision(candidate, state.instances);
+    // The placement step: square fit, mesh, shaft-group turns and motor hubs (openspec gear-meshing)
+    const settled = settlePlacedInstance(candidate, [...state.instances, candidate]);
+    const ownPatch = settled.patches.find((p) => p.instanceId === instanceId);
+    if (ownPatch) Object.assign(candidate, ownPatch);
+    const otherPatches = settled.patches.filter((p) => p.instanceId !== instanceId);
+    const settledInstances = applyPosePatches(state.instances, otherPatches);
+
+    const { isIntersecting, collidingWith } = checkCandidateCollision(candidate, settledInstances);
     candidate.isIntersecting = isIntersecting;
-    candidate.lastValidPosition = isIntersecting ? null : [...position];
-    candidate.lastValidRotation = isIntersecting ? null : [...rotation];
+    candidate.lastValidPosition = isIntersecting ? null : [...candidate.position];
+    candidate.lastValidRotation = isIntersecting ? null : [...candidate.rotation];
 
     if (isIntersecting && args.previewIfIntersecting === false) {
       return {
@@ -822,7 +840,7 @@ async function executeTool(name, args = {}) {
     const nextState = await writeAssemblyState({
       ...state,
       selectedId: instanceId,
-      instances: [...state.instances, candidate]
+      instances: [...settledInstances, candidate]
     });
 
     return {
@@ -832,10 +850,15 @@ async function executeTool(name, args = {}) {
       isIntersecting,
       collidingWith,
       instance: candidate,
+      ...(settled.messages.length ? { notes: settled.messages } : {}),
+      ...(ownPatch?.rotation ? { rotationReplaced: 'The given rotation was turned to fit a square hole or to mesh.' } : {}),
+      ...(otherPatches.length
+        ? { turnedOthers: otherPatches.map((p) => state.instances.find((i) => i.instanceId === p.instanceId)?.label || p.instanceId) }
+        : {}),
       totalInstances: nextState.instances.length,
       message: isIntersecting
         ? 'Part intersects solid geometry and is shown as transparent grey (unplaced preview) in the 3D viewport. Move it to clear space or through a hole to place it.'
-        : `Successfully placed ${candidate.label} (${part.partNumber}) at [${position.join(', ')}] mm.`
+        : `Successfully placed ${candidate.label} (${part.partNumber}) at [${candidate.position.join(', ')}] mm.`
     };
   }
 
@@ -1345,6 +1368,10 @@ async function executeTool(name, args = {}) {
       ...(p.collidingWith.length ? { overlaps: p.collidingWith } : {}),
       ...(p.stoppedAgainst ? { stoppedAgainst: p.stoppedAgainst } : {}),
       ...(p.mirrorApproximate ? { mirrorApproximate: true } : {}),
+      // The placement step: meshes, square fits, hub turns, neighbours it couldn't mesh with
+      ...(p.notes?.length ? { notes: p.notes } : {}),
+      ...(p.rollReplaced ? { rollReplaced: 'The given roll was changed to fit a square hole or to mesh.' } : {}),
+      ...(p.turnedOthers?.length ? { turnedOthers: p.turnedOthers } : {}),
       ...(withPoses ? { position: p.inst.position, rotation: p.inst.rotation } : {})
     }));
 

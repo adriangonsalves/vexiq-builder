@@ -667,7 +667,9 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   snap = snapFor(shaftAt(25.4 + 5, 23.87), [rail], [X]);
   check('5 mm from a hole (holes are 6.35 mm apart): pulled only to a hole within 3.5 mm', !snap || (Math.abs(snap.offset.x) <= 3.5 && missAfter(snap) < 0.01), JSON.stringify(snap?.offset));
   snap = snapFor(shaftAt(25.4 + 2, 23.87, 72.65 + 60), [rail], [X]); // near end ~32 mm from the rail
-  check('a shaft over 2 pitch along the hole line from the rail is not pulled', !snap, JSON.stringify(snap?.offset));
+  check('a shaft ~32 mm along the hole line from the rail is pulled (reach is 12 pitch, as the highlights)', snap && near(snap.offset.x, -2, 0.01), JSON.stringify(snap?.offset));
+  snap = snapFor(shaftAt(25.4 + 2, 23.87, 72.65 + 180), [rail], [X]); // near end ~152 mm + from the rail
+  check('a shaft over 12 pitch along the hole line from the rail is not pulled', !snap, JSON.stringify(snap?.offset));
   snap = snapFor(shaftAt(25.4 + 2, 23.87, 72.65 + 45), [rail], [X]); // near end ~17 mm from the rail
   check('a shaft 17 mm along the hole line from the rail is pulled', snap && near(snap.offset.x, -2), JSON.stringify(snap?.offset));
   snap = snapFor(shaftAt(25.4 + 2, 23.87), [rail], [Z]);

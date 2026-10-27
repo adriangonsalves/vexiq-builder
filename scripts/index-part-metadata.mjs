@@ -9,6 +9,14 @@ import {
   buildWorldMatrix,
   VEX_PITCH_MM
 } from '../mcp/assembly-engine.mjs';
+import { getLocalFeatures, SHAFT_FASTENER_TYPES } from '../src/utils/pinHoleAlignment.js';
+import {
+  measureMotorHub,
+  measureOpeningShape,
+  measureRack,
+  measureShaftFlat,
+  measureSpurGear
+} from './measure-part-geometry.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '..');
@@ -338,6 +346,59 @@ function buildStepFileMap(dir, map = new Map()) {
   return map;
 }
 
+/**
+ * Measured gear teeth, rack teeth, square bores and shafts and the Smart Motor hub (see
+ * scripts/measure-part-geometry.mjs). Adds fields to `gearSpecs`, `fastenerSpecs` and the shaft
+ * ports in place; returns rackSpecs and hubSpecs for parts that have them. Parts that should have
+ * been measured but couldn't be are added to `unmeasured`.
+ */
+function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasured) {
+  const features = getLocalFeatures({ ...part, ports, fastenerSpecs });
+  const featureById = new Map(features.map((f) => [f.featureId, f]));
+  let rackSpecs = null;
+  let hubSpecs = null;
+
+  if (gearSpecs?.gearType === 'spur') {
+    const m = measureSpurGear(part, gearSpecs.teeth);
+    if (m.measured) Object.assign(gearSpecs, m);
+    else {
+      gearSpecs.measured = false;
+      if (gearSpecs.teeth && m.reason !== 'not a meshing gear') unmeasured.push(`${part.name}: ${m.reason}`);
+    }
+    // The gear's own center hole, whether or not a port was found for it (the idler gear has none)
+    const z = part.bbox.center[2];
+    gearSpecs.boreShape = measureOpeningShape(part, {
+      origin: [0, 0, z],
+      axis: [0, 0, 1],
+      tMin: part.bbox.min[2],
+      tMax: part.bbox.max[2]
+    }).shape;
+  } else if (gearSpecs?.gearType === 'rack') {
+    const m = measureRack(part);
+    if (m.measured) rackSpecs = m;
+    else unmeasured.push(`${part.name}: ${m.reason}`);
+  }
+
+  for (const port of ports) {
+    if (port.type !== 'shaft_bore' && port.type !== 'shaft_socket') continue;
+    const f = featureById.get(port.portId);
+    const shape = f ? measureOpeningShape(part, f) : { shape: 'round' };
+    port.shape = shape.shape;
+    if (shape.shape === 'square') port.squarePhaseDeg = shape.squarePhaseDeg;
+    if (port.type === 'shaft_socket' && part.partNumber === '228-2560' && shape.shape === 'square') {
+      hubSpecs = measureMotorHub(part, f, shape, cylinders);
+      if (!hubSpecs) unmeasured.push(`${part.name}: drive hub not found`);
+    }
+  }
+
+  if (SHAFT_FASTENER_TYPES.has(fastenerSpecs?.fastenerType)) {
+    const flat = measureShaftFlat(part, fastenerSpecs.usableSpanZ);
+    fastenerSpecs.shape = flat ? 'square' : 'round';
+    if (flat) fastenerSpecs.squarePhaseDeg = flat.squarePhaseDeg;
+  }
+  return { rackSpecs, hubSpecs };
+}
+
 async function main() {
   const t0 = Date.now();
   const { catalog } = getCatalog();
@@ -351,6 +412,7 @@ async function main() {
 
   const metadataById = {};
   let totalVerifiedPorts = 0;
+  const unmeasured = [];
 
   for (let idx = 0; idx < catalog.length; idx++) {
     const part = catalog[idx];
@@ -565,6 +627,7 @@ async function main() {
     const gearSpecs = inferGearSpecs(part);
     const fastenerSpecs = inferFastenerSpecs(part);
     const mountingRules = classifyMountingRules(part);
+    const { rackSpecs, hubSpecs } = measureShapes(part, ports, gearSpecs, fastenerSpecs, rawCylinders, unmeasured);
 
     const portCounts = {
       total: ports.length,
@@ -581,7 +644,9 @@ async function main() {
       pitchSize,
       originType,
       gearSpecs,
+      ...(rackSpecs ? { rackSpecs } : {}),
       fastenerSpecs,
+      ...(hubSpecs ? { hubSpecs } : {}),
       mountingRules,
       portCounts,
       ports
@@ -593,7 +658,9 @@ async function main() {
     part.pitchSize = pitchSize;
     part.originType = originType;
     part.gearSpecs = gearSpecs;
+    if (rackSpecs) part.rackSpecs = rackSpecs;
     part.fastenerSpecs = fastenerSpecs;
+    if (hubSpecs) part.hubSpecs = hubSpecs;
     part.mountingRules = mountingRules;
     part.portCounts = portCounts;
     part.ports = ports;
@@ -616,6 +683,10 @@ async function main() {
 
   fs.writeFileSync(CATALOG_PATH, JSON.stringify(catalog, null, 2));
 
+  if (unmeasured.length) {
+    console.log(`Couldn't measure ${unmeasured.length} part(s); they won't be turned to mesh or fit:`);
+    for (const u of unmeasured) console.log(`  ${u}`);
+  }
   console.log(
     `Indexed ${catalog.length} parts with ${totalVerifiedPorts} verified semantic ports in ${(
       (Date.now() - t0) /
