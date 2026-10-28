@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
 import * as THREE from 'three';
 import {
   VEX_PITCH_MM,
@@ -631,6 +632,17 @@ const TOOLS = [
     }
   }
 ];
+
+// How real pieces go together (motor shaft rings, collars, connectors...), from AGENTS.md
+function partUsageNotes() {
+  try {
+    const text = fs.readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8');
+    const notes = /<!-- part-usage:start -->([\s\S]*?)<!-- part-usage:end -->/.exec(text)?.[1].trim();
+    return notes ? `How VEX IQ pieces are used:\n${notes}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // Tools that only read: they still answer with the assistant turned off in the app's Settings
 const READ_ONLY_TOOLS = new Set(['search_parts', 'get_part_details', 'get_assembly', 'get_history', 'audit_assembly', 'capture_viewport_views']);
@@ -1482,7 +1494,8 @@ async function handleJsonRpcMessage(req) {
           serverInfo: {
             name: 'vexiq-builder-mcp',
             version: '1.0.0'
-          }
+          },
+          instructions: partUsageNotes()
         }
       });
       return;
