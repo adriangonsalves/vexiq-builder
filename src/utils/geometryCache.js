@@ -6,6 +6,23 @@ import { hubFrame, splitHubTriangles, subGeometry } from './motorHub.js';
 const loader = new GLTFLoader();
 export const RUBBER_MATERIAL_NAME = 'rubber';
 export const RUBBER_COLOR = '#1c1f22';
+export const METAL_SHAFT_COLOR = '#e2e8f0';
+
+export function isMetalShaftName(name) {
+  const lower = (name || '').toLowerCase();
+  return (
+    (lower.includes('shaft') || lower.includes('axle')) &&
+    !lower.includes('plastic') &&
+    !lower.includes('collar') &&
+    !lower.includes('bushing') &&
+    !lower.includes('washer') &&
+    !lower.includes('spacer')
+  );
+}
+
+export function isMetalPart(part) {
+  return Boolean(part?.isMetal || isMetalShaftName(part?.name));
+}
 // partId -> Promise<{ geometries, collisionGeometries, localBox, hub }>; `hub` is set for the Smart
 // Motor: { frame, renderIndices, collisionIndices } naming the hub pieces of each list (motorHub.js)
 const partAssetCache = new Map();
@@ -91,6 +108,9 @@ export function loadPartAsset(part) {
             if (child.material?.name === RUBBER_MATERIAL_NAME) renderGeo.userData.rubber = true;
             if (child.material?.name?.startsWith('step:')) {
               renderGeo.userData.fixedColor = child.material.name.slice(5);
+            }
+            if (isMetalPart(part)) {
+              renderGeo.userData.isMetal = true;
             }
             if (!renderGeo.attributes.normal) {
               renderGeo.computeVertexNormals();

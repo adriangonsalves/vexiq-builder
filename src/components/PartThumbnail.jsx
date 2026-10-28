@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { loadPartAsset, RUBBER_COLOR } from '../utils/geometryCache.js';
+import { loadPartAsset, RUBBER_COLOR, isMetalPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
 
 const thumbnailDataUrlCache = new Map(); // "partId|defaultColor" -> string (dataURL)
 const thumbKey = (part) => `${part.id}|${part.defaultColor}`;
@@ -87,20 +87,21 @@ function renderPartToDataUrl(part, geometries, localBox) {
     }
   }
 
-  const original = new THREE.Color(part.defaultColor || '#64748b');
+  const isMetal = isMetalPart(part);
+  const original = new THREE.Color(part.defaultColor || (isMetal ? METAL_SHAFT_COLOR : '#64748b'));
   const light = luminance(original) > LIGHT_PART_LUMINANCE;
-  const partColor = thumbnailColor(part.defaultColor);
+  const partColor = thumbnailColor(part.defaultColor || (isMetal ? METAL_SHAFT_COLOR : '#64748b'));
 
   const mat = new THREE.MeshStandardMaterial({
     color: partColor,
-    roughness: light ? 0.6 : 0.45,
-    metalness: 0.1
+    roughness: isMetal ? 0.22 : (light ? 0.6 : 0.45),
+    metalness: isMetal ? 0.85 : 0.1
   });
 
   const edgeMat = new THREE.LineBasicMaterial({
     color: 0x0f172a,
     transparent: true,
-    opacity: light ? 0.9 : 0.7
+    opacity: isMetal ? 0.25 : (light ? 0.9 : 0.7)
   });
 
   const rubberMat = new THREE.MeshStandardMaterial({ color: RUBBER_COLOR, roughness: 0.85, metalness: 0 });

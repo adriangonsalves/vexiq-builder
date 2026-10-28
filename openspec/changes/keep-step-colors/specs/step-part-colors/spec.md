@@ -33,6 +33,17 @@ A part's thumbnail SHALL draw each extra colour body in its STEP colour. Very da
 - **WHEN** the parts list shows the 2x Pitch Motor Shaft
 - **THEN** its thumbnail shows the red stop ring
 
+### Requirement: Non-plastic shafts render with reflective metallic silver
+Non-plastic shafts (including motor shafts, capped shafts, and standard axles) SHALL render with a reflective metallic silver material (`metalness: 0.85`, `roughness: 0.22`, default color `#e2e8f0`). Multi-color accents (such as the motor shaft red stop ring) SHALL remain in their fixed accent color.
+
+#### Scenario: Metal motor shaft appearance
+- **WHEN** a 2x, 3x, or 4x Pitch Motor Shaft is placed in the 3D view
+- **THEN** its shaft body is drawn in reflective metallic silver and its stop ring is drawn in red
+
+#### Scenario: Plastic shafts unchanged
+- **WHEN** a Plastic Motor Shaft or Plastic Shaft is placed
+- **THEN** it renders with standard plastic material (`metalness: 0.12`, `roughness: 0.38`)
+
 ### Requirement: Single-colour and uncoloured parts unchanged
 Parts whose STEP files have one colour or none SHALL look the same as before.
 

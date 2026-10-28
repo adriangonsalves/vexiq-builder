@@ -7,7 +7,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { loadPartAsset, RUBBER_COLOR } from '../utils/geometryCache.js';
+import { loadPartAsset, RUBBER_COLOR, isMetalPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
 import { hubMatrix } from '../utils/motorHub.js';
 import { isMeshingGear, meshTurn, worldToothed } from '../utils/gearMeshing.js';
 import { squareFitRoll } from '../utils/shaftGroups.js';
@@ -4398,10 +4398,11 @@ export default function Viewport3D({
             group.userData.localBox = localBox;
             group.userData.hub = hub ? { ...hub, objects: [] } : null;
 
+            const isMetal = isMetalPart(partMeta);
             const material = new THREE.MeshStandardMaterial({
-              color: new THREE.Color(inst.color || partMeta.defaultColor),
-              roughness: 0.38,
-              metalness: 0.12
+              color: new THREE.Color(inst.color || partMeta.defaultColor || (isMetal ? METAL_SHAFT_COLOR : '#64748b')),
+              roughness: isMetal ? 0.22 : 0.38,
+              metalness: isMetal ? 0.85 : 0.12
             });
 
             const fixedMaterials = new Map();
@@ -4439,7 +4440,7 @@ export default function Viewport3D({
               const edgesMat = new THREE.LineBasicMaterial({
                 color: 0x0f172a,
                 transparent: true,
-                opacity: 0.28
+                opacity: isMetal ? 0.18 : 0.28
               });
               const edges = new THREE.LineSegments(edgesGeo, edgesMat);
               edges.name = '__cad_edges__';

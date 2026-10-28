@@ -18,6 +18,7 @@ The Controller, Battery, Radio and Bumper Switch have one colour each. The **VEX
 - The body with the most faces counts as the part's main body. It still takes the part's colour (the default, or one the user picks). Every other colour body keeps its STEP colour.
 - The 3D view and the parts-list thumbnails both draw those extra colours. The thumbnail lifts very dark colours so they can still be seen, as it does now.
 - Black rubber keeps working as it does now. It becomes one case of the general rule.
+- Non-plastic metal shafts (motor shafts, capped shafts, standard axles) render with a reflective metallic silver finish (`#e2e8f0`, `metalness: 0.85`, `roughness: 0.22`), while their accent bodies (such as the motor shaft red stop ring) stay in their distinct STEP colours.
 - STEP files with one colour or none don't change. Using a single STEP colour as the part's default colour is left for later.
 - Re-run `npm run convert` so the 11 multi-colour parts and the 7 multi-colour control parts (plus Robot Brain with Battery) get rebuilt.
 

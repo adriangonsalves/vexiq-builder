@@ -41,8 +41,37 @@ const MULTI_COLOR_PART_NUMBERS = new Set([
 ]);
 const cacheKey = (file, variant) => (variant ? `${file}#${variant}` : file);
 
+export function isMetalShaftName(name) {
+  const lower = (name || '').toLowerCase();
+  return (
+    (lower.includes('shaft') || lower.includes('axle')) &&
+    !lower.includes('plastic') &&
+    !lower.includes('collar') &&
+    !lower.includes('bushing') &&
+    !lower.includes('washer') &&
+    !lower.includes('spacer')
+  );
+}
+
 function classifyPart(name) {
   const lower = name.toLowerCase();
+
+  // Shafts & axles checked before electronics so "Motor Shaft" is categorized as a shaft
+  if (
+    lower.includes('shaft') ||
+    lower.includes('collar') ||
+    lower.includes('bushing') ||
+    lower.includes('washer') ||
+    lower.includes('spacer') ||
+    lower.includes('axle')
+  ) {
+    const isMetalShaft = isMetalShaftName(name);
+    return {
+      category: 'Shafts, Spacers & Collars',
+      defaultColor: isMetalShaft ? '#e2e8f0' : '#1f2937',
+      isMetal: isMetalShaft
+    };
+  }
 
   if (
     lower.includes('brain') ||
@@ -97,24 +126,6 @@ function classifyPart(name) {
     return { category: 'Gears, Sprockets & Pulleys', defaultColor: '#374151' };
   }
 
-  if (
-    lower.includes('shaft') ||
-    lower.includes('collar') ||
-    lower.includes('bushing') ||
-    lower.includes('washer') ||
-    lower.includes('spacer') ||
-    lower.includes('axle')
-  ) {
-    const isMetalShaft =
-      lower.includes('shaft') &&
-      !lower.includes('plastic') &&
-      !lower.includes('collar') &&
-      !lower.includes('bushing');
-    return {
-      category: 'Shafts, Spacers & Collars',
-      defaultColor: isMetalShaft ? '#cbd5e1' : '#1f2937'
-    };
-  }
 
   if (lower.includes('pin') || lower.includes('standoff')) {
     let color = '#2563eb';
@@ -273,11 +284,12 @@ async function main() {
     }
 
     const stat = fs.statSync(entry.stepPath);
-    const { category, defaultColor } = classifyPart(entry.displayName);
+    const { category, defaultColor, isMetal } = classifyPart(entry.displayName);
     pendingTasks.push({
       ...entry,
       category,
       defaultColor,
+      isMetal,
       isMultiColorPart,
       outGlbPath: path.join(OUT_MODELS_DIR, `${entry.id}.glb`),
       fileSize: stat.size
@@ -331,6 +343,7 @@ async function main() {
               partNumber: task.partNumber,
               category: task.category,
               defaultColor: task.defaultColor,
+              ...(task.isMetal ? { isMetal: true } : {}),
               file: task.filename,
               ...(task.variant ? { variant: task.variant } : {}),
               modelUrl: `/models/${task.id}.glb`,

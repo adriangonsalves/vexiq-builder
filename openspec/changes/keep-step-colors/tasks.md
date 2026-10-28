@@ -16,3 +16,9 @@
 - [x] 3.1 Run `npm run convert` and `npm run index-metadata` (link the STEP folders in a worktree first)
 - [x] 3.2 Screenshot each of the rebuilt parts and their thumbnails; confirm the motor shaft ring is red, omni wheel rollers are still black, and the Smart Motor, brain, sensors and cable show their colours
 - [x] 3.3 Run `node scripts/check-*.mjs`
+
+## 4. Reflective Metallic Silver for Metal Shafts
+
+- [x] 4.1 Update `scripts/convert-parts.mjs` and `public/catalog.json`: detect metal shafts (`isMetalShaftName`), set `category: 'Shafts, Spacers & Collars'`, `defaultColor: '#e2e8f0'`, and `isMetal: true`
+- [x] 4.2 In `src/utils/geometryCache.js`, `src/components/Viewport3D.jsx`, and `src/components/PartThumbnail.jsx`: render non-plastic shafts with metallic reflective parameters (`metalness: 0.85`, `roughness: 0.22`), while preserving fixed accent rings
+- [x] 4.3 Verify all check scripts and production build pass cleanly

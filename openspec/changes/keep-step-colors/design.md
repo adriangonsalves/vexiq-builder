@@ -16,6 +16,7 @@
 - **Cache.** `convert-parts.mjs` skips parts that already have a GLB. The 11 files must be forced: delete their GLBs, or add a converter version to the cache key so `npm run convert` rebuilds them.
 
 - **Control parts.** Same rule. The Smart Motor's dark red (46,4,7) and the cable's black (18,18,18) are above the rubber limit (0.06), so they become `step:` colours, not rubber. Main bodies by face count: motor 334-face dark body, brain 1549-face dark body, cable 538-face grey, sensors 155–254-face grey. The Brain with Battery part is built from the brain and battery GLBs, so it must be rebuilt after them.
+- **Reflective metallic silver for non-plastic shafts.** Non-plastic shafts (motor shafts, capped shafts, standard axles) are detected via `isMetalPart` / `isMetalShaftName` and assigned `category: 'Shafts, Spacers & Collars'`, `defaultColor: '#e2e8f0'`, and rendered with physical metallic parameters (`metalness: 0.85`, `roughness: 0.22`). Plastic shafts retain standard plastic parameters (`metalness: 0.12`, `roughness: 0.38`). The motor shaft red stop ring remains intact as a `step:#a40508` accent.
 - **Scan subfolders.** `VEX-IQ-All-Control/` keeps each part in its own subfolder; the check script must walk subfolders, as `convert-parts.mjs` already does.
 
 ## Risks / Trade-offs

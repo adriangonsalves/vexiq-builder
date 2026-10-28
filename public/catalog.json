@@ -23976,7 +23976,7 @@
     "name": "2.5x Pitch Capped Shaft",
     "partNumber": "228-2500-2220",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "2.5x Pitch Capped Shaft (228-2500-2220).step",
     "modelUrl": "/models/2-5x-pitch-capped-shaft-228-2500-2220-80.glb",
     "stepSizeBytes": 41774,
@@ -24068,7 +24068,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "2-5x1-4-widescreen-monitor-228-2500-1905-81",
@@ -24675,7 +24676,7 @@
     "name": "2x Pitch Capped Shaft",
     "partNumber": "228-2500-2219",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "2x Pitch Capped Shaft (228-2500-2219).step",
     "modelUrl": "/models/2x-pitch-capped-shaft-228-2500-2219-84.glb",
     "stepSizeBytes": 41763,
@@ -24767,7 +24768,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "2x-pitch-linear-motion-bracket-side-mount-228-2500-1469-85",
@@ -25321,8 +25323,8 @@
     "id": "2x-pitch-motor-shaft-228-2500-2234-86",
     "name": "2x Pitch Motor Shaft",
     "partNumber": "228-2500-2234",
-    "category": "Electronics & Motion",
-    "defaultColor": "#4b5563",
+    "category": "Shafts, Spacers & Collars",
+    "defaultColor": "#e2e8f0",
     "file": "2x Pitch Motor Shaft (228-2500-2234).step",
     "modelUrl": "/models/2x-pitch-motor-shaft-228-2500-2234-86.glb",
     "stepSizeBytes": 130107,
@@ -25441,7 +25443,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "2x-pitch-plastic-motor-shaft-228-2500-078-87",
@@ -25758,7 +25761,7 @@
     "name": "2x Pitch Shaft",
     "partNumber": "228-2500-117",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "2x Pitch Shaft (228-2500-117).step",
     "modelUrl": "/models/2x-pitch-shaft-228-2500-117-90.glb",
     "stepSizeBytes": 44558,
@@ -25837,7 +25840,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "2x-pitch-shock-absorber-weak-228-2500-1560-91",
@@ -75484,7 +75488,7 @@
     "name": "3x Pitch Capped Shaft",
     "partNumber": "228-2500-2221",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "3x Pitch Capped Shaft (228-2500-2221).step",
     "modelUrl": "/models/3x-pitch-capped-shaft-228-2500-2221-183.glb",
     "stepSizeBytes": 41838,
@@ -75576,7 +75580,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "3x-pitch-ducted-fan-housing-228-2500-1918-184",
@@ -75935,8 +75940,8 @@
     "id": "3x-pitch-motor-shaft-228-2500-2236-185",
     "name": "3x Pitch Motor Shaft",
     "partNumber": "228-2500-2236",
-    "category": "Electronics & Motion",
-    "defaultColor": "#4b5563",
+    "category": "Shafts, Spacers & Collars",
+    "defaultColor": "#e2e8f0",
     "file": "3x Pitch Motor Shaft (228-2500-2236).step",
     "modelUrl": "/models/3x-pitch-motor-shaft-228-2500-2236-185.glb",
     "stepSizeBytes": 130122,
@@ -76055,7 +76060,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "3x-pitch-plastic-motor-shaft-228-2500-094-186",
@@ -76247,7 +76253,7 @@
     "name": "3x Pitch Shaft",
     "partNumber": "228-2500-119",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "3x Pitch Shaft (228-2500-119).step",
     "modelUrl": "/models/3x-pitch-shaft-228-2500-119-188.glb",
     "stepSizeBytes": 44554,
@@ -76326,7 +76332,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "3x-pitch-standoff-228-2500-069-189",
@@ -105258,7 +105265,7 @@
     "name": "4.5x Pitch Capped Shaft",
     "partNumber": "228-2500-2224",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "4.5x Pitch Capped Shaft (228-2500-2224).step",
     "modelUrl": "/models/4-5x-pitch-capped-shaft-228-2500-2224-222.glb",
     "stepSizeBytes": 41851,
@@ -105350,7 +105357,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "4-5x4-5-diagonal-corner-panel-228-2500-2003-223",
@@ -107112,7 +107120,7 @@
     "name": "4x Pitch Capped Shaft",
     "partNumber": "228-2500-2223",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "4x Pitch Capped Shaft (228-2500-2223).step",
     "modelUrl": "/models/4x-pitch-capped-shaft-228-2500-2223-227.glb",
     "stepSizeBytes": 41850,
@@ -107204,7 +107212,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "4x-pitch-diameter-160-mm-travel-low-friction-wheel-228-2500-1384-228",
@@ -108163,8 +108172,8 @@
     "id": "4x-pitch-motor-shaft-228-2500-2238-231",
     "name": "4x Pitch Motor Shaft",
     "partNumber": "228-2500-2238",
-    "category": "Electronics & Motion",
-    "defaultColor": "#4b5563",
+    "category": "Shafts, Spacers & Collars",
+    "defaultColor": "#e2e8f0",
     "file": "4x Pitch Motor Shaft (228-2500-2238).step",
     "modelUrl": "/models/4x-pitch-motor-shaft-228-2500-2238-231.glb",
     "stepSizeBytes": 130078,
@@ -108283,7 +108292,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "4x-pitch-plastic-motor-shaft-228-2500-079-232",
@@ -108475,7 +108485,7 @@
     "name": "4x Pitch Shaft",
     "partNumber": "228-2500-120",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "4x Pitch Shaft (228-2500-120).step",
     "modelUrl": "/models/4x-pitch-shaft-228-2500-120-234.glb",
     "stepSizeBytes": 44556,
@@ -108554,7 +108564,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "4x-pitch-standoff-228-2500-070-235",
@@ -133100,7 +133111,7 @@
     "name": "5x Pitch Capped Shaft",
     "partNumber": "228-2500-2225",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "5x Pitch Capped Shaft (228-2500-2225).step",
     "modelUrl": "/models/5x-pitch-capped-shaft-228-2500-2225-254.glb",
     "stepSizeBytes": 41902,
@@ -133192,7 +133203,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "5x-pitch-diameter-10x-pitch-long-half-round-panel-228-2500-1698-255",
@@ -135050,7 +135062,7 @@
     "name": "5x Pitch Shaft",
     "partNumber": "228-2500-121",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "5x Pitch Shaft (228-2500-121).step",
     "modelUrl": "/models/5x-pitch-shaft-228-2500-121-257.glb",
     "stepSizeBytes": 44561,
@@ -135129,7 +135141,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "5x-pitch-weighted-disk-housing-228-2500-2248-258",
@@ -136870,7 +136883,7 @@
     "name": "6x Pitch Capped Shaft",
     "partNumber": "228-2500-2226",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "6x Pitch Capped Shaft (228-2500-2226).step",
     "modelUrl": "/models/6x-pitch-capped-shaft-228-2500-2226-261.glb",
     "stepSizeBytes": 41852,
@@ -136962,7 +136975,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "6x-pitch-cube-face-228-2500-204-262",
@@ -137678,7 +137692,7 @@
     "name": "6x Pitch Shaft",
     "partNumber": "228-2500-122",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "6x Pitch Shaft (228-2500-122).step",
     "modelUrl": "/models/6x-pitch-shaft-228-2500-122-265.glb",
     "stepSizeBytes": 44564,
@@ -137757,7 +137771,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "6x-pitch-standoff-228-2500-072-266",
@@ -149367,7 +149382,7 @@
     "name": "7x Pitch Capped Shaft",
     "partNumber": "228-2500-2227",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "7x Pitch Capped Shaft (228-2500-2227).step",
     "modelUrl": "/models/7x-pitch-capped-shaft-228-2500-2227-273.glb",
     "stepSizeBytes": 41852,
@@ -149459,14 +149474,15 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "7x-pitch-shaft-228-2500-123-274",
     "name": "7x Pitch Shaft",
     "partNumber": "228-2500-123",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "7x Pitch Shaft (228-2500-123).step",
     "modelUrl": "/models/7x-pitch-shaft-228-2500-123-274.glb",
     "stepSizeBytes": 44539,
@@ -149545,7 +149561,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "7x9x11-6-8-10-triangle-truss-plate-228-2500-1117-275",
@@ -152061,7 +152078,7 @@
     "name": "8x Pitch Capped Shaft",
     "partNumber": "228-2500-2228",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "8x Pitch Capped Shaft (228-2500-2228).step",
     "modelUrl": "/models/8x-pitch-capped-shaft-228-2500-2228-278.glb",
     "stepSizeBytes": 41840,
@@ -152153,14 +152170,15 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "8x-pitch-shaft-228-2500-124-279",
     "name": "8x Pitch Shaft",
     "partNumber": "228-2500-124",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "8x Pitch Shaft (228-2500-124).step",
     "modelUrl": "/models/8x-pitch-shaft-228-2500-124-279.glb",
     "stepSizeBytes": 44551,
@@ -152239,7 +152257,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "8x-pitch-standoff-228-2500-1061-280",
@@ -152374,7 +152393,7 @@
     "name": "9x Pitch Capped Shaft",
     "partNumber": "228-2500-2229",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "9x Pitch Capped Shaft (228-2500-2229).step",
     "modelUrl": "/models/9x-pitch-capped-shaft-228-2500-2229-281.glb",
     "stepSizeBytes": 41846,
@@ -152466,14 +152485,15 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "9x-pitch-shaft-228-2500-260-282",
     "name": "9x Pitch Shaft",
     "partNumber": "228-2500-260",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "9x Pitch Shaft (228-2500-260).step",
     "modelUrl": "/models/9x-pitch-shaft-228-2500-260-282.glb",
     "stepSizeBytes": 44561,
@@ -152552,7 +152572,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "9x4-5-solar-flat-panel-228-2500-2010-283",
@@ -153249,7 +153270,7 @@
     "name": "10x Pitch Capped Shaft",
     "partNumber": "228-2500-2230",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "10x Pitch Capped Shaft (228-2500-2230).step",
     "modelUrl": "/models/10x-pitch-capped-shaft-228-2500-2230-285.glb",
     "stepSizeBytes": 41876,
@@ -153341,14 +153362,15 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "10x-pitch-shaft-228-2500-261-286",
     "name": "10x Pitch Shaft",
     "partNumber": "228-2500-261",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "10x Pitch Shaft (228-2500-261).step",
     "modelUrl": "/models/10x-pitch-shaft-228-2500-261-286.glb",
     "stepSizeBytes": 44556,
@@ -153427,7 +153449,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "10x-pitch-wide-front-loader-bucket-228-2500-2028-287",
@@ -153985,7 +154008,7 @@
     "name": "11x Pitch Capped Shaft",
     "partNumber": "228-2500-2231",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "11x Pitch Capped Shaft (228-2500-2231).step",
     "modelUrl": "/models/11x-pitch-capped-shaft-228-2500-2231-288.glb",
     "stepSizeBytes": 41776,
@@ -154077,14 +154100,15 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "11x-pitch-shaft-228-2500-262-289",
     "name": "11x Pitch Shaft",
     "partNumber": "228-2500-262",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "11x Pitch Shaft (228-2500-262).step",
     "modelUrl": "/models/11x-pitch-shaft-228-2500-262-289.glb",
     "stepSizeBytes": 44548,
@@ -154163,7 +154187,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "12-tooth-gear-228-2500-213-290",
@@ -154594,7 +154619,7 @@
     "name": "12x Pitch Capped Shaft",
     "partNumber": "228-2500-2232",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "12x Pitch Capped Shaft (228-2500-2232).step",
     "modelUrl": "/models/12x-pitch-capped-shaft-228-2500-2232-293.glb",
     "stepSizeBytes": 41871,
@@ -154686,7 +154711,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "12x-pitch-rope-228-2500-430-294",
@@ -154816,7 +154842,7 @@
     "name": "12x Pitch Shaft",
     "partNumber": "228-2500-263",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "12x Pitch Shaft (228-2500-263).step",
     "modelUrl": "/models/12x-pitch-shaft-228-2500-263-295.glb",
     "stepSizeBytes": 44555,
@@ -154895,7 +154921,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "12x-robot-arm-beam-228-2500-472-296",
@@ -167479,7 +167506,7 @@
     "name": "14x Pitch Shaft",
     "partNumber": "228-2500-264",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "14x Pitch Shaft (228-2500-264).step",
     "modelUrl": "/models/14x-pitch-shaft-228-2500-264-299.glb",
     "stepSizeBytes": 44566,
@@ -167558,7 +167585,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "14x14-octagon-truss-plate-228-2500-1381-300",
@@ -173615,7 +173643,7 @@
     "name": "16x Pitch Shaft",
     "partNumber": "228-2500-265",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "16x Pitch Shaft (228-2500-265).step",
     "modelUrl": "/models/16x-pitch-shaft-228-2500-265-306.glb",
     "stepSizeBytes": 44565,
@@ -173694,7 +173722,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "17x-robot-arm-beam-228-2500-471-307",
@@ -174972,7 +175001,7 @@
     "name": "18x Pitch Shaft",
     "partNumber": "228-2500-266",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "18x Pitch Shaft (228-2500-266).step",
     "modelUrl": "/models/18x-pitch-shaft-228-2500-266-309.glb",
     "stepSizeBytes": 44558,
@@ -175051,7 +175080,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "20mm-pulley-228-2500-164-310",
@@ -175289,7 +175319,7 @@
     "name": "20x Pitch Shaft",
     "partNumber": "228-2500-267",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "20x Pitch Shaft (228-2500-267).step",
     "modelUrl": "/models/20x-pitch-shaft-228-2500-267-312.glb",
     "stepSizeBytes": 44544,
@@ -175368,14 +175398,15 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "22x-pitch-shaft-228-2500-268-313",
     "name": "22x Pitch Shaft",
     "partNumber": "228-2500-268",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "22x Pitch Shaft (228-2500-268).step",
     "modelUrl": "/models/22x-pitch-shaft-228-2500-268-313.glb",
     "stepSizeBytes": 44557,
@@ -175454,7 +175485,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "24-tooth-gear-228-2500-227-314",
@@ -177701,7 +177733,7 @@
     "name": "24x Pitch Shaft",
     "partNumber": "228-2500-269",
     "category": "Shafts, Spacers & Collars",
-    "defaultColor": "#cbd5e1",
+    "defaultColor": "#e2e8f0",
     "file": "24x Pitch Shaft (228-2500-269).step",
     "modelUrl": "/models/24x-pitch-shaft-228-2500-269-320.glb",
     "stepSizeBytes": 44569,
@@ -177780,7 +177812,8 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "isMetal": true
   },
   {
     "id": "25mm-half-tube-3x-pitch-barrel-end-228-2500-1302-321",
