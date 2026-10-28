@@ -19,7 +19,20 @@ function SwitchRow({ label, hint, checked, onChange }) {
  * Advanced options. History's choice and the Assistant section only show with advanced options on.
  * Every change applies at once; closing (button, Esc, a click outside) changes nothing.
  */
-export default function SettingsPanel({ open, onClose, settings, onChange, shadows, setShadows, ambientOcclusion, setAmbientOcclusion }) {
+export default function SettingsPanel({
+  open,
+  onClose,
+  settings,
+  onChange,
+  shadows,
+  setShadows,
+  ambientOcclusion,
+  setAmbientOcclusion,
+  environmentReflections = true,
+  setEnvironmentReflections,
+  reflectionIntensity = 0.75,
+  setReflectionIntensity
+}) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -66,6 +79,32 @@ export default function SettingsPanel({ open, onClose, settings, onChange, shado
             checked={ambientOcclusion}
             onChange={setAmbientOcclusion}
           />
+          <SwitchRow
+            label="Environment reflections"
+            hint="Studio lighting and reflections on metal shafts and surfaces"
+            checked={environmentReflections}
+            onChange={setEnvironmentReflections}
+          />
+          <div className={`settings-slider-row ${!environmentReflections ? 'is-disabled' : ''}`}>
+            <label className="settings-slider-label">
+              <span className="settings-row-text">
+                <span className="settings-row-label">Reflection brightness</span>
+                <span className="settings-row-hint">Intensity of environment highlights ({Math.round((reflectionIntensity ?? 0.75) * 100)}%)</span>
+              </span>
+              <div className="settings-slider-wrap">
+                <input
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.05"
+                  value={reflectionIntensity ?? 0.75}
+                  disabled={!environmentReflections}
+                  onChange={(e) => setReflectionIntensity?.(Number(e.target.value))}
+                />
+                <span className="settings-slider-val">{Math.round((reflectionIntensity ?? 0.75) * 100)}%</span>
+              </div>
+            </label>
+          </div>
         </section>
 
         <section className="settings-section">

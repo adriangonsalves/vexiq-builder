@@ -161,6 +161,8 @@ export default function App() {
   }, [panelsHidden]);
   const [shadows, setShadows] = useState(false); // optional soft shadows (render-shadows)
   const [ambientOcclusion, setAmbientOcclusion] = useState(false); // optional AO (render-ambient-occlusion)
+  const [environmentReflections, setEnvironmentReflections] = useState(true); // optional studio environment reflections
+  const [reflectionIntensity, setReflectionIntensity] = useState(0.75); // brightness/intensity of reflections (0 to 2)
   const [isLoadingMesh, setIsLoadingMesh] = useState(false);
   const [mcpConnected, setMcpConnected] = useState(false);
 
@@ -288,6 +290,8 @@ export default function App() {
     if (vp.stereoDepth !== undefined) setStereoDepth(clampStereoDepth(vp.stereoDepth));
     if (vp.shadows !== undefined) setShadows(Boolean(vp.shadows));
     if (vp.ambientOcclusion !== undefined) setAmbientOcclusion(Boolean(vp.ambientOcclusion));
+    if (vp.environmentReflections !== undefined) setEnvironmentReflections(Boolean(vp.environmentReflections));
+    if (vp.reflectionIntensity !== undefined) setReflectionIntensity(Math.max(0, Math.min(2, Number(vp.reflectionIntensity) || 0.75)));
     const trigger = vp.viewAlongTrigger;
     if (trigger && Number.isFinite(trigger.n)) {
       setViewAlongTrigger((prev) =>
@@ -546,11 +550,11 @@ export default function App() {
       build: currentBuild,
       instances,
       history,
-      viewport: { transformMode, snapPitchFactor, rotationSnapDeg, showGrid, showConnectors, projection, viewLayout, stereoCrossEyed, stereoDepth, shadows, ambientOcclusion }
+      viewport: { transformMode, snapPitchFactor, rotationSnapDeg, showGrid, showConnectors, projection, viewLayout, stereoCrossEyed, stereoDepth, shadows, ambientOcclusion, environmentReflections, reflectionIntensity }
     };
     clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(saveCurrentBuildNow, SAVE_DELAY_MS);
-  }, [catalog.length, currentBuild, instances, history, transformMode, snapPitchFactor, rotationSnapDeg, showGrid, showConnectors, projection, viewLayout, stereoCrossEyed, stereoDepth, shadows, ambientOcclusion, saveCurrentBuildNow]);
+  }, [catalog.length, currentBuild, instances, history, transformMode, snapPitchFactor, rotationSnapDeg, showGrid, showConnectors, projection, viewLayout, stereoCrossEyed, stereoDepth, shadows, ambientOcclusion, environmentReflections, reflectionIntensity, saveCurrentBuildNow]);
 
   // A pending save goes out when the tab is hidden or closed
   useEffect(() => {
@@ -662,7 +666,9 @@ export default function App() {
           stereoDepth,
           viewAlongTrigger,
           shadows,
-          ambientOcclusion
+          ambientOcclusion,
+          environmentReflections,
+          reflectionIntensity
         },
         instances
       })
@@ -710,6 +716,8 @@ export default function App() {
     viewAlongTrigger,
     shadows,
     ambientOcclusion,
+    environmentReflections,
+    reflectionIntensity,
     currentBuild
   ]);
 
@@ -992,7 +1000,9 @@ export default function App() {
       stereoDepth: sd,
       viewAlong,
       shadows: sh,
-      ambientOcclusion: ao
+      ambientOcclusion: ao,
+      environmentReflections: er,
+      reflectionIntensity: ri
     }) => {
       if (tm) setTransformMode(tm);
       if (sg !== undefined) setShowGrid(Boolean(sg));
@@ -1006,6 +1016,8 @@ export default function App() {
       if (VIEW_DIRECTIONS.includes(viewAlong)) turnViewAlong(viewAlong);
       if (sh !== undefined) setShadows(Boolean(sh));
       if (ao !== undefined) setAmbientOcclusion(Boolean(ao));
+      if (er !== undefined) setEnvironmentReflections(Boolean(er));
+      if (ri !== undefined) setReflectionIntensity(Math.max(0, Math.min(2, Number(ri) || 0.75)));
     },
     resetAssembly: (mode) => {
       setExplodeMode('off');
@@ -1321,7 +1333,9 @@ export default function App() {
               stereoDepth,
               viewAlongTrigger,
               shadows,
-              ambientOcclusion
+              ambientOcclusion,
+              environmentReflections,
+              reflectionIntensity
             },
             instances
           },
@@ -1657,6 +1671,8 @@ export default function App() {
             immersive={immersive}
             shadows={shadows}
             ambientOcclusion={ambientOcclusion}
+            environmentReflections={environmentReflections}
+            reflectionIntensity={reflectionIntensity}
             showConnectors={showConnectors}
             explodeMode={explodeMode}
             focusTrigger={focusTrigger}
@@ -2531,6 +2547,10 @@ export default function App() {
         setShadows={setShadows}
         ambientOcclusion={ambientOcclusion}
         setAmbientOcclusion={setAmbientOcclusion}
+        environmentReflections={environmentReflections}
+        setEnvironmentReflections={setEnvironmentReflections}
+        reflectionIntensity={reflectionIntensity}
+        setReflectionIntensity={setReflectionIntensity}
       />
 
       {/* Native Light-Dismiss Modal Dialog for 6-Stage Mechanical Audit & 3-View Blueprint */}

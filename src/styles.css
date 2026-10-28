@@ -1350,6 +1350,46 @@ body,
   flex-shrink: 0;
 }
 
+.settings-slider-row {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-panel-elevated);
+  margin-bottom: 6px;
+  transition: opacity 0.15s ease;
+}
+
+.settings-slider-row.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.settings-slider-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.settings-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-slider-wrap input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent, #3b82f6);
+  cursor: pointer;
+}
+
+.settings-slider-val {
+  min-width: 44px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
 /* --- Build library (openspec build-library) ---------------------------------------------------- */
 
 .build-name,

@@ -338,6 +338,16 @@ const TOOLS = [
           type: 'boolean',
           description: 'Soft shadows from the main light: parts shade each other and the build casts a faint ground shadow (off by default).'
         },
+        environmentReflections: {
+          type: 'boolean',
+          description: 'Studio environment reflections on metal shafts and surfaces (on by default).'
+        },
+        reflectionIntensity: {
+          type: 'number',
+          minimum: 0,
+          maximum: 2,
+          description: 'Brightness/intensity of environment reflections (0 to 2, default 0.75).'
+        },
         viewAlong: {
           type: 'string',
           enum: ['+x', '-x', '+y', '-y', '+z', '-z'],
@@ -1084,6 +1094,12 @@ async function executeTool(name, args = {}) {
     if (args.shadows !== undefined && typeof args.shadows !== 'boolean') {
       return { isError: true, error: `shadows must be true or false (got ${JSON.stringify(args.shadows)}).` };
     }
+    if (args.environmentReflections !== undefined && typeof args.environmentReflections !== 'boolean') {
+      return { isError: true, error: `environmentReflections must be true or false (got ${JSON.stringify(args.environmentReflections)}).` };
+    }
+    if (args.reflectionIntensity !== undefined && !(Number(args.reflectionIntensity) >= 0 && Number(args.reflectionIntensity) <= 2)) {
+      return { isError: true, error: `reflectionIntensity must be a number from 0 to 2 (got ${JSON.stringify(args.reflectionIntensity)}).` };
+    }
     if (args.stereoCrossEyed !== undefined && typeof args.stereoCrossEyed !== 'boolean') {
       return { isError: true, error: `stereoCrossEyed must be true or false (got ${JSON.stringify(args.stereoCrossEyed)}).` };
     }
@@ -1107,6 +1123,9 @@ async function executeTool(name, args = {}) {
       stereoDepth: args.stereoDepth !== undefined ? Number(args.stereoDepth) : prevVp.stereoDepth ?? 1,
       shadows: args.shadows ?? prevVp.shadows ?? false,
       ambientOcclusion: args.ambientOcclusion ?? prevVp.ambientOcclusion ?? false,
+      environmentReflections: args.environmentReflections ?? prevVp.environmentReflections ?? true,
+      reflectionIntensity:
+        args.reflectionIntensity !== undefined ? Number(args.reflectionIntensity) : prevVp.reflectionIntensity ?? 0.75,
       // A one-shot turn: the app turns the camera when the count goes up
       viewAlongTrigger: args.viewAlong ? { dir: args.viewAlong, n: (prevAlong.n || 0) + 1 } : prevAlong
     };

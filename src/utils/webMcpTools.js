@@ -173,10 +173,12 @@ export function registerVexIqWebMcpTools(contextRef) {
           stereoDepth: { type: 'number', minimum: 0.25, maximum: 3, description: 'Stereo depth (1 by default).' },
           viewAlong: { type: 'string', enum: VIEW_OPTIONS.viewAlong, description: 'Turn the camera once to look from that side.' },
           shadows: { type: 'boolean', description: 'Soft shadows from the main light (off by default).' },
-          ambientOcclusion: { type: 'boolean', description: 'Darken creases and inside corners (off by default).' }
+          ambientOcclusion: { type: 'boolean', description: 'Darken creases and inside corners (off by default).' },
+          environmentReflections: { type: 'boolean', description: 'Studio environment reflections on metal shafts and surfaces (on by default).' },
+          reflectionIntensity: { type: 'number', minimum: 0, maximum: 2, description: 'Brightness/intensity of reflections (0 to 2, default 0.75).' }
         }
       },
-      execute({ transformMode = 'translate', showGrid, showConnectors, focusCamera, projection, viewLayout, stereoCrossEyed, stereoDepth, viewAlong, shadows, ambientOcclusion } = {}) {
+      execute({ transformMode = 'translate', showGrid, showConnectors, focusCamera, projection, viewLayout, stereoCrossEyed, stereoDepth, viewAlong, shadows, ambientOcclusion, environmentReflections, reflectionIntensity } = {}) {
         const ctx = contextRef.current;
         if (!ctx) return { error: 'Application context is not ready.' };
         if (transformMode && !TRANSFORM_MODES.includes(transformMode)) {
@@ -192,7 +194,11 @@ export function registerVexIqWebMcpTools(contextRef) {
         }
         if (shadows !== undefined && typeof shadows !== 'boolean') return { error: 'shadows must be true or false.' };
         if (ambientOcclusion !== undefined && typeof ambientOcclusion !== 'boolean') return { error: 'ambientOcclusion must be true or false.' };
-        ctx.configureViewport({ transformMode, showGrid, showConnectors, focusCamera, projection, viewLayout, stereoCrossEyed, stereoDepth, viewAlong, shadows, ambientOcclusion });
+        if (environmentReflections !== undefined && typeof environmentReflections !== 'boolean') return { error: 'environmentReflections must be true or false.' };
+        if (reflectionIntensity !== undefined && !(Number(reflectionIntensity) >= 0 && Number(reflectionIntensity) <= 2)) {
+          return { error: 'reflectionIntensity must be a number from 0 to 2.' };
+        }
+        ctx.configureViewport({ transformMode, showGrid, showConnectors, focusCamera, projection, viewLayout, stereoCrossEyed, stereoDepth, viewAlong, shadows, ambientOcclusion, environmentReflections, reflectionIntensity });
         return { ok: true };
       },
       annotations: { readOnlyHint: false }

@@ -1250,7 +1250,9 @@ export default function Viewport3D({
   viewAlongTrigger,
   immersive = false,
   shadows = false,
-  ambientOcclusion = false
+  ambientOcclusion = false,
+  environmentReflections = true,
+  reflectionIntensity = 0.75
 }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
@@ -1270,6 +1272,11 @@ export default function Viewport3D({
   shadowsRef.current = shadows;
   const aoRef = useRef(ambientOcclusion);
   aoRef.current = ambientOcclusion;
+  const envTextureRef = useRef(null);
+  const envReflectionsRef = useRef(environmentReflections);
+  envReflectionsRef.current = environmentReflections;
+  const reflectionIntensityRef = useRef(reflectionIntensity);
+  reflectionIntensityRef.current = reflectionIntensity;
   const viewLayoutRef = useRef(viewLayout);
   viewLayoutRef.current = viewLayout;
   const stereoRef = useRef({ crossEyed: stereoCrossEyed, depth: stereoDepth });
@@ -2951,8 +2958,13 @@ export default function Viewport3D({
     pmremGenerator.compileEquirectangularShader();
     const roomEnv = new RoomEnvironment();
     const envTexture = pmremGenerator.fromScene(roomEnv, 0.04).texture;
-    scene.environment = envTexture;
-    scene.environmentIntensity = 0.75;
+    envTextureRef.current = envTexture;
+    if (envReflectionsRef.current !== false) {
+      scene.environment = envTexture;
+      scene.environmentIntensity = typeof reflectionIntensityRef.current === 'number' ? reflectionIntensityRef.current : 0.75;
+    } else {
+      scene.environment = null;
+    }
     roomEnv.dispose();
     pmremGenerator.dispose();
 
@@ -4670,6 +4682,19 @@ export default function Viewport3D({
     syncGizmos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewLayout]);
+
+  // Studio environment reflections toggle and intensity
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    if (!environmentReflections) {
+      scene.environment = null;
+    } else {
+      scene.environment = envTextureRef.current;
+      scene.environmentIntensity = typeof reflectionIntensity === 'number' ? reflectionIntensity : 0.75;
+    }
+    renderFrameRef.current?.();
+  }, [environmentReflections, reflectionIntensity]);
 
   // Perspective or orthographic main view (stereo always draws in perspective)
   useEffect(() => {
