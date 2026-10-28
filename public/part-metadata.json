@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-28T02:12:18.806Z",
-  "partCount": 479,
-  "totalVerifiedPorts": 4147,
+  "generatedAt": "2026-10-28T02:28:25.258Z",
+  "partCount": 480,
+  "totalVerifiedPorts": 4163,
   "parts": {
     "5x-pitch-idler-pulley-228-2500-1413-0": {
       "id": "5x-pitch-idler-pulley-228-2500-1413-0",
@@ -110622,6 +110622,408 @@
       "pitchSize": [
         7.98,
         3.16,
+        5.98
+      ],
+      "originType": "offset",
+      "gearSpecs": null,
+      "fastenerSpecs": null,
+      "mountingRules": {
+        "massClass": "heavy",
+        "minFastenersRequired": 4
+      },
+      "portCounts": {
+        "total": 16,
+        "pinHoles": 16,
+        "shaftBores": 0,
+        "pinPegs": 0
+      },
+      "ports": [
+        {
+          "portId": "hole_1",
+          "type": "pin_hole",
+          "origin": [
+            -6.35,
+            -6.2,
+            -38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            -37.211,
+            37.211
+          ],
+          "pitchCoord": [
+            -0.5,
+            -0.49,
+            -2.99
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_2",
+          "type": "pin_hole",
+          "origin": [
+            44.45,
+            -6.2,
+            -38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            -38,
+            37.211
+          ],
+          "pitchCoord": [
+            3.5,
+            -0.49,
+            -2.99
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_3",
+          "type": "pin_hole",
+          "origin": [
+            19.05,
+            -6.2,
+            -38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            -37.211,
+            37.211
+          ],
+          "pitchCoord": [
+            1.5,
+            -0.49,
+            -2.99
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_4",
+          "type": "pin_hole",
+          "origin": [
+            -44.45,
+            -6.2,
+            -38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            -38,
+            38
+          ],
+          "pitchCoord": [
+            -3.5,
+            -0.49,
+            -2.99
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_5",
+          "type": "pin_hole",
+          "origin": [
+            6.35,
+            -6.2,
+            -38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            -37.211,
+            37.211
+          ],
+          "pitchCoord": [
+            0.5,
+            -0.49,
+            -2.99
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_6",
+          "type": "pin_hole",
+          "origin": [
+            31.75,
+            -6.2,
+            -38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            -37.211,
+            37.211
+          ],
+          "pitchCoord": [
+            2.5,
+            -0.49,
+            -2.99
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_7",
+          "type": "pin_hole",
+          "origin": [
+            -31.75,
+            -6.2,
+            -38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            -37.211,
+            37.211
+          ],
+          "pitchCoord": [
+            -2.5,
+            -0.49,
+            -2.99
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_8",
+          "type": "pin_hole",
+          "origin": [
+            -19.05,
+            -6.2,
+            -38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            -37.211,
+            37.211
+          ],
+          "pitchCoord": [
+            -1.5,
+            -0.49,
+            -2.99
+          ],
+          "verified": true
+        },
+        {
+          "portId": "brain_right_mount_1",
+          "type": "pin_hole",
+          "origin": [
+            -44.45,
+            -6.35,
+            38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "depthMm": 6.35,
+          "pitchCoord": [
+            -3.5,
+            -0.5,
+            2.9921259842519685
+          ],
+          "verified": true
+        },
+        {
+          "portId": "brain_right_mount_2",
+          "type": "pin_hole",
+          "origin": [
+            -31.75,
+            -6.35,
+            38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "depthMm": 6.35,
+          "pitchCoord": [
+            -2.5,
+            -0.5,
+            2.9921259842519685
+          ],
+          "verified": true
+        },
+        {
+          "portId": "brain_right_mount_3",
+          "type": "pin_hole",
+          "origin": [
+            -19.05,
+            -6.35,
+            38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "depthMm": 6.35,
+          "pitchCoord": [
+            -1.5,
+            -0.5,
+            2.9921259842519685
+          ],
+          "verified": true
+        },
+        {
+          "portId": "brain_right_mount_4",
+          "type": "pin_hole",
+          "origin": [
+            -6.35,
+            -6.35,
+            38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "depthMm": 6.35,
+          "pitchCoord": [
+            -0.5,
+            -0.5,
+            2.9921259842519685
+          ],
+          "verified": true
+        },
+        {
+          "portId": "brain_right_mount_5",
+          "type": "pin_hole",
+          "origin": [
+            6.35,
+            -6.35,
+            38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "depthMm": 6.35,
+          "pitchCoord": [
+            0.5,
+            -0.5,
+            2.9921259842519685
+          ],
+          "verified": true
+        },
+        {
+          "portId": "brain_right_mount_6",
+          "type": "pin_hole",
+          "origin": [
+            19.05,
+            -6.35,
+            38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "depthMm": 6.35,
+          "pitchCoord": [
+            1.5,
+            -0.5,
+            2.9921259842519685
+          ],
+          "verified": true
+        },
+        {
+          "portId": "brain_right_mount_7",
+          "type": "pin_hole",
+          "origin": [
+            31.75,
+            -6.35,
+            38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "depthMm": 6.35,
+          "pitchCoord": [
+            2.5,
+            -0.5,
+            2.9921259842519685
+          ],
+          "verified": true
+        },
+        {
+          "portId": "brain_right_mount_8",
+          "type": "pin_hole",
+          "origin": [
+            44.45,
+            -6.35,
+            38
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "depthMm": 6.35,
+          "pitchCoord": [
+            3.5,
+            -0.5,
+            2.9921259842519685
+          ],
+          "verified": true
+        }
+      ]
+    },
+    "vex-iq-robot-brain-228-2540-502-with-battery": {
+      "id": "vex-iq-robot-brain-228-2540-502-with-battery",
+      "partNumber": "228-2540 + 228-2604",
+      "name": "VEX IQ Robot Brain with Battery",
+      "category": "Electronics & Motion",
+      "pitchSize": [
+        8.4,
+        3.85,
         5.98
       ],
       "originType": "offset",

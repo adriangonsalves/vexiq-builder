@@ -13,6 +13,11 @@ const OUT_CATALOG_PATH = path.join(ROOT_DIR, 'public', 'catalog.json');
 // Bodies left out of a part's model because they are catalog parts of their own (part number ->
 // body name prefixes): the Robot Brain's file includes its battery
 const SEPARATE_BODIES = { '228-2540': ['228-2604'] };
+// Extra catalog entries made from the same file with every body kept (part number -> variants)
+const WHOLE_FILE_VARIANTS = {
+  '228-2540': [{ key: 'with-battery', name: 'VEX IQ Robot Brain with Battery', partNumber: '228-2540 + 228-2604' }]
+};
+const cacheKey = (file, variant) => (variant ? `${file}#${variant}` : file);
 
 function classifyPart(name) {
   const lower = name.toLowerCase();
@@ -174,7 +179,7 @@ async function main() {
     try {
       const prev = JSON.parse(fs.readFileSync(OUT_CATALOG_PATH, 'utf8'));
       for (const item of prev) {
-        existingByFile.set(item.file, item);
+        existingByFile.set(cacheKey(item.file, item.variant), item);
       }
     } catch {
       // ignore
@@ -225,11 +230,17 @@ async function main() {
     });
   }
 
+  for (const entry of [...allSourceEntries]) {
+    for (const v of WHOLE_FILE_VARIANTS[entry.partNumber] || []) {
+      allSourceEntries.push({ ...entry, id: `${entry.id}-${v.key}`, displayName: v.name, partNumber: v.partNumber, variant: v.key, excludeBodies: [] });
+    }
+  }
+
   const catalog = [];
   const pendingTasks = [];
 
   for (const entry of allSourceEntries) {
-    const cached = existingByFile.get(entry.filename);
+    const cached = existingByFile.get(cacheKey(entry.filename, entry.variant));
     const outGlbPath = path.join(OUT_MODELS_DIR, `${(cached || entry).id}.glb`);
     if (cached && fs.existsSync(outGlbPath)) {
       catalog.push(cached);
@@ -280,7 +291,7 @@ async function main() {
             stepPath: task.stepPath,
             outGlbPath: task.outGlbPath,
             fileSize: task.fileSize,
-            excludeBodies: SEPARATE_BODIES[task.partNumber] || []
+            excludeBodies: task.excludeBodies || SEPARATE_BODIES[task.partNumber] || []
           });
         };
 
@@ -295,6 +306,7 @@ async function main() {
               category: task.category,
               defaultColor: task.defaultColor,
               file: task.filename,
+              ...(task.variant ? { variant: task.variant } : {}),
               modelUrl: `/models/${task.id}.glb`,
               stepSizeBytes: task.fileSize,
               glbSizeBytes: msg.glbBytes,

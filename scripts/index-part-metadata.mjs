@@ -586,7 +586,7 @@ async function main() {
       }
     }
 
-    // 3. Dedicated Smart Motor (228-2560) & Robot Brain (228-2540) verified socket/flange ports
+    // 3. Dedicated Smart Motor (228-2560) & Robot Brain (228-2540, with or without battery) verified socket/flange ports
     if (part.partNumber === '228-2560') {
       ports.unshift({
         portId: 'motor_drive_socket',
@@ -598,7 +598,7 @@ async function main() {
         pitchCoord: [-0.75, 0, 0],
         verified: true
       });
-    } else if (part.partNumber === '228-2540') {
+    } else if (part.partNumber.startsWith('228-2540')) {
       // Ensure all 16 verified horizontal side mounting holes (z = ±38.0, y = -6.35) are explicitly indexed
       const brainSideXs = [-44.45, -31.75, -19.05, -6.35, 6.35, 19.05, 31.75, 44.45];
       for (const side of [
