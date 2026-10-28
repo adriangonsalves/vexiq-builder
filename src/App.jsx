@@ -26,6 +26,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Radio,
+  Settings as SettingsIcon,
   Redo2,
   RotateCcw,
   RotateCw,
@@ -40,7 +41,28 @@ import {
 import Viewport3D from './components/Viewport3D.jsx';
 import PartThumbnail from './components/PartThumbnail.jsx';
 import HistoryTimeline from './components/HistoryTimeline.jsx';
+import SettingsPanel from './components/SettingsPanel.jsx';
+import ToolbarMenu from './components/ToolbarMenu.jsx';
+import ViewMenu from './components/ViewMenu.jsx';
+import { STARTERS, starterById } from './starters.js';
+import {
+  copyName,
+  deleteBuild,
+  exportFileName,
+  fileBuildName,
+  getBuild,
+  libraryAvailable,
+  listBuilds,
+  newBuildId,
+  nextBuildName,
+  putBuild,
+  starterBuildName,
+  uniqueName
+} from './utils/buildLibrary.js';
+import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
+import LibraryDialog from './components/LibraryDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
+import { DEFAULT_SETTINGS, isLinearHistory, normalizeSettings } from './utils/appSettings.js';
 import {
   applyOps,
   createHistory,
@@ -72,7 +94,6 @@ const VEX_COLORS = [
   '#1f2937'  // Tire / Rubber Black
 ];
 
-const STORAGE_KEY = 'vexiq_builder_assembly_v2';
 const TIMELINE_KEY = 'vexiq_history_timeline_visible';
 // This tab's id: its own saves come back over SSE and are skipped; other tabs' saves are taken
 const TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -81,6 +102,7 @@ const PROJECTIONS = ['perspective', 'orthographic'];
 const VIEW_LAYOUTS = ['single', 'four', 'stereo'];
 const VIEW_DIRECTIONS = ['+x', '-x', '+y', '-y', '+z', '-z'];
 const PANELS_HIDDEN_KEY = 'vexiq.panelsHidden';
+const SETTINGS_KEY = 'vexiq.settings'; // fallback copy of the app settings when there is no bridge
 const clampStereoDepth =(v) => Math.min(3, Math.max(0.25, Number(v) || 1));
 
 /** Parts with pose patches ({ instanceId, position?, rotation?, socketAngleDeg? }) applied. */
@@ -156,6 +178,59 @@ export default function App() {
   const [gearTrainPreset, setGearTrainPreset] = useState('3x36T');
   const [gearTrainIncludeShafts, setGearTrainIncludeShafts] = useState(true);
   const [actionFeedback, setActionFeedback] = useState(null);
+  // App settings (openspec app-settings): shared through /api/settings, a local copy as fallback
+  const [settings, setSettings] = useState(() => {
+    try {
+      return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'));
+    } catch {
+      return { ...DEFAULT_SETTINGS };
+    }
+  });
+  // The build being worked on (openspec build-library): { id, name }, shared through the saved state
+  const [currentBuild, setCurrentBuild] = useState(null);
+  const currentBuildRef = useRef(null);
+  currentBuildRef.current = currentBuild;
+  const lastPostedBuildIdRef = useRef(null); // the build the bridge last got from this tab
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [viewMenuAt, setViewMenuAt] = useState(null); // { x, y } while the view menu is open
+  const closeViewMenu = useCallback(() => setViewMenuAt(null), []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const keepSettings = useCallback((next) => {
+    const normalized = normalizeSettings(next);
+    settingsRef.current = normalized;
+    setSettings(normalized);
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalized));
+    } catch {
+      // private mode: the bridge copy still applies
+    }
+    return normalized;
+  }, []);
+  /** Changes some settings: applied at once, saved for every tab and the MCP server. */
+  const updateSettings = useCallback(
+    (patch) => {
+      const next = keepSettings({ ...settingsRef.current, ...patch });
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Client-Id': TAB_ID },
+        body: JSON.stringify(next)
+      }).catch(() => {});
+    },
+    [keepSettings]
+  );
+  useEffect(() => {
+    if (!actionFeedback) return undefined;
+    const timer = setTimeout(() => setActionFeedback(null), 4000);
+    return () => clearTimeout(timer);
+  }, [actionFeedback]);
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((loaded) => loaded && keepSettings(loaded))
+      .catch(() => {});
+  }, [keepSettings]);
   const [isRunningAction, setIsRunningAction] = useState(false);
   const [auditModalData, setAuditModalData] = useState(null);
 
@@ -192,7 +267,12 @@ export default function App() {
     setBuild((b) => {
       const next = typeof updater === 'function' ? updater(b.instances) : updater;
       if (next === b.instances) return b;
-      const recorded = recordStep(b.history, b.instances, next, { source, label: meta.label, mergeKey: meta.mergeKey });
+      const recorded = recordStep(b.history, b.instances, next, {
+        source,
+        label: meta.label,
+        mergeKey: meta.mergeKey,
+        linear: isLinearHistory(settingsRef.current)
+      });
       return { instances: next, history: recorded.history };
     });
   }, []);
@@ -219,6 +299,11 @@ export default function App() {
   /** Takes parts (and history, when present) that came from the server: MCP, smart actions, startup. */
   const adoptServerState = useCallback((state) => {
     if (!state || !Array.isArray(state.instances)) return;
+    // Another tab or the assistant switched or renamed the current build
+    if (state.build?.id && (state.build.id !== currentBuildRef.current?.id || state.build.name !== currentBuildRef.current?.name)) {
+      lastPostedBuildIdRef.current = state.build.id;
+      setCurrentBuild({ id: state.build.id, name: state.build.name });
+    }
     if (isHistory(state.history)) {
       const history = loadHistory(state.history, state.instances);
       syncRef.current = { baseRev: history.rev, baseInstances: state.instances, postedHistory: history };
@@ -227,7 +312,11 @@ export default function App() {
       // An older writer sent parts without history: record what it changed
       setBuild((b) => ({
         instances: state.instances,
-        history: recordStep(b.history, b.instances, state.instances, { source: 'mcp', label: 'External change' }).history
+        history: recordStep(b.history, b.instances, state.instances, {
+          source: 'mcp',
+          label: 'External change',
+          linear: isLinearHistory(settingsRef.current)
+        }).history
       }));
     }
   }, []);
@@ -286,7 +375,6 @@ export default function App() {
     if (selectedId && !instances.some((i) => i.instanceId === selectedId)) setSelectedId(null);
   }, [instances, selectedId]);
 
-  const fileInputRef = useRef(null);
   const auditDialogRef = useRef(null);
   const suppressNextServerSyncRef = useRef(false);
   const webMcpContextRef = useRef(null);
@@ -366,9 +454,112 @@ export default function App() {
           setInstances(starter, { label: 'Load starter assembly' });
           setSelectedId(starter[1]?.instanceId || starter[0]?.instanceId || null);
         }
+        chooseStartupBuild(serverState?.build);
       })
       .catch((err) => console.error('Failed to initialize catalog:', err));
   }, []);
+
+  /**
+   * The build the app opens with: the saved state's build when the library has it (the saved state
+   * is the newest copy), else a new library entry for what was open: "Build #1" in an empty library,
+   * which takes over the build saved before the library existed.
+   */
+  const startupBuildChosenRef = useRef(false);
+  const chooseStartupBuild = async (savedBuild) => {
+    // Once per page: the catalog load runs twice in development (React strict mode)
+    if (startupBuildChosenRef.current) return;
+    startupBuildChosenRef.current = true;
+    let names = [];
+    let known = false;
+    if (libraryAvailable()) {
+      try {
+        const list = await listBuilds();
+        names = list.map((b) => b.name);
+        known = Boolean(savedBuild?.id && list.some((b) => b.id === savedBuild.id));
+      } catch {
+        // no library in this browser: the build still works, it just isn't listed
+      }
+    }
+    if (known) {
+      setCurrentBuild({ id: savedBuild.id, name: savedBuild.name });
+      return;
+    }
+    const name = savedBuild?.name && !names.includes(savedBuild.name) ? savedBuild.name : nextBuildName(names);
+    setCurrentBuild({ id: savedBuild?.id || newBuildId(), name });
+  };
+
+  // --- Auto-save to the library (openspec build-library) ------------------------------------------
+  const autoSaveTimerRef = useRef(null);
+  const latestForSaveRef = useRef(null);
+  const SAVE_DELAY_MS = 1000;
+
+  /** A small JPEG picture of the build for the library (null when the view isn't ready). */
+  const makeThumbnail = useCallback(async () => {
+    try {
+      const png = screenshotRef.current?.({ view: 'iso', width: 240, height: 160 });
+      if (!png) return null;
+      const img = new Image();
+      img.src = `data:image/png;base64,${png}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 160;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, 240, 160);
+      ctx.drawImage(img, 0, 0, 240, 160);
+      return canvas.toDataURL('image/jpeg', 0.72);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /** Writes the current build to the library now (no-op without a library or a build). */
+  const saveCurrentBuildNow = useCallback(async () => {
+    clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = null;
+    const data = latestForSaveRef.current;
+    if (!data?.build || !libraryAvailable()) return;
+    try {
+      const existing = await getBuild(data.build.id);
+      const thumbnail = document.visibilityState === 'hidden' ? existing?.thumbnail ?? null : (await makeThumbnail()) ?? existing?.thumbnail ?? null;
+      await putBuild({
+        id: data.build.id,
+        name: data.build.name,
+        createdAt: existing?.createdAt ?? Date.now(),
+        updatedAt: Date.now(),
+        partCount: data.instances.length,
+        thumbnail,
+        instances: data.instances,
+        history: data.history,
+        viewport: data.viewport
+      });
+    } catch (err) {
+      console.warn('Saving the build to the library failed:', err);
+    }
+  }, [makeThumbnail]);
+
+  // Builds save themselves about a second after each change
+  useEffect(() => {
+    if (catalog.length === 0 || !currentBuild) return;
+    latestForSaveRef.current = {
+      build: currentBuild,
+      instances,
+      history,
+      viewport: { transformMode, snapPitchFactor, rotationSnapDeg, showGrid, showConnectors, projection, viewLayout, stereoCrossEyed, stereoDepth, shadows, ambientOcclusion }
+    };
+    clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(saveCurrentBuildNow, SAVE_DELAY_MS);
+  }, [catalog.length, currentBuild, instances, history, transformMode, snapPitchFactor, rotationSnapDeg, showGrid, showConnectors, projection, viewLayout, stereoCrossEyed, stereoDepth, shadows, ambientOcclusion, saveCurrentBuildNow]);
+
+  // A pending save goes out when the tab is hidden or closed
+  useEffect(() => {
+    const flush = () => {
+      if (document.visibilityState === 'hidden' && autoSaveTimerRef.current) saveCurrentBuildNow();
+    };
+    document.addEventListener('visibilitychange', flush);
+    return () => document.removeEventListener('visibilitychange', flush);
+  }, [saveCurrentBuildNow]);
 
   // Subscribe to real-time SSE updates pushed by the MCP Server
   useEffect(() => {
@@ -378,6 +569,10 @@ export default function App() {
     es.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (msg.type === 'settings') {
+          if (msg.clientId !== TAB_ID) keepSettings(msg.settings);
+          return;
+        }
         if (msg.type === 'screenshot-request') {
           let reply;
           try {
@@ -423,13 +618,6 @@ export default function App() {
   // Sync browser changes back to localStorage and the MCP bridge (/api/assembly)
   useEffect(() => {
     if (catalog.length === 0) return;
-    try {
-      const validOnly = instances.filter((i) => !i.isIntersecting);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(validOnly));
-    } catch {
-      // ignore
-    }
-
     if (suppressNextServerSyncRef.current) {
       suppressNextServerSyncRef.current = false;
       return;
@@ -437,7 +625,11 @@ export default function App() {
 
     // History goes along only when it changed since the last save; the bridge keeps it otherwise
     const base = syncRef.current;
-    const sendHistory = history !== base.postedHistory;
+    // Switching builds (New, Starter, Open, Delete) replaces the whole saved state, so it goes
+    // without the history check that guards edits of the same build against another writer
+    const switching = Boolean(currentBuild) && currentBuild.id !== lastPostedBuildIdRef.current;
+    if (currentBuild) lastPostedBuildIdRef.current = currentBuild.id;
+    const sendHistory = switching || history !== base.postedHistory;
     if (sendHistory) {
       syncRef.current = { baseRev: history.rev, baseInstances: instances, postedHistory: history };
     }
@@ -451,8 +643,9 @@ export default function App() {
       },
       body: JSON.stringify({
         version: '1.0',
-        baseHistoryRev: base.baseRev,
+        ...(switching ? {} : { baseHistoryRev: base.baseRev }),
         ...(sendHistory ? { history } : {}),
+        ...(currentBuild ? { build: currentBuild } : {}),
         selectedId,
         viewport: {
           transformMode,
@@ -515,7 +708,8 @@ export default function App() {
     stereoDepth,
     viewAlongTrigger,
     shadows,
-    ambientOcclusion
+    ambientOcclusion,
+    currentBuild
   ]);
 
   const catalogMap = useMemo(() => {
@@ -560,84 +754,9 @@ export default function App() {
     [selectedInstance, catalogMap]
   );
 
+  // The sample starter (src/starters.js); File → Starter lists every starter
   function buildStarterAssembly(catalogList) {
-    const findByPartNum = (num) => catalogList.find((p) => p.partNumber === num);
-    const beam =
-      findByPartNum('228-2500-025') ||
-      catalogList.find((p) => p.name.includes('2x8 Beam')) ||
-      catalogList[0];
-    const pin =
-      findByPartNum('228-2500-086') ||
-      catalogList.find((p) => p.name.includes('0x2 Connector Pin'));
-    const shaft =
-      findByPartNum('228-2500-258') ||
-      catalogList.find((p) => p.name.includes('4x Pitch Shaft'));
-    const gear =
-      findByPartNum('228-2500-215') ||
-      catalogList.find((p) => p.name.includes('36 Tooth Gear'));
-
-    const starter = [];
-    if (beam) {
-      starter.push({
-        instanceId: `inst-starter-beam`,
-        partId: beam.id,
-        label: `${beam.name} #1`,
-        position: [0, 12.7, 0],
-        rotation: [0, 0, 0],
-        lastValidPosition: [0, 12.7, 0],
-        lastValidRotation: [0, 0, 0],
-        isIntersecting: false,
-        color: beam.defaultColor,
-        visible: true,
-        locked: false
-      });
-    }
-    if (pin) {
-      starter.push({
-        instanceId: `inst-starter-pin`,
-        partId: pin.id,
-        label: `${pin.name} #1`,
-        position: [6.35, 6.35, 3.175],
-        rotation: [0, 180, 0],
-        lastValidPosition: [6.35, 6.35, 3.175],
-        lastValidRotation: [0, 180, 0],
-        isIntersecting: false,
-        color: pin.defaultColor,
-        visible: true,
-        locked: false
-      });
-    }
-    if (shaft) {
-      starter.push({
-        instanceId: `inst-starter-shaft`,
-        partId: shaft.id,
-        label: `${shaft.name} #1`,
-        position: [-19.05, 6.35, 0],
-        rotation: [0, 0, 0],
-        lastValidPosition: [-19.05, 6.35, 0],
-        lastValidRotation: [0, 0, 0],
-        isIntersecting: false,
-        color: shaft.defaultColor,
-        visible: true,
-        locked: false
-      });
-    }
-    if (gear) {
-      starter.push({
-        instanceId: `inst-starter-gear`,
-        partId: gear.id,
-        label: `${gear.name} #1`,
-        position: [-19.05, 6.35, 12.7],
-        rotation: [0, 0, 0],
-        lastValidPosition: [-19.05, 6.35, 12.7],
-        lastValidRotation: [0, 0, 0],
-        isIntersecting: false,
-        color: '#dc2626',
-        visible: true,
-        locked: false
-      });
-    }
-    return starter;
+    return starterById('sample').build(catalogList);
   }
 
   const resolveIntersectingInstances = (list, keepInstanceId = null) => {
@@ -855,6 +974,7 @@ export default function App() {
 
   // Keep WebMCP context ref up to date and register WebMCP tools on mount
   webMcpContextRef.current = {
+    mcpEnabled: settings.mcpEnabled,
     catalog,
     instances,
     selectedId,
@@ -941,6 +1061,8 @@ export default function App() {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(active?.tagName) || active?.isContentEditable) {
         return;
       }
+      // A dialog (Settings, Audit) takes the keys while it is open: Esc closes it, nothing else
+      if (document.querySelector('dialog[open]')) return;
       const key = e.key.toLowerCase();
       // Undo: Ctrl/Cmd+Z. Redo: Shift+Ctrl/Cmd+Z or Ctrl+Y
       const mod = e.metaKey || e.ctrlKey;
@@ -1015,35 +1137,150 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `vexiq-assembly-${new Date().toISOString().slice(0, 10)}.vexiq.json`;
+    a.download = exportFileName(currentBuild?.name);
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  const handleImportJson = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // --- Builds: New, Starter, the library, Open from computer (openspec build-library) -------------
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryBuilds, setLibraryBuilds] = useState([]);
+  const closeLibrary = useCallback(() => setLibraryOpen(false), []);
+
+  const refreshLibrary = async () => {
+    if (!libraryAvailable()) return [];
+    try {
+      const list = await listBuilds();
+      setLibraryBuilds(list);
+      return list;
+    } catch {
+      return [];
+    }
+  };
+  /** Every build name in use: the library's and the open build's. */
+  const buildNames = async () => [...(await refreshLibrary()).map((b) => b.name), currentBuildRef.current?.name].filter(Boolean);
+
+  /**
+   * Makes `record` the current build: the open one is saved first (unless it is being deleted), then
+   * its parts, history and view settings come in, and the bridge, other tabs and the assistant follow.
+   */
+  const switchToBuild = async ({ id, name, instances: parts, history: hist, viewport }, { saveCurrent = true } = {}) => {
+    if (saveCurrent) {
+      await saveCurrentBuildNow();
+    } else {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+      latestForSaveRef.current = null;
+    }
+    setPreview(null);
+    setExplodeMode('off');
+    setSelectedId(null);
+    setBuild({ instances: parts, history: loadHistory(hist, parts, { source: 'app', label: 'External change' }) });
+    if (viewport) {
+      if (viewport.transformMode) setTransformMode(viewport.transformMode);
+      if (viewport.snapPitchFactor !== undefined) setSnapPitchFactor(viewport.snapPitchFactor);
+      if (viewport.rotationSnapDeg !== undefined) setRotationSnapDeg(viewport.rotationSnapDeg);
+      if (viewport.showGrid !== undefined) setShowGrid(viewport.showGrid);
+      if (viewport.showConnectors !== undefined) setShowConnectors(viewport.showConnectors);
+      applyViewOptions(viewport);
+    }
+    setCurrentBuild({ id, name });
+    setFocusTrigger((c) => c + 1);
+  };
+
+  const handleNewBuild = async () => {
+    const name = nextBuildName(await buildNames());
+    await switchToBuild({ id: newBuildId(), name, instances: [], history: createHistory([]) });
+    setActionFeedback({ message: `Started ${name}`, isError: false });
+  };
+
+  const handleStarterBuild = async (starterId) => {
+    const starter = starterById(starterId);
+    const parts = starter.build(catalog);
+    const history = recordStep(createHistory([]), [], parts, { source: 'app', label: `Add ${starter.name}` }).history;
+    const name = starterBuildName(await buildNames(), starter.name);
+    await switchToBuild({ id: newBuildId(), name, instances: parts, history });
+    setActionFeedback({ message: `Started ${name}`, isError: false });
+  };
+
+  const handleOpenBuild = async (id) => {
+    if (id === currentBuildRef.current?.id) return;
+    const record = await getBuild(id).catch(() => null);
+    if (!record) {
+      setActionFeedback({ message: "That build couldn't be opened", isError: true });
+      return;
+    }
+    await switchToBuild(record);
+    setLibraryOpen(false);
+  };
+
+  const handleRenameBuild = async (id, name) => {
+    if (id === currentBuildRef.current?.id) {
+      setCurrentBuild({ id, name });
+    } else {
+      const record = await getBuild(id).catch(() => null);
+      if (record) await putBuild({ ...record, name });
+    }
+    // The library list shows the new name once the open build's save lands
+    setTimeout(refreshLibrary, id === currentBuildRef.current?.id ? 1200 : 0);
+  };
+
+  const handleDuplicateBuild = async (id) => {
+    if (id === currentBuildRef.current?.id) await saveCurrentBuildNow();
+    const record = await getBuild(id).catch(() => null);
+    if (!record) return;
+    const now = Date.now();
+    await putBuild({ ...record, id: newBuildId(), name: copyName(await buildNames(), record.name), createdAt: now, updatedAt: now });
+    refreshLibrary();
+  };
+
+  /** Deletes a build from this browser for good (asks first); the open one gives way to the next. */
+  const handleDeleteBuild = async (id) => {
+    const isCurrent = id === currentBuildRef.current?.id;
+    const name = isCurrent ? currentBuildRef.current.name : libraryBuilds.find((b) => b.id === id)?.name || 'this build';
+    if (!window.confirm(`Delete ${name}? This can't be undone.`)) return;
+    if (isCurrent) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+      latestForSaveRef.current = null;
+    }
+    if (libraryAvailable()) await deleteBuild(id).catch(() => {});
+    const remaining = await refreshLibrary();
+    if (isCurrent) {
+      const next = remaining[0] ? await getBuild(remaining[0].id).catch(() => null) : null;
+      if (next) await switchToBuild(next, { saveCurrent: false });
+      else {
+        await switchToBuild(
+          { id: newBuildId(), name: nextBuildName(remaining.map((b) => b.name)), instances: [], history: createHistory([]) },
+          { saveCurrent: false }
+        );
+      }
+    }
+    setActionFeedback({ message: `Deleted ${name}`, isError: false });
+  };
+
+  /** Open from computer…: the file becomes a new build in the library, named after the file. */
+  const handleOpenFile = (file) => {
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const parsed = JSON.parse(String(reader.result));
-        if (Array.isArray(parsed.instances)) {
-          setExplodeMode('off');
-          // Opening a file replaces the build and its history (a file without one starts a new one)
-          setBuild({
-            instances: parsed.instances,
-            history: loadHistory(parsed.history, parsed.instances, { source: 'app', label: 'External change' })
-          });
-          setSelectedId(null);
-          setFocusTrigger((c) => c + 1);
-        }
+        if (!Array.isArray(parsed.instances)) throw new Error('it has no parts list');
+        const name = uniqueName(await buildNames(), fileBuildName(file.name));
+        await switchToBuild({ id: newBuildId(), name, instances: parsed.instances, history: parsed.history });
+        setLibraryOpen(false);
+        setActionFeedback({ message: `Opened ${name}`, isError: false });
       } catch (err) {
-        alert('Invalid .vexiq.json assembly file: ' + err.message);
+        setActionFeedback({ message: `Couldn't open ${file.name}: ${err.message}`, isError: true });
       }
     };
     reader.readAsText(file);
-    e.target.value = '';
   };
+
+  useEffect(() => {
+    if (libraryOpen) refreshLibrary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libraryOpen]);
 
   const mateTargetInst = useMemo(
     () =>
@@ -1133,19 +1370,26 @@ export default function App() {
         <div className="brand">
           <span className="brand-badge">VEX IQ</span>
           <span>3D Robot Modeler</span>
+          <BuildNameField name={currentBuild?.name} onRename={(name) => currentBuild && setCurrentBuild({ ...currentBuild, name })} />
           <span
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 4,
               fontSize: 11,
-              color: mcpConnected ? '#4ade80' : 'var(--text-muted)',
+              color: settings.advanced && settings.mcpEnabled && mcpConnected ? '#4ade80' : 'var(--text-muted)',
               fontWeight: 500
             }}
-            title="Live MCP Server Bridge Status"
+            title={settings.advanced ? 'Parts in this build · live MCP server bridge status' : 'Parts in this build'}
           >
-            <Radio size={12} />
-            {mcpConnected ? `MCP Live • ${catalog.length} Parts` : `${catalog.length} Parts`}
+            {settings.advanced && <Radio size={12} />}
+            {(() => {
+              // The open build's part count (the library's 478 parts show in its own panel)
+              const count = `${instances.length} part${instances.length === 1 ? '' : 's'}`;
+              if (!settings.advanced) return count;
+              if (!settings.mcpEnabled) return `MCP Off • ${count}`;
+              return mcpConnected ? `MCP Live • ${count}` : count;
+            })()}
           </span>
         </div>
 
@@ -1205,98 +1449,36 @@ export default function App() {
             </button>
           </div>
 
-          <div className="toolbar-group" role="group" aria-label="VEX Pitch Snap">
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '0 5px' }}>
-              Pitch:
-            </span>
-            {[
-              { label: '1P', value: 1 },
-              { label: '0.5P', value: 0.5 },
-              { label: '0.25P', value: 0.25 },
-              { label: 'Free', value: 0 }
-            ].map((opt) => (
-              <button
-                key={opt.label}
-                type="button"
-                className={`btn ${snapPitchFactor === opt.value ? 'active' : ''}`}
-                onClick={() => setSnapPitchFactor(opt.value)}
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div className="toolbar-group" role="group" aria-label="Snap and Explode">
+            <ToolbarMenu
+              label="Snap"
+              title="How far a drag moves in one step (VEX pitch = 12.7 mm)"
+              value={snapPitchFactor}
+              onChange={setSnapPitchFactor}
+              options={[
+                { label: '1P', value: 1 },
+                { label: '0.5P', value: 0.5 },
+                { label: '0.25P', value: 0.25 },
+                { label: 'Free', value: 0 }
+              ]}
+            />
+            <ToolbarMenu
+              label="Explode"
+              icon={Expand}
+              title="Spread the parts apart along X, Y, Z or all axes (Shortcut: X)"
+              value={explodeMode}
+              onChange={setExplodeMode}
+              options={[
+                { label: 'Off', value: 'off' },
+                { label: 'X', value: 'x' },
+                { label: 'Y', value: 'y' },
+                { label: 'Z', value: 'z' },
+                { label: 'All', value: 'all' }
+              ]}
+            />
           </div>
 
-          {/* Explode View Controls: Off, X, Y, Z, All */}
-          <div className="toolbar-group" role="group" aria-label="Explode Assembly View">
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: 11,
-                color: 'var(--text-secondary)',
-                padding: '0 6px'
-              }}
-              title="Explode assembly along X, Y, Z, or All axes (Shortcut: X)"
-            >
-              <Expand size={13} />
-              Explode:
-            </span>
-            {[
-              { label: 'Off', value: 'off' },
-              { label: 'X', value: 'x' },
-              { label: 'Y', value: 'y' },
-              { label: 'Z', value: 'z' },
-              { label: 'All', value: 'all' }
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                className={`btn ${explodeMode === opt.value ? 'active' : ''}`}
-                onClick={() => setExplodeMode(opt.value)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="toolbar-group">
-            <button
-              type="button"
-              className={`btn ${showGrid ? 'active' : ''}`}
-              onClick={() => setShowGrid((v) => !v)}
-              title="Toggle VEX 12.7mm Pitch Grid"
-            >
-              <Grid size={14} />
-              Grid
-            </button>
-            <button
-              type="button"
-              className={`btn ${showConnectors ? 'active' : ''}`}
-              onClick={() => setShowConnectors((v) => !v)}
-              title="Preview Analytic Pin/Shaft Hole Axes extracted from STEP file"
-            >
-              <Compass size={14} />
-              Axes
-            </button>
-            <button
-              type="button"
-              className={`btn ${shadows ? 'active' : ''}`}
-              onClick={() => setShadows((v) => !v)}
-              title="Soft shadows from the main light, so surfaces look less flat"
-            >
-              <Sun size={14} />
-              Shadows
-            </button>
-            <button
-              type="button"
-              className={`btn ${ambientOcclusion ? 'active' : ''}`}
-              onClick={() => setAmbientOcclusion((v) => !v)}
-              title="Ambient occlusion: darken creases and inside corners where faces meet (separate from Shadows)"
-            >
-              <Contrast size={14} />
-              AO
-            </button>
+          <div className="toolbar-group" role="group" aria-label="View">
             <button
               type="button"
               className="btn"
@@ -1306,72 +1488,6 @@ export default function App() {
               <Maximize2 size={14} />
               Focus
             </button>
-          </div>
-
-          <div className="toolbar-group" role="group" aria-label="View">
-            <button
-              type="button"
-              className={`btn ${projection === 'orthographic' ? 'active' : ''}`}
-              onClick={() => setProjection((p) => (p === 'perspective' ? 'orthographic' : 'perspective'))}
-              title={
-                viewLayout === 'stereo'
-                  ? 'Stereo always uses perspective; this applies when you leave Stereo (Shortcut: P)'
-                  : 'Switch between perspective and orthographic (Shortcut: P)'
-              }
-            >
-              <Cuboid size={14} />
-              {projection === 'orthographic' ? 'Ortho' : 'Persp'}
-            </button>
-            {[
-              { value: 'single', label: 'Single', icon: Square, title: 'One view' },
-              { value: 'four', label: '4-View', icon: LayoutGrid, title: 'Working view plus front, top and side views' },
-              { value: 'stereo', label: 'Stereo', icon: Glasses, title: 'Side-by-side stereo pair (work in either picture)' }
-            ].map(({ value, label, icon: Icon, title }) => (
-              <button
-                key={value}
-                type="button"
-                className={`btn ${viewLayout === value ? 'active' : ''}`}
-                onClick={() => setViewLayout(value)}
-                title={title}
-              >
-                <Icon size={14} />
-                {label}
-              </button>
-            ))}
-            {viewLayout === 'stereo' && (
-              <>
-                <button
-                  type="button"
-                  className={`btn ${stereoCrossEyed ? 'active' : ''}`}
-                  onClick={() => setStereoCrossEyed((v) => !v)}
-                  title="Swap the images for cross-eyed viewing (off: parallel viewing or a phone VR viewer)"
-                >
-                  <Columns2 size={14} />
-                  Cross-eyed
-                </button>
-                <label className="toolbar-slider" title="Stereo depth: how far apart the two eye positions are">
-                  Depth
-                  <input
-                    type="range"
-                    min="0.25"
-                    max="3"
-                    step="0.25"
-                    value={stereoDepth}
-                    onChange={(e) => setStereoDepth(clampStereoDepth(e.target.value))}
-                  />
-                  <span>{stereoDepth.toFixed(2)}×</span>
-                </label>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={enterImmersive}
-                  title="Fill the screen with the stereo pair, nothing else (Esc to exit)"
-                >
-                  <Fullscreen size={14} />
-                  Full screen
-                </button>
-              </>
-            )}
             <button
               type="button"
               className={`btn ${panelsHidden ? 'active' : ''}`}
@@ -1381,26 +1497,38 @@ export default function App() {
               {panelsHidden ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
               {panelsHidden ? 'Panels' : 'Wide'}
             </button>
+            {viewLayout === 'stereo' && (
+              <button
+                type="button"
+                className={`btn ${viewMenuAt ? 'active' : ''}`}
+                onClick={(e) => {
+                  if (viewMenuAt) {
+                    setViewMenuAt(null);
+                    return;
+                  }
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setViewMenuAt({ x: r.left, y: r.bottom + 4 });
+                }}
+                title="View options (the view cube's menu, which is hidden in Stereo)"
+                aria-haspopup="menu"
+              >
+                <Glasses size={14} />
+                View
+              </button>
+            )}
           </div>
         </div>
 
         {/* Scene Actions: Starter, Export, Import */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => {
-              setExplodeMode('off');
-              const starter = buildStarterAssembly(catalog);
-              setInstances(starter, { label: 'Load starter assembly' });
-              setSelectedId(starter[1]?.instanceId || starter[0]?.instanceId || null);
-              setFocusTrigger((c) => c + 1);
-            }}
-            title="Reset to sample starter parts"
-          >
-            <Sparkles size={14} />
-            Starter
-          </button>
+          <FileMenu
+            starters={STARTERS}
+            onNew={handleNewBuild}
+            onStarter={handleStarterBuild}
+            onLoad={() => setLibraryOpen(true)}
+            onExport={handleExportJson}
+            onDeleteCurrent={() => currentBuild && handleDeleteBuild(currentBuild.id)}
+          />
           <button
             type="button"
             className="btn btn-outline"
@@ -1413,28 +1541,13 @@ export default function App() {
           </button>
           <button
             type="button"
-            className="btn btn-outline"
-            onClick={handleExportJson}
-            disabled={instances.length === 0}
+            className={`btn btn-outline ${settingsOpen ? 'active' : ''}`}
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+            aria-label="Settings"
           >
-            <Download size={14} />
-            Save
+            <SettingsIcon size={14} />
           </button>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload size={14} />
-            Load
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            style={{ display: 'none' }}
-            onChange={handleImportJson}
-          />
         </div>
       </header>
 
@@ -1517,7 +1630,13 @@ export default function App() {
 
         {/* Center 3D Viewport */}
         <main className={`viewport-container layout-${viewLayout}`}>
+          {actionFeedback && (
+            <div className={`message-strip ${actionFeedback.isError ? 'error' : ''}`} role="status" aria-live="polite">
+              {actionFeedback.message}
+            </div>
+          )}
           <Viewport3D
+            onCubeMenu={setViewMenuAt}
             instances={preview ? preview.parts : instances}
             catalogMap={catalogMap}
             selectedId={preview ? null : selectedId}
@@ -1937,6 +2056,9 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Advanced options only (openspec app-settings) */}
+                {settings.advanced && (
+                <>
                 {/* Smart Assembly & Fastening Tools (Manual CAD Workflow) */}
                 <div className="field-group">
                   <div className="field-label">
@@ -1944,11 +2066,6 @@ export default function App() {
                     <span style={{ color: '#38bdf8' }}>BVH Verified</span>
                   </div>
 
-                  {actionFeedback && (
-                    <div className={`action-toast ${actionFeedback.isError ? 'error' : ''}`}>
-                      {actionFeedback.message}
-                    </div>
-                  )}
 
                   <div className="smart-tools-card">
                     {/* 1. Auto-Fasten Joint */}
@@ -2358,17 +2475,62 @@ export default function App() {
                     )}
                   </div>
                 </div>
+                </>
+                )}
               </div>
             ) : (
               <div className="empty-state">
-                Select a part in the 3D viewport or Assembly Outliner to inspect its VEX Pitch
-                coordinates, use Auto-Fasten / Port Mating / Gear Train tools, or view its semantic
-                ports.
+                Select a part in the 3D view or the Assembly Outliner to see where it is, turn it
+                and change its color.
               </div>
             )}
           </section>
         </aside>
       </div>
+
+      {viewMenuAt && (
+        <ViewMenu
+          at={viewMenuAt}
+          onClose={closeViewMenu}
+          view={{
+            projection,
+            setProjection,
+            viewLayout,
+            setViewLayout,
+            stereoCrossEyed,
+            setStereoCrossEyed,
+            stereoDepth,
+            setStereoDepth: (v) => setStereoDepth(clampStereoDepth(v)),
+            onFullScreen: enterImmersive,
+            showGrid,
+            setShowGrid,
+            showConnectors,
+            setShowConnectors
+          }}
+        />
+      )}
+      <LibraryDialog
+        open={libraryOpen}
+        onClose={closeLibrary}
+        builds={libraryBuilds}
+        currentId={currentBuild?.id}
+        available={libraryAvailable()}
+        onOpen={handleOpenBuild}
+        onRename={handleRenameBuild}
+        onDuplicate={handleDuplicateBuild}
+        onDelete={handleDeleteBuild}
+        onOpenFile={handleOpenFile}
+      />
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={closeSettings}
+        settings={settings}
+        onChange={updateSettings}
+        shadows={shadows}
+        setShadows={setShadows}
+        ambientOcclusion={ambientOcclusion}
+        setAmbientOcclusion={setAmbientOcclusion}
+      />
 
       {/* Native Light-Dismiss Modal Dialog for 6-Stage Mechanical Audit & 3-View Blueprint */}
       <dialog

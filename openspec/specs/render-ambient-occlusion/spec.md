@@ -6,7 +6,7 @@ An optional ambient occlusion effect that darkens creases and inside corners whe
 ## Requirements
 
 ### Requirement: Ambient occlusion option
-A toolbar toggle named AO SHALL turn ambient occlusion on and off. It SHALL be off by default and independent of the Shadows toggle: any of the four combinations SHALL work.
+An Ambient occlusion switch in the Settings panel's Display section (see app-settings) SHALL turn ambient occlusion on and off. It SHALL be off by default and independent of the Shadows toggle: any of the four combinations SHALL work.
 
 When it is on:
 - inside corners, creases and gaps between nearby faces of parts SHALL be darkened softly, fading out over a few millimetres from the corner;
@@ -22,7 +22,7 @@ Screenshots for the assistant SHALL NOT include ambient occlusion.
 When it is off, the picture SHALL be exactly as it was without this option.
 
 #### Scenario: Turn AO on
-- **WHEN** the user clicks AO with a beam on screen
+- **WHEN** the user turns Ambient occlusion on in Settings with a beam on screen
 - **THEN** the base of each hole's raised ring and the inside corners of the beam's pockets are darker, and its flat faces are unchanged
 
 #### Scenario: Independent of shadows

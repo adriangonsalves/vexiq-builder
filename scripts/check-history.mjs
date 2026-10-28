@@ -105,6 +105,30 @@ const session = () => {
   check('diff: reorder detected', diffParts([a, b], [b, a]).some((o) => o.op === 'reorder'));
 }
 
+// --- Linear history (the app's default History setting) --------------------------------------------
+{
+  const s = session();
+  const A = makePart('A');
+  const B = makePart('B');
+  const C = makePart('C');
+  const D = makePart('D');
+  s.commit([A], { linear: true });
+  s.commit([A, B], { linear: true });
+  s.commit([A, B, C], { linear: true });
+  s.undo(3);
+  s.redo(2);
+  check('linear: undo three, redo two gives A,B', ids(s.parts) === ids([A, B]));
+  s.redo();
+  check('linear: one more redo brings C back', ids(s.parts) === ids([A, B, C]));
+  s.undo(2);
+  const r = s.commit([A, D], { linear: true });
+  check('linear: undo twice then add gives A,D', ids(s.parts) === ids([A, D]));
+  check('linear: B and C are no longer in the history', s.history.steps.length === 2 && !r.branched, JSON.stringify(s.history.steps.map((x) => x.label)));
+  check('linear: redo is unavailable', redo(s.history, s.parts) === null && headPosition(s.history).currentStep === headPosition(s.history).totalSteps);
+  check('linear: no branch is left behind', branchesAt(s.history, s.history.steps[0].id).length <= 1);
+  check('linear: the history replays to the parts', ids(replay(s.history)) === ids([A, D]));
+}
+
 // --- 1.2 history tree -----------------------------------------------------------------------------
 {
   const s = session();

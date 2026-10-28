@@ -6,6 +6,9 @@ dist/
 VEX-IQ-All-Parts/
 VEX-IQ-All-Control/
 
+# App settings (per machine, see src/utils/appSettings.js)
+public/app-settings.json
+
 # Local Environment & Secrets
 .env
 .env.local

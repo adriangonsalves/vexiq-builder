@@ -6,7 +6,7 @@ An optional, subtle shadow pass that makes the build look less flat: parts shade
 ## Requirements
 
 ### Requirement: Shadows option
-A toolbar toggle named Shadows SHALL turn shadows on and off. It SHALL be off by default.
+A Shadows switch in the Settings panel's Display section (see app-settings) SHALL turn shadows on and off. It SHALL be off by default.
 
 When shadows are on:
 - the main light SHALL cast soft shadows from every visible part onto other parts and onto itself;
@@ -23,7 +23,7 @@ Shadows SHALL show in every view: perspective and orthographic, the four-view sm
 When shadows are off, the picture SHALL look exactly as it did before this option existed.
 
 #### Scenario: Turn shadows on
-- **WHEN** the user clicks Shadows with a robot on screen
+- **WHEN** the user turns Shadows on in Settings with a robot on screen
 - **THEN** the parts shade each other where one blocks the main light, and a soft shadow appears on a dark floor patch under the robot
 
 #### Scenario: Shadows follow a drag

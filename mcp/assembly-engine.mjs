@@ -20,6 +20,7 @@ import {
 } from '../src/utils/pinHoleAlignment.js';
 import { applyOps, diffParts, fromLegacy, loadHistory, recordStep, summarize } from '../src/utils/buildHistory.js';
 import { hubFrame, hubMatrix, splitHubTriangles } from '../src/utils/motorHub.js';
+import { isLinearHistory, normalizeSettings } from '../src/utils/appSettings.js';
 import { isMeshingGear, meshTurn, quaternionToEulerDeg, turnQuaternion, worldToothed } from '../src/utils/gearMeshing.js';
 import { squareFitRoll } from '../src/utils/shaftGroups.js';
 import { settlePlacement, turnAboutLine } from '../src/utils/placementFit.js';
@@ -29,6 +30,17 @@ export const ROOT_DIR = path.resolve(__dirname, '..');
 export const CATALOG_PATH = path.join(ROOT_DIR, 'public', 'catalog.json');
 // VEXIQ_STATE_PATH lets checks run against a temporary assembly file instead of the user's
 export const STATE_PATH = process.env.VEXIQ_STATE_PATH || path.join(ROOT_DIR, 'public', 'assembly-state.json');
+// The app's settings (openspec app-settings), shared with the app through its bridge
+export const SETTINGS_PATH = process.env.VEXIQ_SETTINGS_PATH || path.join(ROOT_DIR, 'public', 'app-settings.json');
+
+/** The app's settings, read fresh on every call (defaults when the file is missing or bad). */
+export function readAppSettings() {
+  try {
+    return normalizeSettings(JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')));
+  } catch {
+    return normalizeSettings(null);
+  }
+}
 export const VEX_PITCH_MM = 12.7;
 
 let catalogCache = null;
@@ -435,7 +447,8 @@ export async function writeAssemblyState(nextState, options = {}) {
       source: 'mcp',
       label: (ops) => mcpStepLabel(store?.toolName, ops),
       mergeKey: store?.callId ? `mcp:${store.callId}` : undefined,
-      mergeWindowMs: Infinity
+      mergeWindowMs: Infinity,
+      linear: isLinearHistory(readAppSettings())
     });
     history = recorded.history;
     if (store) {

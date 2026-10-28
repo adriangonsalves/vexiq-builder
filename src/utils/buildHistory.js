@@ -318,17 +318,35 @@ const resolveLabel = (label, ops, parts, style) => {
   return summarize(ops, { style, parts });
 };
 
+/** `history` without every step below `id` (the undone steps), and redo pointers into them. */
+function dropBelow(history, id) {
+  const dropped = new Set();
+  const stack = childrenOf(history, id).map((c) => c.id);
+  while (stack.length) {
+    const next = stack.pop();
+    dropped.add(next);
+    for (const c of childrenOf(history, next)) stack.push(c.id);
+  }
+  if (dropped.size === 0) return history;
+  const activeChild = Object.fromEntries(
+    Object.entries(history.activeChild).filter(([key, child]) => !dropped.has(key) && !dropped.has(child))
+  );
+  return { ...history, steps: history.steps.filter((s) => !dropped.has(s.id)), activeChild };
+}
+
 /**
  * Records the change from `before` to `after` as a step after the head.
  * Returns { history, step, merged, branched }; step is null when nothing in the build changed.
  * With `mergeKey`, a change within `mergeWindowMs` of a leaf head with the same key and source
  * amends that head instead (typing in a field, repeated nudges, several writes in one MCP call).
+ * With `linear` (the app's default History setting), a change after undo drops the undone steps
+ * instead of keeping them as a branch.
  */
 export function recordStep(
   history,
   before,
   after,
-  { source = 'app', label, mergeKey, at = Date.now(), mergeWindowMs = MERGE_WINDOW_MS } = {}
+  { source = 'app', label, mergeKey, at = Date.now(), mergeWindowMs = MERGE_WINDOW_MS, linear = false } = {}
 ) {
   const head = stepById(history, history.headId);
   const canMerge =
@@ -368,6 +386,7 @@ export function recordStep(
   const ops = diffParts(before, after);
   if (ops.length === 0) return { history, step: null, merged: false, branched: false };
 
+  if (linear) history = dropBelow(history, history.headId);
   const branched = childrenOf(history, history.headId).length > 0;
   const style = source === 'mcp' ? 'mcp' : 'app';
   const step = {

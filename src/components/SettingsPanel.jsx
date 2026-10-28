@@ -1,0 +1,119 @@
+import React, { useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
+
+/** One labeled on/off switch row. */
+function SwitchRow({ label, hint, checked, onChange }) {
+  return (
+    <label className="settings-row">
+      <span className="settings-row-text">
+        <span className="settings-row-label">{label}</span>
+        {hint && <span className="settings-row-hint">{hint}</span>}
+      </span>
+      <input type="checkbox" role="switch" className="settings-switch" checked={Boolean(checked)} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  );
+}
+
+/**
+ * The Settings panel (openspec app-settings): Display (shadows, AO), History, Assistant (MCP) and
+ * Advanced options. History's choice and the Assistant section only show with advanced options on.
+ * Every change applies at once; closing (button, Esc, a click outside) changes nothing.
+ */
+export default function SettingsPanel({ open, onClose, settings, onChange, shadows, setShadows, ambientOcclusion, setAmbientOcclusion }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return undefined;
+    const onCloseEvent = () => onClose();
+    // A click on the backdrop (outside the panel) closes it, also where closedby isn't supported
+    const onClick = (event) => {
+      if (event.target !== dialog) return;
+      const r = dialog.getBoundingClientRect();
+      const inside = r.top <= event.clientY && event.clientY <= r.bottom && r.left <= event.clientX && event.clientX <= r.right;
+      if (!inside) dialog.close();
+    };
+    dialog.addEventListener('close', onCloseEvent);
+    dialog.addEventListener('click', onClick);
+    return () => {
+      dialog.removeEventListener('close', onCloseEvent);
+      dialog.removeEventListener('click', onClick);
+    };
+  }, [onClose]);
+
+  return (
+    <dialog ref={ref} closedby="any" className="settings-dialog" aria-labelledby="settingsTitle">
+      <div className="settings-header">
+        <strong id="settingsTitle">Settings</strong>
+        <button type="button" className="icon-btn" onClick={() => ref.current?.close()} aria-label="Close settings" title="Close (Esc)">
+          <X size={16} />
+        </button>
+      </div>
+      <div className="settings-body">
+        <section className="settings-section">
+          <h3>Display</h3>
+          <SwitchRow label="Shadows" hint="Soft shadows from the main light" checked={shadows} onChange={setShadows} />
+          <SwitchRow
+            label="Ambient occlusion"
+            hint="Darkens creases and inside corners (uses more graphics power)"
+            checked={ambientOcclusion}
+            onChange={setAmbientOcclusion}
+          />
+        </section>
+
+        <section className="settings-section">
+          <h3>History</h3>
+          {settings.advanced ? (
+            <>
+              <label className="settings-choice">
+                <input type="radio" name="history-mode" checked={settings.history === 'linear'} onChange={() => onChange({ history: 'linear' })} />
+                <span>
+                  <span className="settings-row-label">Linear</span>
+                  <span className="settings-row-hint">Undo and redo as usual; a change after undo drops the undone steps</span>
+                </span>
+              </label>
+              <label className="settings-choice">
+                <input type="radio" name="history-mode" checked={settings.history === 'branches'} onChange={() => onChange({ history: 'branches' })} />
+                <span>
+                  <span className="settings-row-label">Keep branches</span>
+                  <span className="settings-row-hint">A change after undo starts a branch; the undone steps stay in the timeline</span>
+                </span>
+              </label>
+            </>
+          ) : (
+            <p className="settings-note">Undo and redo as usual. A change after undo drops the undone steps.</p>
+          )}
+        </section>
+
+        {settings.advanced && (
+          <section className="settings-section">
+            <h3>Assistant (MCP)</h3>
+            <SwitchRow
+              label="Let the assistant change the build"
+              hint="Off: the AI assistant can still look at the build, but can't change it"
+              checked={settings.mcpEnabled}
+              onChange={(v) => onChange({ mcpEnabled: v })}
+            />
+          </section>
+        )}
+
+        <section className="settings-section">
+          <h3>Advanced options</h3>
+          <SwitchRow
+            label="Show advanced options"
+            hint="Smart assembly tools, part metadata, history branches and assistant settings"
+            checked={settings.advanced}
+            onChange={(v) => onChange({ advanced: v })}
+          />
+        </section>
+      </div>
+    </dialog>
+  );
+}

@@ -15,10 +15,21 @@ import {
   mirrorSubassembly
 } from './mcp/assembly-engine.mjs';
 import { applyOps, diffParts, loadHistory, mergeBrowserSave, recordStep, summarize } from './src/utils/buildHistory.js';
+import { MCP_OFF_MESSAGE, isLinearHistory, normalizeSettings } from './src/utils/appSettings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // VEXIQ_STATE_PATH (as for the MCP engine) lets a test server use its own build file
 const STATE_FILE = process.env.VEXIQ_STATE_PATH || path.join(__dirname, 'public', 'assembly-state.json');
+// App settings shared with the MCP server (openspec app-settings); VEXIQ_SETTINGS_PATH as for the engine
+const SETTINGS_FILE = process.env.VEXIQ_SETTINGS_PATH || path.join(__dirname, 'public', 'app-settings.json');
+
+function readSettingsFile() {
+  try {
+    return normalizeSettings(JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')));
+  } catch {
+    return normalizeSettings(null);
+  }
+}
 
 /**
  * Vite plugin providing a live two-way HTTP + Server-Sent Events (SSE) bridge
@@ -39,6 +50,12 @@ function vexiqMcpBridgePlugin() {
     } catch {
       return null;
     }
+  }
+
+  // Settings changed in one tab reach the others as a `settings` event
+  function broadcastSettings(settings, clientId = undefined) {
+    const msg = `data: ${JSON.stringify({ type: 'settings', clientId, settings })}\n\n`;
+    for (const client of sseClients) client.write(msg);
   }
 
   // clientId: the browser tab that sent the change, so only that tab skips its own echo
@@ -65,6 +82,32 @@ function vexiqMcpBridgePlugin() {
 
         req.on('close', () => {
           sseClients.delete(res);
+        });
+      });
+
+      server.middlewares.use('/api/settings', (req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        if (req.method === 'GET') {
+          res.end(JSON.stringify(readSettingsFile()));
+          return;
+        }
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end(JSON.stringify({ ok: false, error: 'Method not allowed' }));
+          return;
+        }
+        let body = '';
+        req.on('data', (chunk) => (body += chunk));
+        req.on('end', () => {
+          try {
+            const settings = normalizeSettings({ ...readSettingsFile(), ...JSON.parse(body || '{}') });
+            fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+            broadcastSettings(settings, req.headers['x-client-id']);
+            res.end(JSON.stringify({ ok: true, settings }));
+          } catch (err) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ ok: false, error: err.message }));
+          }
         });
       });
 
@@ -102,7 +145,8 @@ function vexiqMcpBridgePlugin() {
                 diffParts(baseInstances, saved.instances).length > 0 ? applyOps(saved.instances, ops) : nextState.instances;
               const { history } = recordStep(saved.history, saved.instances, instances, {
                 source: 'action',
-                label: (stepOps) => `${action}: ${summarize(stepOps)}`
+                label: (stepOps) => `${action}: ${summarize(stepOps)}`,
+                linear: isLinearHistory(readSettingsFile())
               });
               return Object.assign(nextState, { instances, history, historyRev: history.rev });
             };
@@ -449,6 +493,13 @@ function vexiqMcpBridgePlugin() {
             try {
               const parsed = JSON.parse(body);
               const source = req.headers['x-mcp-source'] || 'unknown';
+              // The assistant turned off in Settings: the open app takes nothing from it
+              if (source !== 'browser' && readSettingsFile().mcpEnabled === false) {
+                res.statusCode = 423;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ ok: false, error: MCP_OFF_MESSAGE }));
+                return;
+              }
               let payload = { ...parsed, updatedAt: new Date().toISOString() };
               if (source === 'browser') {
                 // Keep the saved history when the browser sends only parts; refuse a save built on

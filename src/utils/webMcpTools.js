@@ -1,3 +1,4 @@
+import { MCP_OFF_MESSAGE } from './appSettings.js';
 const VEX_PITCH_MM = 12.7;
 const TRANSFORM_MODES = ['translate', 'rotate'];
 const VIEW_OPTIONS = {
@@ -228,6 +229,11 @@ export function registerVexIqWebMcpTools(contextRef) {
   ];
 
   for (const tool of tools) {
+    // With the assistant turned off in Settings, tools that change things refuse (openspec mcp-app-link)
+    if (!tool.annotations?.readOnlyHint) {
+      const execute = tool.execute;
+      tool.execute = (...args) => (contextRef.current?.mcpEnabled === false ? { error: MCP_OFF_MESSAGE } : execute.apply(tool, args));
+    }
     Promise.resolve(document.modelContext.registerTool(tool, options)).catch(() => {
       // Ignore registration errors in environments with partial WebMCP support
     });

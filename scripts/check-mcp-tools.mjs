@@ -36,6 +36,10 @@ const emptyState = () => ({
 const writeState = (state) => fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
 const readState = () => JSON.parse(fs.readFileSync(statePath, 'utf8'));
 writeState(emptyState());
+// The app's settings: branches kept, so the branch checks below apply (linear is checked separately)
+const settingsPath = path.join(tmpDir, 'app-settings.json');
+const writeSettings = (settings) => fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+writeSettings({ advanced: true, history: 'branches', mcpEnabled: true });
 
 // --- Stub app bridge: counts POSTs, fakes connected browsers, answers screenshot requests -------
 const bridge = {
@@ -83,7 +87,7 @@ const startBridge = () => new Promise((r) => { bridge.running = true; stub.liste
 // --- MCP server over stdio ----------------------------------------------------------------------
 const server = spawn(process.execPath, [path.join(ROOT, 'mcp', 'vexiq-mcp-server.mjs')], {
   cwd: ROOT,
-  env: { ...process.env, VEXIQ_STATE_PATH: statePath, VEXIQ_APP_PORT: String(bridgePort) },
+  env: { ...process.env, VEXIQ_STATE_PATH: statePath, VEXIQ_SETTINGS_PATH: settingsPath, VEXIQ_APP_PORT: String(bridgePort) },
   stdio: ['pipe', 'pipe', 'inherit']
 });
 let nextId = 1;
@@ -707,6 +711,45 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   );
   const asm1 = (await call('get_assembly')).data;
   check('get_assembly shows the turned hub angle', asm1?.instances?.find((i) => i.instanceId === motorId)?.socketAngleDeg === hubAngle);
+}
+
+// ---------------------------------------------------------------------------
+// App settings: linear history and the assistant turned off (openspec app-settings, mcp-app-link)
+// ---------------------------------------------------------------------------
+{
+  writeSettings({ advanced: false, history: 'linear', mcpEnabled: true });
+  writeState(emptyState());
+  await call('place_part', { partQuery: '1x6 Beam', label: 'L1', position: [0, 0, 0] });
+  await call('place_part', { partQuery: '1x6 Beam', label: 'L2', position: [0, 30, 0] });
+  await call('undo');
+  const res = await call('place_part', { partQuery: '1x6 Beam', label: 'L3', position: [0, 60, 0] });
+  const line = currentLine(readState().history).map((st) => st.label);
+  check(
+    'linear history: an MCP change after undo drops the undone step and reports no branch',
+    readState().history.steps.length === 2 && !res.data?.historyNote && line.join('|') === 'place_part: L1|place_part: L3',
+    JSON.stringify({ steps: readState().history.steps.map((st) => st.label), note: res.data?.historyNote })
+  );
+
+  writeSettings({ advanced: false, history: 'linear', mcpEnabled: false });
+  const before = fs.readFileSync(statePath, 'utf8');
+  const refused = await callRaw('place_part', { partQuery: '1x6 Beam', label: 'Off', position: [0, 90, 0] });
+  check(
+    'assistant off: place_part refuses with the Settings message and changes nothing',
+    refused.isError && /turned off in the app's Settings/.test(refused.data?.error || '') && fs.readFileSync(statePath, 'utf8') === before,
+    JSON.stringify(refused.data)
+  );
+  const undoRefused = await callRaw('undo');
+  check('assistant off: undo refuses too', undoRefused.isError && fs.readFileSync(statePath, 'utf8') === before);
+  const viewRefused = await callRaw('configure_viewport', { showGrid: false });
+  check('assistant off: configure_viewport refuses', viewRefused.isError);
+  const asm = await callRaw('get_assembly');
+  check('assistant off: get_assembly still answers', !asm.isError && asm.data?.instanceCount === 2, JSON.stringify(asm.data)?.slice(0, 120));
+  const found = await callRaw('search_parts', { query: 'beam' });
+  check('assistant off: search_parts still answers', !found.isError);
+
+  writeSettings({ advanced: false, history: 'linear', mcpEnabled: true });
+  const back = await call('place_part', { partQuery: '1x6 Beam', label: 'On', position: [0, 120, 0] });
+  check('assistant back on: place_part works again', back.data?.ok && readState().instances.some((i) => i.label === 'On'));
 }
 
 // ---------------------------------------------------------------------------

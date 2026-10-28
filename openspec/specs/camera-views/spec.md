@@ -6,7 +6,7 @@ Lets the user switch the main view between perspective and orthographic, and tur
 ## Requirements
 
 ### Requirement: Perspective and orthographic projection
-The main view SHALL have two projections: perspective (the default) and orthographic, where parallel edges stay parallel at any depth. A toolbar button and the `P` key SHALL switch between them. The button SHALL show which one is active.
+The main view SHALL have two projections: perspective (the default) and orthographic, where parallel edges stay parallel at any depth. The view cube's menu (see view-cube-menu) and the `P` key SHALL switch between them. The menu SHALL show which one is active.
 
 On a switch, the view SHALL keep:
 - the same orbit target and view direction;
@@ -25,7 +25,7 @@ In both projections, these SHALL behave the same:
 
 #### Scenario: Switch to orthographic
 - **WHEN** the user presses `P` in perspective
-- **THEN** the view becomes orthographic, the parts stay centered where they were at about the same size, and the toolbar shows Orthographic
+- **THEN** the view becomes orthographic, the parts stay centered where they were at about the same size, and the cube menu shows Orthographic
 
 #### Scenario: Edit in orthographic
 - **WHEN** the view is orthographic and the user drags a pin with the Move gizmo near a beam hole
@@ -69,7 +69,7 @@ Clicking the cube SHALL turn the camera like the axis keys:
 - an edge looks from halfway between its two faces;
 - a corner looks from the diagonal between its three faces.
 
-Hovering a face, edge or corner SHALL highlight it.
+Hovering a face, edge or corner SHALL highlight it. Dragging on the cube, double-clicking a face and right-clicking the cube are described in view-cube-menu.
 
 The cube SHALL be shown in single and four-view layouts. It SHALL NOT be shown in stereo, in the small views or in screenshots.
 

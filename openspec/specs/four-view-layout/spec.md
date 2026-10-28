@@ -6,7 +6,7 @@ Shows one large working view next to three smaller orthographic views along X, Y
 ## Requirements
 
 ### Requirement: Four-view layout
-A toolbar layout choice SHALL switch between Single, Four-view and Stereo.
+A layout choice in the view cube's menu (see view-cube-menu) SHALL switch between Single, Four-view and Stereo. In Stereo, where the cube is hidden, the same menu SHALL open from a View button in the toolbar.
 
 In Four-view, the viewport SHALL show:
 - the large working view on the left, taking most of the width;

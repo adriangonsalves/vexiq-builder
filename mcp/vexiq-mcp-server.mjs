@@ -18,10 +18,12 @@ import {
   mirrorSubassembly,
   applyPosePatches,
   placeParts,
+  readAppSettings,
   settlePlacedInstance,
   readAssemblyState,
   writeAssemblyState
 } from './assembly-engine.mjs';
+import { MCP_OFF_MESSAGE } from '../src/utils/appSettings.js';
 import {
   branchesAt,
   currentLine,
@@ -630,7 +632,14 @@ const TOOLS = [
   }
 ];
 
+// Tools that only read: they still answer with the assistant turned off in the app's Settings
+const READ_ONLY_TOOLS = new Set(['search_parts', 'get_part_details', 'get_assembly', 'get_history', 'audit_assembly', 'capture_viewport_views']);
+
 async function executeTool(name, args = {}) {
+  // The app's Settings can turn the assistant off: then nothing it does changes the build
+  if (!READ_ONLY_TOOLS.has(name) && readAppSettings().mcpEnabled === false) {
+    return { isError: true, ok: false, error: MCP_OFF_MESSAGE };
+  }
   const { catalog, catalogById } = getCatalog();
 
   if (name === 'search_parts') {

@@ -1222,6 +1222,7 @@ export default function Viewport3D({
   onToggleRotateRequest,
   collisionRecheck,
   onPickStatus,
+  onCubeMenu,
   onInsertCopy,
   projection = 'perspective',
   viewLayout = 'single',
@@ -1271,6 +1272,8 @@ export default function Viewport3D({
   const pickModeRef = useRef(null);
   const pickOverlayRef = useRef(null);
   const copyPointerRef = useRef(null); // canvas px of the pointer over the viewport, for the copy preview
+  const onCubeMenuRef = useRef(onCubeMenu);
+  onCubeMenuRef.current = onCubeMenu;
   const onPickStatusRef = useRef(onPickStatus);
   onPickStatusRef.current = onPickStatus;
   const onInsertCopyRef = useRef(onInsertCopy);
@@ -3450,6 +3453,7 @@ export default function Viewport3D({
     // Capture phase, so Esc only dismisses the arrows (or unselects the wheel ring) and doesn't reach
     // App's deselect handler. Esc in an angle field is handled by the field itself.
     const handleKeyDownCapture = (e) => {
+      if (document.querySelector('dialog[open]')) return; // Settings or Audit is open: its keys
       if ((e.key === 'Control' || e.key === 'Meta') && !e.repeat && !pickModeRef.current && copyPointerRef.current) {
         if (startCopy()) updatePickHover(copyPointerRef.current.x, copyPointerRef.current.y);
       }
@@ -3558,43 +3562,110 @@ export default function Viewport3D({
     };
     // A press on the cube itself is the cube's (capture phase, ahead of the gizmo, rings, orbit and
     // selection); a press in its square but off the cube falls through to the parts behind
-    let cubePress = null; // { index, x, y }
+    let cubePress = null; // { index, x, y, lastX, lastY, dragging, pointerId }
     let lastCubeClickAt = -Infinity;
-    const handleCubePointerDown = (e) => {
-      if (!cubeShown() || e.button !== 0) return;
+    let lastCubeClick = null; // { index, at } for double-clicks
+    const CUBE_DRAG_PX = 5;
+    const CUBE_DOUBLE_CLICK_MS = 350;
+    const cubeHit = (e) => {
+      if (!cubeShown()) return -1;
       const ndc = cubeNdc(e);
-      const index = ndc ? viewCube.pick(ndc) : -1;
+      return ndc ? viewCube.pick(ndc) : -1;
+    };
+    /** Orbits the active camera about the orbit target, as dragging empty space does. */
+    const orbitBy = (dx, dy) => {
+      const cam = cameraRef.current;
+      const controls = orbitRef.current;
+      if (!cam || !controls) return;
+      const height = inputEl.clientHeight || 1;
+      const offset = cam.position.clone().sub(controls.target);
+      const sph = new THREE.Spherical().setFromVector3(offset);
+      sph.theta -= (2 * Math.PI * dx) / height;
+      sph.phi = THREE.MathUtils.clamp(sph.phi - (2 * Math.PI * dy) / height, Math.max(0.0001, controls.minPolarAngle), Math.min(Math.PI - 0.0001, controls.maxPolarAngle));
+      cam.position.copy(controls.target).add(offset.setFromSpherical(sph));
+      cam.lookAt(controls.target);
+      controls.update();
+    };
+    const handleCubePointerDown = (e) => {
+      const index = cubeHit(e);
       if (index < 0) return;
+      // A right press on the cube is the cube's (its menu), never the part behind it
+      if (e.button === 2) {
+        e.stopImmediatePropagation();
+        return;
+      }
+      if (e.button !== 0) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      cubePress = { index, x: e.clientX, y: e.clientY };
+      cubePress = { index, x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, dragging: false, pointerId: e.pointerId };
+      try {
+        inputEl.setPointerCapture(e.pointerId); // the drag goes on when the pointer leaves the cube
+      } catch {
+        // pointer already gone
+      }
     };
     const handleCubePointerUp = (e) => {
       if (!cubePress) return;
       e.stopImmediatePropagation();
       const press = cubePress;
       cubePress = null;
+      try {
+        inputEl.releasePointerCapture(press.pointerId);
+      } catch {
+        // not captured
+      }
       lastCubeClickAt = performance.now();
-      if (Math.hypot(e.clientX - press.x, e.clientY - press.y) <= 5) animateViewTo(viewCube.direction(press.index));
+      if (press.dragging) {
+        lastCubeClick = null;
+        return;
+      }
+      // A second click on the same face, edge or corner looks from the opposite side
+      const now = performance.now();
+      const double = lastCubeClick && lastCubeClick.index === press.index && now - lastCubeClick.at <= CUBE_DOUBLE_CLICK_MS;
+      lastCubeClick = double ? null : { index: press.index, at: now };
+      const dir = viewCube.direction(press.index);
+      animateViewTo(double ? dir.clone().negate() : dir);
+    };
+    const handleCubeContextMenu = (e) => {
+      if (cubeHit(e) < 0) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      onCubeMenuRef.current?.({ x: e.clientX, y: e.clientY });
     };
     let cubeHovered = false;
     const handleCubePointerMove = (e) => {
-      if (e.buttons !== 0 && !cubePress) return; // an orbit or drag passing over the cube
+      if (cubePress) {
+        e.stopImmediatePropagation();
+        if (!cubePress.dragging && Math.hypot(e.clientX - cubePress.x, e.clientY - cubePress.y) > CUBE_DRAG_PX) {
+          cubePress.dragging = true;
+        }
+        if (cubePress.dragging) {
+          orbitBy(e.clientX - cubePress.lastX, e.clientY - cubePress.lastY);
+          inputEl.style.cursor = 'grabbing';
+        }
+        cubePress.lastX = e.clientX;
+        cubePress.lastY = e.clientY;
+        return;
+      }
+      if (e.buttons !== 0) return; // an orbit or drag passing over the cube
       const ndc = cubeShown() ? cubeNdc(e) : null;
       const index = ndc ? viewCube.pick(ndc) : -1;
       viewCube.setHover(index);
       if (index >= 0) {
         cubeHovered = true;
+        inputEl.title = 'Click: look from this side · double-click: the opposite side · drag: turn the view · right-click: view options';
         inputEl.style.cursor = 'pointer';
         e.stopImmediatePropagation(); // no hole hover or gizmo highlight under the cube
       } else if (cubeHovered) {
         cubeHovered = false;
+        inputEl.title = '';
         inputEl.style.cursor = '';
       }
     };
     inputEl.addEventListener('pointerdown', handleCubePointerDown, true);
     inputEl.addEventListener('pointerup', handleCubePointerUp, true);
     inputEl.addEventListener('pointermove', handleCubePointerMove, true);
+    inputEl.addEventListener('contextmenu', handleCubeContextMenu, true);
 
     inputEl.addEventListener('pointerdown', trackAltKey, true);
     inputEl.addEventListener('pointermove', trackAltKey, true);
@@ -4119,6 +4190,7 @@ export default function Viewport3D({
       inputEl.removeEventListener('pointerdown', handleCubePointerDown, true);
       inputEl.removeEventListener('pointerup', handleCubePointerUp, true);
       inputEl.removeEventListener('pointermove', handleCubePointerMove, true);
+      inputEl.removeEventListener('contextmenu', handleCubeContextMenu, true);
       viewCube.dispose();
       for (const { composer, aoPass } of aoSlots.values()) {
         aoPass.dispose();
