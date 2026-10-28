@@ -4,7 +4,9 @@ dist/
 
 # Raw CAD Source Assets (500MB+ STEP files; GLB meshes in public/models/ are tracked)
 VEX-IQ-All-Parts/
+VEX-IQ-All-Parts
 VEX-IQ-All-Control/
+VEX-IQ-All-Control
 
 # App settings (per machine, see src/utils/appSettings.js)
 public/app-settings.json
