@@ -104,9 +104,28 @@ function renderPartToDataUrl(part, geometries, localBox) {
   });
 
   const rubberMat = new THREE.MeshStandardMaterial({ color: RUBBER_COLOR, roughness: 0.85, metalness: 0 });
+  const fixedMats = new Map();
 
   for (const geo of geometries) {
-    const mesh = new THREE.Mesh(geo, geo.userData.rubber ? rubberMat : mat);
+    let meshMat = mat;
+    if (geo.userData.rubber) {
+      meshMat = rubberMat;
+    } else if (geo.userData.fixedColor) {
+      if (!fixedMats.has(geo.userData.fixedColor)) {
+        const fc = thumbnailColor(geo.userData.fixedColor);
+        const fcLight = luminance(new THREE.Color(geo.userData.fixedColor)) > LIGHT_PART_LUMINANCE;
+        fixedMats.set(
+          geo.userData.fixedColor,
+          new THREE.MeshStandardMaterial({
+            color: fc,
+            roughness: fcLight ? 0.6 : 0.45,
+            metalness: 0.1
+          })
+        );
+      }
+      meshMat = fixedMats.get(geo.userData.fixedColor);
+    }
+    const mesh = new THREE.Mesh(geo, meshMat);
     group.add(mesh);
 
     const edgeGeo = new THREE.EdgesGeometry(geo, 25);

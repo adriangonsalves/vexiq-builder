@@ -4404,17 +4404,35 @@ export default function Viewport3D({
               metalness: 0.12
             });
 
-            const rubberMaterial = geometries.some((geo) => geo.userData.rubber)
-              ? new THREE.MeshStandardMaterial({ color: new THREE.Color(RUBBER_COLOR), roughness: 0.85, metalness: 0 })
-              : null;
+            const fixedMaterials = new Map();
+            for (const geo of geometries) {
+              if (geo.userData.rubber && !fixedMaterials.has('rubber')) {
+                fixedMaterials.set('rubber', new THREE.MeshStandardMaterial({
+                  color: new THREE.Color(RUBBER_COLOR),
+                  roughness: 0.85,
+                  metalness: 0
+                }));
+              } else if (geo.userData.fixedColor && !fixedMaterials.has(geo.userData.fixedColor)) {
+                fixedMaterials.set(geo.userData.fixedColor, new THREE.MeshStandardMaterial({
+                  color: new THREE.Color(geo.userData.fixedColor),
+                  roughness: 0.38,
+                  metalness: 0.12
+                }));
+              }
+            }
 
             geometries.forEach((geo, index) => {
-              const mesh = new THREE.Mesh(geo, geo.userData.rubber ? rubberMaterial : material);
+              let meshMat = material;
+              if (geo.userData.rubber) meshMat = fixedMaterials.get('rubber');
+              else if (geo.userData.fixedColor) meshMat = fixedMaterials.get(geo.userData.fixedColor);
+
+              const mesh = new THREE.Mesh(geo, meshMat);
               mesh.castShadow = true; // only matters while the Shadows option is on
               mesh.receiveShadow = true;
               mesh.userData.instanceId = inst.instanceId;
               mesh.userData.isPartMesh = true;
               if (geo.userData.rubber) mesh.userData.fixedColor = RUBBER_COLOR;
+              else if (geo.userData.fixedColor) mesh.userData.fixedColor = geo.userData.fixedColor;
               group.add(mesh);
 
               const edgesGeo = new THREE.EdgesGeometry(geo, 32);

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-28T02:28:25.258Z",
+  "generatedAt": "2026-10-28T03:09:43.918Z",
   "partCount": 480,
   "totalVerifiedPorts": 4163,
   "parts": {
@@ -93437,8 +93437,8 @@
         }
       ]
     },
-    "ant-front-antenna-228-2500-320-351": {
-      "id": "ant-front-antenna-228-2500-320-351",
+    "ant-front-antenna-228-2500-320-352": {
+      "id": "ant-front-antenna-228-2500-320-352",
       "partNumber": "228-2500-320",
       "name": "Ant Front Antenna",
       "category": "Specialty & Panels",
@@ -93763,8 +93763,8 @@
         }
       ]
     },
-    "ant-rear-antenna-228-2500-321-353": {
-      "id": "ant-rear-antenna-228-2500-321-353",
+    "ant-rear-antenna-228-2500-321-354": {
+      "id": "ant-rear-antenna-228-2500-321-354",
       "partNumber": "228-2500-321",
       "name": "Ant Rear Antenna",
       "category": "Specialty & Panels",

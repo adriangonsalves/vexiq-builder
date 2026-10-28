@@ -25326,7 +25326,7 @@
     "file": "2x Pitch Motor Shaft (228-2500-2234).step",
     "modelUrl": "/models/2x-pitch-motor-shaft-228-2500-2234-86.glb",
     "stepSizeBytes": 130107,
-    "glbSizeBytes": 51108,
+    "glbSizeBytes": 51456,
     "bbox": {
       "min": [
         -2.4,
@@ -25351,6 +25351,7 @@
     },
     "vertexCount": 1658,
     "triangleCount": 1752,
+    "stepColors": true,
     "connectorCount": 4,
     "cylinders": [
       {
@@ -25847,7 +25848,7 @@
     "file": "2x Pitch Shock Absorber (Weak) (228-2500-1560).step",
     "modelUrl": "/models/2x-pitch-shock-absorber-weak-228-2500-1560-91.glb",
     "stepSizeBytes": 618755,
-    "glbSizeBytes": 134984,
+    "glbSizeBytes": 135280,
     "bbox": {
       "min": [
         -6.22,
@@ -25872,6 +25873,8 @@
     },
     "vertexCount": 4526,
     "triangleCount": 4256,
+    "hasRubber": true,
+    "stepColors": true,
     "connectorCount": 15,
     "cylinders": [
       {
@@ -75937,7 +75940,7 @@
     "file": "3x Pitch Motor Shaft (228-2500-2236).step",
     "modelUrl": "/models/3x-pitch-motor-shaft-228-2500-2236-185.glb",
     "stepSizeBytes": 130122,
-    "glbSizeBytes": 49272,
+    "glbSizeBytes": 49616,
     "bbox": {
       "min": [
         -2.4,
@@ -75962,6 +75965,7 @@
     },
     "vertexCount": 1606,
     "triangleCount": 1656,
+    "stepColors": true,
     "connectorCount": 4,
     "cylinders": [
       {
@@ -108164,7 +108168,7 @@
     "file": "4x Pitch Motor Shaft (228-2500-2238).step",
     "modelUrl": "/models/4x-pitch-motor-shaft-228-2500-2238-231.glb",
     "stepSizeBytes": 130078,
-    "glbSizeBytes": 48372,
+    "glbSizeBytes": 48716,
     "bbox": {
       "min": [
         -2.4,
@@ -108189,6 +108193,7 @@
     },
     "vertexCount": 1578,
     "triangleCount": 1616,
+    "stepColors": true,
     "connectorCount": 4,
     "cylinders": [
       {
@@ -154692,7 +154697,7 @@
     "file": "12x Pitch Rope (228-2500-430).step",
     "modelUrl": "/models/12x-pitch-rope-228-2500-430-294.glb",
     "stepSizeBytes": 94907,
-    "glbSizeBytes": 82692,
+    "glbSizeBytes": 83040,
     "bbox": {
       "min": [
         -73.85,
@@ -154717,6 +154722,7 @@
     },
     "vertexCount": 2620,
     "triangleCount": 3164,
+    "stepColors": true,
     "connectorCount": 3,
     "cylinders": [
       {
@@ -175190,7 +175196,7 @@
     "file": "20x Pitch Rope (228-2500-436).step",
     "modelUrl": "/models/20x-pitch-rope-228-2500-436-311.glb",
     "stepSizeBytes": 94895,
-    "glbSizeBytes": 76688,
+    "glbSizeBytes": 77036,
     "bbox": {
       "min": [
         -146.86,
@@ -175215,6 +175221,7 @@
     },
     "vertexCount": 2452,
     "triangleCount": 2828,
+    "stepColors": true,
     "connectorCount": 3,
     "cylinders": [
       {
@@ -177575,7 +177582,7 @@
     "file": "24x Pitch Rope (228-2500-438).step",
     "modelUrl": "/models/24x-pitch-rope-228-2500-438-319.glb",
     "stepSizeBytes": 94075,
-    "glbSizeBytes": 52164,
+    "glbSizeBytes": 52512,
     "bbox": {
       "min": [
         -150.05,
@@ -177600,6 +177607,7 @@
     },
     "vertexCount": 1680,
     "triangleCount": 1840,
+    "stepColors": true,
     "connectorCount": 3,
     "cylinders": [
       {
@@ -191003,7 +191011,7 @@
     "file": "120x Pitch Rope (228-2500-448).step",
     "modelUrl": "/models/120x-pitch-rope-228-2500-448-342.glb",
     "stepSizeBytes": 94912,
-    "glbSizeBytes": 69936,
+    "glbSizeBytes": 70284,
     "bbox": {
       "min": [
         -759.65,
@@ -191028,6 +191036,7 @@
     },
     "vertexCount": 2260,
     "triangleCount": 2476,
+    "stepColors": true,
     "connectorCount": 3,
     "cylinders": [
       {
@@ -191651,7 +191660,7 @@
     "file": "200mm Travel Omni-Directional Wheel (228-2536).step",
     "modelUrl": "/models/200mm-travel-omni-directional-wheel-228-2536-345.glb",
     "stepSizeBytes": 2016727,
-    "glbSizeBytes": 1944616,
+    "glbSizeBytes": 1944948,
     "bbox": {
       "min": [
         -31.74,
@@ -191677,6 +191686,7 @@
     "vertexCount": 62241,
     "triangleCount": 74941,
     "hasRubber": true,
+    "stepColors": true,
     "connectorCount": 23,
     "cylinders": [
       {
@@ -193118,15 +193128,15 @@
     ]
   },
   {
-    "id": "ant-front-antenna-228-2500-320-351",
+    "id": "ant-front-antenna-228-2500-320-352",
     "name": "Ant Front Antenna",
     "partNumber": "228-2500-320",
     "category": "Specialty & Panels",
     "defaultColor": "#dc2626",
     "file": "Ant Front Antenna (228-2500-320).step",
-    "modelUrl": "/models/ant-front-antenna-228-2500-320-351.glb",
+    "modelUrl": "/models/ant-front-antenna-228-2500-320-352.glb",
     "stepSizeBytes": 2349943,
-    "glbSizeBytes": 186208,
+    "glbSizeBytes": 186556,
     "bbox": {
       "min": [
         -104.77,
@@ -193151,6 +193161,7 @@
     },
     "vertexCount": 5945,
     "triangleCount": 7108,
+    "stepColors": true,
     "connectorCount": 14,
     "cylinders": [
       {
@@ -194405,15 +194416,15 @@
     ]
   },
   {
-    "id": "ant-rear-antenna-228-2500-321-353",
+    "id": "ant-rear-antenna-228-2500-321-354",
     "name": "Ant Rear Antenna",
     "partNumber": "228-2500-321",
     "category": "Specialty & Panels",
     "defaultColor": "#dc2626",
     "file": "Ant Rear Antenna (228-2500-321).step",
-    "modelUrl": "/models/ant-rear-antenna-228-2500-321-353.glb",
+    "modelUrl": "/models/ant-rear-antenna-228-2500-321-354.glb",
     "stepSizeBytes": 2060747,
-    "glbSizeBytes": 156444,
+    "glbSizeBytes": 156792,
     "bbox": {
       "min": [
         -46.5,
@@ -194438,6 +194449,7 @@
     },
     "vertexCount": 5006,
     "triangleCount": 5908,
+    "stepColors": true,
     "connectorCount": 18,
     "cylinders": [
       {
@@ -239167,7 +239179,7 @@
     "file": "VEX-IQ-All-Control/228-2780 VEX IQ Cable Pack/228-2780 - Simulated Cable.STEP",
     "modelUrl": "/models/vex-iq-cable-pack-228-2780-506.glb",
     "stepSizeBytes": 904683,
-    "glbSizeBytes": 392344,
+    "glbSizeBytes": 393008,
     "bbox": {
       "min": [
         -6.45,
@@ -239192,6 +239204,7 @@
     },
     "vertexCount": 12978,
     "triangleCount": 13334,
+    "stepColors": true,
     "connectorCount": 1,
     "cylinders": [
       {
@@ -239237,7 +239250,7 @@
     "file": "VEX-IQ-All-Control/228-3012 VEX IQ Color Sensor/228-3012.STEP",
     "modelUrl": "/models/vex-iq-color-sensor-228-3012-509.glb",
     "stepSizeBytes": 319954,
-    "glbSizeBytes": 121192,
+    "glbSizeBytes": 121540,
     "bbox": {
       "min": [
         -12.55,
@@ -239262,6 +239275,7 @@
     },
     "vertexCount": 4084,
     "triangleCount": 3716,
+    "stepColors": true,
     "connectorCount": 36,
     "cylinders": [
       {
@@ -240751,7 +240765,7 @@
     "file": "VEX-IQ-All-Control/228-3011 VEX IQ Distance Sensor/228-3011.STEP",
     "modelUrl": "/models/vex-iq-distance-sensor-228-3011-508.glb",
     "stepSizeBytes": 458128,
-    "glbSizeBytes": 159956,
+    "glbSizeBytes": 160304,
     "bbox": {
       "min": [
         -50.5,
@@ -240776,6 +240790,7 @@
     },
     "vertexCount": 5386,
     "triangleCount": 4976,
+    "stepColors": true,
     "connectorCount": 38,
     "cylinders": [
       {
@@ -241578,7 +241593,7 @@
     "file": "VEX-IQ-All-Control/228-3014 VEX IQ Gyro Sensor/228-3014.STEP",
     "modelUrl": "/models/vex-iq-gyro-sensor-228-3014-510.glb",
     "stepSizeBytes": 301862,
-    "glbSizeBytes": 94916,
+    "glbSizeBytes": 95264,
     "bbox": {
       "min": [
         -25.1,
@@ -241603,6 +241618,7 @@
     },
     "vertexCount": 3206,
     "triangleCount": 2856,
+    "stepColors": true,
     "connectorCount": 26,
     "cylinders": [
       {
@@ -242247,7 +242263,7 @@
     "file": "VEX-IQ-All-Control/228-2540 VEX IQ Robot Brain/228-2540.STEP",
     "modelUrl": "/models/vex-iq-robot-brain-228-2540-502.glb",
     "stepSizeBytes": 4250292,
-    "glbSizeBytes": 550456,
+    "glbSizeBytes": 550808,
     "bbox": {
       "min": [
         -50.65,
@@ -242272,6 +242288,7 @@
     },
     "vertexCount": 18986,
     "triangleCount": 15652,
+    "stepColors": true,
     "connectorCount": 86,
     "cylinders": [
       {
@@ -243514,7 +243531,7 @@
     "variant": "with-battery",
     "modelUrl": "/models/vex-iq-robot-brain-228-2540-502-with-battery.glb",
     "stepSizeBytes": 4250292,
-    "glbSizeBytes": 600464,
+    "glbSizeBytes": 600812,
     "bbox": {
       "min": [
         -56.05,
@@ -243539,6 +243556,7 @@
     },
     "vertexCount": 20706,
     "triangleCount": 17106,
+    "stepColors": true,
     "connectorCount": 86,
     "cylinders": [
       {
@@ -244780,7 +244798,7 @@
     "file": "VEX-IQ-All-Control/228 2560 VEX IQ Smart Motor/228-2560.STEP",
     "modelUrl": "/models/vex-iq-smart-motor-228-2560-500.glb",
     "stepSizeBytes": 1058650,
-    "glbSizeBytes": 196572,
+    "glbSizeBytes": 197256,
     "bbox": {
       "min": [
         -28.47,
@@ -244805,6 +244823,7 @@
     },
     "vertexCount": 6640,
     "triangleCount": 6058,
+    "stepColors": true,
     "connectorCount": 49,
     "cylinders": [
       {
@@ -245453,6 +245472,11 @@
     "originType": "mounting_face",
     "gearSpecs": null,
     "fastenerSpecs": null,
+    "hubSpecs": {
+      "radiusMm": 4,
+      "faceOffsetMm": 0.125,
+      "depthMm": 6
+    },
     "mountingRules": {
       "massClass": "heavy",
       "minFastenersRequired": 4
@@ -245763,12 +245787,7 @@
         ],
         "verified": true
       }
-    ],
-    "hubSpecs": {
-      "radiusMm": 4,
-      "faceOffsetMm": 0.125,
-      "depthMm": 6
-    }
+    ]
   },
   {
     "id": "vex-iq-touch-sensor-228-3010-507",
@@ -245779,7 +245798,7 @@
     "file": "VEX-IQ-All-Control/228-3010 VEX IQ Touch Sensor/228-3010.STEP",
     "modelUrl": "/models/vex-iq-touch-sensor-228-3010-507.glb",
     "stepSizeBytes": 294802,
-    "glbSizeBytes": 94892,
+    "glbSizeBytes": 95240,
     "bbox": {
       "min": [
         -25.1,
@@ -245804,6 +245823,7 @@
     },
     "vertexCount": 3198,
     "triangleCount": 2884,
+    "stepColors": true,
     "connectorCount": 30,
     "cylinders": [
       {

@@ -17,6 +17,28 @@ const SEPARATE_BODIES = { '228-2540': ['228-2604'] };
 const WHOLE_FILE_VARIANTS = {
   '228-2540': [{ key: 'with-battery', name: 'VEX IQ Robot Brain with Battery', partNumber: '228-2540 + 228-2604' }]
 };
+// Parts with multiple colours in their STEP files that must retain multi-colour bodies
+const MULTI_COLOR_PART_NUMBERS = new Set([
+  '228-2500-2234', // 2x Pitch Motor Shaft
+  '228-2500-2236', // 3x Pitch Motor Shaft
+  '228-2500-2238', // 4x Pitch Motor Shaft
+  '228-2500-430',  // 12x Pitch Rope
+  '228-2500-436',  // 20x Pitch Rope
+  '228-2500-438',  // 24x Pitch Rope
+  '228-2500-448',  // 120x Pitch Rope
+  '228-2536',      // 200mm Travel Omni-Directional Wheel
+  '228-2500-1560', // 2x Pitch Shock Absorber (Weak)
+  '228-2500-320',  // Ant Front Antenna
+  '228-2500-321',  // Ant Rear Antenna
+  '228-2560',      // Smart Motor
+  '228-2540',      // Robot Brain
+  '228-2780',      // Cable Pack
+  '228-3010',      // Touch Sensor
+  '228-3011',      // Distance Sensor
+  '228-3012',      // Color Sensor
+  '228-3014',      // Gyro Sensor
+  '228-2540 + 228-2604' // Robot Brain with Battery
+]);
 const cacheKey = (file, variant) => (variant ? `${file}#${variant}` : file);
 
 function classifyPart(name) {
@@ -242,9 +264,12 @@ async function main() {
   for (const entry of allSourceEntries) {
     const cached = existingByFile.get(cacheKey(entry.filename, entry.variant));
     const outGlbPath = path.join(OUT_MODELS_DIR, `${(cached || entry).id}.glb`);
+    const isMultiColorPart = MULTI_COLOR_PART_NUMBERS.has(entry.partNumber);
     if (cached && fs.existsSync(outGlbPath)) {
-      catalog.push(cached);
-      continue;
+      if (!isMultiColorPart || cached.stepColors) {
+        catalog.push(cached);
+        continue;
+      }
     }
 
     const stat = fs.statSync(entry.stepPath);
@@ -253,6 +278,7 @@ async function main() {
       ...entry,
       category,
       defaultColor,
+      isMultiColorPart,
       outGlbPath: path.join(OUT_MODELS_DIR, `${entry.id}.glb`),
       fileSize: stat.size
     });
@@ -314,6 +340,7 @@ async function main() {
               vertexCount: msg.vertexCount,
               triangleCount: msg.triangleCount,
               ...(msg.hasRubber ? { hasRubber: true } : {}),
+              ...(task.isMultiColorPart ? { stepColors: true } : {}),
               connectorCount: msg.connectorCount,
               cylinders: msg.cylinders
             });

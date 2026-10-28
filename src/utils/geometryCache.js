@@ -89,6 +89,9 @@ export function loadPartAsset(part) {
             const renderGeo = child.geometry.clone();
             // Black rubber bodies (omni wheel rollers) keep their own colour (convert-worker.mjs)
             if (child.material?.name === RUBBER_MATERIAL_NAME) renderGeo.userData.rubber = true;
+            if (child.material?.name?.startsWith('step:')) {
+              renderGeo.userData.fixedColor = child.material.name.slice(5);
+            }
             if (!renderGeo.attributes.normal) {
               renderGeo.computeVertexNormals();
             }
@@ -105,6 +108,7 @@ export function loadPartAsset(part) {
                 ].filter((piece) => piece.geo)
               : [{ geo: renderGeo, hub: false }];
             for (const piece of pieces) {
+              Object.assign(piece.geo.userData, renderGeo.userData);
               if (piece.hub) {
                 hub.renderIndices.push(geometries.length);
                 hub.collisionIndices.push(collisionGeometries.length);

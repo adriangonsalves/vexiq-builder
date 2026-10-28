@@ -66,29 +66,112 @@ function extractStepCylinders(stepText) {
 const RUBBER_MAX_CHANNEL = 0.06;
 const isRubberMesh = (m) => Array.isArray(m.color) && Math.max(...m.color) < RUBBER_MAX_CHANNEL;
 
+function getMeshColorKey(m) {
+  if (isRubberMesh(m)) return 'rubber';
+  if (!Array.isArray(m.color) || m.color.length < 3) return 'none';
+  const r8 = Math.round(Math.max(0, Math.min(1, m.color[0])) * 255);
+  const g8 = Math.round(Math.max(0, Math.min(1, m.color[1])) * 255);
+  const b8 = Math.round(Math.max(0, Math.min(1, m.color[2])) * 255);
+  return `#${((1 << 24) + (r8 << 16) + (g8 << 8) + b8).toString(16).slice(1)}`;
+}
+
 /**
  * Merges all sub-meshes from occt-import-js into a single compact binary GLB buffer
  * and returns bounding box + vertex/triangle stats. When a part mixes plastic and black rubber
- * bodies, the rubber goes in a second primitive with a material named "rubber" so the app can
- * keep it black whatever colour the part is given.
+ * bodies, or has bodies with multiple colours, the body with the most faces becomes the
+ * recolourable main body (primitive 0 with no material). Every other colour body keeps its colour:
+ * near-black bodies get a "rubber" material and other colours get a "step:#rrggbb" material.
  */
 function buildGlbFromOcctResult(result) {
-  let totalVertices = 0;
-  let totalIndices = 0;
-
   const allMeshes = (result.meshes || []).filter(
     (m) => m.attributes?.position?.array?.length > 0 && m.index?.array?.length > 0
   );
-  const rubberMeshes = allMeshes.filter(isRubberMesh);
-  const splitRubber = rubberMeshes.length > 0 && rubberMeshes.length < allMeshes.length;
-  const validMeshes = splitRubber
-    ? [...allMeshes.filter((m) => !isRubberMesh(m)), ...rubberMeshes]
-    : allMeshes;
-  let bodyIndexCount = 0;
 
-  for (const m of validMeshes) {
-    totalVertices += m.attributes.position.array.length / 3;
-    totalIndices += m.index.array.length;
+  if (allMeshes.length === 0) {
+    throw new Error('No valid geometry produced from STEP file');
+  }
+
+  // Group meshes by 8-bit RGB colour, with rubber as a special group
+  const groupsMap = new Map();
+  for (const m of allMeshes) {
+    const key = getMeshColorKey(m);
+    if (!groupsMap.has(key)) {
+      const isRubber = key === 'rubber';
+      let hex = null;
+      let baseColorFactor = null;
+      if (isRubber) {
+        baseColorFactor = [0.02, 0.02, 0.02, 1];
+      } else if (key !== 'none') {
+        hex = key;
+        const r8 = parseInt(hex.slice(1, 3), 16);
+        const g8 = parseInt(hex.slice(3, 5), 16);
+        const b8 = parseInt(hex.slice(5, 7), 16);
+        baseColorFactor = [r8 / 255, g8 / 255, b8 / 255, 1];
+      }
+      groupsMap.set(key, {
+        key,
+        isRubber,
+        hex,
+        baseColorFactor,
+        meshes: [],
+        totalFaces: 0,
+        maxBodyFaces: 0,
+        indexCount: 0
+      });
+    }
+    const g = groupsMap.get(key);
+    const faces = m.brep_faces?.length || (m.index?.array?.length / 3) || 1;
+    g.meshes.push(m);
+    g.totalFaces += faces;
+    if (faces > g.maxBodyFaces) g.maxBodyFaces = faces;
+  }
+
+  // Count actual distinct colours (excluding uncoloured 'none')
+  const actualColors = new Set([...groupsMap.keys()].filter((k) => k !== 'none'));
+  let groups;
+
+  if (actualColors.size <= 1) {
+    // Single-colour or uncoloured part -> single primitive with no material, unchanged
+    groups = [{
+      key: 'main',
+      isRubber: false,
+      hex: null,
+      baseColorFactor: null,
+      meshes: allMeshes,
+      totalFaces: 0,
+      maxBodyFaces: 0,
+      indexCount: 0
+    }];
+  } else {
+    // Multi-colour part: merge any uncoloured meshes into the largest colour group
+    let noneGroup = groupsMap.get('none');
+    groupsMap.delete('none');
+    groups = Array.from(groupsMap.values());
+    groups.sort((a, b) => {
+      const diff = b.maxBodyFaces - a.maxBodyFaces;
+      if (diff !== 0) return diff;
+      return b.totalFaces - a.totalFaces;
+    });
+    if (noneGroup) {
+      groups[0].meshes.push(...noneGroup.meshes);
+      groups[0].totalFaces += noneGroup.totalFaces;
+      if (noneGroup.maxBodyFaces > groups[0].maxBodyFaces) {
+        groups[0].maxBodyFaces = noneGroup.maxBodyFaces;
+      }
+    }
+  }
+
+  const validMeshes = groups.flatMap((g) => g.meshes);
+
+  let totalVertices = 0;
+  let totalIndices = 0;
+  for (const g of groups) {
+    g.indexCount = 0;
+    for (const m of g.meshes) {
+      totalVertices += m.attributes.position.array.length / 3;
+      totalIndices += m.index.array.length;
+      g.indexCount += m.index.array.length;
+    }
   }
 
   if (totalVertices === 0 || totalIndices === 0) {
@@ -140,7 +223,6 @@ function buildGlbFromOcctResult(result) {
 
     vOffset += vCount;
     iOffset += idxArr.length;
-    if (!splitRubber || !isRubberMesh(m)) bodyIndexCount = iOffset;
   }
 
   const posByteLength = positions.byteLength;
@@ -155,6 +237,59 @@ function buildGlbFromOcctResult(result) {
   Buffer.from(normals.buffer, normals.byteOffset, normByteLength).copy(binBuffer, posByteLength);
   Buffer.from(indices.buffer, indices.byteOffset, idxByteLength).copy(binBuffer, posByteLength + normByteLength);
 
+  const primitives = [];
+  const indexAccessors = [];
+  const gltfMaterials = [];
+  let currentByteOffset = 0;
+
+  for (let k = 0; k < groups.length; k++) {
+    const g = groups[k];
+    const accessorIdx = 2 + k;
+    indexAccessors.push({
+      bufferView: 2,
+      byteOffset: currentByteOffset,
+      componentType: useUint32 ? 5125 : 5123,
+      count: g.indexCount,
+      type: 'SCALAR'
+    });
+    currentByteOffset += g.indexCount * indices.BYTES_PER_ELEMENT;
+
+    if (k === 0) {
+      primitives.push({
+        attributes: { POSITION: 0, NORMAL: 1 },
+        indices: accessorIdx,
+        mode: 4
+      });
+    } else {
+      const matIdx = gltfMaterials.length;
+      if (g.isRubber) {
+        gltfMaterials.push({
+          name: 'rubber',
+          pbrMetallicRoughness: {
+            baseColorFactor: [0.02, 0.02, 0.02, 1],
+            metallicFactor: 0,
+            roughnessFactor: 0.9
+          }
+        });
+      } else {
+        gltfMaterials.push({
+          name: `step:${g.hex}`,
+          pbrMetallicRoughness: {
+            baseColorFactor: g.baseColorFactor,
+            metallicFactor: 0.1,
+            roughnessFactor: 0.5
+          }
+        });
+      }
+      primitives.push({
+        attributes: { POSITION: 0, NORMAL: 1 },
+        indices: accessorIdx,
+        material: matIdx,
+        mode: 4
+      });
+    }
+  }
+
   const gltfJson = {
     asset: { version: '2.0', generator: 'vexiq-builder-step-converter' },
     scene: 0,
@@ -162,18 +297,7 @@ function buildGlbFromOcctResult(result) {
     nodes: [{ mesh: 0 }],
     meshes: [
       {
-        primitives: splitRubber
-          ? [
-              { attributes: { POSITION: 0, NORMAL: 1 }, indices: 2, mode: 4 },
-              { attributes: { POSITION: 0, NORMAL: 1 }, indices: 3, material: 0, mode: 4 }
-            ]
-          : [
-              {
-                attributes: { POSITION: 0, NORMAL: 1 },
-                indices: 2,
-                mode: 4
-              }
-            ]
+        primitives
       }
     ],
     accessors: [
@@ -193,30 +317,9 @@ function buildGlbFromOcctResult(result) {
         count: totalVertices,
         type: 'VEC3'
       },
-      ...(splitRubber
-        ? [
-            { bufferView: 2, byteOffset: 0, componentType: useUint32 ? 5125 : 5123, count: bodyIndexCount, type: 'SCALAR' },
-            {
-              bufferView: 2,
-              byteOffset: bodyIndexCount * indices.BYTES_PER_ELEMENT,
-              componentType: useUint32 ? 5125 : 5123,
-              count: totalIndices - bodyIndexCount,
-              type: 'SCALAR'
-            }
-          ]
-        : [
-            {
-              bufferView: 2,
-              byteOffset: 0,
-              componentType: useUint32 ? 5125 : 5123, // UNSIGNED_INT or UNSIGNED_SHORT
-              count: totalIndices,
-              type: 'SCALAR'
-            }
-          ])
+      ...indexAccessors
     ],
-    ...(splitRubber
-      ? { materials: [{ name: 'rubber', pbrMetallicRoughness: { baseColorFactor: [0.02, 0.02, 0.02, 1], metallicFactor: 0, roughnessFactor: 0.9 } }] }
-      : {}),
+    ...(gltfMaterials.length > 0 ? { materials: gltfMaterials } : {}),
     bufferViews: [
       {
         buffer: 0,
@@ -288,7 +391,7 @@ function buildGlbFromOcctResult(result) {
     vertexCount: totalVertices,
     triangleCount: Math.floor(totalIndices / 3),
     glbBytes: totalGlbLength,
-    hasRubber: splitRubber
+    hasRubber: groups.length > 1 && groups.slice(1).some((g) => g.isRubber)
   };
 }
 
