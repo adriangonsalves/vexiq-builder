@@ -35,6 +35,9 @@ import {
   undo as undoHistory
 } from '../src/utils/buildHistory.js';
 
+// capture_screenshot's named views (src/components/Viewport3D.jsx frames them)
+const SCREENSHOT_VIEWS = ['current', 'iso', 'iso-front-left', 'iso-back-right', 'iso-back-left', 'front', 'back', 'side', 'right', 'left', 'top', 'bottom'];
+
 const TOOLS = [
   {
     name: 'search_parts',
@@ -592,11 +595,23 @@ const TOOLS = [
   {
     name: 'capture_screenshot',
     description:
-      "Return a PNG picture of the app's 3D view, rendered by the browser that has the app open. view 'current' uses the user's camera; 'iso', 'front', 'top' and 'side' use a separate camera framed on the whole assembly (or focusInstanceId) and leave the user's camera alone. Gizmos, hole highlights and the selection tint are left out. Fails with a hint when the app isn't running or no browser has it open.",
+      "Return a PNG picture of the app's 3D view, rendered by the browser that has the app open. view 'current' uses the user's camera; the other views (or a direction) use a separate camera framed on the whole assembly (or focusInstanceId) and leave the user's camera alone. Gizmos, hole highlights and the selection tint are left out. Every open tab is asked and the most complete picture is returned; the reply has a warning when even that tab is still loading parts or shows a different build than the saved one. Fails with a hint when the app isn't running or no browser has it open.",
     inputSchema: {
       type: 'object',
       properties: {
-        view: { type: 'string', enum: ['current', 'iso', 'front', 'top', 'side'], default: 'iso' },
+        view: {
+          type: 'string',
+          enum: SCREENSHOT_VIEWS,
+          default: 'iso',
+          description: "Camera: +X is the robot's front and +Z its right. 'iso' looks from front-right-above; 'iso-front-left', 'iso-back-right', 'iso-back-left' from the other corners; 'front', 'back', 'left', 'right' (= 'side'), 'top', 'bottom' straight on. 'current' is the user's camera."
+        },
+        direction: {
+          type: 'array',
+          items: { type: 'number' },
+          minItems: 3,
+          maxItems: 3,
+          description: 'Look from this direction instead of a named view: [x, y, z] from the assembly toward the camera, e.g. [1, 0.5, -1].'
+        },
         focusInstanceId: { type: 'string', description: 'Frame this part instead of the whole assembly (standard views only).' },
         width: { type: 'number', default: 1024, description: '320 to 1920 px.' },
         height: { type: 'number', default: 768, description: '320 to 1920 px.' }
@@ -1428,7 +1443,8 @@ async function executeTool(name, args = {}) {
   if (name === 'capture_screenshot') {
     const clamp = (v, d) => Math.round(Math.min(Math.max(Number(v) || d, 320), 1920));
     const request = {
-      view: ['current', 'iso', 'front', 'top', 'side'].includes(args.view) ? args.view : 'iso',
+      view: SCREENSHOT_VIEWS.includes(args.view) ? args.view : 'iso',
+      ...(Array.isArray(args.direction) && args.direction.length === 3 ? { direction: args.direction.map(Number) } : {}),
       width: clamp(args.width, 1024),
       height: clamp(args.height, 768),
       ...(args.focusInstanceId ? { focusInstanceId: args.focusInstanceId } : {})
@@ -1458,7 +1474,7 @@ async function executeTool(name, args = {}) {
     return {
       mcpContent: [
         { type: 'image', data: reply.png, mimeType: 'image/png' },
-        { type: 'text', text: JSON.stringify({ ok: true, ...request }) }
+        { type: 'text', text: JSON.stringify({ ok: true, ...request, ...(reply.warning ? { warning: reply.warning } : {}) }) }
       ]
     };
   }

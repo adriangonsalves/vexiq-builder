@@ -440,15 +440,50 @@ function vexiqMcpBridgePlugin() {
         res.end(JSON.stringify(payload));
       };
 
+      // The visible parts of the saved build, to compare with what a tab drew
+      const savedVisibleIds = () => new Set((readSaved()?.instances || []).filter((i) => i.visible !== false).map((i) => i.instanceId));
+      const shotIsComplete = (status) => {
+        if (!status || status.partsLoading > 0) return false;
+        const saved = savedVisibleIds();
+        return status.instanceIds.length === saved.size && status.instanceIds.every((id) => saved.has(id));
+      };
+      // Answers with the most complete picture the tabs sent, saying what is wrong with it if anything
+      const finishShot = (requestId) => {
+        const pending = pendingShots.get(requestId);
+        if (!pending) return;
+        pendingShots.delete(requestId);
+        clearTimeout(pending.timer);
+        const shots = pending.replies.filter((r) => r.png);
+        if (!shots.length) {
+          const error = pending.replies.find((r) => r.error)?.error;
+          return sendJson(pending.res, pending.replies.length ? 500 : 504, {
+            ok: false,
+            error: error || 'The app did not send a screenshot within 10 seconds'
+          });
+        }
+        const saved = savedVisibleIds();
+        const missing = (s) => (s ? s.partsLoading + [...saved].filter((id) => !s.instanceIds.includes(id)).length : saved.size);
+        const best = shots.reduce((a, b) => (missing(b.status) < missing(a.status) ? b : a));
+        const s = best.status;
+        let warning;
+        if (s && !shotIsComplete(s)) {
+          const stale = s.instanceIds.length !== saved.size || s.instanceIds.some((id) => !saved.has(id));
+          warning = stale
+            ? `The open tab shows a different build than the saved one (${s.instanceIds.length} parts drawn, ${saved.size} saved). Reload the app tab.`
+            : `${s.partsLoading} part(s) were still loading in the browser and are missing from the picture. Try again in a moment, or reload the app tab if it keeps happening.`;
+        }
+        sendJson(pending.res, 200, { ok: true, png: best.png, ...(warning ? { warning } : {}), tabs: pending.asked });
+      };
+
       server.middlewares.use('/api/assembly/screenshot-result', async (req, res) => {
         if (req.method !== 'POST') return sendJson(res, 405, { ok: false, error: 'Method not allowed' });
-        const { requestId, png, error } = await readJson(req);
+        const { requestId, png, error, status } = await readJson(req);
         const pending = pendingShots.get(requestId);
         if (pending) {
-          pendingShots.delete(requestId);
-          clearTimeout(pending.timer);
-          if (png) sendJson(pending.res, 200, { ok: true, png });
-          else sendJson(pending.res, 500, { ok: false, error: error || 'The app could not render the view' });
+          pending.replies.push({ png, error, status });
+          // Every open tab is asked; a complete picture (nothing loading, the saved build) answers at once
+          if (png && shotIsComplete(status)) finishShot(requestId);
+          else if (pending.replies.length >= pending.asked) finishShot(requestId);
         }
         sendJson(res, 200, { ok: true });
       });
@@ -456,15 +491,12 @@ function vexiqMcpBridgePlugin() {
       server.middlewares.use('/api/assembly/screenshot', async (req, res) => {
         if (req.method !== 'POST') return sendJson(res, 405, { ok: false, error: 'Method not allowed' });
         const request = await readJson(req);
-        const client = [...sseClients].at(-1);
-        if (!client) return sendJson(res, 409, { ok: false, error: 'No browser has the app open' });
+        const clients = [...sseClients];
+        if (!clients.length) return sendJson(res, 409, { ok: false, error: 'No browser has the app open' });
         const requestId = `shot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const timer = setTimeout(() => {
-          pendingShots.delete(requestId);
-          sendJson(res, 504, { ok: false, error: 'The app did not send a screenshot within 10 seconds' });
-        }, 10000);
-        pendingShots.set(requestId, { res, timer });
-        client.write(`data: ${JSON.stringify({ type: 'screenshot-request', requestId, ...request })}\n\n`);
+        const timer = setTimeout(() => finishShot(requestId), 10000);
+        pendingShots.set(requestId, { res, timer, asked: clients.length, replies: [] });
+        for (const client of clients) client.write(`data: ${JSON.stringify({ type: 'screenshot-request', requestId, ...request })}\n\n`);
       });
 
       server.middlewares.use('/api/assembly', (req, res, next) => {

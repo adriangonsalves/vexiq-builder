@@ -577,7 +577,8 @@ export default function App() {
           let reply;
           try {
             const png = screenshotRef.current?.(msg);
-            reply = png ? { requestId: msg.requestId, png } : { requestId: msg.requestId, error: 'The 3D view is not ready yet' };
+            const status = screenshotRef.current?.status?.();
+            reply = png ? { requestId: msg.requestId, png, status } : { requestId: msg.requestId, error: 'The 3D view is not ready yet', status };
           } catch (err) {
             reply = { requestId: msg.requestId, error: err?.message || String(err) };
           }

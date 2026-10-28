@@ -2656,15 +2656,29 @@ export default function Viewport3D({
   // happens in one task (render, read the canvas, restore), so the user never sees a frame of it.
   useEffect(() => {
     if (!onRegisterScreenshot) return;
-    onRegisterScreenshot(({ view = 'iso', width = 1024, height = 768, focusInstanceId } = {}) => {
+    const shoot = ({ view = 'iso', width = 1024, height = 768, focusInstanceId, direction } = {}) => {
       const renderer = rendererRef.current;
       const scene = sceneRef.current;
       const camera = cameraRef.current;
       const container = containerRef.current;
       if (!renderer || !scene || !camera || !container) return null;
 
-      // Frame the whole assembly (or one part) from a fixed direction per standard view
-      const VIEW_DIRS = { iso: [1, 0.75, 1], front: [1, 0, 0], side: [0, 0, 1], top: [0, 1, 0] };
+      // Frame the whole assembly (or one part) from a fixed direction per standard view (+X is the
+      // front, +Z the right side), or from any `direction` [x, y, z] the caller gives
+      const VIEW_DIRS = {
+        iso: [1, 0.75, 1],
+        'iso-front-left': [1, 0.75, -1],
+        'iso-back-right': [-1, 0.75, 1],
+        'iso-back-left': [-1, 0.75, -1],
+        front: [1, 0, 0],
+        back: [-1, 0, 0],
+        side: [0, 0, 1],
+        right: [0, 0, 1],
+        left: [0, 0, -1],
+        top: [0, 1, 0],
+        bottom: [0, -1, 0]
+      };
+      const customDir = Array.isArray(direction) && direction.length === 3 && direction.some((n) => Number(n)) ? direction.map(Number) : null;
       // 'current' is the main view's own camera (orthographic when set; one picture, even in stereo);
       // the standard views always use perspective
       const shotCamera = (view === 'current' ? camera : perspCameraRef.current).clone();
@@ -2678,10 +2692,10 @@ export default function Viewport3D({
           const center = box.getCenter(new THREE.Vector3());
           const size = box.getSize(new THREE.Vector3());
           const maxDim = Math.max(size.x, size.y, size.z, 40);
-          const dir = new THREE.Vector3(...(VIEW_DIRS[view] || VIEW_DIRS.iso)).normalize();
+          const dir = new THREE.Vector3(...(customDir || VIEW_DIRS[view] || VIEW_DIRS.iso)).normalize();
           shotCamera.position.copy(center).addScaledVector(dir, maxDim * 2.1 * Math.max(1, height / width));
-          // Looking straight down, +X is up in the picture (a robot facing +X has its front at the top)
-          if (view === 'top') shotCamera.up.set(1, 0, 0);
+          // Looking straight down (or up), +X is up in the picture (a robot facing +X has its front at the top)
+          if (Math.abs(dir.y) > 0.99) shotCamera.up.set(1, 0, 0);
           else shotCamera.up.set(0, 1, 0);
           shotCamera.lookAt(center);
         }
@@ -2727,7 +2741,18 @@ export default function Viewport3D({
         renderFrameRef.current?.();
       }
       return png;
-    });
+    };
+    // What the picture shows, so the server can tell a tab that is out of date or still loading parts
+    shoot.status = () => {
+      const visible = instancesRef.current.filter((i) => i.visible !== false);
+      const loading = visible.filter((i) => !meshMapRef.current.get(i.instanceId)?.userData.renderGeometries);
+      return {
+        instanceIds: visible.map((i) => i.instanceId),
+        partsLoading: loading.length,
+        hidden: typeof document !== 'undefined' && document.hidden
+      };
+    };
+    onRegisterScreenshot(shoot);
   }, [onRegisterScreenshot]);
 
   // Expose a contact-aware nudge/move resolver to App.jsx for the Inspector -X/+X/-Y/+Y/-Z/+Z buttons
