@@ -452,6 +452,31 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
 }
 
 // ---------------------------------------------------------------------------
+// mirror_subassembly: the Speedbot's left side mirrored gives a sound right side
+// ---------------------------------------------------------------------------
+{
+  const { starterById } = await import('../src/starters.js');
+  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.json'), 'utf8'));
+  const speedbot = starterById('speedbot').build(catalog);
+  const withoutRight = speedbot.filter((i) => !/ R( \d)?$/.test(i.label));
+  writeState({ ...emptyState(), instances: withoutRight });
+  const leftIds = withoutRight.filter((i) => / L( \d)?$/.test(i.label)).map((i) => i.instanceId);
+  const res = await call('mirror_subassembly', { instanceIds: leftIds, mirrorPlane: 'Z', planeOffsetMm: 0 });
+  const audit = (await call('audit_assembly')).data;
+  const labels = (res.data?.mirroredInstances || []).map((i) => i.label);
+  check(
+    'mirror_subassembly of the Speedbot\'s left side: sound, no overlaps, both motors drive, offset connector and collars held',
+    res.data?.mirroredCount === leftIds.length && audit.isMechanicallySound && audit.collisionCount === 0 && audit.unsecuredPartCount === 0 && audit.kinematics.drivenWheelCount === 2,
+    JSON.stringify({ n: res.data?.mirroredCount, collisions: audit.collisionCount, unsecured: audit.unsecuredParts, driven: audit.kinematics.drivenWheelCount })
+  );
+  check(
+    '  labels swap L for R (no "(Mirrored)", no front/rear swap)',
+    labels.includes('Offset Connector R') && labels.includes('Rear Collar R') && labels.every((l) => / R( \d)?$/.test(l)),
+    JSON.stringify(labels)
+  );
+}
+
+// ---------------------------------------------------------------------------
 // View options (openspec: view-options): projection, layout, stereo, viewAlong
 // ---------------------------------------------------------------------------
 {

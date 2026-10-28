@@ -22,6 +22,6 @@ The MCP server sends the section between the markers below to every client when 
 ## Working habits
 
 - Check the result after every MCP step: `audit_assembly`, then `capture_screenshot` from more than one view. A clean audit doesn't mean the parts face the right way.
-- `mirror_subassembly` is a quick way to build the second side; check its connectors and collars afterwards.
+- `mirror_subassembly` (or `place_parts` with `mirror`) builds the second side; still look at it, since a part whose left and right versions differ can only be turned to the closest pose.
 - Converting new parts: put the STEP file in `VEX-IQ-All-Parts/`, then `npm run convert` and `npm run index-metadata`. In a git worktree, link `VEX-IQ-All-Parts/` and `VEX-IQ-All-Control/` from the main checkout first, or the catalog is rewritten empty.
 - Checks: `node scripts/check-*.mjs` (each exits 1 on failure).

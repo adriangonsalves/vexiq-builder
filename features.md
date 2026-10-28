@@ -201,7 +201,8 @@ Located in the right-hand **Part Inspector** ([`src/App.jsx`](file:///Users/adri
    - Automatically alternates gear roll angles (`180° / teeth`) to prevent tooth-on-tooth clashes, centers gears between inner and outer rails, and optionally inserts `3x Pitch Shafts` (`228-2500-2221`).
 5. **🪞 Symmetry Mirror (`mirror_subassembly`):**
    - Mirrors the selected part (or the entire half-assembly) across `Z = 0` (`Left ↔ Right`) or `X = 0` (`Front ↔ Rear`).
-   - Automatically applies BVH collision compensation (`±180°` roll / yaw search) for asymmetric parts such as Smart Motors, capped pins, and corner brackets.
+   - Each part is turned to its mirror image (shared with `place_parts` `mirror`): of the three turns that reflect the part through one of its own middle planes, the one whose pins and openings land on the true mirror image's wins, then the one whose shape matches best. Offset connectors, rubber collars, motors and capped shafts come out the right way round; parts whose surface pattern or tread isn't symmetric get the closest turn with their holes in place, and parts with no exact mirror are flagged `mirrorApproximate`.
+   - Labels swap `Left`/`Right` and a standalone `L`/`R` (`Omni Collar L` → `Omni Collar R`), or get ` (mirror)` when they have neither.
 6. **CAD & Semantic Metadata Readout:**
    - Displays live placement status (`Placed (Clear)` vs `Intersecting`), Part Number, Category, Origin Type (`centered`, `offset_flange`, `asymmetric`), bounding box in `mm` and VEX Pitch (`P`), port breakdown (`pinHoles`, `shaftBores`, `pinPegs`), Gear Specs (`teeth`, `pitchRadiusMm`), Fastener Specs, and Heavy-Part Mounting Rules.
 

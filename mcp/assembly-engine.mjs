@@ -1506,8 +1506,9 @@ export function buildMeshedGearTrain(state, options = {}) {
 
 /**
  * Mirrors a set of placed instances across a symmetry plane ("X", "Y", or "Z") at `planeOffsetMm`.
- * Automatically compensates for asymmetric VEX IQ parts (`end_shoulder` Capped Shafts, Standoffs,
- * `1x2 Connector Pins`, and `mounting_face` Smart Motors) and verifies each mirrored instance with `MeshBVH`.
+ * Each part gets its mirror pose (mirrorPose: exact for parts with a symmetry plane, the closest
+ * turned pose for left- or right-handed ones) and a label with Left/Right and L/R swapped.
+ * Overlaps are checked against the parts already placed.
  */
 export function mirrorSubassembly(state, options = {}) {
   const { catalogById } = getCatalog();
@@ -1529,81 +1530,23 @@ export function mirrorSubassembly(state, options = {}) {
     const src = sourceInstances[idx];
     const part = catalogById.get(src.partId);
     if (!part) continue;
-
-    // Reflect position across mirrorPlane = planeOffsetMm
-    const reflPos = [...src.position];
-    reflPos[axisIdx] = Number((2 * planeOffsetMm - src.position[axisIdx]).toFixed(3));
-
-    // Candidate rotations to test (handles symmetric parts, 180-flipped Z-axis pins/shafts, and Y-axis motors)
-    const r = src.rotation || [0, 0, 0];
-    const candidateRotations = [
-      [...r],
-      [Number(((r[0] + 180) % 360).toFixed(2)), r[1], r[2]],
-      [r[0], Number(((r[1] + 180) % 360).toFixed(2)), r[2]],
-      [Number((-r[0]).toFixed(2)), Number(((180 - r[1]) % 360).toFixed(2)), r[2]],
-      [Number((-r[0]).toFixed(2)), r[1], Number(((180 - r[2]) % 360).toFixed(2))]
-    ];
-
-    // If part is asymmetric and its world center was shifted by origin offset, prioritize rotations that mirror its world bounding box center cleanly!
-    const srcMat = buildWorldMatrix(src.position, src.rotation);
-    const srcWorldCenter = new THREE.Vector3(...part.bbox.center).applyMatrix4(srcMat);
-    const desiredMirroredCenter = srcWorldCenter.clone();
-    desiredMirroredCenter.setComponent(
-      axisIdx,
-      2 * planeOffsetMm - srcWorldCenter.getComponent(axisIdx)
-    );
-
-    // Sort candidateRotations by how closely they place the mirrored part's bbox.center at desiredMirroredCenter
-    const scoredCandidates = candidateRotations.map((candRot) => {
-      const m = buildWorldMatrix(reflPos, candRot);
-      const c = new THREE.Vector3(...part.bbox.center).applyMatrix4(m);
-      return {
-        rot: candRot,
-        centerError: c.distanceTo(desiredMirroredCenter)
-      };
-    });
-    scoredCandidates.sort((a, b) => a.centerError - b.centerError);
-
-    let chosenRot = scoredCandidates[0].rot;
-    let chosenCol = { isIntersecting: false, collidingWith: [] };
-
-    for (const cand of scoredCandidates) {
-      const temp = {
-        instanceId: `inst-mirror-${Date.now()}-${idx}`,
-        partId: src.partId,
-        position: reflPos,
-        rotation: cand.rot,
-        visible: true
-      };
-      const col = checkCandidateCollision(temp, workingInstances);
-      if (!col.isIntersecting && cand.centerError < 1.5) {
-        chosenRot = cand.rot;
-        chosenCol = col;
-        break;
-      }
-    }
-
-    // Generate mirrored label (e.g. Left <-> Right or Front <-> Rear)
-    let newLabel = src.label;
-    if (/left/i.test(newLabel)) newLabel = newLabel.replace(/Left/g, 'Right').replace(/left/g, 'right');
-    else if (/right/i.test(newLabel)) newLabel = newLabel.replace(/Right/g, 'Left').replace(/right/g, 'left');
-    else if (/front/i.test(newLabel)) newLabel = newLabel.replace(/Front/g, 'Rear').replace(/front/g, 'rear');
-    else if (/rear/i.test(newLabel)) newLabel = newLabel.replace(/Rear/g, 'Front').replace(/rear/g, 'front');
-    else newLabel = `${src.label} (Mirrored)`;
-
+    const pose = mirrorPose(part, src, axisIdx, planeOffsetMm);
     const mirroredInst = {
       instanceId: `inst-${Date.now()}-mir-${idx + 1}`,
       partId: src.partId,
-      label: newLabel,
-      position: reflPos,
-      rotation: chosenRot,
-      lastValidPosition: reflPos,
-      lastValidRotation: chosenRot,
-      isIntersecting: chosenCol.isIntersecting,
+      label: mirrorLabel(src.label),
+      position: pose.position,
+      rotation: pose.rotation,
       color: src.color,
       visible: src.visible,
-      locked: false
+      locked: false,
+      ...(src.socketAngleDeg !== undefined ? { socketAngleDeg: src.socketAngleDeg } : {}),
+      ...(pose.exact ? {} : { mirrorApproximate: true })
     };
+    const { isIntersecting } = checkCandidateCollision(mirroredInst, workingInstances);
+    mirroredInst.isIntersecting = isIntersecting;
+    mirroredInst.lastValidPosition = isIntersecting ? null : [...pose.position];
+    mirroredInst.lastValidRotation = isIntersecting ? null : [...pose.rotation];
 
     workingInstances.push(mirroredInst);
     mirroredInstances.push(mirroredInst);
@@ -2126,9 +2069,8 @@ export function placeParts(state, items, options = {}) {
 const SHAPE_CELL_MM = 0.75; // shape signatures compare occupied cells of this size
 const SAME_SHAPE_MIN = 0.85; // share of cells two poses must have in common to look the same
 
-/** Cells a part's collision mesh occupies at a pose, for telling apart fits that look different. */
-function shapeSignature(part, position, rotation) {
-  const matrix = buildWorldMatrix(position, rotation);
+/** Cells a part's collision mesh occupies under a world matrix (a reflection is fine too). */
+function shapeCells(part, matrix) {
   const cells = new Set();
   const v = new THREE.Vector3();
   for (const { geo } of getPartCollisionBvh(part).pieces) {
@@ -2142,11 +2084,16 @@ function shapeSignature(part, position, rotation) {
   return cells;
 }
 
-function sameShape(a, b) {
+const shapeSignature = (part, position, rotation) => shapeCells(part, buildWorldMatrix(position, rotation));
+
+/** Share of cells two shapes have in common (1 = the same). */
+function shapeOverlap(a, b) {
   let common = 0;
   for (const c of a) if (b.has(c)) common++;
-  return common / Math.max(a.size, b.size) >= SAME_SHAPE_MIN;
+  return common / Math.max(a.size, b.size, 1);
 }
+
+const sameShape = (a, b) => shapeOverlap(a, b) >= SAME_SHAPE_MIN;
 
 /**
  * The other ways `part` goes into the same opening: led with the other end (`flip`) and rolled in
@@ -2343,78 +2290,53 @@ function insertIntoOpening(part, insert, target, others, instanceId) {
   }
   return { position: rounded.toArray(), rotation, stoppedAgainst: stoppedAgainst || 'flush with far face', preTurned: Boolean(own) };
 }
-const mirrorSymmetryCache = new Map(); // partId -> { axis, center } | null
-
 /**
- * A local axis k (0 = x, 1 = y, 2 = z) and plane coordinate c such that reflecting the part's own
- * geometry across local plane x_k = c gives the same part: same bbox, and every pin, peg, shaft and
- * opening lands on one of the same kind with the same span. null for a part with no such plane
- * (a left- or right-handed part).
- */
-function localMirrorSymmetry(part) {
-  if (mirrorSymmetryCache.has(part.id)) return mirrorSymmetryCache.get(part.id);
-  const features = getLocalFeatures(part);
-  const ends = (f, k, c) => {
-    const o = new THREE.Vector3(...f.origin);
-    const a = new THREE.Vector3(...f.axis);
-    const t0 = o.dot(a);
-    const pts = [o.clone().addScaledVector(a, f.tMin - t0), o.clone().addScaledVector(a, f.tMax - t0)];
-    if (k !== undefined) for (const p of pts) p.setComponent(k, 2 * c - p.getComponent(k));
-    return pts;
-  };
-  const sameEnds = (p, q, tol) =>
-    (p[0].distanceTo(q[0]) <= tol && p[1].distanceTo(q[1]) <= tol) ||
-    (p[0].distanceTo(q[1]) <= tol && p[1].distanceTo(q[0]) <= tol);
-  let found = null;
-  for (const k of [0, 1, 2]) {
-    const c = (part.bbox.min[k] + part.bbox.max[k]) / 2;
-    const symmetric = features.every((f) => {
-      const mirrored = ends(f, k, c);
-      return features.some((g) => g.kind === f.kind && sameEnds(mirrored, ends(g), 0.3));
-    });
-    if (symmetric) {
-      found = { axis: k, center: c };
-      break;
-    }
-  }
-  mirrorSymmetryCache.set(part.id, found);
-  return found;
-}
-
-/**
- * Mirror image of a placed part across world plane x_i = offsetMm, as a proper pose:
- * with world reflection S and the part's own symmetry L (localMirrorSymmetry), the mirrored part
- * S(R p + t) equals R' q + t' with R' = S R L and t' = S(R (2c e_k) + t). Returns
- * { position, rotation, exact }; exact is false for a part without a symmetry plane, where the
- * closest pose from mirrorSubassembly is used.
+ * Mirror image of a placed part across world plane x_i = offsetMm, as a proper pose. A mirror image
+ * of a part is the part reflected; a real part can only be turned, so it is reflected once more
+ * through one of its own middle planes x_k = c (L): with world reflection S, R' = S R L and
+ * t' = S(R (2c e_k) + t). Of the three planes, one whose pins and openings land on the true mirror
+ * image's wins (exact), then the one whose shape matches it best (a left- or right-handed part, or a
+ * surface pattern that isn't symmetric). Returns { position, rotation, exact }.
  */
 function mirrorPose(part, inst, axisIdx, offsetMm) {
-  const sym = localMirrorSymmetry(part);
-  if (!sym) {
-    const fallback = mirrorSubassembly({ instances: [inst] }, { instanceIds: [inst.instanceId], mirrorPlane: 'XYZ'[axisIdx], planeOffsetMm: offsetMm }).mirroredInstances[0];
-    return { position: fallback.position, rotation: fallback.rotation, exact: false };
-  }
   const R = new THREE.Matrix4().makeRotationFromEuler(
     new THREE.Euler(...inst.rotation.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ')
   );
   const S = new THREE.Matrix4().makeScale(...[0, 1, 2].map((i) => (i === axisIdx ? -1 : 1)));
-  const L = new THREE.Matrix4().makeScale(...[0, 1, 2].map((i) => (i === sym.axis ? -1 : 1)));
-  const Rp = new THREE.Matrix4().multiplyMatrices(S, R).multiply(L);
-  const shift = new THREE.Vector3().setComponent(sym.axis, 2 * sym.center).applyMatrix4(R);
-  const t = new THREE.Vector3(...inst.position).add(shift).applyMatrix4(S);
-  t.setComponent(axisIdx, t.getComponent(axisIdx) + 2 * offsetMm);
-  const e = new THREE.Euler().setFromRotationMatrix(Rp, 'XYZ');
-  return {
-    position: t.toArray().map((n) => Number(n.toFixed(3)) + 0),
-    rotation: [e.x, e.y, e.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2)) + 0),
-    exact: true
+  const worldMirror = new THREE.Matrix4().makeTranslation(...[0, 1, 2].map((i) => (i === axisIdx ? 2 * offsetMm : 0))).multiply(S);
+  const target = shapeCells(part, worldMirror.clone().multiply(buildWorldMatrix(inst.position, inst.rotation)));
+  // The original's pins and openings reflected: a mirror pose is exact when its own land on these
+  const reflectedEnds = worldFeaturesFor(inst).map((f) => ({ kind: f.kind, ends: [f.start.clone().applyMatrix4(worldMirror), f.end.clone().applyMatrix4(worldMirror)] }));
+  const sameEnds = (p, q) =>
+    (p[0].distanceTo(q[0]) <= 0.3 && p[1].distanceTo(q[1]) <= 0.3) || (p[0].distanceTo(q[1]) <= 0.3 && p[1].distanceTo(q[0]) <= 0.3);
+  const portsMatch = (position, rotation) => {
+    const own = worldFeaturesFor({ ...inst, position, rotation });
+    return own.length === reflectedEnds.length && own.every((f) => reflectedEnds.some((g) => g.kind === f.kind && sameEnds([f.start, f.end], g.ends)));
   };
+  let best = null;
+  for (const k of [0, 1, 2]) {
+    const L = new THREE.Matrix4().makeScale(...[0, 1, 2].map((i) => (i === k ? -1 : 1)));
+    const Rp = new THREE.Matrix4().multiplyMatrices(S, R).multiply(L);
+    const center = (part.bbox.min[k] + part.bbox.max[k]) / 2;
+    const shift = new THREE.Vector3().setComponent(k, 2 * center).applyMatrix4(R);
+    const t = new THREE.Vector3(...inst.position).add(shift).applyMatrix4(S);
+    t.setComponent(axisIdx, t.getComponent(axisIdx) + 2 * offsetMm);
+    const e = new THREE.Euler().setFromRotationMatrix(Rp, 'XYZ');
+    const position = t.toArray().map((n) => Number(n.toFixed(3)) + 0);
+    const rotation = [e.x, e.y, e.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2)) + 0);
+    const ports = portsMatch(position, rotation);
+    const score = shapeOverlap(target, shapeCells(part, buildWorldMatrix(position, rotation)));
+    if (!best || (ports && !best.ports) || (ports === best.ports && score > best.score)) best = { position, rotation, ports, score };
+  }
+  return { position: best.position, rotation: best.rotation, exact: best.ports };
 }
 
-/** Swaps Left and Right in a label (keeping case), or adds " (mirror)" when it has neither. */
+/** Swaps Left/Right and a standalone L/R in a label (keeping case), or adds " (mirror)" when it has neither. */
 function mirrorLabel(label) {
-  if (!/left|right/i.test(label)) return `${label} (mirror)`;
-  return label.replace(/left|right/gi, (w) => {
+  const pattern = /\b(left|right)\b|\b[LR]\b/gi;
+  if (!/\b(left|right)\b|\b[LR]\b/i.test(label)) return `${label} (mirror)`;
+  return label.replace(pattern, (w) => {
+    if (w.length === 1) return w === 'L' ? 'R' : w === 'R' ? 'L' : w;
     const swap = /left/i.test(w) ? 'right' : 'left';
     if (w === w.toUpperCase()) return swap.toUpperCase();
     if (w[0] === w[0].toUpperCase()) return swap[0].toUpperCase() + swap.slice(1);
