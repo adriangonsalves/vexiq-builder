@@ -36,5 +36,10 @@ check('the Speedbot 2.0 starter has all 43 parts of the kit (cables left out)', 
 const overlapping = speedbot.filter((inst) => checkCandidateCollision(inst, speedbot).isIntersecting).map((p) => p.label);
 check('  none of its parts overlap (tires on their hubs included)', overlapping.length === 0, overlapping.join(', '));
 
+const basebot = starterById('basebot').build(catalog);
+check('the BaseBot starter has its 97 parts (cables left out, two wheel hubs added)', basebot.length === 97, String(basebot.length));
+const basebotOverlapping = basebot.filter((inst) => checkCandidateCollision(inst, basebot).isIntersecting).map((p) => p.label);
+check('  none of its parts overlap', basebotOverlapping.length === 0, basebotOverlapping.join(', '));
+
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);
