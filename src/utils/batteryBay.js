@@ -35,3 +35,20 @@ export function seatedBatteryBay(batteryPart, batteryMatrix, brainPart, brainMat
   }
   return bay;
 }
+
+const _pos = new THREE.Vector3();
+const _quat = new THREE.Quaternion();
+const _scale = new THREE.Vector3();
+const _euler = new THREE.Euler();
+
+/** Where `batteryPart` goes in `brainPart`'s bay, for a brain at `brainMatrix`: { position, rotation } or null. */
+export function batteryBayPose(batteryPart, brainPart, brainMatrix) {
+  const bay = BATTERY_BAYS.find((b) => b.battery === batteryPart?.partNumber && b.brain === brainPart?.partNumber);
+  if (!bay) return null;
+  _expected.multiplyMatrices(brainMatrix, bayMatrix(bay)).decompose(_pos, _quat, _scale);
+  _euler.setFromQuaternion(_quat, 'XYZ');
+  return {
+    position: _pos.toArray().map((n) => Number(n.toFixed(3)) + 0),
+    rotation: [_euler.x, _euler.y, _euler.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2)) + 0)
+  };
+}

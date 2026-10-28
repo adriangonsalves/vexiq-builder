@@ -13,6 +13,7 @@ import { isMeshingGear, meshTurn, worldToothed } from '../utils/gearMeshing.js';
 import { squareFitRoll } from '../utils/shaftGroups.js';
 import { settlePlacement } from '../utils/placementFit.js';
 import { isTireOnHub } from '../utils/tireFit.js';
+import { batteryBayPose } from '../utils/batteryBay.js';
 import {
   HOLE_SNAP_AXIAL_REACH_MM,
   MAX_AXIAL_GAP_MM,
@@ -2405,6 +2406,43 @@ export default function Viewport3D({
   };
 
   /** Double-click on the selected part: mate in its only direction, or offer arrows for several. */
+  /**
+   * With a battery selected, double-clicking a brain slides the battery into that brain's bay
+   * (src/utils/batteryBay.js). Returns false when the selected part and `brainId` aren't a battery
+   * and a brain it fits, so the double-click does its usual job.
+   */
+  const batteryFitsBrain = (batteryId, brainId) => {
+    const partOf = (id) => catalogMapRef.current.get(instancesRef.current.find((i) => i.instanceId === id)?.partId);
+    return Boolean(brainId && batteryBayPose(partOf(batteryId), partOf(brainId), new THREE.Matrix4()));
+  };
+
+  const slideBatteryInto = (brainId) => {
+    const selId = selectedIdRef.current;
+    const group = selId ? meshMapRef.current.get(selId) : null;
+    const brain = meshMapRef.current.get(brainId);
+    const inst = instancesRef.current.find((i) => i.instanceId === selId);
+    const brainInst = instancesRef.current.find((i) => i.instanceId === brainId);
+    if (!group || !brain || !inst || !brainInst || explodeModeRef.current !== 'off') return false;
+    brain.updateMatrixWorld(true);
+    const pose = batteryBayPose(catalogMapRef.current.get(inst.partId), catalogMapRef.current.get(brainInst.partId), brain.matrixWorld);
+    if (!pose) return false;
+    const feedback = (message, isError = false) => onMateFeedbackRef.current?.(message, isError);
+    if (inst.locked) {
+      feedback('Part is locked', true);
+      return true;
+    }
+    const before = groupPose(group);
+    poseGroup(group, pose);
+    if (checkGroupCollision(group, false)) {
+      poseGroup(group, before);
+      feedback(`Can't slide ${inst.label} into ${brainInst.label}: something is in the way`, true);
+      return true;
+    }
+    commitPlacement(group, { label: `Slide ${inst.label} into ${brainInst.label}`, settle: false });
+    feedback(`Slid ${inst.label} into ${brainInst.label}`);
+    return true;
+  };
+
   const handleMateRequest = () => {
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
@@ -3406,7 +3444,9 @@ export default function Viewport3D({
       const front = ids[0] ?? null;
       const selId = selectedIdRef.current;
       cancelPendingSelect();
-      if (selId && front !== selId && ids.includes(selId)) {
+      // Wait for a possible double-click before selecting: on the selected part behind another, or on
+      // a brain the selected battery fits (the double-click slides it in)
+      if (selId && front !== selId && (ids.includes(selId) || batteryFitsBrain(selId, front))) {
         pendingSelectTimer = setTimeout(() => {
           pendingSelectTimer = null;
           onSelectRef.current(front);
@@ -3474,8 +3514,15 @@ export default function Viewport3D({
         if (rotateGizmo.pick(raycaster)) return; // double-clicking a ring handle never mates
       }
       const selId = selectedIdRef.current;
+      if (!selId) return;
+      const underPointer = pickPartsAt(e);
+      // A selected battery and a brain double-clicked: slide the battery into the brain's bay
+      if (underPointer.some((id) => id !== selId && slideBatteryInto(id))) {
+        cancelPendingSelect();
+        return;
+      }
       // The selected part may be behind another part; anywhere under the pointer counts
-      if (!selId || !pickPartsAt(e).includes(selId)) return;
+      if (!underPointer.includes(selId)) return;
       cancelPendingSelect();
       handleMateRequest();
     };
