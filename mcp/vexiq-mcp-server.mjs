@@ -555,6 +555,10 @@ const TOOLS = [
                     },
                     required: ['port']
                   },
+                  flip: {
+                    type: 'boolean',
+                    description: 'Lead with the other end of the pin, shaft or opening (turns the part end for end). The reply lists other fits (otherFits) when a part goes in more than one way.'
+                  },
                   rollDeg: {
                     type: 'number',
                     default: 0,
@@ -1388,6 +1392,12 @@ async function executeTool(name, args = {}) {
       status: p.inst.isIntersecting ? 'overlapping' : 'placed',
       ...(p.collidingWith.length ? { overlaps: p.collidingWith } : {}),
       ...(p.stoppedAgainst ? { stoppedAgainst: p.stoppedAgainst } : {}),
+      ...(p.otherFits?.length
+        ? {
+            otherFits: p.otherFits,
+            otherFitsNote: `This part also fits ${p.otherFits.length} other way(s) that look different. Check it faces the right way; pass insert.flip / insert.rollDeg from one of these to use it instead.`
+          }
+        : {}),
       ...(p.mirrorApproximate ? { mirrorApproximate: true } : {}),
       // The placement step: meshes, square fits, hub turns, neighbours it couldn't mesh with
       ...(p.notes?.length ? { notes: p.notes } : {}),

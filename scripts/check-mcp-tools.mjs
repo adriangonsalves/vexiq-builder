@@ -399,6 +399,26 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
     hubRes && hubRes.status === 'placed' && /Beam/.test(hubRes.stoppedAgainst) && jointOf(a, 'Shaft').includes('Hub'),
     JSON.stringify({ hubRes, joints: jointOf(a, 'Shaft') })
   );
+
+  // e. Parts that fit more than one way list the others (otherFits), and flip picks one
+  const brain = mk('Brain', 'VEX IQ Robot Brain', [0, 69.9, 0]);
+  const cornerItem = (insert = {}) => [{ partQuery: 'Double 2x Wide, 1x2 Corner Connector', label: 'Corner', insert: { sourcePort: 'peg_1', into: { instanceId: 'Brain', port: 'brain_right_mount_8@lo' }, ...insert } }];
+  res = await fresh([brain], cornerItem(), { dryRun: true });
+  const corner = res.data?.parts?.[0];
+  check(
+    'A corner connector pushed into the brain lists its one other fit: turned end for end (upside down)',
+    corner?.otherFits?.length === 1 && corner.otherFits[0].flip === true && /other way/.test(corner.otherFitsNote || ''),
+    JSON.stringify(corner)
+  );
+  res = await fresh([brain], cornerItem({ flip: true }), { dryRun: true });
+  const flipped = res.data?.parts?.[0];
+  check(
+    '  insert.flip places it that way, and the reply lists no others once a choice is made',
+    flipped?.status === 'placed' && !flipped.otherFits && JSON.stringify(flipped.rotation) === JSON.stringify(corner?.otherFits?.[0]?.rotation),
+    JSON.stringify(flipped)
+  );
+  res = await fresh([beam], [{ partQuery: '1x1 Connector Pin', label: 'P', insert: { into: { instanceId: 'Beam', port: 'hole_3' }, fromSide: '+' } }], { dryRun: true });
+  check('  a 1x1 pin (same either way) lists no other fits', res.data?.parts?.[0]?.status === 'placed' && !res.data.parts[0].otherFits, JSON.stringify(res.data?.parts?.[0]));
 }
 
 // ---------------------------------------------------------------------------

@@ -2035,6 +2035,7 @@ export function placeParts(state, items, options = {}) {
     };
     let stoppedAgainst;
     let preTurned = false;
+    let otherFits = [];
 
     if (item.insert) {
       const target = resolveInstance(item.insert.into);
@@ -2045,6 +2046,11 @@ export function placeParts(state, items, options = {}) {
       inst.rotation = pose.rotation;
       stoppedAgainst = pose.stoppedAgainst;
       preTurned = pose.preTurned;
+      // A part that fits more than one way (flipped, rolled) gets the others listed, unless the
+      // caller already chose with flip / rollDeg
+      if (item.insert.flip === undefined && item.insert.rollDeg === undefined) {
+        otherFits = otherInsertFits(part, item.insert, target, working, inst.instanceId, pose);
+      }
     } else {
       if (!Array.isArray(item.position) || item.position.length !== 3) {
         return fail(index, item.ref, 'give either position [x, y, z] (mm) or insert');
@@ -2077,6 +2083,7 @@ export function placeParts(state, items, options = {}) {
       ref: item.ref,
       inst,
       stoppedAgainst,
+      ...(otherFits.length ? { otherFits } : {}),
       notes: settled.messages,
       ...((own?.rotation || preTurned) && rollGiven ? { rollReplaced: true } : {}),
       ...(others.length ? { turnedOthers: others.map((p) => working.find((w) => w.instanceId === p.instanceId)?.label || p.instanceId) } : {})
@@ -2114,6 +2121,65 @@ export function placeParts(state, items, options = {}) {
     placed,
     audit: summarizeAudit(auditAssembly({ ...state, instances: working }))
   };
+}
+
+const SHAPE_CELL_MM = 0.75; // shape signatures compare occupied cells of this size
+const SAME_SHAPE_MIN = 0.85; // share of cells two poses must have in common to look the same
+
+/** Cells a part's collision mesh occupies at a pose, for telling apart fits that look different. */
+function shapeSignature(part, position, rotation) {
+  const matrix = buildWorldMatrix(position, rotation);
+  const cells = new Set();
+  const v = new THREE.Vector3();
+  for (const { geo } of getPartCollisionBvh(part).pieces) {
+    const pos = geo.attributes.position;
+    const stride = Math.max(1, Math.floor(pos.count / 4000));
+    for (let i = 0; i < pos.count; i += stride) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(matrix);
+      cells.add(`${Math.round(v.x / SHAPE_CELL_MM)},${Math.round(v.y / SHAPE_CELL_MM)},${Math.round(v.z / SHAPE_CELL_MM)}`);
+    }
+  }
+  return cells;
+}
+
+function sameShape(a, b) {
+  let common = 0;
+  for (const c of a) if (b.has(c)) common++;
+  return common / Math.max(a.size, b.size) >= SAME_SHAPE_MIN;
+}
+
+/**
+ * The other ways `part` goes into the same opening: led with the other end (`flip`) and rolled in
+ * quarter turns, keeping those that fit without overlapping and don't look the same as the chosen
+ * pose or each other (a round pin rolled is still the same pin). Returns [{ flip, rollDeg, ... }].
+ */
+function otherInsertFits(part, insert, target, others, instanceId, chosen) {
+  const measured = getPartMeasurements(part);
+  const targetFeatures = worldFeaturesFor(target);
+  // How many pins sit in openings between the part and the target at a pose
+  const seatedCount = (pose) =>
+    findSeatedPairs(collectWorldFeatures(part, buildWorldMatrix(pose.position, pose.rotation), instanceId, measured), targetFeatures).length;
+  const chosenSeated = seatedCount(chosen);
+  // Rolling a pin or shaft about its own axis changes nothing that matters (square fits are turned
+  // by the placement step); turning it end for end can (capped shafts and pins)
+  const fastener = isFastenerPart(part, collectWorldFeatures(part, new THREE.Matrix4(), instanceId, measured));
+  const seen = [shapeSignature(part, chosen.position, chosen.rotation)];
+  const fits = [];
+  for (const flip of [false, true]) {
+    for (const rollDeg of fastener ? [0] : [0, 90, 180, 270]) {
+      if (!flip && rollDeg === 0) continue;
+      const pose = insertIntoOpening(part, { ...insert, flip, rollDeg }, target, others, instanceId);
+      if (pose.error) continue;
+      if (seatedCount(pose) < chosenSeated) continue;
+      const candidate = { instanceId, partId: part.id, label: part.name, position: pose.position, rotation: pose.rotation, visible: true };
+      if (checkCandidateCollision(candidate, others).isIntersecting) continue;
+      const signature = shapeSignature(part, pose.position, pose.rotation);
+      if (seen.some((s) => sameShape(s, signature))) continue;
+      seen.push(signature);
+      fits.push({ flip, rollDeg, position: pose.position, rotation: pose.rotation, ...(pose.stoppedAgainst ? { stoppedAgainst: pose.stoppedAgainst } : {}) });
+    }
+  }
+  return fits;
 }
 
 const INSERT_START_GAP_MM = 1; // the item starts this far outside the target before moving in
@@ -2176,6 +2242,7 @@ function insertIntoOpening(part, insert, target, others, instanceId) {
   else if (source.kind === 'shaft') uWorld = part.fastenerSpecs?.hasEndCap ? travel.clone().negate() : a;
   else if (!source.through) uWorld = source.featureId.endsWith('@lo') ? travel.clone().negate() : travel;
   else uWorld = a;
+  if (insert.flip) uWorld.negate();
   const q = buildAxisAlignedQuaternion(source.axis.toArray(), uWorld.toArray(), Number(insert.rollDeg) || 0);
   const euler = new THREE.Euler().setFromQuaternion(q, 'XYZ');
   let rotation = [euler.x, euler.y, euler.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2)) + 0);
