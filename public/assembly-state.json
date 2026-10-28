@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "selectedId": "inst-1793149098967-3-mewx",
+  "selectedId": "inst-1793152569901-1-drbe",
   "viewport": {
     "transformMode": "translate",
     "snapPitchFactor": 0.25,
@@ -313,35 +313,6 @@
       ]
     },
     {
-      "instanceId": "inst-1793149098967-a-bsw7",
-      "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
-      "label": "Drive Shaft L",
-      "position": [
-        -38.1,
-        31.8,
-        -85.725
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "color": "#4b5563",
-      "visible": true,
-      "locked": false,
-      "isIntersecting": false,
-      "lastValidPosition": [
-        -38.1,
-        31.8,
-        -85.725
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ]
-    },
-    {
       "instanceId": "inst-1793149098967-b-7u0a",
       "partId": "0-25x-pitch-spacer-228-2500-114-4",
       "label": "Spacer L",
@@ -377,7 +348,7 @@
       "position": [
         -38.1,
         31.8,
-        -73.45
+        -73.025
       ],
       "rotation": [
         90,
@@ -391,7 +362,7 @@
       "lastValidPosition": [
         -38.1,
         31.8,
-        -73.45
+        -73.025
       ],
       "lastValidRotation": [
         90,
@@ -541,35 +512,6 @@
       "lastValidRotation": [
         0,
         180,
-        0
-      ]
-    },
-    {
-      "instanceId": "inst-1793149098967-i-izba",
-      "partId": "rubber-shaft-collar-228-2500-143-412",
-      "label": "Omni Collar L",
-      "position": [
-        -42.191,
-        39.895,
-        -90.76
-      ],
-      "rotation": [
-        90,
-        0,
-        0
-      ],
-      "color": "#1f2937",
-      "visible": true,
-      "locked": false,
-      "isIntersecting": false,
-      "lastValidPosition": [
-        -42.191,
-        39.895,
-        -90.76
-      ],
-      "lastValidRotation": [
-        90,
-        0,
         0
       ]
     },
@@ -894,35 +836,6 @@
       ]
     },
     {
-      "instanceId": "inst-1793149098967-u-i9gt",
-      "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
-      "label": "Drive Shaft R",
-      "position": [
-        -38.1,
-        31.8,
-        85.725
-      ],
-      "rotation": [
-        180,
-        180,
-        0
-      ],
-      "color": "#4b5563",
-      "visible": true,
-      "locked": false,
-      "isIntersecting": false,
-      "lastValidPosition": [
-        -38.1,
-        31.8,
-        85.725
-      ],
-      "lastValidRotation": [
-        180,
-        180,
-        0
-      ]
-    },
-    {
       "instanceId": "inst-1793149098967-v-dtlq",
       "partId": "0-25x-pitch-spacer-228-2500-114-4",
       "label": "Spacer R",
@@ -958,7 +871,7 @@
       "position": [
         -38.1,
         31.8,
-        73.45
+        73.025
       ],
       "rotation": [
         270,
@@ -972,7 +885,7 @@
       "lastValidPosition": [
         -38.1,
         31.8,
-        73.45
+        73.025
       ],
       "lastValidRotation": [
         270,
@@ -1184,35 +1097,6 @@
       ]
     },
     {
-      "instanceId": "inst-1793149098967-14-696c",
-      "partId": "rubber-shaft-collar-228-2500-143-412",
-      "label": "Omni Collar R",
-      "position": [
-        -42.191,
-        23.705,
-        90.76
-      ],
-      "rotation": [
-        -90,
-        0,
-        0
-      ],
-      "color": "#1f2937",
-      "visible": true,
-      "locked": false,
-      "isIntersecting": false,
-      "lastValidPosition": [
-        -42.191,
-        23.705,
-        90.76
-      ],
-      "lastValidRotation": [
-        -90,
-        0,
-        0
-      ]
-    },
-    {
       "instanceId": "inst-1793149098967-15-h314",
       "partId": "rubber-shaft-collar-228-2500-143-412",
       "label": "Rear Collar R",
@@ -1240,9 +1124,125 @@
         0,
         0
       ]
+    },
+    {
+      "instanceId": "inst-1793152515778-0-f7v6",
+      "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+      "label": "Drive Shaft L",
+      "position": [
+        -38.1,
+        31.8,
+        -47.6
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        -47.6
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793152515778-1-2bqh",
+      "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+      "label": "Drive Shaft R",
+      "position": [
+        -38.1,
+        31.8,
+        47.6
+      ],
+      "rotation": [
+        0,
+        180,
+        0
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        47.6
+      ],
+      "lastValidRotation": [
+        0,
+        180,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793152569901-0-69ua",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Omni Collar L",
+      "position": [
+        -42.191,
+        23.705,
+        -63.5
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -42.191,
+        23.705,
+        -63.5
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793152569901-1-drbe",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Omni Collar R",
+      "position": [
+        -42.191,
+        39.895,
+        63.5
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -42.191,
+        39.895,
+        63.5
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
     }
   ],
-  "updatedAt": "2026-10-28T01:30:45.286Z",
+  "updatedAt": "2026-10-28T01:56:10.355Z",
   "history": {
     "version": 1,
     "base": [],
@@ -22849,9 +22849,543 @@
           }
         ],
         "mergeKey": "mcp:mvrfu1d0-2"
+      },
+      {
+        "id": "step-mvrgowx6-jnld9b",
+        "parentId": "step-mvrfu1lx-8h2dq6",
+        "at": 1793152485546,
+        "source": "mcp",
+        "label": "remove_part: Drive Shaft L",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 10,
+            "part": {
+              "instanceId": "inst-1793149098967-a-bsw7",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft L",
+              "position": [
+                -38.1,
+                31.8,
+                -85.725
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -85.725
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrgowwh-2"
+      },
+      {
+        "id": "step-mvrgowyt-w5afoh",
+        "parentId": "step-mvrgowx6-jnld9b",
+        "at": 1793152485605,
+        "source": "mcp",
+        "label": "remove_part: Omni Collar L",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 17,
+            "part": {
+              "instanceId": "inst-1793149098967-i-izba",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L",
+              "position": [
+                -42.191,
+                39.895,
+                -90.76
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                -90.76
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrgowym-3"
+      },
+      {
+        "id": "step-mvrgpk6t-jyjg82",
+        "parentId": "step-mvrgowyt-w5afoh",
+        "at": 1793152515701,
+        "source": "mcp",
+        "label": "remove_part: Drive Shaft R",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 28,
+            "part": {
+              "instanceId": "inst-1793149098967-u-i9gt",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft R",
+              "position": [
+                -38.1,
+                31.8,
+                85.725
+              ],
+              "rotation": [
+                180,
+                180,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                85.725
+              ],
+              "lastValidRotation": [
+                180,
+                180,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrgpk61-2"
+      },
+      {
+        "id": "step-mvrgpk8j-qmel5o",
+        "parentId": "step-mvrgpk6t-jyjg82",
+        "at": 1793152515763,
+        "source": "mcp",
+        "label": "remove_part: Omni Collar R",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 37,
+            "part": {
+              "instanceId": "inst-1793149098967-14-696c",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar R",
+              "position": [
+                -42.191,
+                23.705,
+                90.76
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                23.705,
+                90.76
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrgpk8d-3"
+      },
+      {
+        "id": "step-mvrgpkr7-6ouzi4",
+        "parentId": "step-mvrgpk8j-qmel5o",
+        "at": 1793152516435,
+        "source": "mcp",
+        "label": "place_parts: 4 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 38,
+            "part": {
+              "instanceId": "inst-1793152515778-0-f7v6",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft L",
+              "position": [
+                -38.1,
+                31.8,
+                -47.6
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -47.6
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 39,
+            "part": {
+              "instanceId": "inst-1793152515778-1-2bqh",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft R",
+              "position": [
+                -38.1,
+                31.8,
+                47.6
+              ],
+              "rotation": [
+                0,
+                180,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                47.6
+              ],
+              "lastValidRotation": [
+                0,
+                180,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793152515778-2-hp0u",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L",
+              "position": [
+                -42.191,
+                23.705,
+                -63.5
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                23.705,
+                -63.5
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 41,
+            "part": {
+              "instanceId": "inst-1793152515778-3-gg86",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar R",
+              "position": [
+                -42.191,
+                39.895,
+                63.5
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                63.5
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrgpk8v-4"
+      },
+      {
+        "id": "step-mvrgqpre-3gdlis",
+        "parentId": "step-mvrgpkr7-6ouzi4",
+        "at": 1793152569578,
+        "source": "mcp",
+        "label": "remove_part: Omni Collar L",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793152515778-2-hp0u",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L",
+              "position": [
+                -42.191,
+                23.705,
+                -63.5
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                23.705,
+                -63.5
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrgqpqo-2"
+      },
+      {
+        "id": "step-mvrgqpt0-n3ldvi",
+        "parentId": "step-mvrgqpre-3gdlis",
+        "at": 1793152569636,
+        "source": "mcp",
+        "label": "remove_part: Omni Collar R",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793152515778-3-gg86",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar R",
+              "position": [
+                -42.191,
+                39.895,
+                63.5
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                63.5
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrgqpsu-3"
+      },
+      {
+        "id": "step-mvrgqpzi-zn4ln7",
+        "parentId": "step-mvrgqpt0-n3ldvi",
+        "at": 1793152569870,
+        "source": "mcp",
+        "label": "update_part: move Omni Wheel L",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793149098967-c-bosn",
+            "name": "Omni Wheel L",
+            "before": {
+              "position": [
+                -38.1,
+                31.8,
+                -73.45
+              ]
+            },
+            "after": {
+              "position": [
+                -38.1,
+                31.8,
+                -73.025
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrgqptc-4"
+      },
+      {
+        "id": "step-mvrgqpzz-o7zlpp",
+        "parentId": "step-mvrgqpzi-zn4ln7",
+        "at": 1793152569887,
+        "source": "mcp",
+        "label": "update_part: move Omni Wheel R",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793149098967-w-kgg2",
+            "name": "Omni Wheel R",
+            "before": {
+              "position": [
+                -38.1,
+                31.8,
+                73.45
+              ]
+            },
+            "after": {
+              "position": [
+                -38.1,
+                31.8,
+                73.025
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrgqpzt-5"
+      },
+      {
+        "id": "step-mvrgqqcz-yvyyx1",
+        "parentId": "step-mvrgqpzz-o7zlpp",
+        "at": 1793152570355,
+        "source": "mcp",
+        "label": "place_parts: 2 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793152569901-0-69ua",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L",
+              "position": [
+                -42.191,
+                23.705,
+                -63.5
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                23.705,
+                -63.5
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 41,
+            "part": {
+              "instanceId": "inst-1793152569901-1-drbe",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar R",
+              "position": [
+                -42.191,
+                39.895,
+                63.5
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                63.5
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrgqq0a-6"
       }
     ],
-    "headId": "step-mvrfu1lx-8h2dq6",
+    "headId": "step-mvrgqqcz-yvyyx1",
     "activeChild": {
       "root": "step-mvm1cbpd-8kprhe",
       "step-mvm1cbpd-8kprhe": "step-mvmho6hy-13n0rx",
@@ -23207,9 +23741,19 @@
       "step-mvrefs0k-ga6sxd": "step-mvrefshv-jgikvu",
       "step-mvrefshv-jgikvu": "step-mvreobs6-2dn8yg",
       "step-mvreobs6-2dn8yg": "step-mvreoce2-dhrg9e",
-      "step-mvreoce2-dhrg9e": "step-mvrfu1lx-8h2dq6"
+      "step-mvreoce2-dhrg9e": "step-mvrfu1lx-8h2dq6",
+      "step-mvrfu1lx-8h2dq6": "step-mvrgowx6-jnld9b",
+      "step-mvrgowx6-jnld9b": "step-mvrgowyt-w5afoh",
+      "step-mvrgowyt-w5afoh": "step-mvrgpk6t-jyjg82",
+      "step-mvrgpk6t-jyjg82": "step-mvrgpk8j-qmel5o",
+      "step-mvrgpk8j-qmel5o": "step-mvrgpkr7-6ouzi4",
+      "step-mvrgpkr7-6ouzi4": "step-mvrgqpre-3gdlis",
+      "step-mvrgqpre-3gdlis": "step-mvrgqpt0-n3ldvi",
+      "step-mvrgqpt0-n3ldvi": "step-mvrgqpzi-zn4ln7",
+      "step-mvrgqpzi-zn4ln7": "step-mvrgqpzz-o7zlpp",
+      "step-mvrgqpzz-o7zlpp": "step-mvrgqqcz-yvyyx1"
     },
-    "rev": 469
+    "rev": 484
   },
-  "historyRev": 469
+  "historyRev": 484
 }
