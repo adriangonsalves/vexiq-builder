@@ -6,6 +6,7 @@ import {
   getCatalog,
   findPart,
   getPartCollisionBvh,
+  getPartRawGeometry,
   buildWorldMatrix,
   VEX_PITCH_MM
 } from '../mcp/assembly-engine.mjs';
@@ -222,6 +223,54 @@ function probeIntersectsPart(probeBvh, probePos, probeRotDeg, partBvh) {
   return partBvh.colGeo.boundsTree.intersectsGeometry(probeBvh.colGeo, matProbe);
 }
 
+// A pin hole's wall: rays out from its axis that all hit within this radius (a pin bore is at most
+// ~3.3 mm, counterbores included), sampled every WALL_STEP_MM along the axis
+const WALL_MAX_RADIUS_MM = 3.6;
+const WALL_STEP_MM = 0.05;
+const WALL_RAYS = 8;
+const WALL_MIN_LENGTH_MM = 0.2; // plastic sheets are 0.25 mm thick
+const WALL_SEARCH_MM = 3.2; // the STEP anchor can sit on a face up to a rim's depth from the wall
+
+/**
+ * Where a pin hole's wall really runs along its axis, measured on the part's mesh. Used when all of
+ * a hole's STEP surfaces are placed on one face, which gives it no length (the 2nd gen omni wheel's
+ * holes, plastic sheets, truss plates). Walks out both ways from `anchorT` while every ray out from
+ * the axis meets the part within WALL_MAX_RADIUS_MM. Returns [minT, maxT], or null when no wall is
+ * found (a shallower stub than WALL_MIN_LENGTH_MM counts as none).
+ */
+function measureHoleWallSpan(raycast, perpOrigin, axis, anchorT, bbox) {
+  const ax = new THREE.Vector3(...axis);
+  const u = new THREE.Vector3()
+    .crossVectors(ax, Math.abs(ax.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0))
+    .normalize();
+  const v = new THREE.Vector3().crossVectors(ax, u);
+  const dirs = Array.from({ length: WALL_RAYS }, (_, i) => {
+    const a = (i / WALL_RAYS) * Math.PI * 2;
+    return u.clone().multiplyScalar(Math.cos(a)).addScaledVector(v, Math.sin(a)).toArray();
+  });
+  const walled = (t) => {
+    const c = new THREE.Vector3(...perpOrigin).addScaledVector(ax, t).toArray();
+    return dirs.every((d) => {
+      const dist = raycast(c, d);
+      return dist != null && dist <= WALL_MAX_RADIUS_MM;
+    });
+  };
+  const k = axis.findIndex((a) => Math.abs(a) === 1);
+  const [tLo, tHi] = k >= 0 ? [Math.min(bbox.min[k] * axis[k], bbox.max[k] * axis[k]), Math.max(bbox.min[k] * axis[k], bbox.max[k] * axis[k])] : [-Infinity, Infinity];
+  // The STEP anchor often sits on a face or a wider rim, so start at the nearest wall either side of it
+  let start;
+  for (let d = 0; d <= WALL_SEARCH_MM && start === undefined; d += WALL_STEP_MM) {
+    start = [anchorT - d, anchorT + d].find((t) => t >= tLo && t <= tHi && walled(t));
+  }
+  if (start === undefined) return null;
+  let lo = start;
+  while (lo - WALL_STEP_MM >= tLo && walled(lo - WALL_STEP_MM)) lo -= WALL_STEP_MM;
+  let hi = start;
+  while (hi + WALL_STEP_MM <= tHi && walled(hi + WALL_STEP_MM)) hi += WALL_STEP_MM;
+  if (hi - lo < WALL_MIN_LENGTH_MM) return null;
+  return [Number(lo.toFixed(3)), Number(hi.toFixed(3))];
+}
+
 /**
  * Infers gear & sprocket mechanical specifications from part name and bounding box.
  */
@@ -424,6 +473,19 @@ async function main() {
   for (let idx = 0; idx < catalog.length; idx++) {
     const part = catalog[idx];
     const partBvh = getPartCollisionBvh(part);
+    // Raycasts on the part's real (not shrunk) mesh, built only when a hole needs measuring
+    let partRaycast = null;
+    const rawRaycast = () => {
+      if (partRaycast) return partRaycast;
+      const geo = getPartRawGeometry(part);
+      const ray = new THREE.Ray();
+      partRaycast = (o, d) => {
+        ray.origin.set(o[0], o[1], o[2]);
+        ray.direction.set(d[0], d[1], d[2]);
+        return geo.boundsTree.raycastFirst(ray, THREE.DoubleSide)?.distance ?? null;
+      };
+      return partRaycast;
+    };
 
     const stepPath =
       stepFileMap.get(path.basename(part.file)) ||
@@ -524,13 +586,17 @@ async function main() {
           verifiedType === 'pin_hole'
             ? `hole_${holeCounter++}`
             : `bore_${boreCounter++}`;
+        const span =
+          verifiedType === 'pin_hole' && g.maxT - g.minT < 0.01
+            ? measureHoleWallSpan(rawRaycast(), g.perpOrigin, g.axis, g.minT, part.bbox) || [g.minT, g.maxT]
+            : [g.minT, g.maxT];
         ports.push({
           portId: id,
           type: verifiedType,
           origin: verifiedPos,
           axis: g.axis,
           through: isThrough,
-          spanMm: [g.minT, g.maxT],
+          spanMm: span,
           pitchCoord: [
             Number((verifiedPos[0] / VEX_PITCH_MM).toFixed(2)),
             Number((verifiedPos[1] / VEX_PITCH_MM).toFixed(2)),
