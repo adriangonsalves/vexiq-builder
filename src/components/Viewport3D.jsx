@@ -7,11 +7,12 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { loadPartAsset } from '../utils/geometryCache.js';
+import { loadPartAsset, RUBBER_COLOR } from '../utils/geometryCache.js';
 import { hubMatrix } from '../utils/motorHub.js';
 import { isMeshingGear, meshTurn, worldToothed } from '../utils/gearMeshing.js';
 import { squareFitRoll } from '../utils/shaftGroups.js';
 import { settlePlacement } from '../utils/placementFit.js';
+import { isTireOnHub } from '../utils/tireFit.js';
 import {
   HOLE_SNAP_AXIAL_REACH_MM,
   MAX_AXIAL_GAP_MM,
@@ -1097,7 +1098,7 @@ function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) 
         mat.emissiveIntensity = 0.25;
       }
     } else {
-      mat.color.set(baseColor || '#64748b');
+      mat.color.set(child.userData.fixedColor || baseColor || '#64748b');
       mat.transparent = false;
       mat.opacity = 1.0;
       mat.depthWrite = true;
@@ -1420,6 +1421,10 @@ export default function Viewport3D({
       const worldBoxB = localBoxB.clone().applyMatrix4(otherGroup.matrixWorld);
 
       if (!worldBoxA.intersectsBox(worldBoxB)) continue;
+      const catalogMap = catalogMapRef.current;
+      const partA = catalogMap.get(targetGroup.userData.partId);
+      const partB = catalogMap.get(otherGroup.userData.partId);
+      if (isTireOnHub(partA, targetGroup.matrixWorld, partB, otherGroup.matrixWorld)) continue;
 
       matrixBtoA.multiplyMatrices(invMatrixA, otherGroup.matrixWorld);
       // A turned motor hub's collision piece is posed by its own local matrix inside its group
@@ -4327,12 +4332,17 @@ export default function Viewport3D({
               metalness: 0.12
             });
 
+            const rubberMaterial = geometries.some((geo) => geo.userData.rubber)
+              ? new THREE.MeshStandardMaterial({ color: new THREE.Color(RUBBER_COLOR), roughness: 0.85, metalness: 0 })
+              : null;
+
             geometries.forEach((geo, index) => {
-              const mesh = new THREE.Mesh(geo, material);
+              const mesh = new THREE.Mesh(geo, geo.userData.rubber ? rubberMaterial : material);
               mesh.castShadow = true; // only matters while the Shadows option is on
               mesh.receiveShadow = true;
               mesh.userData.instanceId = inst.instanceId;
               mesh.userData.isPartMesh = true;
+              if (geo.userData.rubber) mesh.userData.fixedColor = RUBBER_COLOR;
               group.add(mesh);
 
               const edgesGeo = new THREE.EdgesGeometry(geo, 32);

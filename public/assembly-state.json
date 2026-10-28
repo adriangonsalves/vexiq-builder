@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "selectedId": null,
+  "selectedId": "inst-1793149098967-15-h314",
   "viewport": {
     "transformMode": "translate",
     "snapPitchFactor": 0.25,
@@ -22,724 +22,1227 @@
   },
   "instances": [
     {
-      "instanceId": "inst-1792873620500-31hi",
-      "partId": "2x20-beam-228-2500-030-173",
-      "label": "2x20 Beam #1 (Copy)",
+      "instanceId": "inst-1793149098967-0-8sc5",
+      "partId": "vex-iq-robot-brain-228-2540-502",
+      "label": "Robot Brain",
       "position": [
-        47.625,
-        12.7,
-        -238.125
+        0,
+        69.9,
+        0
       ],
       "rotation": [
         0,
         0,
         0
       ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
       "lastValidPosition": [
-        47.625,
-        12.7,
-        -238.125
+        0,
+        69.9,
+        0
       ],
       "lastValidRotation": [
         0,
         0,
         0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
+      ]
     },
     {
-      "instanceId": "inst-1792873646909-2g63",
-      "partId": "2x18-beam-228-2500-029-172",
-      "label": "2x18 Beam #1",
+      "instanceId": "inst-1793149098967-1-qm5u",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Standoff L 1",
       "position": [
-        177.8,
-        12.7,
-        -120.65
-      ],
-      "rotation": [
-        0,
-        90,
-        0
-      ],
-      "lastValidPosition": [
-        177.8,
-        12.7,
-        -120.65
-      ],
-      "lastValidRotation": [
-        0,
-        90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792873972877-rw3x",
-      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
-      "label": "2x Wide, 2x2 Corner Connector #1",
-      "position": [
-        174.899,
-        19.05,
-        -12.7
-      ],
-      "rotation": [
-        -90,
-        90,
-        0
-      ],
-      "lastValidPosition": [
-        174.899,
-        19.05,
-        -12.7
-      ],
-      "lastValidRotation": [
-        -90,
-        90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#f8fafc",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874083401-ayt9",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #1",
-      "position": [
-        155.575,
-        19.05,
-        -6.273
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        155.575,
-        19.05,
-        -6.273
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874128344-42qb",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #1 (Copy)",
-      "position": [
-        168.275,
-        19.05,
-        -6.273
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": null,
-      "lastValidRotation": null,
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874131738-p3f1",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #1 (Copy) (Copy)",
-      "position": [
-        155.575,
-        6.35,
-        -6.273
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        155.575,
-        6.35,
-        -6.273
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874139952-iwxm",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #1 (Copy) (Copy) (Copy)",
-      "position": [
-        168.275,
-        6.35,
-        -6.273
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        168.275,
-        6.35,
-        -6.273
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874159470-o8pb",
-      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
-      "label": "2x Wide, 2x2 Corner Connector #1 (Copy)",
-      "position": [
-        174.898,
-        6.35,
-        -228.6
-      ],
-      "rotation": [
-        90,
-        90,
-        0
-      ],
-      "lastValidPosition": [
-        174.898,
-        6.35,
-        -228.6
-      ],
-      "lastValidRotation": [
-        90,
-        90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#f8fafc",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874320451-3ajm",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #5",
-      "position": [
-        168.275,
-        6.35,
-        -234.627
+        -44.45,
+        63.55,
+        -38.1
       ],
       "rotation": [
         0,
         0,
         0
       ],
-      "lastValidPosition": [
-        168.275,
-        6.35,
-        -234.627
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874400221-72jr",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #5 (Copy)",
-      "position": [
-        168.275,
-        19.05,
-        -235.027
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        168.275,
-        19.05,
-        -235.027
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874405206-hb9x",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #5 (Copy) (Copy)",
-      "position": [
-        155.575,
-        19.05,
-        -235.027
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        155.575,
-        19.05,
-        -235.027
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874415355-2ifl",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #5 (Copy) (Copy) (Copy)",
-      "position": [
-        155.575,
-        6.35,
-        -235.027
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        155.575,
-        6.35,
-        -235.027
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874440330-fj6o",
-      "partId": "2x18-beam-228-2500-029-172",
-      "label": "2x18 Beam #1 (Copy)",
-      "position": [
-        -82.55,
-        12.7,
-        -120.65
-      ],
-      "rotation": [
-        0,
-        90,
-        0
-      ],
-      "lastValidPosition": [
-        -82.55,
-        12.7,
-        -120.65
-      ],
-      "lastValidRotation": [
-        0,
-        90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874493954-sxhu",
-      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
-      "label": "2x Wide, 2x2 Corner Connector #1 (Copy)",
-      "position": [
-        -79.648,
-        19.05,
-        -228.6
-      ],
-      "rotation": [
-        90,
-        -90,
-        0
-      ],
-      "lastValidPosition": [
-        -79.648,
-        19.05,
-        -228.6
-      ],
-      "lastValidRotation": [
-        90,
-        -90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#f8fafc",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792874576536-1o5z",
-      "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
-      "label": "2x Wide, 2x2 Corner Connector #1 (Copy) (Copy)",
-      "position": [
-        -79.648,
-        6.35,
-        -12.7
-      ],
-      "rotation": [
-        -90,
-        -90,
-        0
-      ],
-      "lastValidPosition": [
-        -79.648,
-        6.35,
-        -12.7
-      ],
-      "lastValidRotation": [
-        -90,
-        -90,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#f8fafc",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792880180792-tlib",
-      "partId": "2x18-beam-228-2500-029-172",
-      "label": "2x18 Beam #1 (Copy)",
-      "position": [
-        34.652,
-        12.7,
-        -3.784
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        34.652,
-        12.7,
-        -3.784
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792880533923-ezwl",
-      "partId": "1x6-smooth-beam-228-2500-323-65",
-      "label": "1x6 Smooth Beam #1",
-      "position": [
-        -16.148,
-        6.35,
-        2.279
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        -16.148,
-        6.35,
-        2.279
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#64748b",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792880710372-03zt",
-      "partId": "large-chassis-corner-connector-228-2500-126-386",
-      "label": "Large Chassis Corner Connector #1",
-      "position": [
-        140.202,
-        63.5,
-        -139.7
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        140.202,
-        63.5,
-        -139.7
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#f8fafc",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792884614691-hw2b",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #9",
-      "position": [
-        -73.298,
-        6.35,
-        -6.883
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        -73.298,
-        6.35,
-        -6.883
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792884615899-e3c6",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #10",
-      "position": [
-        -73.298,
-        19.05,
-        -6.882
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        -73.298,
-        19.05,
-        -6.882
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792884616859-2nrd",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #11",
-      "position": [
-        -60.598,
-        19.05,
-        -6.882
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        -60.598,
-        19.05,
-        -6.882
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1792884617843-hzx2",
-      "partId": "0x2-connector-pin-228-2500-086-8",
-      "label": "0x2 Connector Pin #12",
-      "position": [
-        -60.598,
-        6.35,
-        -6.882
-      ],
-      "rotation": [
-        -180,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        -60.598,
-        6.35,
-        -6.882
-      ],
-      "lastValidRotation": [
-        -180,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#2563eb",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1793056423734-zsf6",
-      "partId": "48-tooth-gear-228-2500-228-335",
-      "label": "48 Tooth Gear #1",
-      "position": [
-        60.052,
-        12.7,
-        2.566
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        60.052,
-        12.7,
-        2.566
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#374151",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1793056463034-iyvv",
-      "partId": "24-tooth-gear-228-2500-227-314",
-      "label": "24 Tooth Gear #1",
-      "position": [
-        97.664,
-        11.528,
-        1.309
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        97.664,
-        11.528,
-        1.309
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
-      "color": "#16a34a",
-      "visible": true,
-      "locked": false
-    },
-    {
-      "instanceId": "inst-1793057019402-1lt9",
-      "partId": "3x-pitch-standoff-228-2500-069-189",
-      "label": "3x Pitch Standoff #1",
-      "position": [
-        21.952,
-        12.7,
-        -6.62
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "lastValidPosition": [
-        21.952,
-        12.7,
-        -6.62
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ],
-      "isIntersecting": false,
       "color": "#475569",
       "visible": true,
-      "locked": false
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -44.45,
+        63.55,
+        -38.1
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-2-3aqo",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Standoff L 2",
+      "position": [
+        -31.75,
+        63.55,
+        -38.1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -31.75,
+        63.55,
+        -38.1
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-3-mewx",
+      "partId": "double-2x-wide-1x2-corner-connector-228-2500-271-371",
+      "label": "Corner Connector L",
+      "position": [
+        44.45,
+        63.55,
+        -50.8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#f8fafc",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        44.45,
+        63.55,
+        -50.8
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-4-nyda",
+      "partId": "4x8-plate-228-2500-043-249",
+      "label": "Side Plate L",
+      "position": [
+        0,
+        44.5,
+        -53.85
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#64748b",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        44.5,
+        -53.85
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-5-ywpw",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Motor Pin L 1",
+      "position": [
+        -31.75,
+        38.15,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -31.75,
+        38.15,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-6-sk2s",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Motor Pin L 2",
+      "position": [
+        -44.45,
+        38.15,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -44.45,
+        38.15,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-7-nhqu",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Motor Pin L 3",
+      "position": [
+        -31.75,
+        25.45,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -31.75,
+        25.45,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-8-uf1v",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Motor Pin L 4",
+      "position": [
+        -44.45,
+        25.45,
+        -50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -44.45,
+        25.45,
+        -50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-9-5xbe",
+      "partId": "vex-iq-smart-motor-228-2560-500",
+      "label": "Drive Motor L",
+      "position": [
+        -28.57,
+        31.8,
+        -50.67
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "socketAngleDeg": -14.1,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -28.57,
+        31.8,
+        -50.67
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-a-bsw7",
+      "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+      "label": "Drive Shaft L",
+      "position": [
+        -38.1,
+        31.8,
+        -85.725
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        -85.725
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-b-7u0a",
+      "partId": "0-25x-pitch-spacer-228-2500-114-4",
+      "label": "Spacer L",
+      "position": [
+        -38.1,
+        31.8,
+        -58.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        -58.5
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-c-bosn",
+      "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+      "label": "Omni Wheel L",
+      "position": [
+        -38.1,
+        31.8,
+        -73.45
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#6b7280",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        -73.45
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-d-grxb",
+      "partId": "2x-pitch-motor-shaft-228-2500-2234-86",
+      "label": "Rear Axle L",
+      "position": [
+        38.1,
+        31.8,
+        -54.4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        38.1,
+        31.8,
+        -54.4
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-e-7pr7",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Connector Pin L 1",
+      "position": [
+        31.75,
+        38.15,
+        -57.15
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        31.75,
+        38.15,
+        -57.15
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-f-a7fu",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Connector Pin L 2",
+      "position": [
+        44.45,
+        25.45,
+        -57.15
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        44.45,
+        25.45,
+        -57.15
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-g-9ghl",
+      "partId": "2x-wide-2x2-offset-corner-connector-228-2500-136-104",
+      "label": "Offset Connector L",
+      "position": [
+        57.15,
+        25.45,
+        -57.15
+      ],
+      "rotation": [
+        90,
+        90,
+        0
+      ],
+      "color": "#f8fafc",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        57.15,
+        25.45,
+        -57.15
+      ],
+      "lastValidRotation": [
+        90,
+        90,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-h-pigi",
+      "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+      "label": "Rear Hub L",
+      "position": [
+        38.1,
+        31.8,
+        -66.6
+      ],
+      "rotation": [
+        0,
+        180,
+        0
+      ],
+      "color": "#6b7280",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        38.1,
+        31.8,
+        -66.6
+      ],
+      "lastValidRotation": [
+        0,
+        180,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-i-izba",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Omni Collar L",
+      "position": [
+        -42.191,
+        39.895,
+        -90.76
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -42.191,
+        39.895,
+        -90.76
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-j-nyld",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Rear Collar L",
+      "position": [
+        34.009,
+        23.705,
+        -66.675
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        34.009,
+        23.705,
+        -66.675
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-k-sof5",
+      "partId": "tire-200-mm-travel-228-2500-209-449",
+      "label": "Rear Tire L",
+      "position": [
+        38.1,
+        31.8,
+        -73.01
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        38.1,
+        31.8,
+        -73.01
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-l-f7ub",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Standoff R 1",
+      "position": [
+        -44.45,
+        63.55,
+        38.1
+      ],
+      "rotation": [
+        180,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -44.45,
+        63.55,
+        38.1
+      ],
+      "lastValidRotation": [
+        180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-m-jc32",
+      "partId": "1x-pitch-standoff-228-2500-065-23",
+      "label": "Standoff R 2",
+      "position": [
+        -31.75,
+        63.55,
+        38.1
+      ],
+      "rotation": [
+        180,
+        0,
+        0
+      ],
+      "color": "#475569",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -31.75,
+        63.55,
+        38.1
+      ],
+      "lastValidRotation": [
+        180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-n-6xne",
+      "partId": "double-2x-wide-1x2-corner-connector-228-2500-271-371",
+      "label": "Corner Connector R",
+      "position": [
+        44.45,
+        63.55,
+        50.8
+      ],
+      "rotation": [
+        180,
+        0,
+        0
+      ],
+      "color": "#f8fafc",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        44.45,
+        63.55,
+        50.8
+      ],
+      "lastValidRotation": [
+        180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-o-t1tu",
+      "partId": "4x8-plate-228-2500-043-249",
+      "label": "Side Plate R",
+      "position": [
+        0,
+        44.5,
+        53.85
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#64748b",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        44.5,
+        53.85
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-p-er8m",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Motor Pin R 1",
+      "position": [
+        -31.75,
+        38.15,
+        50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -31.75,
+        38.15,
+        50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-q-2sdp",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Motor Pin R 2",
+      "position": [
+        -44.45,
+        38.15,
+        50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -44.45,
+        38.15,
+        50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-r-vfdc",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Motor Pin R 3",
+      "position": [
+        -31.75,
+        25.45,
+        50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -31.75,
+        25.45,
+        50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-s-ic00",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Motor Pin R 4",
+      "position": [
+        -44.45,
+        25.45,
+        50.8
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -44.45,
+        25.45,
+        50.8
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-t-dztb",
+      "partId": "vex-iq-smart-motor-228-2560-500",
+      "label": "Drive Motor R",
+      "position": [
+        -28.57,
+        31.8,
+        50.67
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "socketAngleDeg": -14.1,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -28.57,
+        31.8,
+        50.67
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-u-i9gt",
+      "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+      "label": "Drive Shaft R",
+      "position": [
+        -38.1,
+        31.8,
+        85.725
+      ],
+      "rotation": [
+        180,
+        180,
+        0
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        85.725
+      ],
+      "lastValidRotation": [
+        180,
+        180,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-v-dtlq",
+      "partId": "0-25x-pitch-spacer-228-2500-114-4",
+      "label": "Spacer R",
+      "position": [
+        -38.1,
+        31.8,
+        58.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        58.5
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-w-kgg2",
+      "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+      "label": "Omni Wheel R",
+      "position": [
+        -38.1,
+        31.8,
+        73.45
+      ],
+      "rotation": [
+        270,
+        0,
+        0
+      ],
+      "color": "#6b7280",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        73.45
+      ],
+      "lastValidRotation": [
+        270,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-x-g7qg",
+      "partId": "2x-pitch-motor-shaft-228-2500-2234-86",
+      "label": "Rear Axle R",
+      "position": [
+        38.1,
+        31.8,
+        54.4
+      ],
+      "rotation": [
+        180,
+        0,
+        0
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        38.1,
+        31.8,
+        54.4
+      ],
+      "lastValidRotation": [
+        180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-y-g948",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Connector Pin R 1",
+      "position": [
+        31.75,
+        38.15,
+        57.15
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        31.75,
+        38.15,
+        57.15
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-z-p7of",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "Connector Pin R 2",
+      "position": [
+        44.45,
+        25.45,
+        57.15
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#3b82f6",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        44.45,
+        25.45,
+        57.15
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-10-l023",
+      "partId": "2x-wide-2x2-offset-corner-connector-228-2500-136-104",
+      "label": "Offset Connector R",
+      "position": [
+        57.15,
+        38.15,
+        57.15
+      ],
+      "rotation": [
+        -90,
+        90,
+        0
+      ],
+      "color": "#f8fafc",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        57.15,
+        38.15,
+        57.15
+      ],
+      "lastValidRotation": [
+        -90,
+        90,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-11-xazr",
+      "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+      "label": "Rear Hub R",
+      "position": [
+        38.1,
+        31.8,
+        66.6
+      ],
+      "rotation": [
+        180,
+        180,
+        0
+      ],
+      "color": "#6b7280",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        38.1,
+        31.8,
+        66.6
+      ],
+      "lastValidRotation": [
+        180,
+        180,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-12-gkzv",
+      "partId": "tire-200-mm-travel-228-2500-209-449",
+      "label": "Rear Tire R",
+      "position": [
+        38.1,
+        31.8,
+        73.01
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        38.1,
+        31.8,
+        73.01
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-13-b4sw",
+      "partId": "2x10-beam-228-2500-025-166",
+      "label": "Rear Crossbeam",
+      "position": [
+        60.2,
+        31.8,
+        0
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "color": "#64748b",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        60.2,
+        31.8,
+        0
+      ],
+      "lastValidRotation": [
+        0,
+        90,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-14-696c",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Omni Collar R",
+      "position": [
+        -42.191,
+        23.705,
+        90.76
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -42.191,
+        23.705,
+        90.76
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793149098967-15-h314",
+      "partId": "rubber-shaft-collar-228-2500-143-412",
+      "label": "Rear Collar R",
+      "position": [
+        34.009,
+        39.895,
+        66.675
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        34.009,
+        39.895,
+        66.675
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
     }
   ],
-  "updatedAt": "2026-10-26T23:28:15.296Z",
+  "updatedAt": "2026-10-28T00:58:19.706Z",
   "history": {
     "version": 1,
     "base": [],
@@ -16639,9 +17142,5677 @@
             }
           }
         ]
+      },
+      {
+        "id": "step-mvrdwqd9-zdm7k4",
+        "parentId": "step-mvpvvrt1-tuxzj8",
+        "at": 1793147811453,
+        "source": "mcp",
+        "label": "clear_assembly",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 0,
+            "part": {
+              "instanceId": "inst-1792873620500-31hi",
+              "partId": "2x20-beam-228-2500-030-173",
+              "label": "2x20 Beam #1 (Copy)",
+              "position": [
+                47.625,
+                12.7,
+                -238.125
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                47.625,
+                12.7,
+                -238.125
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 1,
+            "part": {
+              "instanceId": "inst-1792873646909-2g63",
+              "partId": "2x18-beam-228-2500-029-172",
+              "label": "2x18 Beam #1",
+              "position": [
+                177.8,
+                12.7,
+                -120.65
+              ],
+              "rotation": [
+                0,
+                90,
+                0
+              ],
+              "lastValidPosition": [
+                177.8,
+                12.7,
+                -120.65
+              ],
+              "lastValidRotation": [
+                0,
+                90,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 2,
+            "part": {
+              "instanceId": "inst-1792873972877-rw3x",
+              "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
+              "label": "2x Wide, 2x2 Corner Connector #1",
+              "position": [
+                174.899,
+                19.05,
+                -12.7
+              ],
+              "rotation": [
+                -90,
+                90,
+                0
+              ],
+              "lastValidPosition": [
+                174.899,
+                19.05,
+                -12.7
+              ],
+              "lastValidRotation": [
+                -90,
+                90,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 3,
+            "part": {
+              "instanceId": "inst-1792874083401-ayt9",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #1",
+              "position": [
+                155.575,
+                19.05,
+                -6.273
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                155.575,
+                19.05,
+                -6.273
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 4,
+            "part": {
+              "instanceId": "inst-1792874128344-42qb",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #1 (Copy)",
+              "position": [
+                168.275,
+                19.05,
+                -6.273
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": null,
+              "lastValidRotation": null,
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 5,
+            "part": {
+              "instanceId": "inst-1792874131738-p3f1",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #1 (Copy) (Copy)",
+              "position": [
+                155.575,
+                6.35,
+                -6.273
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                155.575,
+                6.35,
+                -6.273
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 6,
+            "part": {
+              "instanceId": "inst-1792874139952-iwxm",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #1 (Copy) (Copy) (Copy)",
+              "position": [
+                168.275,
+                6.35,
+                -6.273
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                168.275,
+                6.35,
+                -6.273
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 7,
+            "part": {
+              "instanceId": "inst-1792874159470-o8pb",
+              "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
+              "label": "2x Wide, 2x2 Corner Connector #1 (Copy)",
+              "position": [
+                174.898,
+                6.35,
+                -228.6
+              ],
+              "rotation": [
+                90,
+                90,
+                0
+              ],
+              "lastValidPosition": [
+                174.898,
+                6.35,
+                -228.6
+              ],
+              "lastValidRotation": [
+                90,
+                90,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 8,
+            "part": {
+              "instanceId": "inst-1792874320451-3ajm",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #5",
+              "position": [
+                168.275,
+                6.35,
+                -234.627
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                168.275,
+                6.35,
+                -234.627
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 9,
+            "part": {
+              "instanceId": "inst-1792874400221-72jr",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #5 (Copy)",
+              "position": [
+                168.275,
+                19.05,
+                -235.027
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                168.275,
+                19.05,
+                -235.027
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 10,
+            "part": {
+              "instanceId": "inst-1792874405206-hb9x",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #5 (Copy) (Copy)",
+              "position": [
+                155.575,
+                19.05,
+                -235.027
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                155.575,
+                19.05,
+                -235.027
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 11,
+            "part": {
+              "instanceId": "inst-1792874415355-2ifl",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #5 (Copy) (Copy) (Copy)",
+              "position": [
+                155.575,
+                6.35,
+                -235.027
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                155.575,
+                6.35,
+                -235.027
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 12,
+            "part": {
+              "instanceId": "inst-1792874440330-fj6o",
+              "partId": "2x18-beam-228-2500-029-172",
+              "label": "2x18 Beam #1 (Copy)",
+              "position": [
+                -82.55,
+                12.7,
+                -120.65
+              ],
+              "rotation": [
+                0,
+                90,
+                0
+              ],
+              "lastValidPosition": [
+                -82.55,
+                12.7,
+                -120.65
+              ],
+              "lastValidRotation": [
+                0,
+                90,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 13,
+            "part": {
+              "instanceId": "inst-1792874493954-sxhu",
+              "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
+              "label": "2x Wide, 2x2 Corner Connector #1 (Copy)",
+              "position": [
+                -79.648,
+                19.05,
+                -228.6
+              ],
+              "rotation": [
+                90,
+                -90,
+                0
+              ],
+              "lastValidPosition": [
+                -79.648,
+                19.05,
+                -228.6
+              ],
+              "lastValidRotation": [
+                90,
+                -90,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 14,
+            "part": {
+              "instanceId": "inst-1792874576536-1o5z",
+              "partId": "2x-wide-2x2-corner-connector-228-2500-134-102",
+              "label": "2x Wide, 2x2 Corner Connector #1 (Copy) (Copy)",
+              "position": [
+                -79.648,
+                6.35,
+                -12.7
+              ],
+              "rotation": [
+                -90,
+                -90,
+                0
+              ],
+              "lastValidPosition": [
+                -79.648,
+                6.35,
+                -12.7
+              ],
+              "lastValidRotation": [
+                -90,
+                -90,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 15,
+            "part": {
+              "instanceId": "inst-1792880180792-tlib",
+              "partId": "2x18-beam-228-2500-029-172",
+              "label": "2x18 Beam #1 (Copy)",
+              "position": [
+                34.652,
+                12.7,
+                -3.784
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                34.652,
+                12.7,
+                -3.784
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 16,
+            "part": {
+              "instanceId": "inst-1792880533923-ezwl",
+              "partId": "1x6-smooth-beam-228-2500-323-65",
+              "label": "1x6 Smooth Beam #1",
+              "position": [
+                -16.148,
+                6.35,
+                2.279
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -16.148,
+                6.35,
+                2.279
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 17,
+            "part": {
+              "instanceId": "inst-1792880710372-03zt",
+              "partId": "large-chassis-corner-connector-228-2500-126-386",
+              "label": "Large Chassis Corner Connector #1",
+              "position": [
+                140.202,
+                63.5,
+                -139.7
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                140.202,
+                63.5,
+                -139.7
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 18,
+            "part": {
+              "instanceId": "inst-1792884614691-hw2b",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #9",
+              "position": [
+                -73.298,
+                6.35,
+                -6.883
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -73.298,
+                6.35,
+                -6.883
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 19,
+            "part": {
+              "instanceId": "inst-1792884615899-e3c6",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #10",
+              "position": [
+                -73.298,
+                19.05,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -73.298,
+                19.05,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 20,
+            "part": {
+              "instanceId": "inst-1792884616859-2nrd",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #11",
+              "position": [
+                -60.598,
+                19.05,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -60.598,
+                19.05,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 21,
+            "part": {
+              "instanceId": "inst-1792884617843-hzx2",
+              "partId": "0x2-connector-pin-228-2500-086-8",
+              "label": "0x2 Connector Pin #12",
+              "position": [
+                -60.598,
+                6.35,
+                -6.882
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -60.598,
+                6.35,
+                -6.882
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#2563eb",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793056423734-zsf6",
+              "partId": "48-tooth-gear-228-2500-228-335",
+              "label": "48 Tooth Gear #1",
+              "position": [
+                60.052,
+                12.7,
+                2.566
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                60.052,
+                12.7,
+                2.566
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#374151",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 23,
+            "part": {
+              "instanceId": "inst-1793056463034-iyvv",
+              "partId": "24-tooth-gear-228-2500-227-314",
+              "label": "24 Tooth Gear #1",
+              "position": [
+                97.664,
+                11.528,
+                1.309
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                97.664,
+                11.528,
+                1.309
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#16a34a",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 24,
+            "part": {
+              "instanceId": "inst-1793057019402-1lt9",
+              "partId": "3x-pitch-standoff-228-2500-069-189",
+              "label": "3x Pitch Standoff #1",
+              "position": [
+                21.952,
+                12.7,
+                -6.62
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                21.952,
+                12.7,
+                -6.62
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#475569",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrdwqcq-2"
+      },
+      {
+        "id": "step-mvrdwqht-9ygfed",
+        "parentId": "step-mvrdwqd9-zdm7k4",
+        "at": 1793147811617,
+        "source": "mcp",
+        "label": "place_part: 200mm Travel Omni-Directional Wheel #1",
+        "ops": [
+          {
+            "op": "add",
+            "index": 0,
+            "part": {
+              "instanceId": "inst-1793147811502-7ei5",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "200mm Travel Omni-Directional Wheel #1",
+              "position": [
+                0,
+                31.8,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                0,
+                31.8,
+                0
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrdwqej-3"
+      },
+      {
+        "id": "step-mvre0cpm-3rpaaw",
+        "parentId": "step-mvrdwqht-9ygfed",
+        "at": 1793147980378,
+        "source": "mcp",
+        "label": "clear_assembly",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 0,
+            "part": {
+              "instanceId": "inst-1793147811502-7ei5",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "200mm Travel Omni-Directional Wheel #1",
+              "position": [
+                0,
+                31.8,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                0,
+                31.8,
+                0
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvre0cow-2"
+      },
+      {
+        "id": "step-mvre0d5u-ade7hn",
+        "parentId": "step-mvre0cpm-3rpaaw",
+        "at": 1793147980962,
+        "source": "mcp",
+        "label": "place_parts: 5 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 0,
+            "part": {
+              "instanceId": "inst-1793147980437-0-ryx8",
+              "partId": "vex-iq-robot-brain-228-2540-502",
+              "label": "Robot Brain",
+              "position": [
+                0,
+                69.9,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                0,
+                69.9,
+                0
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 1,
+            "part": {
+              "instanceId": "inst-1793147980437-1-s62m",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff L front-top",
+              "position": [
+                -44.45,
+                63.55,
+                -38.1
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#475569",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                63.55,
+                -38.1
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 2,
+            "part": {
+              "instanceId": "inst-1793147980437-2-2a73",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff L front",
+              "position": [
+                -31.75,
+                63.55,
+                -38.1
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#475569",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                63.55,
+                -38.1
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 3,
+            "part": {
+              "instanceId": "inst-1793147980437-3-anm8",
+              "partId": "double-2x-wide-1x2-corner-connector-228-2500-271-371",
+              "label": "Corner Connector L",
+              "position": [
+                44.45,
+                63.55,
+                -50.8
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                44.45,
+                63.55,
+                -50.8
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 4,
+            "part": {
+              "instanceId": "inst-1793147980437-4-ltua",
+              "partId": "4x8-plate-228-2500-043-249",
+              "label": "Side Plate L",
+              "position": [
+                0,
+                44.5,
+                -53.75
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#64748b",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                0,
+                44.5,
+                -53.75
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvre0cr6-3"
+      },
+      {
+        "id": "step-mvre1p9r-4rhkej",
+        "parentId": "step-mvre0d5u-ade7hn",
+        "at": 1793148043311,
+        "source": "mcp",
+        "label": "update_part: move Side Plate L",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793147980437-4-ltua",
+            "name": "Side Plate L",
+            "before": {
+              "position": [
+                0,
+                44.5,
+                -53.75
+              ]
+            },
+            "after": {
+              "position": [
+                0,
+                44.5,
+                -53.85
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvre1p5x-2"
+      },
+      {
+        "id": "step-mvre24jy-j2l1h0",
+        "parentId": "step-mvre1p9r-4rhkej",
+        "at": 1793148063118,
+        "source": "mcp",
+        "label": "place_parts: 6 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 5,
+            "part": {
+              "instanceId": "inst-1793148062651-0-s4pi",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L1",
+              "position": [
+                -31.75,
+                38.15,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                38.15,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 6,
+            "part": {
+              "instanceId": "inst-1793148062651-1-wz69",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L2",
+              "position": [
+                -44.45,
+                38.15,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                38.15,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 7,
+            "part": {
+              "instanceId": "inst-1793148062651-2-yifw",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L3",
+              "position": [
+                -31.75,
+                25.45,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                25.45,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 8,
+            "part": {
+              "instanceId": "inst-1793148062651-3-k9zl",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L4",
+              "position": [
+                -44.45,
+                25.45,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                25.45,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 9,
+            "part": {
+              "instanceId": "inst-1793148062651-4-hpn5",
+              "partId": "vex-iq-smart-motor-228-2560-500",
+              "label": "Smart Motor L",
+              "position": [
+                -28.57,
+                31.8,
+                -50.67
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "socketAngleDeg": -14.1,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -28.57,
+                31.8,
+                -50.67
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 10,
+            "part": {
+              "instanceId": "inst-1793148062651-5-fmbn",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft L",
+              "position": [
+                -38.095,
+                31.8,
+                -86.36
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.095,
+                31.8,
+                -86.36
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvre246j-2"
+      },
+      {
+        "id": "step-mvre2u61-kp9zz5",
+        "parentId": "step-mvre24jy-j2l1h0",
+        "at": 1793148096313,
+        "source": "mcp",
+        "label": "update_part: move Drive Shaft L",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793148062651-5-fmbn",
+            "name": "Drive Shaft L",
+            "before": {
+              "position": [
+                -38.095,
+                31.8,
+                -86.36
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ]
+            },
+            "after": {
+              "position": [
+                -38.1,
+                31.8,
+                -48.4
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvre2u10-2"
+      },
+      {
+        "id": "step-mvre3ks2-s87tah",
+        "parentId": "step-mvre2u61-kp9zz5",
+        "at": 1793148130802,
+        "source": "mcp",
+        "label": "remove_part: Drive Shaft L",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 10,
+            "part": {
+              "instanceId": "inst-1793148062651-5-fmbn",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft L",
+              "position": [
+                -38.1,
+                31.8,
+                -48.4
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": true,
+              "lastValidPosition": [
+                -38.095,
+                31.8,
+                -86.36
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvre3krf-2"
+      },
+      {
+        "id": "step-mvre4y8z-f85rku",
+        "parentId": "step-mvre3ks2-s87tah",
+        "at": 1793148194915,
+        "source": "mcp",
+        "label": "place_parts: 3 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 10,
+            "part": {
+              "instanceId": "inst-1793148194514-0-7k44",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft L",
+              "position": [
+                -38.1,
+                31.8,
+                -85.725
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -85.725
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 11,
+            "part": {
+              "instanceId": "inst-1793148194514-1-d4hi",
+              "partId": "0-25x-pitch-spacer-228-2500-114-4",
+              "label": "Spacer L",
+              "position": [
+                -38.1,
+                31.8,
+                -58.5
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -58.5
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 12,
+            "part": {
+              "instanceId": "inst-1793148194514-2-uslm",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "Omni Wheel L",
+              "position": [
+                -38.1,
+                31.8,
+                -73.45
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -73.45
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvre4xxa-2"
+      },
+      {
+        "id": "step-mvre8wcb-fguux9",
+        "parentId": "step-mvre4y8z-f85rku",
+        "at": 1793148379067,
+        "source": "mcp",
+        "label": "place_parts: 4 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 13,
+            "part": {
+              "instanceId": "inst-1793148378590-0-7icj",
+              "partId": "2x-pitch-motor-shaft-228-2500-2234-86",
+              "label": "Rear Axle L",
+              "position": [
+                38.1,
+                31.8,
+                -54.4
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                -54.4
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 14,
+            "part": {
+              "instanceId": "inst-1793148378590-1-3vrq",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Offset Pin L1",
+              "position": [
+                31.75,
+                38.15,
+                -57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                31.75,
+                38.15,
+                -57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 15,
+            "part": {
+              "instanceId": "inst-1793148378590-2-6b9n",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Offset Pin L2",
+              "position": [
+                44.45,
+                25.45,
+                -57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                44.45,
+                25.45,
+                -57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 16,
+            "part": {
+              "instanceId": "inst-1793148378590-3-egc2",
+              "partId": "2x-wide-2x2-offset-corner-connector-228-2500-136-104",
+              "label": "Offset Connector L",
+              "position": [
+                57.15,
+                38.15,
+                -63.1
+              ],
+              "rotation": [
+                -90,
+                90,
+                0
+              ],
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                57.15,
+                38.15,
+                -63.1
+              ],
+              "lastValidRotation": [
+                -90,
+                90,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvre8vyi-2"
+      },
+      {
+        "id": "step-mvreaqxe-hx33c7",
+        "parentId": "step-mvre8wcb-fguux9",
+        "at": 1793148465362,
+        "source": "mcp",
+        "label": "update_part: move Offset Connector L",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793148378590-3-egc2",
+            "name": "Offset Connector L",
+            "before": {
+              "position": [
+                57.15,
+                38.15,
+                -63.1
+              ],
+              "rotation": [
+                -90,
+                90,
+                0
+              ]
+            },
+            "after": {
+              "position": [
+                57.15,
+                25.45,
+                -57.15
+              ],
+              "rotation": [
+                90,
+                90,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvreaqqw-2"
+      },
+      {
+        "id": "step-mvrebyxq-h0n9am",
+        "parentId": "step-mvreaqxe-hx33c7",
+        "at": 1793148522398,
+        "source": "mcp",
+        "label": "place_parts: 2 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 17,
+            "part": {
+              "instanceId": "inst-1793148521988-0-06u7",
+              "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+              "label": "Rear Hub L",
+              "position": [
+                38.1,
+                31.8,
+                -79.375
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                -79.375
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 18,
+            "part": {
+              "instanceId": "inst-1793148521988-1-3tw1",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L",
+              "position": [
+                -42.191,
+                39.895,
+                -90.76
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                -90.76
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrebylw-2"
+      },
+      {
+        "id": "step-mvreco50-oez8ru",
+        "parentId": "step-mvrebyxq-h0n9am",
+        "at": 1793148555060,
+        "source": "mcp",
+        "label": "update_part: move Rear Hub L",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793148521988-0-06u7",
+            "name": "Rear Hub L",
+            "before": {
+              "position": [
+                38.1,
+                31.8,
+                -79.375
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ]
+            },
+            "after": {
+              "position": [
+                38.1,
+                31.8,
+                -66.6
+              ],
+              "rotation": [
+                0,
+                180,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvreco07-2"
+      },
+      {
+        "id": "step-mvrecoex-4o8sg7",
+        "parentId": "step-mvreco50-oez8ru",
+        "at": 1793148555417,
+        "source": "mcp",
+        "label": "place_parts: 2 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 19,
+            "part": {
+              "instanceId": "inst-1793148555103-0-344m",
+              "partId": "tire-200-mm-travel-228-2500-209-449",
+              "label": "Rear Tire L",
+              "position": [
+                38.1,
+                31.8,
+                -73.01
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": true,
+              "lastValidPosition": null,
+              "lastValidRotation": null
+            }
+          },
+          {
+            "op": "add",
+            "index": 20,
+            "part": {
+              "instanceId": "inst-1793148555103-1-1bme",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Rear Collar L",
+              "position": [
+                34.009,
+                23.705,
+                -66.675
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                34.009,
+                23.705,
+                -66.675
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvreco65-3"
+      },
+      {
+        "id": "step-mvred3ss-toicmc",
+        "parentId": "step-mvrecoex-4o8sg7",
+        "at": 1793148575356,
+        "source": "mcp",
+        "label": "remove_part: Rear Tire L",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 19,
+            "part": {
+              "instanceId": "inst-1793148555103-0-344m",
+              "partId": "tire-200-mm-travel-228-2500-209-449",
+              "label": "Rear Tire L",
+              "position": [
+                38.1,
+                31.8,
+                -73.01
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": true,
+              "lastValidPosition": null,
+              "lastValidRotation": null
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvred3sa-2"
+      },
+      {
+        "id": "step-mvreevtn-eqqi11",
+        "parentId": "step-mvred3ss-toicmc",
+        "at": 1793148658331,
+        "source": "mcp",
+        "label": "place_parts: Rear Tire L",
+        "ops": [
+          {
+            "op": "add",
+            "index": 20,
+            "part": {
+              "instanceId": "inst-1793148657922-0-655m",
+              "partId": "tire-200-mm-travel-228-2500-209-449",
+              "label": "Rear Tire L",
+              "position": [
+                38.1,
+                31.8,
+                -73.01
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                -73.01
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvreevhq-2"
+      },
+      {
+        "id": "step-mvref2hz-60twqf",
+        "parentId": "step-mvreevtn-eqqi11",
+        "at": 1793148666983,
+        "source": "mcp",
+        "label": "mirror_subassembly: 20 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 21,
+            "part": {
+              "instanceId": "inst-1793148666813-mir-1",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff L rear-top",
+              "position": [
+                -44.45,
+                63.55,
+                38.1
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -44.45,
+                63.55,
+                38.1
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#475569",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793148666817-mir-2",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff L rear",
+              "position": [
+                -31.75,
+                63.55,
+                38.1
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -31.75,
+                63.55,
+                38.1
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#475569",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 23,
+            "part": {
+              "instanceId": "inst-1793148666829-mir-3",
+              "partId": "double-2x-wide-1x2-corner-connector-228-2500-271-371",
+              "label": "Corner Connector L (Mirrored)",
+              "position": [
+                44.45,
+                63.55,
+                50.8
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                44.45,
+                63.55,
+                50.8
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 24,
+            "part": {
+              "instanceId": "inst-1793148666866-mir-4",
+              "partId": "4x8-plate-228-2500-043-249",
+              "label": "Side Plate L (Mirrored)",
+              "position": [
+                0,
+                44.5,
+                53.85
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                0,
+                44.5,
+                53.85
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 25,
+            "part": {
+              "instanceId": "inst-1793148666869-mir-5",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L1 (Mirrored)",
+              "position": [
+                -31.75,
+                38.15,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -31.75,
+                38.15,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 26,
+            "part": {
+              "instanceId": "inst-1793148666871-mir-6",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L2 (Mirrored)",
+              "position": [
+                -44.45,
+                38.15,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -44.45,
+                38.15,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 27,
+            "part": {
+              "instanceId": "inst-1793148666873-mir-7",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L3 (Mirrored)",
+              "position": [
+                -31.75,
+                25.45,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -31.75,
+                25.45,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 28,
+            "part": {
+              "instanceId": "inst-1793148666875-mir-8",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L4 (Mirrored)",
+              "position": [
+                -44.45,
+                25.45,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -44.45,
+                25.45,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 29,
+            "part": {
+              "instanceId": "inst-1793148666897-mir-9",
+              "partId": "vex-iq-smart-motor-228-2560-500",
+              "label": "Smart Motor L (Mirrored)",
+              "position": [
+                -28.57,
+                31.8,
+                50.67
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -28.57,
+                31.8,
+                50.67
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 30,
+            "part": {
+              "instanceId": "inst-1793148666907-mir-10",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft L (Mirrored)",
+              "position": [
+                -38.1,
+                31.8,
+                85.725
+              ],
+              "rotation": [
+                180,
+                180,
+                0
+              ],
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                85.725
+              ],
+              "lastValidRotation": [
+                180,
+                180,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 31,
+            "part": {
+              "instanceId": "inst-1793148666907-mir-11",
+              "partId": "0-25x-pitch-spacer-228-2500-114-4",
+              "label": "Spacer L (Mirrored)",
+              "position": [
+                -38.1,
+                31.8,
+                58.5
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                58.5
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 32,
+            "part": {
+              "instanceId": "inst-1793148666938-mir-12",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "Omni Wheel L (Mirrored)",
+              "position": [
+                -38.1,
+                31.8,
+                73.45
+              ],
+              "rotation": [
+                270,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                73.45
+              ],
+              "lastValidRotation": [
+                270,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 33,
+            "part": {
+              "instanceId": "inst-1793148666945-mir-13",
+              "partId": "2x-pitch-motor-shaft-228-2500-2234-86",
+              "label": "Front Axle L",
+              "position": [
+                38.1,
+                31.8,
+                54.4
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                54.4
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 34,
+            "part": {
+              "instanceId": "inst-1793148666947-mir-14",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Offset Pin L1 (Mirrored)",
+              "position": [
+                31.75,
+                38.15,
+                57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                31.75,
+                38.15,
+                57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 35,
+            "part": {
+              "instanceId": "inst-1793148666949-mir-15",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Offset Pin L2 (Mirrored)",
+              "position": [
+                44.45,
+                25.45,
+                57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                44.45,
+                25.45,
+                57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 36,
+            "part": {
+              "instanceId": "inst-1793148666962-mir-16",
+              "partId": "2x-wide-2x2-offset-corner-connector-228-2500-136-104",
+              "label": "Offset Connector L (Mirrored)",
+              "position": [
+                57.15,
+                25.45,
+                57.15
+              ],
+              "rotation": [
+                90,
+                90,
+                0
+              ],
+              "lastValidPosition": [
+                57.15,
+                25.45,
+                57.15
+              ],
+              "lastValidRotation": [
+                90,
+                90,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 37,
+            "part": {
+              "instanceId": "inst-1793148666969-mir-17",
+              "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+              "label": "Front Hub L",
+              "position": [
+                38.1,
+                31.8,
+                66.6
+              ],
+              "rotation": [
+                180,
+                180,
+                0
+              ],
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                66.6
+              ],
+              "lastValidRotation": [
+                180,
+                180,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 38,
+            "part": {
+              "instanceId": "inst-1793148666971-mir-18",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L (Mirrored)",
+              "position": [
+                -42.191,
+                39.895,
+                90.76
+              ],
+              "rotation": [
+                -90,
+                180,
+                0
+              ],
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                90.76
+              ],
+              "lastValidRotation": [
+                -90,
+                180,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 39,
+            "part": {
+              "instanceId": "inst-1793148666973-mir-19",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Front Collar L",
+              "position": [
+                34.009,
+                23.705,
+                66.675
+              ],
+              "rotation": [
+                90,
+                180,
+                0
+              ],
+              "lastValidPosition": [
+                34.009,
+                23.705,
+                66.675
+              ],
+              "lastValidRotation": [
+                90,
+                180,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "add",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793148666979-mir-20",
+              "partId": "tire-200-mm-travel-228-2500-209-449",
+              "label": "Front Tire L",
+              "position": [
+                38.1,
+                31.8,
+                73.01
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                73.01
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvref27h-2"
+      },
+      {
+        "id": "step-mvrefh1p-lrs009",
+        "parentId": "step-mvref2hz-60twqf",
+        "at": 1793148685837,
+        "source": "mcp",
+        "label": "update_part: move Offset Connector L (Mirrored)",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793148666962-mir-16",
+            "name": "Offset Connector L (Mirrored)",
+            "before": {
+              "position": [
+                57.15,
+                25.45,
+                57.15
+              ],
+              "rotation": [
+                90,
+                90,
+                0
+              ]
+            },
+            "after": {
+              "position": [
+                57.15,
+                38.15,
+                57.15
+              ],
+              "rotation": [
+                -90,
+                90,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrefgvd-2"
+      },
+      {
+        "id": "step-mvrefhc5-keex01",
+        "parentId": "step-mvrefh1p-lrs009",
+        "at": 1793148686213,
+        "source": "mcp",
+        "label": "place_parts: Rear Crossbeam",
+        "ops": [
+          {
+            "op": "add",
+            "index": 41,
+            "part": {
+              "instanceId": "inst-1793148685877-0-w403",
+              "partId": "2x10-beam-228-2500-025-166",
+              "label": "Rear Crossbeam",
+              "position": [
+                60.2,
+                31.8,
+                0
+              ],
+              "rotation": [
+                0,
+                90,
+                0
+              ],
+              "color": "#64748b",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                60.2,
+                31.8,
+                0
+              ],
+              "lastValidRotation": [
+                0,
+                90,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrefh2r-3"
+      },
+      {
+        "id": "step-mvrefrz9-p11svk",
+        "parentId": "step-mvrefhc5-keex01",
+        "at": 1793148700005,
+        "source": "mcp",
+        "label": "remove_part: Omni Collar L (Mirrored)",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 38,
+            "part": {
+              "instanceId": "inst-1793148666971-mir-18",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L (Mirrored)",
+              "position": [
+                -42.191,
+                39.895,
+                90.76
+              ],
+              "rotation": [
+                -90,
+                180,
+                0
+              ],
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                90.76
+              ],
+              "lastValidRotation": [
+                -90,
+                180,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrefryp-2"
+      },
+      {
+        "id": "step-mvrefs0k-ga6sxd",
+        "parentId": "step-mvrefrz9-p11svk",
+        "at": 1793148700052,
+        "source": "mcp",
+        "label": "remove_part: Front Collar L",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 38,
+            "part": {
+              "instanceId": "inst-1793148666973-mir-19",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Front Collar L",
+              "position": [
+                34.009,
+                23.705,
+                66.675
+              ],
+              "rotation": [
+                90,
+                180,
+                0
+              ],
+              "lastValidPosition": [
+                34.009,
+                23.705,
+                66.675
+              ],
+              "lastValidRotation": [
+                90,
+                180,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrefs0f-3"
+      },
+      {
+        "id": "step-mvrefshv-jgikvu",
+        "parentId": "step-mvrefs0k-ga6sxd",
+        "at": 1793148700675,
+        "source": "mcp",
+        "label": "place_parts: 2 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793148700064-0-wgcd",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar R",
+              "position": [
+                -42.191,
+                23.705,
+                90.76
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                23.705,
+                90.76
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 41,
+            "part": {
+              "instanceId": "inst-1793148700064-1-zg08",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Rear Collar R",
+              "position": [
+                34.009,
+                39.895,
+                66.675
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                34.009,
+                39.895,
+                66.675
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrefs0t-4"
+      },
+      {
+        "id": "step-mvreobs6-2dn8yg",
+        "parentId": "step-mvrefshv-jgikvu",
+        "at": 1793149098918,
+        "source": "mcp",
+        "label": "clear_assembly",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 0,
+            "part": {
+              "instanceId": "inst-1793147980437-0-ryx8",
+              "partId": "vex-iq-robot-brain-228-2540-502",
+              "label": "Robot Brain",
+              "position": [
+                0,
+                69.9,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                0,
+                69.9,
+                0
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 1,
+            "part": {
+              "instanceId": "inst-1793147980437-1-s62m",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff L front-top",
+              "position": [
+                -44.45,
+                63.55,
+                -38.1
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#475569",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                63.55,
+                -38.1
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 2,
+            "part": {
+              "instanceId": "inst-1793147980437-2-2a73",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff L front",
+              "position": [
+                -31.75,
+                63.55,
+                -38.1
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#475569",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                63.55,
+                -38.1
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 3,
+            "part": {
+              "instanceId": "inst-1793147980437-3-anm8",
+              "partId": "double-2x-wide-1x2-corner-connector-228-2500-271-371",
+              "label": "Corner Connector L",
+              "position": [
+                44.45,
+                63.55,
+                -50.8
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                44.45,
+                63.55,
+                -50.8
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 4,
+            "part": {
+              "instanceId": "inst-1793147980437-4-ltua",
+              "partId": "4x8-plate-228-2500-043-249",
+              "label": "Side Plate L",
+              "position": [
+                0,
+                44.5,
+                -53.85
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#64748b",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                0,
+                44.5,
+                -53.85
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 5,
+            "part": {
+              "instanceId": "inst-1793148062651-0-s4pi",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L1",
+              "position": [
+                -31.75,
+                38.15,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                38.15,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 6,
+            "part": {
+              "instanceId": "inst-1793148062651-1-wz69",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L2",
+              "position": [
+                -44.45,
+                38.15,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                38.15,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 7,
+            "part": {
+              "instanceId": "inst-1793148062651-2-yifw",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L3",
+              "position": [
+                -31.75,
+                25.45,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                25.45,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 8,
+            "part": {
+              "instanceId": "inst-1793148062651-3-k9zl",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L4",
+              "position": [
+                -44.45,
+                25.45,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                25.45,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 9,
+            "part": {
+              "instanceId": "inst-1793148062651-4-hpn5",
+              "partId": "vex-iq-smart-motor-228-2560-500",
+              "label": "Smart Motor L",
+              "position": [
+                -28.57,
+                31.8,
+                -50.67
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "socketAngleDeg": -14.1,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -28.57,
+                31.8,
+                -50.67
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 10,
+            "part": {
+              "instanceId": "inst-1793148194514-0-7k44",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft L",
+              "position": [
+                -38.1,
+                31.8,
+                -85.725
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -85.725
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 11,
+            "part": {
+              "instanceId": "inst-1793148194514-1-d4hi",
+              "partId": "0-25x-pitch-spacer-228-2500-114-4",
+              "label": "Spacer L",
+              "position": [
+                -38.1,
+                31.8,
+                -58.5
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -58.5
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 12,
+            "part": {
+              "instanceId": "inst-1793148194514-2-uslm",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "Omni Wheel L",
+              "position": [
+                -38.1,
+                31.8,
+                -73.45
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -73.45
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 13,
+            "part": {
+              "instanceId": "inst-1793148378590-0-7icj",
+              "partId": "2x-pitch-motor-shaft-228-2500-2234-86",
+              "label": "Rear Axle L",
+              "position": [
+                38.1,
+                31.8,
+                -54.4
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                -54.4
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 14,
+            "part": {
+              "instanceId": "inst-1793148378590-1-3vrq",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Offset Pin L1",
+              "position": [
+                31.75,
+                38.15,
+                -57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                31.75,
+                38.15,
+                -57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 15,
+            "part": {
+              "instanceId": "inst-1793148378590-2-6b9n",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Offset Pin L2",
+              "position": [
+                44.45,
+                25.45,
+                -57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                44.45,
+                25.45,
+                -57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 16,
+            "part": {
+              "instanceId": "inst-1793148378590-3-egc2",
+              "partId": "2x-wide-2x2-offset-corner-connector-228-2500-136-104",
+              "label": "Offset Connector L",
+              "position": [
+                57.15,
+                25.45,
+                -57.15
+              ],
+              "rotation": [
+                90,
+                90,
+                0
+              ],
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                57.15,
+                25.45,
+                -57.15
+              ],
+              "lastValidRotation": [
+                90,
+                90,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 17,
+            "part": {
+              "instanceId": "inst-1793148521988-0-06u7",
+              "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+              "label": "Rear Hub L",
+              "position": [
+                38.1,
+                31.8,
+                -66.6
+              ],
+              "rotation": [
+                0,
+                180,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                -66.6
+              ],
+              "lastValidRotation": [
+                0,
+                180,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 18,
+            "part": {
+              "instanceId": "inst-1793148521988-1-3tw1",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L",
+              "position": [
+                -42.191,
+                39.895,
+                -90.76
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                -90.76
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 19,
+            "part": {
+              "instanceId": "inst-1793148555103-1-1bme",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Rear Collar L",
+              "position": [
+                34.009,
+                23.705,
+                -66.675
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                34.009,
+                23.705,
+                -66.675
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 20,
+            "part": {
+              "instanceId": "inst-1793148657922-0-655m",
+              "partId": "tire-200-mm-travel-228-2500-209-449",
+              "label": "Rear Tire L",
+              "position": [
+                38.1,
+                31.8,
+                -73.01
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                -73.01
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 21,
+            "part": {
+              "instanceId": "inst-1793148666813-mir-1",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff L rear-top",
+              "position": [
+                -44.45,
+                63.55,
+                38.1
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -44.45,
+                63.55,
+                38.1
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#475569",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793148666817-mir-2",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff L rear",
+              "position": [
+                -31.75,
+                63.55,
+                38.1
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -31.75,
+                63.55,
+                38.1
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#475569",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 23,
+            "part": {
+              "instanceId": "inst-1793148666829-mir-3",
+              "partId": "double-2x-wide-1x2-corner-connector-228-2500-271-371",
+              "label": "Corner Connector L (Mirrored)",
+              "position": [
+                44.45,
+                63.55,
+                50.8
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                44.45,
+                63.55,
+                50.8
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 24,
+            "part": {
+              "instanceId": "inst-1793148666866-mir-4",
+              "partId": "4x8-plate-228-2500-043-249",
+              "label": "Side Plate L (Mirrored)",
+              "position": [
+                0,
+                44.5,
+                53.85
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                0,
+                44.5,
+                53.85
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#64748b",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 25,
+            "part": {
+              "instanceId": "inst-1793148666869-mir-5",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L1 (Mirrored)",
+              "position": [
+                -31.75,
+                38.15,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -31.75,
+                38.15,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 26,
+            "part": {
+              "instanceId": "inst-1793148666871-mir-6",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L2 (Mirrored)",
+              "position": [
+                -44.45,
+                38.15,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -44.45,
+                38.15,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 27,
+            "part": {
+              "instanceId": "inst-1793148666873-mir-7",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L3 (Mirrored)",
+              "position": [
+                -31.75,
+                25.45,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -31.75,
+                25.45,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 28,
+            "part": {
+              "instanceId": "inst-1793148666875-mir-8",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L4 (Mirrored)",
+              "position": [
+                -44.45,
+                25.45,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -44.45,
+                25.45,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 29,
+            "part": {
+              "instanceId": "inst-1793148666897-mir-9",
+              "partId": "vex-iq-smart-motor-228-2560-500",
+              "label": "Smart Motor L (Mirrored)",
+              "position": [
+                -28.57,
+                31.8,
+                50.67
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -28.57,
+                31.8,
+                50.67
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 30,
+            "part": {
+              "instanceId": "inst-1793148666907-mir-10",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft L (Mirrored)",
+              "position": [
+                -38.1,
+                31.8,
+                85.725
+              ],
+              "rotation": [
+                180,
+                180,
+                0
+              ],
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                85.725
+              ],
+              "lastValidRotation": [
+                180,
+                180,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 31,
+            "part": {
+              "instanceId": "inst-1793148666907-mir-11",
+              "partId": "0-25x-pitch-spacer-228-2500-114-4",
+              "label": "Spacer L (Mirrored)",
+              "position": [
+                -38.1,
+                31.8,
+                58.5
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                58.5
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 32,
+            "part": {
+              "instanceId": "inst-1793148666938-mir-12",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "Omni Wheel L (Mirrored)",
+              "position": [
+                -38.1,
+                31.8,
+                73.45
+              ],
+              "rotation": [
+                270,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                73.45
+              ],
+              "lastValidRotation": [
+                270,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 33,
+            "part": {
+              "instanceId": "inst-1793148666945-mir-13",
+              "partId": "2x-pitch-motor-shaft-228-2500-2234-86",
+              "label": "Front Axle L",
+              "position": [
+                38.1,
+                31.8,
+                54.4
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                54.4
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 34,
+            "part": {
+              "instanceId": "inst-1793148666947-mir-14",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Offset Pin L1 (Mirrored)",
+              "position": [
+                31.75,
+                38.15,
+                57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                31.75,
+                38.15,
+                57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 35,
+            "part": {
+              "instanceId": "inst-1793148666949-mir-15",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Offset Pin L2 (Mirrored)",
+              "position": [
+                44.45,
+                25.45,
+                57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                44.45,
+                25.45,
+                57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 36,
+            "part": {
+              "instanceId": "inst-1793148666962-mir-16",
+              "partId": "2x-wide-2x2-offset-corner-connector-228-2500-136-104",
+              "label": "Offset Connector L (Mirrored)",
+              "position": [
+                57.15,
+                38.15,
+                57.15
+              ],
+              "rotation": [
+                -90,
+                90,
+                0
+              ],
+              "lastValidPosition": [
+                57.15,
+                38.15,
+                57.15
+              ],
+              "lastValidRotation": [
+                -90,
+                90,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 37,
+            "part": {
+              "instanceId": "inst-1793148666969-mir-17",
+              "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+              "label": "Front Hub L",
+              "position": [
+                38.1,
+                31.8,
+                66.6
+              ],
+              "rotation": [
+                180,
+                180,
+                0
+              ],
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                66.6
+              ],
+              "lastValidRotation": [
+                180,
+                180,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 38,
+            "part": {
+              "instanceId": "inst-1793148666979-mir-20",
+              "partId": "tire-200-mm-travel-228-2500-209-449",
+              "label": "Front Tire L",
+              "position": [
+                38.1,
+                31.8,
+                73.01
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                73.01
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ],
+              "isIntersecting": false,
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false
+            }
+          },
+          {
+            "op": "remove",
+            "index": 39,
+            "part": {
+              "instanceId": "inst-1793148685877-0-w403",
+              "partId": "2x10-beam-228-2500-025-166",
+              "label": "Rear Crossbeam",
+              "position": [
+                60.2,
+                31.8,
+                0
+              ],
+              "rotation": [
+                0,
+                90,
+                0
+              ],
+              "color": "#64748b",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                60.2,
+                31.8,
+                0
+              ],
+              "lastValidRotation": [
+                0,
+                90,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793148700064-0-wgcd",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar R",
+              "position": [
+                -42.191,
+                23.705,
+                90.76
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                23.705,
+                90.76
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "remove",
+            "index": 41,
+            "part": {
+              "instanceId": "inst-1793148700064-1-zg08",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Rear Collar R",
+              "position": [
+                34.009,
+                39.895,
+                66.675
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                34.009,
+                39.895,
+                66.675
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvreobrk-2"
+      },
+      {
+        "id": "step-mvreoce2-dhrg9e",
+        "parentId": "step-mvreobs6-2dn8yg",
+        "at": 1793149099706,
+        "source": "mcp",
+        "label": "place_parts: 42 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 0,
+            "part": {
+              "instanceId": "inst-1793149098967-0-8sc5",
+              "partId": "vex-iq-robot-brain-228-2540-502",
+              "label": "Robot Brain",
+              "position": [
+                0,
+                69.9,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                0,
+                69.9,
+                0
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 1,
+            "part": {
+              "instanceId": "inst-1793149098967-1-qm5u",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff L 1",
+              "position": [
+                -44.45,
+                63.55,
+                -38.1
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#475569",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                63.55,
+                -38.1
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 2,
+            "part": {
+              "instanceId": "inst-1793149098967-2-3aqo",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff L 2",
+              "position": [
+                -31.75,
+                63.55,
+                -38.1
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#475569",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                63.55,
+                -38.1
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 3,
+            "part": {
+              "instanceId": "inst-1793149098967-3-mewx",
+              "partId": "double-2x-wide-1x2-corner-connector-228-2500-271-371",
+              "label": "Corner Connector L",
+              "position": [
+                44.45,
+                63.55,
+                -50.8
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                44.45,
+                63.55,
+                -50.8
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 4,
+            "part": {
+              "instanceId": "inst-1793149098967-4-nyda",
+              "partId": "4x8-plate-228-2500-043-249",
+              "label": "Side Plate L",
+              "position": [
+                0,
+                44.5,
+                -53.85
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#64748b",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                0,
+                44.5,
+                -53.85
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 5,
+            "part": {
+              "instanceId": "inst-1793149098967-5-ywpw",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L 1",
+              "position": [
+                -31.75,
+                38.15,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                38.15,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 6,
+            "part": {
+              "instanceId": "inst-1793149098967-6-sk2s",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L 2",
+              "position": [
+                -44.45,
+                38.15,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                38.15,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 7,
+            "part": {
+              "instanceId": "inst-1793149098967-7-nhqu",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L 3",
+              "position": [
+                -31.75,
+                25.45,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                25.45,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 8,
+            "part": {
+              "instanceId": "inst-1793149098967-8-uf1v",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin L 4",
+              "position": [
+                -44.45,
+                25.45,
+                -50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                25.45,
+                -50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 9,
+            "part": {
+              "instanceId": "inst-1793149098967-9-5xbe",
+              "partId": "vex-iq-smart-motor-228-2560-500",
+              "label": "Drive Motor L",
+              "position": [
+                -28.57,
+                31.8,
+                -50.67
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "socketAngleDeg": -14.1,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -28.57,
+                31.8,
+                -50.67
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 10,
+            "part": {
+              "instanceId": "inst-1793149098967-a-bsw7",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft L",
+              "position": [
+                -38.1,
+                31.8,
+                -85.725
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -85.725
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 11,
+            "part": {
+              "instanceId": "inst-1793149098967-b-7u0a",
+              "partId": "0-25x-pitch-spacer-228-2500-114-4",
+              "label": "Spacer L",
+              "position": [
+                -38.1,
+                31.8,
+                -58.5
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -58.5
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 12,
+            "part": {
+              "instanceId": "inst-1793149098967-c-bosn",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "Omni Wheel L",
+              "position": [
+                -38.1,
+                31.8,
+                -73.45
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -73.45
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 13,
+            "part": {
+              "instanceId": "inst-1793149098967-d-grxb",
+              "partId": "2x-pitch-motor-shaft-228-2500-2234-86",
+              "label": "Rear Axle L",
+              "position": [
+                38.1,
+                31.8,
+                -54.4
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                -54.4
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 14,
+            "part": {
+              "instanceId": "inst-1793149098967-e-7pr7",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Connector Pin L 1",
+              "position": [
+                31.75,
+                38.15,
+                -57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                31.75,
+                38.15,
+                -57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 15,
+            "part": {
+              "instanceId": "inst-1793149098967-f-a7fu",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Connector Pin L 2",
+              "position": [
+                44.45,
+                25.45,
+                -57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                44.45,
+                25.45,
+                -57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 16,
+            "part": {
+              "instanceId": "inst-1793149098967-g-9ghl",
+              "partId": "2x-wide-2x2-offset-corner-connector-228-2500-136-104",
+              "label": "Offset Connector L",
+              "position": [
+                57.15,
+                25.45,
+                -57.15
+              ],
+              "rotation": [
+                90,
+                90,
+                0
+              ],
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                57.15,
+                25.45,
+                -57.15
+              ],
+              "lastValidRotation": [
+                90,
+                90,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 17,
+            "part": {
+              "instanceId": "inst-1793149098967-h-pigi",
+              "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+              "label": "Rear Hub L",
+              "position": [
+                38.1,
+                31.8,
+                -66.6
+              ],
+              "rotation": [
+                0,
+                180,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                -66.6
+              ],
+              "lastValidRotation": [
+                0,
+                180,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 18,
+            "part": {
+              "instanceId": "inst-1793149098967-i-izba",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L",
+              "position": [
+                -42.191,
+                39.895,
+                -90.76
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                -90.76
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 19,
+            "part": {
+              "instanceId": "inst-1793149098967-j-nyld",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Rear Collar L",
+              "position": [
+                34.009,
+                23.705,
+                -66.675
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                34.009,
+                23.705,
+                -66.675
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 20,
+            "part": {
+              "instanceId": "inst-1793149098967-k-sof5",
+              "partId": "tire-200-mm-travel-228-2500-209-449",
+              "label": "Rear Tire L",
+              "position": [
+                38.1,
+                31.8,
+                -73.01
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                -73.01
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 21,
+            "part": {
+              "instanceId": "inst-1793149098967-l-f7ub",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff R 1",
+              "position": [
+                -44.45,
+                63.55,
+                38.1
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "color": "#475569",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                63.55,
+                38.1
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 22,
+            "part": {
+              "instanceId": "inst-1793149098967-m-jc32",
+              "partId": "1x-pitch-standoff-228-2500-065-23",
+              "label": "Standoff R 2",
+              "position": [
+                -31.75,
+                63.55,
+                38.1
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "color": "#475569",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                63.55,
+                38.1
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 23,
+            "part": {
+              "instanceId": "inst-1793149098967-n-6xne",
+              "partId": "double-2x-wide-1x2-corner-connector-228-2500-271-371",
+              "label": "Corner Connector R",
+              "position": [
+                44.45,
+                63.55,
+                50.8
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                44.45,
+                63.55,
+                50.8
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 24,
+            "part": {
+              "instanceId": "inst-1793149098967-o-t1tu",
+              "partId": "4x8-plate-228-2500-043-249",
+              "label": "Side Plate R",
+              "position": [
+                0,
+                44.5,
+                53.85
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#64748b",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                0,
+                44.5,
+                53.85
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 25,
+            "part": {
+              "instanceId": "inst-1793149098967-p-er8m",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin R 1",
+              "position": [
+                -31.75,
+                38.15,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                38.15,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 26,
+            "part": {
+              "instanceId": "inst-1793149098967-q-2sdp",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin R 2",
+              "position": [
+                -44.45,
+                38.15,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                38.15,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 27,
+            "part": {
+              "instanceId": "inst-1793149098967-r-vfdc",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin R 3",
+              "position": [
+                -31.75,
+                25.45,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -31.75,
+                25.45,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 28,
+            "part": {
+              "instanceId": "inst-1793149098967-s-ic00",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Motor Pin R 4",
+              "position": [
+                -44.45,
+                25.45,
+                50.8
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -44.45,
+                25.45,
+                50.8
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 29,
+            "part": {
+              "instanceId": "inst-1793149098967-t-dztb",
+              "partId": "vex-iq-smart-motor-228-2560-500",
+              "label": "Drive Motor R",
+              "position": [
+                -28.57,
+                31.8,
+                50.67
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "socketAngleDeg": -14.1,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -28.57,
+                31.8,
+                50.67
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 30,
+            "part": {
+              "instanceId": "inst-1793149098967-u-i9gt",
+              "partId": "3x-pitch-motor-shaft-228-2500-2236-185",
+              "label": "Drive Shaft R",
+              "position": [
+                -38.1,
+                31.8,
+                85.725
+              ],
+              "rotation": [
+                180,
+                180,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                85.725
+              ],
+              "lastValidRotation": [
+                180,
+                180,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 31,
+            "part": {
+              "instanceId": "inst-1793149098967-v-dtlq",
+              "partId": "0-25x-pitch-spacer-228-2500-114-4",
+              "label": "Spacer R",
+              "position": [
+                -38.1,
+                31.8,
+                58.5
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                58.5
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 32,
+            "part": {
+              "instanceId": "inst-1793149098967-w-kgg2",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "Omni Wheel R",
+              "position": [
+                -38.1,
+                31.8,
+                73.45
+              ],
+              "rotation": [
+                270,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                73.45
+              ],
+              "lastValidRotation": [
+                270,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 33,
+            "part": {
+              "instanceId": "inst-1793149098967-x-g7qg",
+              "partId": "2x-pitch-motor-shaft-228-2500-2234-86",
+              "label": "Rear Axle R",
+              "position": [
+                38.1,
+                31.8,
+                54.4
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                54.4
+              ],
+              "lastValidRotation": [
+                180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 34,
+            "part": {
+              "instanceId": "inst-1793149098967-y-g948",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Connector Pin R 1",
+              "position": [
+                31.75,
+                38.15,
+                57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                31.75,
+                38.15,
+                57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 35,
+            "part": {
+              "instanceId": "inst-1793149098967-z-p7of",
+              "partId": "1x1-connector-pin-228-2500-060-31",
+              "label": "Connector Pin R 2",
+              "position": [
+                44.45,
+                25.45,
+                57.15
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#3b82f6",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                44.45,
+                25.45,
+                57.15
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 36,
+            "part": {
+              "instanceId": "inst-1793149098967-10-l023",
+              "partId": "2x-wide-2x2-offset-corner-connector-228-2500-136-104",
+              "label": "Offset Connector R",
+              "position": [
+                57.15,
+                38.15,
+                57.15
+              ],
+              "rotation": [
+                -90,
+                90,
+                0
+              ],
+              "color": "#f8fafc",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                57.15,
+                38.15,
+                57.15
+              ],
+              "lastValidRotation": [
+                -90,
+                90,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 37,
+            "part": {
+              "instanceId": "inst-1793149098967-11-xazr",
+              "partId": "small-wheel-hub-44-mm-228-2500-208-434",
+              "label": "Rear Hub R",
+              "position": [
+                38.1,
+                31.8,
+                66.6
+              ],
+              "rotation": [
+                180,
+                180,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                66.6
+              ],
+              "lastValidRotation": [
+                180,
+                180,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 38,
+            "part": {
+              "instanceId": "inst-1793149098967-12-gkzv",
+              "partId": "tire-200-mm-travel-228-2500-209-449",
+              "label": "Rear Tire R",
+              "position": [
+                38.1,
+                31.8,
+                73.01
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                38.1,
+                31.8,
+                73.01
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 39,
+            "part": {
+              "instanceId": "inst-1793149098967-13-b4sw",
+              "partId": "2x10-beam-228-2500-025-166",
+              "label": "Rear Crossbeam",
+              "position": [
+                60.2,
+                31.8,
+                0
+              ],
+              "rotation": [
+                0,
+                90,
+                0
+              ],
+              "color": "#64748b",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                60.2,
+                31.8,
+                0
+              ],
+              "lastValidRotation": [
+                0,
+                90,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793149098967-14-696c",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar R",
+              "position": [
+                -42.191,
+                23.705,
+                90.76
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                23.705,
+                90.76
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 41,
+            "part": {
+              "instanceId": "inst-1793149098967-15-h314",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Rear Collar R",
+              "position": [
+                34.009,
+                39.895,
+                66.675
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                34.009,
+                39.895,
+                66.675
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvreobtg-3"
       }
     ],
-    "headId": "step-mvpvvrt1-tuxzj8",
+    "headId": "step-mvreoce2-dhrg9e",
     "activeChild": {
       "root": "step-mvm1cbpd-8kprhe",
       "step-mvm1cbpd-8kprhe": "step-mvmho6hy-13n0rx",
@@ -16972,9 +23143,33 @@
       "step-mvpvuwgi-i80gzm": "step-mvpvv5k1-bq39km",
       "step-mvpvv5k1-bq39km": "step-mvpvvlru-h1ypw0",
       "step-mvpvvlru-h1ypw0": "step-mvpvvpr4-dm4ztf",
-      "step-mvpvvpr4-dm4ztf": "step-mvpvvrt1-tuxzj8"
+      "step-mvpvvpr4-dm4ztf": "step-mvpvvrt1-tuxzj8",
+      "step-mvpvvrt1-tuxzj8": "step-mvrdwqd9-zdm7k4",
+      "step-mvrdwqd9-zdm7k4": "step-mvrdwqht-9ygfed",
+      "step-mvrdwqht-9ygfed": "step-mvre0cpm-3rpaaw",
+      "step-mvre0cpm-3rpaaw": "step-mvre0d5u-ade7hn",
+      "step-mvre0d5u-ade7hn": "step-mvre1p9r-4rhkej",
+      "step-mvre1p9r-4rhkej": "step-mvre24jy-j2l1h0",
+      "step-mvre24jy-j2l1h0": "step-mvre2u61-kp9zz5",
+      "step-mvre2u61-kp9zz5": "step-mvre3ks2-s87tah",
+      "step-mvre3ks2-s87tah": "step-mvre4y8z-f85rku",
+      "step-mvre4y8z-f85rku": "step-mvre8wcb-fguux9",
+      "step-mvre8wcb-fguux9": "step-mvreaqxe-hx33c7",
+      "step-mvreaqxe-hx33c7": "step-mvrebyxq-h0n9am",
+      "step-mvrebyxq-h0n9am": "step-mvreco50-oez8ru",
+      "step-mvreco50-oez8ru": "step-mvrecoex-4o8sg7",
+      "step-mvrecoex-4o8sg7": "step-mvred3ss-toicmc",
+      "step-mvred3ss-toicmc": "step-mvreevtn-eqqi11",
+      "step-mvreevtn-eqqi11": "step-mvref2hz-60twqf",
+      "step-mvref2hz-60twqf": "step-mvrefh1p-lrs009",
+      "step-mvrefh1p-lrs009": "step-mvrefhc5-keex01",
+      "step-mvrefhc5-keex01": "step-mvrefrz9-p11svk",
+      "step-mvrefrz9-p11svk": "step-mvrefs0k-ga6sxd",
+      "step-mvrefs0k-ga6sxd": "step-mvrefshv-jgikvu",
+      "step-mvrefshv-jgikvu": "step-mvreobs6-2dn8yg",
+      "step-mvreobs6-2dn8yg": "step-mvreoce2-dhrg9e"
     },
-    "rev": 444
+    "rev": 468
   },
-  "historyRev": 444
+  "historyRev": 468
 }

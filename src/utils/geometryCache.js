@@ -4,6 +4,8 @@ import { MeshBVH } from 'three-mesh-bvh';
 import { hubFrame, splitHubTriangles, subGeometry } from './motorHub.js';
 
 const loader = new GLTFLoader();
+export const RUBBER_MATERIAL_NAME = 'rubber';
+export const RUBBER_COLOR = '#1c1f22';
 // partId -> Promise<{ geometries, collisionGeometries, localBox, hub }>; `hub` is set for the Smart
 // Motor: { frame, renderIndices, collisionIndices } naming the hub pieces of each list (motorHub.js)
 const partAssetCache = new Map();
@@ -85,6 +87,8 @@ export function loadPartAsset(part) {
         gltf.scene.traverse((child) => {
           if (child.isMesh && child.geometry) {
             const renderGeo = child.geometry.clone();
+            // Black rubber bodies (omni wheel rollers) keep their own colour (convert-worker.mjs)
+            if (child.material?.name === RUBBER_MATERIAL_NAME) renderGeo.userData.rubber = true;
             if (!renderGeo.attributes.normal) {
               renderGeo.computeVertexNormals();
             }

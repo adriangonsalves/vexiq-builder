@@ -62,17 +62,29 @@ function extractStepCylinders(stepText) {
   return cylinders;
 }
 
+// STEP bodies coloured near-black are rubber (omni wheel rollers, tyres moulded onto a hub)
+const RUBBER_MAX_CHANNEL = 0.06;
+const isRubberMesh = (m) => Array.isArray(m.color) && Math.max(...m.color) < RUBBER_MAX_CHANNEL;
+
 /**
  * Merges all sub-meshes from occt-import-js into a single compact binary GLB buffer
- * and returns bounding box + vertex/triangle stats.
+ * and returns bounding box + vertex/triangle stats. When a part mixes plastic and black rubber
+ * bodies, the rubber goes in a second primitive with a material named "rubber" so the app can
+ * keep it black whatever colour the part is given.
  */
 function buildGlbFromOcctResult(result) {
   let totalVertices = 0;
   let totalIndices = 0;
 
-  const validMeshes = (result.meshes || []).filter(
+  const allMeshes = (result.meshes || []).filter(
     (m) => m.attributes?.position?.array?.length > 0 && m.index?.array?.length > 0
   );
+  const rubberMeshes = allMeshes.filter(isRubberMesh);
+  const splitRubber = rubberMeshes.length > 0 && rubberMeshes.length < allMeshes.length;
+  const validMeshes = splitRubber
+    ? [...allMeshes.filter((m) => !isRubberMesh(m)), ...rubberMeshes]
+    : allMeshes;
+  let bodyIndexCount = 0;
 
   for (const m of validMeshes) {
     totalVertices += m.attributes.position.array.length / 3;
@@ -128,6 +140,7 @@ function buildGlbFromOcctResult(result) {
 
     vOffset += vCount;
     iOffset += idxArr.length;
+    if (!splitRubber || !isRubberMesh(m)) bodyIndexCount = iOffset;
   }
 
   const posByteLength = positions.byteLength;
@@ -149,13 +162,18 @@ function buildGlbFromOcctResult(result) {
     nodes: [{ mesh: 0 }],
     meshes: [
       {
-        primitives: [
-          {
-            attributes: { POSITION: 0, NORMAL: 1 },
-            indices: 2,
-            mode: 4
-          }
-        ]
+        primitives: splitRubber
+          ? [
+              { attributes: { POSITION: 0, NORMAL: 1 }, indices: 2, mode: 4 },
+              { attributes: { POSITION: 0, NORMAL: 1 }, indices: 3, material: 0, mode: 4 }
+            ]
+          : [
+              {
+                attributes: { POSITION: 0, NORMAL: 1 },
+                indices: 2,
+                mode: 4
+              }
+            ]
       }
     ],
     accessors: [
@@ -175,14 +193,30 @@ function buildGlbFromOcctResult(result) {
         count: totalVertices,
         type: 'VEC3'
       },
-      {
-        bufferView: 2,
-        byteOffset: 0,
-        componentType: useUint32 ? 5125 : 5123, // UNSIGNED_INT or UNSIGNED_SHORT
-        count: totalIndices,
-        type: 'SCALAR'
-      }
+      ...(splitRubber
+        ? [
+            { bufferView: 2, byteOffset: 0, componentType: useUint32 ? 5125 : 5123, count: bodyIndexCount, type: 'SCALAR' },
+            {
+              bufferView: 2,
+              byteOffset: bodyIndexCount * indices.BYTES_PER_ELEMENT,
+              componentType: useUint32 ? 5125 : 5123,
+              count: totalIndices - bodyIndexCount,
+              type: 'SCALAR'
+            }
+          ]
+        : [
+            {
+              bufferView: 2,
+              byteOffset: 0,
+              componentType: useUint32 ? 5125 : 5123, // UNSIGNED_INT or UNSIGNED_SHORT
+              count: totalIndices,
+              type: 'SCALAR'
+            }
+          ])
     ],
+    ...(splitRubber
+      ? { materials: [{ name: 'rubber', pbrMetallicRoughness: { baseColorFactor: [0.02, 0.02, 0.02, 1], metallicFactor: 0, roughnessFactor: 0.9 } }] }
+      : {}),
     bufferViews: [
       {
         buffer: 0,
@@ -253,7 +287,8 @@ function buildGlbFromOcctResult(result) {
     },
     vertexCount: totalVertices,
     triangleCount: Math.floor(totalIndices / 3),
-    glbBytes: totalGlbLength
+    glbBytes: totalGlbLength,
+    hasRubber: splitRubber
   };
 }
 
@@ -278,7 +313,7 @@ parentPort.on('message', async (task) => {
       throw new Error('occt ReadStepFile returned unsuccessful');
     }
 
-    const { glb, bbox, vertexCount, triangleCount, glbBytes } = buildGlbFromOcctResult(result);
+    const { glb, bbox, vertexCount, triangleCount, glbBytes, hasRubber } = buildGlbFromOcctResult(result);
     fs.writeFileSync(outGlbPath, glb);
 
     const stepText = fileBuffer.toString('latin1');
@@ -291,6 +326,7 @@ parentPort.on('message', async (task) => {
       vertexCount,
       triangleCount,
       glbBytes,
+      hasRubber,
       connectorCount: cylinders.length,
       cylinders: cylinders.slice(0, 64) // store sample in catalog, full can be inspected
     });

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { loadPartAsset } from '../utils/geometryCache.js';
+import { loadPartAsset, RUBBER_COLOR } from '../utils/geometryCache.js';
 
 const thumbnailDataUrlCache = new Map(); // "partId|defaultColor" -> string (dataURL)
 const thumbKey = (part) => `${part.id}|${part.defaultColor}`;
@@ -103,8 +103,10 @@ function renderPartToDataUrl(part, geometries, localBox) {
     opacity: light ? 0.9 : 0.7
   });
 
+  const rubberMat = new THREE.MeshStandardMaterial({ color: RUBBER_COLOR, roughness: 0.85, metalness: 0 });
+
   for (const geo of geometries) {
-    const mesh = new THREE.Mesh(geo, mat);
+    const mesh = new THREE.Mesh(geo, geo.userData.rubber ? rubberMat : mat);
     group.add(mesh);
 
     const edgeGeo = new THREE.EdgesGeometry(geo, 25);

@@ -553,20 +553,25 @@ async function main() {
       part.category === 'Wheels & Treads' ||
       part.category === 'Shafts, Spacers & Collars'
     ) {
-      const hasCenterBore = ports.some(
-        (p) => Math.hypot(p.origin[0], p.origin[1]) < 1.5
-      );
+      // Wheels turn about their thinnest side: Z for nearly all, Y for the 2nd gen omni wheel
+      const size = part.bbox.size;
+      const yThinnest = size[1] < size[2] - 1 && size[1] < size[0] - 1;
+      const a = part.category === 'Wheels & Treads' && yThinnest ? 1 : 2;
+      const axis = [0, 0, 0];
+      axis[a] = 1;
+      const hasCenterBore = ports.some((p) => Math.hypot(...p.origin.filter((_, i) => i !== a)) < 1.5);
       if (!hasCenterBore && !part.name.toLowerCase().includes('shaft')) {
-        const centerPos = [0, 0, Number(part.bbox.center[2].toFixed(3))];
-        const shaftFits = !probeIntersectsPart(refShaftBvh, centerPos, [0, 0, 0], partBvh);
+        const centerPos = [0, 0, 0];
+        centerPos[a] = Number(part.bbox.center[a].toFixed(3));
+        const shaftFits = !probeIntersectsPart(refShaftBvh, centerPos, eulerFromZAxis(axis), partBvh);
         if (shaftFits) {
           ports.unshift({
             portId: 'center_shaft_bore',
             type: 'shaft_bore',
             origin: centerPos,
-            axis: [0, 0, 1],
+            axis,
             through: true,
-            spanMm: [part.bbox.min[2], part.bbox.max[2]],
+            spanMm: [part.bbox.min[a], part.bbox.max[a]],
             pitchCoord: [0, 0, 0],
             verified: true
           });

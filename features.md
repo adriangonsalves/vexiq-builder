@@ -7,7 +7,7 @@
 
 ## 1. 478-Part VEX IQ CAD Library & Semantic Catalog
 
-- **Complete Official Part Coverage (`478` Parts):**
+- **Complete Official Part Coverage (`479` Parts):**
   - Converted from STEP CAD models (`VEX-IQ-All-Parts` & `VEX-IQ-All-Control`) into centered, millimeter-accurate `.glb` meshes (`public/models/`) and indexed in [`public/catalog.json`](file:///Users/adriangonsalves/projects/vexiq_builder/public/catalog.json) + [`public/part-metadata.json`](file:///Users/adriangonsalves/projects/vexiq_builder/public/part-metadata.json).
   - **Categories:**
     - `Beams & Plates` (1x/2x/4x Beams, Specialty Beams, Corner Connectors, Plates)
@@ -17,6 +17,8 @@
     - `Wheels &Hubs` (200mm Omni-Directional, Traction, Balloon Tires, Hubs)
     - `Control & Electronics` (Gen 1 & Gen 2 Robot Brain, Smart Motors, Battery, Optical/Distance/Bumper/Touch LED/Gyro Sensors, Controller)
     - `Pneumatics & Linear Motion` (Pneumatic Cylinders, Solenoids, Air Tanks, Fittings, Linear Racks/Sliders)
+  - **Black rubber stays black:** STEP bodies coloured near-black (like the rollers of the 2nd gen `200mm Travel Omni-Directional Wheel`, 228-2536) are stored as a second "rubber" piece of the part's model (`scripts/convert-worker.mjs`, `hasRubber` in the catalog). The 3D view and thumbnails draw that piece black whatever colour the part is given; the rest of the part takes the part colour as usual.
+  - **Adding a part:** put its STEP file in `VEX-IQ-All-Parts/`, then run `npm run convert` (only new files are converted) and `npm run index-metadata`. A wheel whose thinnest side is Y (like the 2nd gen omni wheel) gets its centre bore along Y.
 - **Live 3D Part Thumbnails & Search:**
   - Interactive category filter pills with part counts.
   - Instant search by part name, VEX part number (`228-2500-...`), or category.
@@ -114,6 +116,7 @@
   - Letting go of the key, leaving the window, changing the selection or Explode ends the preview without changes. It doesn't run during a drag, hole picking or while mate arrows are shown.
 - **Real-Time Concave Mesh Collision Detection (`three-mesh-bvh`):**
   - Uses inward-eroded (`0.38 mm` clearance) concave triangle meshes so pins and shafts pass cleanly through `4.8 mm` holes without false-positive bounding-box collisions, while true solid-body intersections are flagged immediately.
+  - A **tire on its hub** isn't an overlap: tires are moulded smaller than the hub they stretch over, so a tire whose axis lines up with a hub's and whose width covers the hub's middle is left out of the check (`src/utils/tireFit.js`, shared by the app and the MCP engine).
   - Intersecting parts render in **transparent grey** (`opacity: 0.42`) with a top HUD warning and a one-click **Revert Pose / Cancel Placement** button.
   - Selecting another part automatically reverts any unplaced intersecting part to its `lastValidPosition` / `lastValidRotation`.
 - **Multi-Axis Exploded View (`Off`, `X`, `Y`, `Z`, `All`):**
@@ -249,7 +252,7 @@ Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP 
 - **Builds save themselves (File menu and library):**
   - Every build is kept in the browser's storage (IndexedDB `vexiq-builds`, `src/utils/buildLibrary.js`), saved about a second after each change with its parts, its own undo history, its view settings and a small picture. There is no Save button; reloading opens the build that was open.
   - Builds are named **Build #1**, **Build #2**, …; the open build's name is beside the title, click it to rename (Enter keeps, Esc cancels; no history step).
-  - **File → New** starts an empty build; **File → Starter ▸** lists the starters (`src/starters.js`, "Sample starter" for now; more like drivetrains and claws can be added there) and starts a new build from one. The build that was open stays saved.
+  - **File → New** starts an empty build; **File → Starter ▸** lists the starters (`src/starters.js`: "Sample starter" and "Speedbot 2.0", the VEX IQ 2nd gen Speed Build 2.0 from its build instructions with all 42 parts except the two Smart Cables; the brain's model includes the battery. More like drivetrains and claws can be added there) and starts a new build from one. The build that was open stays saved.
   - **File → Load…** shows every saved build, newest first, with its picture, name, when it changed and its part count: **Open** (or double-click), **Rename**, **Duplicate** ("<name> copy") and **Delete** (asks first; deleting the open build opens the most recent other one, or a new empty one). **Open from computer…** adds a `.vexiq.json` file as a new build named after the file.
   - **File → Export** downloads the open build as `<name>.vexiq.json`: its history, with overlapping parts left out and a closing "Leave out overlapping parts" step, as before. A file without history (saved before the history feature) opens with one "Starting assembly" step.
   - **File → Delete this build…** removes the open build from this browser (asks first).

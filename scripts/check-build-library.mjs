@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { changedAgo, copyName, exportFileName, fileBuildName, newBuildId, nextBuildName, starterBuildName } from '../src/utils/buildLibrary.js';
 import { STARTERS, starterById } from '../src/starters.js';
+import { checkCandidateCollision } from '../mcp/assembly-engine.mjs';
 
 let failures = 0;
 const check = (label, ok, detail = '') => {
@@ -29,6 +30,11 @@ const catalog = JSON.parse(fs.readFileSync(path.join(root, 'public', 'catalog.js
 const sample = starterById('sample');
 const parts = sample.build(catalog);
 check('the sample starter lays out a beam, pin, axle and gear', STARTERS.length >= 1 && sample.name === 'Sample starter' && parts.length === 4, JSON.stringify(parts.map((p) => p.label)));
+
+const speedbot = starterById('speedbot').build(catalog);
+check('the Speedbot 2.0 starter has all 42 parts of the kit (cables left out)', speedbot.length === 42, String(speedbot.length));
+const overlapping = speedbot.filter((inst) => checkCandidateCollision(inst, speedbot).isIntersecting).map((p) => p.label);
+check('  none of its parts overlap (tires on their hubs included)', overlapping.length === 0, overlapping.join(', '));
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

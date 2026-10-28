@@ -24,6 +24,7 @@ import { isLinearHistory, normalizeSettings } from '../src/utils/appSettings.js'
 import { isMeshingGear, meshTurn, quaternionToEulerDeg, turnQuaternion, worldToothed } from '../src/utils/gearMeshing.js';
 import { squareFitRoll } from '../src/utils/shaftGroups.js';
 import { settlePlacement, turnAboutLine } from '../src/utils/placementFit.js';
+import { isTireOnHub } from '../src/utils/tireFit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -257,6 +258,7 @@ export function checkCandidateCollision(candidate, instances) {
     const worldBoxB = boxB.clone().applyMatrix4(matB);
 
     if (!worldBoxA.intersectsBox(worldBoxB)) continue;
+    if (isTireOnHub(partA, matA, partB, matB)) continue;
 
     matBtoA.multiplyMatrices(invMatA, matB);
     const piecesB = posedPieces(bvhB, other);

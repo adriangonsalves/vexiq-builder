@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-27T00:12:53.222Z",
-  "partCount": 478,
-  "totalVerifiedPorts": 4137,
+  "generatedAt": "2026-10-28T00:29:02.620Z",
+  "partCount": 479,
+  "totalVerifiedPorts": 4147,
   "parts": {
     "5x-pitch-idler-pulley-228-2500-1413-0": {
       "id": "5x-pitch-idler-pulley-228-2500-1413-0",
@@ -92833,6 +92833,259 @@
         }
       ]
     },
+    "200mm-travel-omni-directional-wheel-228-2536-345": {
+      "id": "200mm-travel-omni-directional-wheel-228-2536-345",
+      "partNumber": "228-2536",
+      "name": "200mm Travel Omni-Directional Wheel",
+      "category": "Wheels & Treads",
+      "pitchSize": [
+        5,
+        2.1,
+        5
+      ],
+      "originType": "centered",
+      "gearSpecs": null,
+      "fastenerSpecs": null,
+      "mountingRules": {
+        "massClass": "light",
+        "minFastenersRequired": 1
+      },
+      "portCounts": {
+        "total": 9,
+        "pinHoles": 8,
+        "shaftBores": 1,
+        "pinPegs": 0
+      },
+      "ports": [
+        {
+          "portId": "center_shaft_bore",
+          "type": "shaft_bore",
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": true,
+          "spanMm": [
+            -13.35,
+            13.35
+          ],
+          "pitchCoord": [
+            0,
+            0,
+            0
+          ],
+          "verified": true,
+          "shape": "square",
+          "squarePhaseDeg": 0
+        },
+        {
+          "portId": "hole_1",
+          "type": "pin_hole",
+          "origin": [
+            0,
+            13.35,
+            -12.7
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            12.286,
+            12.286
+          ],
+          "pitchCoord": [
+            0,
+            1.05,
+            -1
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_2",
+          "type": "pin_hole",
+          "origin": [
+            0,
+            13.35,
+            12.7
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            12.286,
+            12.286
+          ],
+          "pitchCoord": [
+            0,
+            1.05,
+            1
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_3",
+          "type": "pin_hole",
+          "origin": [
+            6.35,
+            13.35,
+            6.35
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            12.286,
+            12.286
+          ],
+          "pitchCoord": [
+            0.5,
+            1.05,
+            0.5
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_4",
+          "type": "pin_hole",
+          "origin": [
+            -6.35,
+            13.35,
+            6.35
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            12.286,
+            12.286
+          ],
+          "pitchCoord": [
+            -0.5,
+            1.05,
+            0.5
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_5",
+          "type": "pin_hole",
+          "origin": [
+            12.7,
+            13.35,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            12.286,
+            12.286
+          ],
+          "pitchCoord": [
+            1,
+            1.05,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_6",
+          "type": "pin_hole",
+          "origin": [
+            -6.35,
+            13.35,
+            -6.35
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            12.286,
+            12.286
+          ],
+          "pitchCoord": [
+            -0.5,
+            1.05,
+            -0.5
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_7",
+          "type": "pin_hole",
+          "origin": [
+            6.35,
+            13.35,
+            -6.35
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            12.286,
+            12.286
+          ],
+          "pitchCoord": [
+            0.5,
+            1.05,
+            -0.5
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_8",
+          "type": "pin_hole",
+          "origin": [
+            -12.7,
+            13.35,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            12.286,
+            12.286
+          ],
+          "pitchCoord": [
+            -1,
+            1.05,
+            0
+          ],
+          "verified": true
+        }
+      ]
+    },
     "228-2500-1960-1950-hub-345": {
       "id": "228-2500-1960-1950-hub-345",
       "partNumber": "1950 Hub",
@@ -97299,12 +97552,39 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 20,
+        "total": 21,
         "pinHoles": 20,
-        "shaftBores": 0,
+        "shaftBores": 1,
         "pinPegs": 0
       },
       "ports": [
+        {
+          "portId": "center_shaft_bore",
+          "type": "shaft_bore",
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": true,
+          "spanMm": [
+            -3.18,
+            3.18
+          ],
+          "pitchCoord": [
+            0,
+            0,
+            0
+          ],
+          "verified": true,
+          "shape": "square",
+          "squarePhaseDeg": 0
+        },
         {
           "portId": "hole_1",
           "type": "pin_hole",

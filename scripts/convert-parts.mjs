@@ -297,6 +297,7 @@ async function main() {
               bbox: msg.bbox,
               vertexCount: msg.vertexCount,
               triangleCount: msg.triangleCount,
+              ...(msg.hasRubber ? { hasRubber: true } : {}),
               connectorCount: msg.connectorCount,
               cylinders: msg.cylinders
             });
