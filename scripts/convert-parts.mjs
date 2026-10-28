@@ -10,6 +10,9 @@ const PARTS_DIR = path.join(ROOT_DIR, 'VEX-IQ-All-Parts');
 const CONTROL_DIR = path.join(ROOT_DIR, 'VEX-IQ-All-Control');
 const OUT_MODELS_DIR = path.join(ROOT_DIR, 'public', 'models');
 const OUT_CATALOG_PATH = path.join(ROOT_DIR, 'public', 'catalog.json');
+// Bodies left out of a part's model because they are catalog parts of their own (part number ->
+// body name prefixes): the Robot Brain's file includes its battery
+const SEPARATE_BODIES = { '228-2540': ['228-2604'] };
 
 function classifyPart(name) {
   const lower = name.toLowerCase();
@@ -276,7 +279,8 @@ async function main() {
             id: task.id,
             stepPath: task.stepPath,
             outGlbPath: task.outGlbPath,
-            fileSize: task.fileSize
+            fileSize: task.fileSize,
+            excludeBodies: SEPARATE_BODIES[task.partNumber] || []
           });
         };
 

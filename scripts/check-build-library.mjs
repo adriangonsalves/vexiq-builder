@@ -32,7 +32,7 @@ const parts = sample.build(catalog);
 check('the sample starter lays out a beam, pin, axle and gear', STARTERS.length >= 1 && sample.name === 'Sample starter' && parts.length === 4, JSON.stringify(parts.map((p) => p.label)));
 
 const speedbot = starterById('speedbot').build(catalog);
-check('the Speedbot 2.0 starter has all 42 parts of the kit (cables left out)', speedbot.length === 42, String(speedbot.length));
+check('the Speedbot 2.0 starter has all 43 parts of the kit (cables left out)', speedbot.length === 43, String(speedbot.length));
 const overlapping = speedbot.filter((inst) => checkCandidateCollision(inst, speedbot).isIntersecting).map((p) => p.label);
 check('  none of its parts overlap (tires on their hubs included)', overlapping.length === 0, overlapping.join(', '));
 

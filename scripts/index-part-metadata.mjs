@@ -109,7 +109,7 @@ function canonicalizeAxis(axis) {
 /**
  * Groups raw STEP cylinders that lie along the same coaxial 3D line.
  */
-function groupCoaxialCylinders(cylinders, bbox) {
+function groupCoaxialCylinders(cylinders, bbox, thinRing = false) {
   const groups = new Map();
 
   for (const cyl of cylinders) {
@@ -147,8 +147,15 @@ function groupCoaxialCylinders(cylinders, bbox) {
   const result = [];
   for (const g of groups.values()) {
     if (!g.hasLockingRidge && !g.hasPinBore) continue;
-    const minT = Math.min(...g.tValues);
-    const maxT = Math.max(...g.tValues);
+    let minT = Math.min(...g.tValues);
+    let maxT = Math.max(...g.tValues);
+    // All of a hole's surfaces placed on one face gives no length; through a spacer or washer (no
+    // thicker than half a pitch along the hole) the hole runs its whole thickness
+    const k = g.axis.findIndex((a) => Math.abs(a) === 1);
+    if (thinRing && maxT - minT < 0.01 && k >= 0 && bbox.max[k] - bbox.min[k] <= VEX_PITCH_MM / 2 + 0.1) {
+      minT = Math.min(bbox.min[k] * g.axis[k], bbox.max[k] * g.axis[k]);
+      maxT = Math.max(bbox.min[k] * g.axis[k], bbox.max[k] * g.axis[k]);
+    }
     const midT = (minT + maxT) / 2;
 
     // Also clamp/project against part bounding box along cardinal axes
@@ -426,7 +433,7 @@ async function main() {
       ? extractAllStepCylinders(stepPath)
       : part.cylinders || [];
 
-    const coaxialGroups = groupCoaxialCylinders(rawCylinders, part.bbox);
+    const coaxialGroups = groupCoaxialCylinders(rawCylinders, part.bbox, /\b(spacer|washer)\b/i.test(part.name));
     const ports = [];
     let holeCounter = 1;
     let boreCounter = 1;

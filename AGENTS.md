@@ -10,12 +10,12 @@ The MCP server sends the section between the markers below to every client when 
 - **Motor shafts (2x/3x/4x Pitch Motor Shaft) have a stop ring near one end that can't pass through a hole.** The short end past the ring goes into the Smart Motor's socket and the ring sits between the plate and the motor, so the shaft can't fall out. The long end comes out the other side of the plate and carries the wheel or gear. Put the shaft through the plate before the motor goes on, ring toward the motor. Never fit one with the ring outside, at the wheel end.
 - **A free axle made from a motor shaft** (no motor) has its ring against one face of the beam or plate it goes through; the long end carries the wheel.
 - **Rubber Shaft Collars go on last, pushed all the way in** until they touch the wheel, gear or spacer, so nothing slides along the shaft. On the 2nd gen omni wheel the collar sits inside the wheel's centre recess.
-- **0.25x Pitch Spacers go on the shaft between a plate and a wheel** so the wheel clears the plate.
+- **0.25x Pitch Spacers go on the shaft between a plate and a wheel** so the wheel clears the plate: insert its `hole_1` onto the shaft and push it to the plate, then the wheel, then the collar.
 - **Wheels:** push the wheel along the shaft until it touches the spacer or plate. A tire goes on a hub (`Tire (200 mm Travel)` on `Small Wheel Hub (44 mm)`); the two overlap in the model by design and that isn't a collision. Hubs face their open dish outward.
 - **Double 2x Wide, 1x2 Corner Connector:** the flat face with the three holes in a clean rim faces out (up when it joins a side plate to the brain); the ribbed open side faces in. Both ways fit the pins, so check it.
 - **2x Wide, 2x2 Offset Corner Connector:** its peg block is offset to one side. On the outside of a plate the block wraps round the plate's end, so the pegs line up with the plate's outer face (and with a 2x10 beam's end holes across a 4x8-plate chassis).
 - **Smart Motor:** mount it flat on 4 pins around the shaft hole; its drive socket lines up with the shaft.
-- **Robot Brain (2nd gen):** side plates hang off its side rails on 1x Pitch Standoffs or corner connector pegs (12.7 mm gap). Its model already includes the battery in the battery bay.
+- **Robot Brain:** side plates hang off its side rails on 1x Pitch Standoffs or corner connector pegs (12.7 mm gap). The library's brain (228-2540) and battery (228-2604) are the 1st gen ones. The battery is its own part: it slides into the bay under the brain at `[-0.75, -1.15, 0]`, turned `[0, -90, 0]`, in the brain's frame (`src/utils/batteryBay.js`), and the audit counts it as held there.
 - **Before calling a build done,** compare each part with the build instructions from the same angle. Parts that fit more than one way (corner connectors, offset connectors, capped shafts, collars, hubs) are where mistakes hide.
 <!-- part-usage:end -->
 

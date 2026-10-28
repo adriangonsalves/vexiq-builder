@@ -33,8 +33,8 @@ function sampleStarter(catalog) {
 }
 
 // The VEX IQ 2nd gen Speed Build 2.0 (iq-2nd-gen-speedbot-v5.pdf), without its two Smart Cables:
-// [part number, label, position, rotation, motor hub turn]. The brain's model includes the battery,
-// so the battery isn't a separate part. Built with the MCP tools: no overlaps, every part held.
+// [part number, label, position, rotation, motor hub turn]. The library's brain and battery are the
+// 1st gen ones (the closest there are). Built with the MCP tools: no overlaps, every part held.
 const SPEEDBOT = [
   ['228-2540', 'Robot Brain', [0, 69.9, 0], [0, 0, 0]],
   ['228-2500-065', 'Standoff L 1', [-44.45, 63.55, -38.1], [0, 0, 0]],
@@ -46,8 +46,6 @@ const SPEEDBOT = [
   ['228-2500-060', 'Motor Pin L 3', [-31.75, 25.45, -50.8], [-180, 0, 0]],
   ['228-2500-060', 'Motor Pin L 4', [-44.45, 25.45, -50.8], [-180, 0, 0]],
   ['228-2560', 'Drive Motor L', [-28.57, 31.8, -50.67], [-90, 0, 0], -14.1],
-  ['228-2500-114', 'Spacer L', [-38.1, 31.8, -58.5], [0, 0, 0]],
-  ['228-2536', 'Omni Wheel L', [-38.1, 31.8, -73.025], [90, 0, 0]],
   ['228-2500-2234', 'Rear Axle L', [38.1, 31.8, -54.4], [0, 0, 0]],
   ['228-2500-060', 'Connector Pin L 1', [31.75, 38.15, -57.15], [0, 0, 0]],
   ['228-2500-060', 'Connector Pin L 2', [44.45, 25.45, -57.15], [0, 0, 0]],
@@ -64,8 +62,6 @@ const SPEEDBOT = [
   ['228-2500-060', 'Motor Pin R 3', [-31.75, 25.45, 50.8], [-180, 0, 0]],
   ['228-2500-060', 'Motor Pin R 4', [-44.45, 25.45, 50.8], [-180, 0, 0]],
   ['228-2560', 'Drive Motor R', [-28.57, 31.8, 50.67], [90, 0, 0], -14.1],
-  ['228-2500-114', 'Spacer R', [-38.1, 31.8, 58.5], [0, 0, 0]],
-  ['228-2536', 'Omni Wheel R', [-38.1, 31.8, 73.025], [270, 0, 0]],
   ['228-2500-2234', 'Rear Axle R', [38.1, 31.8, 54.4], [180, 0, 0]],
   ['228-2500-060', 'Connector Pin R 1', [31.75, 38.15, 57.15], [0, 0, 0]],
   ['228-2500-060', 'Connector Pin R 2', [44.45, 25.45, 57.15], [0, 0, 0]],
@@ -76,8 +72,13 @@ const SPEEDBOT = [
   ['228-2500-143', 'Rear Collar R', [34.009, 39.895, 66.675], [90, 0, 0]],
   ['228-2500-2236', 'Drive Shaft L', [-38.1, 31.8, -47.6], [0, 0, 0]],
   ['228-2500-2236', 'Drive Shaft R', [-38.1, 31.8, 47.6], [0, 180, 0]],
-  ['228-2500-143', 'Omni Collar L', [-42.191, 23.705, -63.5], [-90, 0, 0]],
-  ['228-2500-143', 'Omni Collar R', [-42.191, 39.895, 63.5], [90, 0, 0]]
+  ['228-2500-114', 'Spacer L', [-38.1, 31.8, -57.383], [0, 0, 0]],
+  ['228-2536', 'Omni Wheel L', [-38.1, 31.8, -71.804], [90, 0, 0]],
+  ['228-2500-143', 'Omni Collar L', [-42.191, 23.705, -61.465], [-90, 0, 0]],
+  ['228-2500-114', 'Spacer R', [-38.1, 31.8, 57.383], [-180, 0, 0]],
+  ['228-2536', 'Omni Wheel R', [-38.1, 31.8, 71.804], [-90, 0, 0]],
+  ['228-2500-143', 'Omni Collar R', [-42.191, 39.895, 61.465], [90, 0, 0]],
+  ['228-2604', 'Robot Battery', [-0.75, 68.75, 0], [0, -90, 0]]
 ];
 
 /** The Speed Build 2.0: brain on two side plates, motor-driven omni wheels, free tires at the back. */

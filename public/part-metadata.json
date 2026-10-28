@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-28T00:29:02.620Z",
+  "generatedAt": "2026-10-28T02:12:18.806Z",
   "partCount": 479,
   "totalVerifiedPorts": 4147,
   "parts": {
@@ -275,8 +275,8 @@
           ],
           "through": true,
           "spanMm": [
-            1.587,
-            1.587
+            -1.59,
+            1.59
           ],
           "pitchCoord": [
             0,
@@ -110620,8 +110620,8 @@
       "name": "VEX IQ Robot Brain",
       "category": "Electronics & Motion",
       "pitchSize": [
-        8.4,
-        3.85,
+        7.98,
+        3.16,
         5.98
       ],
       "originType": "offset",
@@ -111536,8 +111536,8 @@
           ],
           "through": true,
           "spanMm": [
-            0.381,
-            0.381
+            -0.38,
+            0.38
           ],
           "pitchCoord": [
             0,

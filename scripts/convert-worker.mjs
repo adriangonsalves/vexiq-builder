@@ -293,7 +293,7 @@ function buildGlbFromOcctResult(result) {
 }
 
 parentPort.on('message', async (task) => {
-  const { id, stepPath, outGlbPath, fileSize } = task;
+  const { id, stepPath, outGlbPath, fileSize, excludeBodies = [] } = task;
   try {
     const occt = await getOcct();
     const fileBuffer = fs.readFileSync(stepPath);
@@ -312,6 +312,8 @@ parentPort.on('message', async (task) => {
     if (!result || !result.success) {
       throw new Error('occt ReadStepFile returned unsuccessful');
     }
+    // Bodies that are catalog parts of their own (e.g. the battery inside the brain's file)
+    result.meshes = (result.meshes || []).filter((m) => !excludeBodies.some((prefix) => String(m.name || '').startsWith(prefix)));
 
     const { glb, bbox, vertexCount, triangleCount, glbBytes, hasRubber } = buildGlbFromOcctResult(result);
     fs.writeFileSync(outGlbPath, glb);

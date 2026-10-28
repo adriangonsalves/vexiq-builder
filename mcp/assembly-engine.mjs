@@ -25,6 +25,7 @@ import { isMeshingGear, meshTurn, quaternionToEulerDeg, turnQuaternion, worldToo
 import { squareFitRoll } from '../src/utils/shaftGroups.js';
 import { settlePlacement, turnAboutLine } from '../src/utils/placementFit.js';
 import { isTireOnHub } from '../src/utils/tireFit.js';
+import { seatedBatteryBay } from '../src/utils/batteryBay.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -797,6 +798,18 @@ export function auditAssembly(state) {
   }
   const pegJoints = [...pegJointsByKey.values()];
 
+  // A battery in its brain's bay is held by the bay's latch: joined to the brain and fully mounted
+  const batteryBays = [];
+  for (const battery of nonFasteners) {
+    for (const brain of nonFasteners) {
+      if (!seatedBatteryBay(battery.part, battery.mat, brain.part, brain.mat)) continue;
+      link(battery.inst.instanceId, brain.inst.instanceId);
+      const required = battery.part.mountingRules?.minFastenersRequired || 1;
+      fastenerCountByPartInstance.set(battery.inst.instanceId, Math.max(fastenerCountByPartInstance.get(battery.inst.instanceId) || 0, required));
+      batteryBays.push({ battery: battery.inst.label, brain: brain.inst.label });
+    }
+  }
+
   // Detect unsecured parts, under-secured heavy parts, and single-pin pivot structural parts
   const unsecuredParts = [];
   const underSecuredHeavyParts = [];
@@ -1094,6 +1107,7 @@ export function auditAssembly(state) {
     protrudingShafts,
     joints,
     pegJoints,
+    batteryBays,
     kinematics: {
       motorCount: motors.length,
       meshedGearPairCount: meshedGearPairs.length,

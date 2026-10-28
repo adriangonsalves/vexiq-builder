@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "selectedId": "inst-1793152569901-1-drbe",
+  "selectedId": "inst-1793153560105-6-wyng",
   "viewport": {
     "transformMode": "translate",
     "snapPitchFactor": 0.25,
@@ -308,64 +308,6 @@
       ],
       "lastValidRotation": [
         -90,
-        0,
-        0
-      ]
-    },
-    {
-      "instanceId": "inst-1793149098967-b-7u0a",
-      "partId": "0-25x-pitch-spacer-228-2500-114-4",
-      "label": "Spacer L",
-      "position": [
-        -38.1,
-        31.8,
-        -58.5
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "color": "#1f2937",
-      "visible": true,
-      "locked": false,
-      "isIntersecting": false,
-      "lastValidPosition": [
-        -38.1,
-        31.8,
-        -58.5
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ]
-    },
-    {
-      "instanceId": "inst-1793149098967-c-bosn",
-      "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
-      "label": "Omni Wheel L",
-      "position": [
-        -38.1,
-        31.8,
-        -73.025
-      ],
-      "rotation": [
-        90,
-        0,
-        0
-      ],
-      "color": "#6b7280",
-      "visible": true,
-      "locked": false,
-      "isIntersecting": false,
-      "lastValidPosition": [
-        -38.1,
-        31.8,
-        -73.025
-      ],
-      "lastValidRotation": [
-        90,
         0,
         0
       ]
@@ -836,64 +778,6 @@
       ]
     },
     {
-      "instanceId": "inst-1793149098967-v-dtlq",
-      "partId": "0-25x-pitch-spacer-228-2500-114-4",
-      "label": "Spacer R",
-      "position": [
-        -38.1,
-        31.8,
-        58.5
-      ],
-      "rotation": [
-        0,
-        0,
-        0
-      ],
-      "color": "#1f2937",
-      "visible": true,
-      "locked": false,
-      "isIntersecting": false,
-      "lastValidPosition": [
-        -38.1,
-        31.8,
-        58.5
-      ],
-      "lastValidRotation": [
-        0,
-        0,
-        0
-      ]
-    },
-    {
-      "instanceId": "inst-1793149098967-w-kgg2",
-      "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
-      "label": "Omni Wheel R",
-      "position": [
-        -38.1,
-        31.8,
-        73.025
-      ],
-      "rotation": [
-        270,
-        0,
-        0
-      ],
-      "color": "#6b7280",
-      "visible": true,
-      "locked": false,
-      "isIntersecting": false,
-      "lastValidPosition": [
-        -38.1,
-        31.8,
-        73.025
-      ],
-      "lastValidRotation": [
-        270,
-        0,
-        0
-      ]
-    },
-    {
       "instanceId": "inst-1793149098967-x-g7qg",
       "partId": "2x-pitch-motor-shaft-228-2500-2234-86",
       "label": "Rear Axle R",
@@ -1184,13 +1068,71 @@
       ]
     },
     {
-      "instanceId": "inst-1793152569901-0-69ua",
+      "instanceId": "inst-1793153560105-0-wllp",
+      "partId": "0-25x-pitch-spacer-228-2500-114-4",
+      "label": "Spacer L",
+      "position": [
+        -38.1,
+        31.8,
+        -57.383
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        -57.383
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793153560105-1-lplg",
+      "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+      "label": "Omni Wheel L",
+      "position": [
+        -38.1,
+        31.8,
+        -71.804
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#6b7280",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        -71.804
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793153560105-2-7fps",
       "partId": "rubber-shaft-collar-228-2500-143-412",
       "label": "Omni Collar L",
       "position": [
         -42.191,
         23.705,
-        -63.5
+        -61.465
       ],
       "rotation": [
         -90,
@@ -1204,7 +1146,7 @@
       "lastValidPosition": [
         -42.191,
         23.705,
-        -63.5
+        -61.465
       ],
       "lastValidRotation": [
         -90,
@@ -1213,13 +1155,71 @@
       ]
     },
     {
-      "instanceId": "inst-1793152569901-1-drbe",
+      "instanceId": "inst-1793153560105-3-8az7",
+      "partId": "0-25x-pitch-spacer-228-2500-114-4",
+      "label": "Spacer R",
+      "position": [
+        -38.1,
+        31.8,
+        57.383
+      ],
+      "rotation": [
+        -180,
+        0,
+        0
+      ],
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        57.383
+      ],
+      "lastValidRotation": [
+        -180,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793153560105-4-g2d8",
+      "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+      "label": "Omni Wheel R",
+      "position": [
+        -38.1,
+        31.8,
+        71.804
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#6b7280",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -38.1,
+        31.8,
+        71.804
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1793153560105-5-mjns",
       "partId": "rubber-shaft-collar-228-2500-143-412",
       "label": "Omni Collar R",
       "position": [
         -42.191,
         39.895,
-        63.5
+        61.465
       ],
       "rotation": [
         90,
@@ -1233,16 +1233,45 @@
       "lastValidPosition": [
         -42.191,
         39.895,
-        63.5
+        61.465
       ],
       "lastValidRotation": [
         90,
         0,
         0
       ]
+    },
+    {
+      "instanceId": "inst-1793153560105-6-wyng",
+      "partId": "vex-iq-robot-battery-228-2604-503",
+      "label": "Robot Battery",
+      "position": [
+        -0.75,
+        68.75,
+        0
+      ],
+      "rotation": [
+        0,
+        -90,
+        0
+      ],
+      "color": "#4b5563",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -0.75,
+        68.75,
+        0
+      ],
+      "lastValidRotation": [
+        0,
+        -90,
+        0
+      ]
     }
   ],
-  "updatedAt": "2026-10-28T01:56:10.355Z",
+  "updatedAt": "2026-10-28T02:12:41.142Z",
   "history": {
     "version": 1,
     "base": [],
@@ -23383,9 +23412,508 @@
           }
         ],
         "mergeKey": "mcp:mvrgqq0a-6"
+      },
+      {
+        "id": "step-mvrhbxy0-3qevbx",
+        "parentId": "step-mvrgqqcz-yvyyx1",
+        "at": 1793153559960,
+        "source": "mcp",
+        "label": "remove_part: Omni Collar L",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793152569901-0-69ua",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L",
+              "position": [
+                -42.191,
+                23.705,
+                -63.5
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                23.705,
+                -63.5
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrhbxxc-2"
+      },
+      {
+        "id": "step-mvrhbxzk-3914m0",
+        "parentId": "step-mvrhbxy0-3qevbx",
+        "at": 1793153560016,
+        "source": "mcp",
+        "label": "remove_part: Omni Collar R",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793152569901-1-drbe",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar R",
+              "position": [
+                -42.191,
+                39.895,
+                63.5
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                63.5
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrhbxze-3"
+      },
+      {
+        "id": "step-mvrhby02-oe5n5h",
+        "parentId": "step-mvrhbxzk-3914m0",
+        "at": 1793153560034,
+        "source": "mcp",
+        "label": "remove_part: Omni Wheel L",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 11,
+            "part": {
+              "instanceId": "inst-1793149098967-c-bosn",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "Omni Wheel L",
+              "position": [
+                -38.1,
+                31.8,
+                -73.025
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -73.025
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrhbxzw-4"
+      },
+      {
+        "id": "step-mvrhby0m-dqt3g3",
+        "parentId": "step-mvrhby02-oe5n5h",
+        "at": 1793153560054,
+        "source": "mcp",
+        "label": "remove_part: Omni Wheel R",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 28,
+            "part": {
+              "instanceId": "inst-1793149098967-w-kgg2",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "Omni Wheel R",
+              "position": [
+                -38.1,
+                31.8,
+                73.025
+              ],
+              "rotation": [
+                270,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                73.025
+              ],
+              "lastValidRotation": [
+                270,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrhby0g-5"
+      },
+      {
+        "id": "step-mvrhby15-4bxzpm",
+        "parentId": "step-mvrhby0m-dqt3g3",
+        "at": 1793153560073,
+        "source": "mcp",
+        "label": "remove_part: Spacer L",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 10,
+            "part": {
+              "instanceId": "inst-1793149098967-b-7u0a",
+              "partId": "0-25x-pitch-spacer-228-2500-114-4",
+              "label": "Spacer L",
+              "position": [
+                -38.1,
+                31.8,
+                -58.5
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -58.5
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrhby0z-6"
+      },
+      {
+        "id": "step-mvrhby1n-o7qkt5",
+        "parentId": "step-mvrhby15-4bxzpm",
+        "at": 1793153560091,
+        "source": "mcp",
+        "label": "remove_part: Spacer R",
+        "ops": [
+          {
+            "op": "remove",
+            "index": 26,
+            "part": {
+              "instanceId": "inst-1793149098967-v-dtlq",
+              "partId": "0-25x-pitch-spacer-228-2500-114-4",
+              "label": "Spacer R",
+              "position": [
+                -38.1,
+                31.8,
+                58.5
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                58.5
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrhby1i-7"
+      },
+      {
+        "id": "step-mvrhbyuu-z3odit",
+        "parentId": "step-mvrhby1n-o7qkt5",
+        "at": 1793153561142,
+        "source": "mcp",
+        "label": "place_parts: 7 parts",
+        "ops": [
+          {
+            "op": "add",
+            "index": 36,
+            "part": {
+              "instanceId": "inst-1793153560105-0-wllp",
+              "partId": "0-25x-pitch-spacer-228-2500-114-4",
+              "label": "Spacer L",
+              "position": [
+                -38.1,
+                31.8,
+                -57.383
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -57.383
+              ],
+              "lastValidRotation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 37,
+            "part": {
+              "instanceId": "inst-1793153560105-1-lplg",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "Omni Wheel L",
+              "position": [
+                -38.1,
+                31.8,
+                -71.804
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                -71.804
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 38,
+            "part": {
+              "instanceId": "inst-1793153560105-2-7fps",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar L",
+              "position": [
+                -42.191,
+                23.705,
+                -61.465
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                23.705,
+                -61.465
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 39,
+            "part": {
+              "instanceId": "inst-1793153560105-3-8az7",
+              "partId": "0-25x-pitch-spacer-228-2500-114-4",
+              "label": "Spacer R",
+              "position": [
+                -38.1,
+                31.8,
+                57.383
+              ],
+              "rotation": [
+                -180,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                57.383
+              ],
+              "lastValidRotation": [
+                -180,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 40,
+            "part": {
+              "instanceId": "inst-1793153560105-4-g2d8",
+              "partId": "200mm-travel-omni-directional-wheel-228-2536-345",
+              "label": "Omni Wheel R",
+              "position": [
+                -38.1,
+                31.8,
+                71.804
+              ],
+              "rotation": [
+                -90,
+                0,
+                0
+              ],
+              "color": "#6b7280",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -38.1,
+                31.8,
+                71.804
+              ],
+              "lastValidRotation": [
+                -90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 41,
+            "part": {
+              "instanceId": "inst-1793153560105-5-mjns",
+              "partId": "rubber-shaft-collar-228-2500-143-412",
+              "label": "Omni Collar R",
+              "position": [
+                -42.191,
+                39.895,
+                61.465
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "color": "#1f2937",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -42.191,
+                39.895,
+                61.465
+              ],
+              "lastValidRotation": [
+                90,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "op": "add",
+            "index": 42,
+            "part": {
+              "instanceId": "inst-1793153560105-6-wyng",
+              "partId": "vex-iq-robot-battery-228-2604-503",
+              "label": "Robot Battery",
+              "position": [
+                -0.75,
+                68.75,
+                0
+              ],
+              "rotation": [
+                0,
+                -90,
+                0
+              ],
+              "color": "#4b5563",
+              "visible": true,
+              "locked": false,
+              "isIntersecting": false,
+              "lastValidPosition": [
+                -0.75,
+                68.75,
+                0
+              ],
+              "lastValidRotation": [
+                0,
+                -90,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrhby1y-8"
       }
     ],
-    "headId": "step-mvrgqqcz-yvyyx1",
+    "headId": "step-mvrhbyuu-z3odit",
     "activeChild": {
       "root": "step-mvm1cbpd-8kprhe",
       "step-mvm1cbpd-8kprhe": "step-mvmho6hy-13n0rx",
@@ -23751,9 +24279,16 @@
       "step-mvrgqpre-3gdlis": "step-mvrgqpt0-n3ldvi",
       "step-mvrgqpt0-n3ldvi": "step-mvrgqpzi-zn4ln7",
       "step-mvrgqpzi-zn4ln7": "step-mvrgqpzz-o7zlpp",
-      "step-mvrgqpzz-o7zlpp": "step-mvrgqqcz-yvyyx1"
+      "step-mvrgqpzz-o7zlpp": "step-mvrgqqcz-yvyyx1",
+      "step-mvrgqqcz-yvyyx1": "step-mvrhbxy0-3qevbx",
+      "step-mvrhbxy0-3qevbx": "step-mvrhbxzk-3914m0",
+      "step-mvrhbxzk-3914m0": "step-mvrhby02-oe5n5h",
+      "step-mvrhby02-oe5n5h": "step-mvrhby0m-dqt3g3",
+      "step-mvrhby0m-dqt3g3": "step-mvrhby15-4bxzpm",
+      "step-mvrhby15-4bxzpm": "step-mvrhby1n-o7qkt5",
+      "step-mvrhby1n-o7qkt5": "step-mvrhbyuu-z3odit"
     },
-    "rev": 484
+    "rev": 491
   },
-  "historyRev": 484
+  "historyRev": 491
 }

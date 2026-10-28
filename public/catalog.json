@@ -638,8 +638,8 @@
         ],
         "through": true,
         "spanMm": [
-          1.587,
-          1.587
+          -1.59,
+          1.59
         ],
         "pitchCoord": [
           0,
@@ -242247,11 +242247,11 @@
     "file": "VEX-IQ-All-Control/228-2540 VEX IQ Robot Brain/228-2540.STEP",
     "modelUrl": "/models/vex-iq-robot-brain-228-2540-502.glb",
     "stepSizeBytes": 4250292,
-    "glbSizeBytes": 600464,
+    "glbSizeBytes": 550456,
     "bbox": {
       "min": [
-        -56.05,
-        -21.15,
+        -50.65,
+        -12.4,
         -38
       ],
       "max": [
@@ -242260,18 +242260,18 @@
         38
       ],
       "size": [
-        106.7,
-        48.85,
+        101.3,
+        40.1,
         76
       ],
       "center": [
-        -2.7,
-        3.28,
+        0,
+        7.65,
         0
       ]
     },
-    "vertexCount": 20706,
-    "triangleCount": 17106,
+    "vertexCount": 18986,
+    "triangleCount": 15652,
     "connectorCount": 86,
     "cylinders": [
       {
@@ -243108,8 +243108,8 @@
       }
     ],
     "pitchSize": [
-      8.4,
-      3.85,
+      7.98,
+      3.16,
       5.98
     ],
     "originType": "offset",
@@ -245173,8 +245173,8 @@
         ],
         "through": true,
         "spanMm": [
-          0.381,
-          0.381
+          -0.38,
+          0.38
         ],
         "pitchCoord": [
           0,
