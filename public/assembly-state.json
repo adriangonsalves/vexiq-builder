@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "selectedId": "inst-1793149098967-15-h314",
+  "selectedId": "inst-1793149098967-3-mewx",
   "viewport": {
     "transformMode": "translate",
     "snapPitchFactor": 0.25,
@@ -115,10 +115,10 @@
       "position": [
         44.45,
         63.55,
-        -50.8
+        -38.1
       ],
       "rotation": [
-        0,
+        180,
         0,
         0
       ],
@@ -129,10 +129,10 @@
       "lastValidPosition": [
         44.45,
         63.55,
-        -50.8
+        -38.1
       ],
       "lastValidRotation": [
-        0,
+        180,
         0,
         0
       ]
@@ -1242,7 +1242,7 @@
       ]
     }
   ],
-  "updatedAt": "2026-10-28T00:58:19.706Z",
+  "updatedAt": "2026-10-28T01:30:45.286Z",
   "history": {
     "version": 1,
     "base": [],
@@ -22810,9 +22810,48 @@
           }
         ],
         "mergeKey": "mcp:mvreobtg-3"
+      },
+      {
+        "id": "step-mvrfu1lx-8h2dq6",
+        "parentId": "step-mvreoce2-dhrg9e",
+        "at": 1793151045285,
+        "source": "mcp",
+        "label": "update_part: move Corner Connector L",
+        "ops": [
+          {
+            "op": "update",
+            "id": "inst-1793149098967-3-mewx",
+            "name": "Corner Connector L",
+            "before": {
+              "position": [
+                44.45,
+                63.55,
+                -50.8
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ]
+            },
+            "after": {
+              "position": [
+                44.45,
+                63.55,
+                -38.1
+              ],
+              "rotation": [
+                180,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "mergeKey": "mcp:mvrfu1d0-2"
       }
     ],
-    "headId": "step-mvreoce2-dhrg9e",
+    "headId": "step-mvrfu1lx-8h2dq6",
     "activeChild": {
       "root": "step-mvm1cbpd-8kprhe",
       "step-mvm1cbpd-8kprhe": "step-mvmho6hy-13n0rx",
@@ -23167,9 +23206,10 @@
       "step-mvrefrz9-p11svk": "step-mvrefs0k-ga6sxd",
       "step-mvrefs0k-ga6sxd": "step-mvrefshv-jgikvu",
       "step-mvrefshv-jgikvu": "step-mvreobs6-2dn8yg",
-      "step-mvreobs6-2dn8yg": "step-mvreoce2-dhrg9e"
+      "step-mvreobs6-2dn8yg": "step-mvreoce2-dhrg9e",
+      "step-mvreoce2-dhrg9e": "step-mvrfu1lx-8h2dq6"
     },
-    "rev": 468
+    "rev": 469
   },
-  "historyRev": 468
+  "historyRev": 469
 }
