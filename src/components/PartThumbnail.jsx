@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { loadPartAsset, RUBBER_COLOR, isMetalPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
 
 const thumbnailDataUrlCache = new Map(); // "partId|defaultColor" -> string (dataURL)
@@ -57,6 +58,14 @@ function getThumbnailStudio() {
     fillLight.position.set(-80, -60, -70);
     sharedThumbScene.add(fillLight);
 
+    const pmremGenerator = new THREE.PMREMGenerator(sharedThumbRenderer);
+    pmremGenerator.compileEquirectangularShader();
+    const roomEnv = new RoomEnvironment();
+    sharedThumbScene.environment = pmremGenerator.fromScene(roomEnv, 0.04).texture;
+    sharedThumbScene.environmentIntensity = 0.75;
+    roomEnv.dispose();
+    pmremGenerator.dispose();
+
     sharedThumbCamera = new THREE.PerspectiveCamera(36, 1, 0.5, 2000);
 
     sharedMeshGroup = new THREE.Group();
@@ -88,9 +97,12 @@ function renderPartToDataUrl(part, geometries, localBox) {
   }
 
   const isMetal = isMetalPart(part);
-  const original = new THREE.Color(part.defaultColor || (isMetal ? METAL_SHAFT_COLOR : '#64748b'));
+  const baseHex = isMetal && (!part.defaultColor || part.defaultColor === '#4b5563')
+    ? METAL_SHAFT_COLOR
+    : (part.defaultColor || (isMetal ? METAL_SHAFT_COLOR : '#64748b'));
+  const original = new THREE.Color(baseHex);
   const light = luminance(original) > LIGHT_PART_LUMINANCE;
-  const partColor = thumbnailColor(part.defaultColor || (isMetal ? METAL_SHAFT_COLOR : '#64748b'));
+  const partColor = thumbnailColor(baseHex);
 
   const mat = new THREE.MeshStandardMaterial({
     color: partColor,

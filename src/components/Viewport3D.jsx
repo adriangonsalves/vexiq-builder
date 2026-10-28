@@ -7,6 +7,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { loadPartAsset, RUBBER_COLOR, isMetalPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
 import { hubMatrix } from '../utils/motorHub.js';
 import { isMeshingGear, meshTurn, worldToothed } from '../utils/gearMeshing.js';
@@ -1081,6 +1082,18 @@ function computeExplodedPositions(instances, explodeMode = 'off', explodeFactor 
 }
 
 /**
+ * Resolves the base display color for a part instance, ensuring non-plastic metal shafts
+ * display in reflective metallic silver (#e2e8f0) even if saved with legacy default grey (#4b5563).
+ */
+function resolvePartBaseColor(inst, partMeta) {
+  const isMetal = isMetalPart(partMeta);
+  if (isMetal && (!inst?.color || inst.color === '#4b5563')) {
+    return METAL_SHAFT_COLOR;
+  }
+  return inst?.color || partMeta?.defaultColor || (isMetal ? METAL_SHAFT_COLOR : '#64748b');
+}
+
+/**
  * Applies either normal VEX appearance or transparent-grey intersecting appearance
  * strictly to actual CAD part meshes (`child.userData.isPartMesh === true`).
  */
@@ -1099,7 +1112,11 @@ function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) 
         mat.emissiveIntensity = 0.25;
       }
     } else {
-      mat.color.set(child.userData.fixedColor || baseColor || '#64748b');
+      let resolvedColor = child.userData.fixedColor || baseColor;
+      if (!child.userData.fixedColor && child.userData.isMetal && (!resolvedColor || resolvedColor === '#4b5563')) {
+        resolvedColor = METAL_SHAFT_COLOR;
+      }
+      mat.color.set(resolvedColor || '#64748b');
       mat.transparent = false;
       mat.opacity = 1.0;
       mat.depthWrite = true;
@@ -2621,7 +2638,7 @@ export default function Viewport3D({
     const isColliding = checkGroupCollision(group, false);
     group.userData.isIntersecting = isColliding;
     applyGroupAppearance(group, {
-      baseColor: inst?.color || partMeta?.defaultColor,
+      baseColor: resolvePartBaseColor(inst, partMeta),
       isSelected: true,
       isIntersecting: isColliding
     });
@@ -2755,7 +2772,7 @@ export default function Viewport3D({
       const selGroup = selId ? meshMapRef.current.get(selId) : null;
       const selInst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
       const selAppearance = selGroup && {
-        baseColor: selInst?.color || catalogMapRef.current.get(selGroup.userData.partId)?.defaultColor,
+        baseColor: resolvePartBaseColor(selInst, catalogMapRef.current.get(selGroup.userData.partId)),
         isIntersecting: Boolean(selGroup.userData.isIntersecting)
       };
       if (selGroup) applyGroupAppearance(selGroup, { ...selAppearance, isSelected: false });
@@ -2929,7 +2946,16 @@ export default function Viewport3D({
     container.appendChild(inputEl);
     inputElRef.current = inputEl;
 
-    // Studio CAD Lighting
+    // Studio CAD Lighting & Environment Reflections
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const roomEnv = new RoomEnvironment();
+    const envTexture = pmremGenerator.fromScene(roomEnv, 0.04).texture;
+    scene.environment = envTexture;
+    scene.environmentIntensity = 0.75;
+    roomEnv.dispose();
+    pmremGenerator.dispose();
+
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
     scene.add(ambientLight);
 
@@ -3132,7 +3158,7 @@ export default function Viewport3D({
 
         obj.userData.isIntersecting = isColliding;
         applyGroupAppearance(obj, {
-          baseColor: inst?.color || partMeta?.defaultColor,
+          baseColor: resolvePartBaseColor(inst, partMeta),
           isSelected: true,
           isIntersecting: isColliding
         });
@@ -3144,7 +3170,7 @@ export default function Viewport3D({
       obj.userData.isIntersecting = isColliding;
 
       applyGroupAppearance(obj, {
-        baseColor: inst?.color || partMeta?.defaultColor,
+        baseColor: resolvePartBaseColor(inst, partMeta),
         isSelected: true,
         isIntersecting: isColliding
       });
@@ -4274,6 +4300,7 @@ export default function Viewport3D({
         composer.dispose();
       }
       depthOnlyMaterial.dispose();
+      envTexture.dispose();
       miniCleanups.forEach((cleanup) => cleanup());
       cancelPendingSelect();
       clearTimeout(rotateGestureRef.current?.wheelTimer);
@@ -4399,8 +4426,9 @@ export default function Viewport3D({
             group.userData.hub = hub ? { ...hub, objects: [] } : null;
 
             const isMetal = isMetalPart(partMeta);
+            const baseColor = resolvePartBaseColor(inst, partMeta);
             const material = new THREE.MeshStandardMaterial({
-              color: new THREE.Color(inst.color || partMeta.defaultColor || (isMetal ? METAL_SHAFT_COLOR : '#64748b')),
+              color: new THREE.Color(baseColor),
               roughness: isMetal ? 0.22 : 0.38,
               metalness: isMetal ? 0.85 : 0.12
             });
@@ -4434,6 +4462,7 @@ export default function Viewport3D({
               mesh.userData.isPartMesh = true;
               if (geo.userData.rubber) mesh.userData.fixedColor = RUBBER_COLOR;
               else if (geo.userData.fixedColor) mesh.userData.fixedColor = geo.userData.fixedColor;
+              if (isMetal) mesh.userData.isMetal = true;
               group.add(mesh);
 
               const edgesGeo = new THREE.EdgesGeometry(geo, 32);
@@ -4461,7 +4490,7 @@ export default function Viewport3D({
             group.userData.isIntersecting = isColliding;
 
             applyGroupAppearance(group, {
-              baseColor: latestInst?.color || partMeta.defaultColor,
+              baseColor: resolvePartBaseColor(latestInst, partMeta),
               isSelected: isSelectedNow,
               isIntersecting: isColliding
             });
@@ -4512,7 +4541,7 @@ export default function Viewport3D({
       group.userData.isIntersecting = isColliding;
 
       applyGroupAppearance(group, {
-        baseColor: inst.color || partMeta.defaultColor,
+        baseColor: resolvePartBaseColor(inst, partMeta),
         isSelected,
         isIntersecting: isColliding
       });
@@ -4581,7 +4610,7 @@ export default function Viewport3D({
       group.userData.isIntersecting = isColliding;
       const partMeta = catalogMapRef.current.get(inst.partId);
       applyGroupAppearance(group, {
-        baseColor: inst.color || partMeta?.defaultColor,
+        baseColor: resolvePartBaseColor(inst, partMeta),
         isSelected: selectedIdRef.current === id,
         isIntersecting: isColliding
       });
