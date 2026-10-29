@@ -1,9 +1,9 @@
 ## 1. Group data and helpers
 
-- [ ] 1.1 Add `groupId` and `groupName` to `BUILD_FIELDS` in `src/utils/buildHistory.js` (missing = no group in `normalizeField`); verify `node scripts/check-history.mjs` still passes and a group-only change produces one `update` step
-- [ ] 1.2 Create `src/utils/partGroups.js` with `groupsOf`, `expandToGroups`, `nextGroupName`, `groupParts`, `ungroupParts`, `renameGroup` (patch lists, dissolving groups left with one part); verify with the check script in 1.4
-- [ ] 1.3 Add `setPivot` and `applySetTransform` (quaternion turn about a pivot, written back in Euler XYZ like `buildWorldMatrix`) to `partGroups.js`; verify with the check script in 1.4
-- [ ] 1.4 Write `scripts/check-part-groups.mjs` covering: group/ungroup/regroup patches, dissolve of one-part groups, name numbering, 4×90° set turn returns every part's world matrix to the start, a pin seated in a beam stays seated after a set move; verify it exits 0
+- [x] 1.1 Add `groupId` and `groupName` to `BUILD_FIELDS` in `src/utils/buildHistory.js` (missing = no group in `normalizeField`); verify `node scripts/check-history.mjs` still passes and a group-only change produces one `update` step
+- [x] 1.2 Create `src/utils/partGroups.js` with `groupsOf`, `expandToGroups`, `nextGroupName`, `groupParts`, `ungroupParts`, `renameGroup` (patch lists, dissolving groups left with one part); verify with the check script in 1.4
+- [x] 1.3 Add `setPivot` and `applySetTransform` (quaternion turn about a pivot, written back in Euler XYZ like `buildWorldMatrix`) to `partGroups.js`; verify with the check script in 1.4
+- [x] 1.4 Write `scripts/check-part-groups.mjs` covering: group/ungroup/regroup patches, dissolve of one-part groups, name numbering, 4×90° set turn returns every part's world matrix to the start, a pin seated in a beam stays seated after a set move; verify it exits 0
 
 ## 2. Selection model
 
