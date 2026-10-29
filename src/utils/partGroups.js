@@ -124,7 +124,7 @@ export function renameGroup(instances, groupId, name) {
   return { name: groupName, oldName: group.name, patches: group.ids.map((id) => ({ id, fields: { groupName } })) };
 }
 
-/** Apply a patch list to parts. A null group field removes it, so ungrouped parts look like they never were. */
+/** Apply a patch list to parts. A null group field removes it, so ungrouped parts look like they never were; a new pose is also the last good pose. */
 export function applyPatches(instances, patches) {
   const byId = new Map();
   for (const { id, fields } of patches) byId.set(id, { ...(byId.get(id) || {}), ...fields });
@@ -133,6 +133,11 @@ export function applyPatches(instances, patches) {
     if (!fields) return inst;
     const next = { ...inst, ...fields };
     for (const key of ['groupId', 'groupName']) if (next[key] == null || next[key] === '') delete next[key];
+    // A pose set here is the part's new known good pose
+    if (fields.position || fields.rotation) {
+      next.lastValidPosition = [...next.position];
+      next.lastValidRotation = [...next.rotation];
+    }
     return next;
   });
 }

@@ -8,6 +8,7 @@ import {
   applySetTransform,
   axisTurn,
   expandToGroups,
+  groupCollapse,
   groupParts,
   groupsOf,
   nextGroupName,
@@ -16,6 +17,7 @@ import {
   syncSelection,
   ungroupParts
 } from '../src/utils/partGroups.js';
+import { connectedFrom, layersFrom } from '../src/utils/jointLayers.js';
 
 let failures = 0;
 const check = (label, ok, detail = '') => {
@@ -147,6 +149,28 @@ const relative = (a, b) => matrixOf(a).invert().multiply(matrixOf(b));
   check('selection: selectedId null clears it', cleared.selectedIds.length === 0);
   const pruned = syncSelection({ instances: instances.slice(1), selectedIds: ['a', 'b'], selectedId: 'b' });
   check('selection: removed parts drop out', pruned.selectedIds.join() === 'b' && pruned.selectedId === 'b');
+}
+
+// --- Walking joints ----------------------------------------------------------------------------------
+{
+  // beam - 2 pins - plate1 - pin3 - plate2 ; a loose part; and a separate peg join plate2 = bracket
+  const graph = {
+    nodes: ['beam', 'pin1', 'pin2', 'plate1', 'pin3', 'plate2', 'bracket', 'loose'],
+    edges: [['pin1', 'beam'], ['pin1', 'plate1'], ['pin2', 'beam'], ['pin2', 'plate1'], ['pin3', 'plate1'], ['pin3', 'plate2'], ['plate2', 'bracket']]
+  };
+  const sorted = (list) => [...list].sort().join();
+  const layers = layersFrom(graph, ['beam']);
+  check('layers: beam, then its pins, then the plate', sorted(layers[0]) === 'beam' && sorted(layers[1]) === 'pin1,pin2' && sorted(layers[2]) === 'plate1', JSON.stringify(layers));
+  check('layers: stop at the first empty layer', layers.length === 6 && layers.every((l) => l.length > 0), JSON.stringify(layers));
+  check('connected: the whole piece, not the loose part', sorted(connectedFrom(graph, ['plate2'])) === 'beam,bracket,pin1,pin2,pin3,plate1,plate2');
+  check('connected: a loose part is alone', connectedFrom(graph, ['loose']).join() === 'loose');
+
+  // A group of plate1 + pin3 counts as one node: reached in one step, all members together
+  const instances = graph.nodes.map((id) => part(id, ['plate1', 'pin3'].includes(id) ? { groupId: 'g', groupName: 'G' } : {}));
+  const collapse = groupCollapse(instances);
+  const grouped = layersFrom(graph, ['beam'], { collapse });
+  check('layers: a group is one step', sorted(grouped[2]) === 'pin3,plate1' && sorted(grouped[3]) === 'plate2', JSON.stringify(grouped));
+  check('layers: seeding with one member starts from the whole group', sorted(layersFrom(graph, ['pin3'], { collapse })[0]) === 'pin3,plate1');
 }
 
 console.log(failures === 0 ? '\nAll part group checks passed.' : `\n${failures} part group check(s) failed.`);

@@ -43,6 +43,7 @@ import PartThumbnail from './components/PartThumbnail.jsx';
 import HistoryTimeline from './components/HistoryTimeline.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
+import SelectMenu from './components/SelectMenu.jsx';
 import ViewMenu from './components/ViewMenu.jsx';
 import { STARTERS, starterById } from './starters.js';
 import {
@@ -63,7 +64,8 @@ import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
 import LibraryDialog from './components/LibraryDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
 import { DEFAULT_SETTINGS, isLinearHistory, normalizeSettings } from './utils/appSettings.js';
-import { expandToGroups } from './utils/partGroups.js';
+import { applyPatches as applyGroupPatches, expandToGroups, groupCollapse, groupParts, groupsOf, ungroupParts } from './utils/partGroups.js';
+import { connectedFrom } from './utils/jointLayers.js';
 import {
   applyOps,
   createHistory,
@@ -826,6 +828,73 @@ export default function App() {
     setSelectedIds(next);
   };
 
+  // --- Select menu (openspec outliner-part-groups) ---
+  const groups = useMemo(() => groupsOf(instances), [instances]);
+  const selectedGroupIds = useMemo(() => {
+    const byId = new Map(instances.map((i) => [i.instanceId, i]));
+    return [...new Set(selectedIds.map((id) => byId.get(id)?.groupId).filter((g) => groups.has(g)))];
+  }, [instances, selectedIds, groups]);
+
+  const changeSelection = (next) => {
+    setInstances((prev) => resolveIntersectingInstances(prev, next), { label: moveBackLabel });
+    setSelectedIds(next);
+  };
+  const handleSelectAll = () => changeSelection(instances.filter((i) => i.visible !== false).map((i) => i.instanceId));
+  const handleSelectNone = () => changeSelection([]);
+  const handleInvertSelection = () =>
+    changeSelection(instances.filter((i) => i.visible !== false && !selectedIds.includes(i.instanceId)).map((i) => i.instanceId));
+
+  // The joints between the parts as they are now (unsaved drags included), from the bridge's audit code
+  const fetchJointGraph = async (parts) => {
+    const res = await fetch('/api/assembly/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'joint_graph', state: { instances: parts } })
+    });
+    const data = await res.json().catch(() => null);
+    if (!data?.ok || !data.graph) throw new Error(data?.error || `the server replied ${res.status}`);
+    return data.graph;
+  };
+
+  const partCount = (n) => `${n} part${n === 1 ? '' : 's'}`;
+
+  const handleSelectConnected = async () => {
+    if (selectedIds.length === 0) {
+      setActionFeedback({ message: 'Select a part first.', isError: true });
+      return;
+    }
+    const parts = instances;
+    const seeds = selectedIds;
+    try {
+      const graph = await fetchJointGraph(parts);
+      const next = connectedFrom(graph, seeds, { collapse: groupCollapse(parts) });
+      changeSelection(next);
+      setActionFeedback({ message: `${partCount(next.length)} selected.`, isError: false });
+    } catch (err) {
+      setActionFeedback({ message: `Couldn't find connected parts: ${err.message}`, isError: true });
+    }
+  };
+
+  const handleGroupSelected = () => {
+    if (selectedIds.length < 2) {
+      setActionFeedback({ message: 'Select two or more parts to make a group.', isError: true });
+      return;
+    }
+    const { name, patches } = groupParts(instances, selectedIds);
+    setInstances((prev) => applyGroupPatches(prev, patches), { label: `Group ${selectedIds.length} parts as ${name}` });
+    setActionFeedback({ message: `Grouped ${selectedIds.length} parts as ${name}.`, isError: false });
+  };
+
+  const handleUngroupSelected = () => {
+    const { groupIds, patches } = ungroupParts(instances, selectedIds);
+    if (groupIds.length === 0) {
+      setActionFeedback({ message: 'No group is selected.', isError: true });
+      return;
+    }
+    const label = groupIds.length === 1 ? `Ungroup ${groups.get(groupIds[0]).name}` : `Ungroup ${groupIds.length} groups`;
+    setInstances((prev) => applyGroupPatches(prev, patches), { label });
+  };
+
   const handleRevertSelectedIntersection = () => {
     if (!selectedInstance) return;
     setInstances((prev) => resolveIntersectingInstances(prev, null), { label: moveBackLabel });
@@ -1136,6 +1205,20 @@ export default function App() {
       }
       // Nothing else edits or selects while a past point is shown
       if (previewRef.current) return;
+      if (mod && key === 'a') {
+        e.preventDefault();
+        handleSelectAll();
+        return;
+      }
+      if (!mod && !e.altKey && key === 'c') {
+        handleSelectConnected();
+        return;
+      }
+      if (!mod && !e.altKey && key === 'g') {
+        if (e.shiftKey) handleUngroupSelected();
+        else handleGroupSelected();
+        return;
+      }
       if (key === 'w') {
         setTransformMode('translate');
       } else if (key === 'e') {
@@ -1155,6 +1238,9 @@ export default function App() {
       } else if (e.key === 'Escape') {
         if (explodeMode !== 'off') {
           setExplodeMode('off');
+        } else if (selectMode) {
+          // Esc first leaves Select mode and keeps the selection
+          setSelectMode(false);
         } else {
           setInstances((prev) => resolveIntersectingInstances(prev, null), { label: moveBackLabel });
           setSelectedId(null);
@@ -1471,6 +1557,22 @@ export default function App() {
             >
               <HistoryIcon size={14} />
             </button>
+          </div>
+
+          <div className="toolbar-group" role="group" aria-label="Selection">
+            <SelectMenu
+              selectMode={selectMode}
+              onToggleSelectMode={() => setSelectMode((on) => !on)}
+              hasSelection={selectedIds.length > 0}
+              canGroup={selectedIds.length >= 2}
+              canUngroup={selectedGroupIds.length > 0}
+              onConnected={handleSelectConnected}
+              onAll={handleSelectAll}
+              onNone={handleSelectNone}
+              onInvert={handleInvertSelection}
+              onGroup={handleGroupSelected}
+              onUngroup={handleUngroupSelected}
+            />
           </div>
 
           <div className="toolbar-group" role="group" aria-label="Transform Mode">

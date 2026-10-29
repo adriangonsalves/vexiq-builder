@@ -12,6 +12,7 @@ import {
   findPart,
   generateOrthographicViews,
   getCatalog,
+  jointGraph,
   mirrorSubassembly
 } from './mcp/assembly-engine.mjs';
 import { applyOps, diffParts, loadHistory, mergeBrowserSave, recordStep, summarize } from './src/utils/buildHistory.js';
@@ -393,6 +394,13 @@ function vexiqMcpBridgePlugin() {
                   message: `Mirrored ${mirRes.mirroredCount} part(s) across ${params.mirrorPlane || 'Z'} = ${Number(params.planeOffsetMm) || 0}mm.`
                 })
               );
+              return;
+            }
+
+            // The joints between parts, for Select Connected and expanding the selection (openspec outliner-part-groups)
+            if (action === 'joint_graph') {
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ ok: true, graph: jointGraph(state) }));
               return;
             }
 

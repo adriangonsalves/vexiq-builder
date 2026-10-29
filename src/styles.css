@@ -1213,6 +1213,21 @@ body,
   outline: none;
 }
 
+.popover-item:disabled {
+  color: var(--text-muted);
+  opacity: 0.55;
+  cursor: default;
+  background: transparent;
+}
+
+.popover-shortcut {
+  margin-left: auto;
+  padding-left: 16px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .popover-check {
   width: 12px;
   color: var(--accent);
