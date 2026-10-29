@@ -2750,12 +2750,12 @@ export default function Viewport3D({
     );
     const candidates = otherFeaturesRef.current.flatMap((o) => (o.instanceId === selId ? [] : o.features));
     const { lines } = findEngagedJoints(selectedFeatures, candidates);
-    if (lines.length > 1) return clear("Can't rotate: held by pins or shafts on more than one axis");
+    // Held on more than one axis line: it can still turn freely; a turn that ends overlapping is put back
 
     const center = group.userData.localBox.getCenter(new THREE.Vector3()).applyMatrix4(group.matrixWorld);
     let pivot;
     let rings;
-    if (lines.length === 0) {
+    if (lines.length !== 1) {
       // On the part's own hole grid, so quarter turns keep its holes lined up. Kept in the part's
       // frame between turns: turning about it leaves it in place, and it moves along with the part.
       if (prev?.instanceId === selId && prev.localPivot) {
@@ -2794,7 +2794,7 @@ export default function Viewport3D({
     const angles = same ? prev.angles : rings.map(() => 0);
     if (!same && selectedRingRef.current >= 0) selectRing(-1);
 
-    const localPivot = lines.length === 0 ? pivot.clone().applyMatrix4(group.matrixWorld.clone().invert()) : null;
+    const localPivot = lines.length !== 1 ? pivot.clone().applyMatrix4(group.matrixWorld.clone().invert()) : null;
     rotateSetupRef.current = { instanceId: selId, pivot, localPivot, rings, angles };
     rotateMessageKeyRef.current = '';
     gizmo.show(
@@ -2817,7 +2817,13 @@ export default function Viewport3D({
         const g = meshMapRef.current.get(id);
         if (g) starts.set(id, { pos: g.position.clone(), quat: g.quaternion.clone() });
       }
-      rotateGestureRef.current = { kind, ring, ids: setup.ids, starts, startAngle: setup.angles[ring], ...extra };
+      // Already overlapping outside parts at the start: such a turn isn't put back for overlapping
+      const ignore = new Set(setup.ids);
+      const startOverlap = setup.ids.some((id) => {
+        const g = meshMapRef.current.get(id);
+        return g ? checkGroupCollision(g, false, ignore) : false;
+      });
+      rotateGestureRef.current = { kind, ring, ids: setup.ids, starts, startOverlap, startAngle: setup.angles[ring], ...extra };
       return rotateGestureRef.current;
     }
     const group = setup ? meshMapRef.current.get(setup.instanceId) : null;
@@ -2828,6 +2834,7 @@ export default function Viewport3D({
       instanceId: setup.instanceId,
       startPos: group.position.clone(),
       startQuat: group.quaternion.clone(),
+      startOverlap: checkGroupCollision(group, false),
       startAngle: setup.angles[ring],
       ...extra
     };
@@ -2885,6 +2892,16 @@ export default function Viewport3D({
     updateAlignedHoleHighlights();
   };
 
+  /** A finished turn that would overlap another part: the ring's angle goes back, with a message. */
+  const putBackTurn = (gesture) => {
+    const setup = rotateSetupRef.current;
+    if (setup?.angles && gesture.ring >= 0 && gesture.ring < setup.angles.length) {
+      setup.angles[gesture.ring] = gesture.startAngle;
+      angleLabelsRef.current?.setAngle(gesture.ring, gesture.startAngle);
+    }
+    onMateFeedbackRef.current?.("Can't turn there: it would overlap another part. Put back.", true);
+  };
+
   /** Saves the turned pose like a drag release; the instance sync then works out the rings again. */
   const commitRotation = () => {
     const gesture = rotateGestureRef.current;
@@ -2893,12 +2910,41 @@ export default function Viewport3D({
     rotateGizmoRef.current?.setDragging(-1);
     rotateGizmoRef.current?.clearSlices();
     if (gesture?.ids) {
+      const members = selectedSetMembers();
+      const overlaps = members ? markSetOverlaps(members, new Set(gesture.ids)) : new Map();
+      if (!gesture.startOverlap && [...overlaps.values()].some(Boolean)) {
+        for (const [id, start] of gesture.starts) {
+          const g = meshMapRef.current.get(id);
+          if (!g) continue;
+          g.position.copy(start.pos);
+          g.quaternion.copy(start.quat);
+          g.updateMatrixWorld();
+        }
+        if (members) markSetOverlaps(members, new Set(gesture.ids));
+        putBackTurn(gesture);
+        return;
+      }
       commitSetPoses(gesture.ids, 'turn');
       return;
     }
     const group = gesture ? meshMapRef.current.get(gesture.instanceId) : null;
     if (!group) return;
     const isColliding = checkGroupCollision(group, false);
+    if (isColliding && !gesture.startOverlap) {
+      group.position.copy(gesture.startPos);
+      group.quaternion.copy(gesture.startQuat);
+      group.updateMatrixWorld();
+      group.userData.isIntersecting = false;
+      const inst = instancesRef.current.find((i) => i.instanceId === gesture.instanceId);
+      applyGroupAppearance(group, {
+        baseColor: resolvePartBaseColor(inst, catalogMapRef.current.get(group.userData.partId)),
+        isSelected: selectLevel(selectedIdsRef.current, gesture.instanceId),
+        isIntersecting: false
+      });
+      putBackTurn(gesture);
+      updateAlignedHoleHighlights();
+      return;
+    }
     group.userData.isIntersecting = isColliding;
     onUpdateTransformRef.current(gesture.instanceId, {
       position: [
@@ -3856,8 +3902,8 @@ export default function Viewport3D({
       if (pickModeRef.current?.kind === 'copy') endPick(); // the modifier went up unseen
       // Right-click (not a right-drag pan) on the selected part, even behind another: Move <-> Rotate
       if (e.button === 2) {
-        const selId = selectedIdRef.current;
-        if (Math.hypot(dx, dy) <= 5 && selId && pickPartsAt(e).includes(selId)) {
+        const selIds = selectedIdsRef.current;
+        if (Math.hypot(dx, dy) <= 5 && selIds.length > 0 && pickPartsAt(e).some((id) => selIds.includes(id))) {
           onToggleRotateRequestRef.current?.();
         }
         return;

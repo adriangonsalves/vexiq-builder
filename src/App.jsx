@@ -1178,8 +1178,9 @@ export default function App() {
 
   // Right-click on the selected part in the viewport: switch between Move and Rotate
   const handleToggleRotateRequest = () => {
-    if (!selectedInstance) return;
-    if (selectedInstance.locked) {
+    if (selectedIds.length === 0) return;
+    const parts = instances.filter((i) => selectedIds.includes(i.instanceId));
+    if (parts.some((p) => p.locked)) {
       setActionFeedback({ message: 'Part is locked', isError: true });
       return;
     }
