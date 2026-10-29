@@ -14,8 +14,8 @@ const readPinned = () => {
 
 /**
  * The Assembly Outliner (openspec outliner-part-groups): the selected parts first, under "Selected (N)",
- * then the rest; loose parts as rows, each group as a folder row in the place of its first part with its
- * parts indented under it while open. Clicks select (folder = whole group, a row inside a folder = that
+ * then the rest; in each, group folders (their parts indented under them while open) before the loose
+ * parts. Clicks select (folder = whole group, a row inside a folder = that
  * part only), Ctrl/Cmd+click adds or removes, and in Select mode a plain click or the row's checkbox
  * (shown only then) does too; Shift+click selects a range in the
  * order shown. The locate button scrolls to the selection; a long press pins it so every new selection
@@ -37,11 +37,15 @@ export default function AssemblyOutliner({
 
   // Display rows: { kind: 'part', inst, depth, groupName? } and { kind: 'folder', group, listed }.
   // Selected parts come first (a wholly selected group as its folder, other grouped parts on their own
-  // row naming their group), then everything else in build order.
+  // row naming their group), then everything else. In each section the group folders come before the
+  // loose parts, otherwise in build order.
   const { selectedRows, otherRows } = useMemo(() => {
     const chosen = new Set(selectedIds);
+    // Folders (with their open rows) and loose rows, per section
     const top = [];
     const rest = [];
+    const topFolders = [];
+    const restFolders = [];
     const shown = new Set();
     const byId = new Map(instances.map((i) => [i.instanceId, i]));
     const addFolder = (list, group, listed) => {
@@ -58,13 +62,13 @@ export default function AssemblyOutliner({
       shown.add(group.id);
       const picked = group.ids.filter((id) => chosen.has(id));
       if (picked.length === group.ids.length) {
-        addFolder(top, group, group.ids);
+        addFolder(topFolders, group, group.ids);
         continue;
       }
       for (const id of picked) top.push({ kind: 'part', inst: byId.get(id), depth: 0, groupName: group.name });
-      addFolder(rest, group, group.ids.filter((id) => !chosen.has(id)));
+      addFolder(restFolders, group, group.ids.filter((id) => !chosen.has(id)));
     }
-    return { selectedRows: top, otherRows: rest };
+    return { selectedRows: [...topFolders, ...top], otherRows: [...restFolders, ...rest] };
   }, [instances, groups, openFolders, selectedIds]);
   const rows = useMemo(() => [...selectedRows, ...otherRows], [selectedRows, otherRows]);
 

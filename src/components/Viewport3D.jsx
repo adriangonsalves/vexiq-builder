@@ -4689,8 +4689,8 @@ export default function Viewport3D({
       // Contour over the pane
       contourMaterial.uniforms.mask.value = entry.target.texture;
       contourMaterial.uniforms.texel.value.set(1 / width, 1 / height);
-      contourMaterial.uniforms.coreR.value = 3.5 * pixelRatio;
-      contourMaterial.uniforms.rimR.value = 5.5 * pixelRatio;
+      contourMaterial.uniforms.coreR.value = 1.75 * pixelRatio;
+      contourMaterial.uniforms.rimR.value = 2.75 * pixelRatio;
       setPane(rect);
       const autoClear = renderer.autoClear;
       renderer.autoClear = false;

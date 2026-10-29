@@ -34,7 +34,7 @@ See proposal.md for why. The current state that shapes the approach:
 Each part gets optional `groupId` and `groupName`. A group exists when two or more parts share a `groupId`; the folder name is read from them. Both fields are added to `BUILD_FIELDS`, so group/ungroup/rename are ordinary `update` ops and undo, branches, timeline playback, the library and the bridge carry them without new code.
 - Renaming writes `groupName` on every member (one step).
 - Alternative considered: a top-level `groups: [{ id, name }]` in the build. Cleaner on paper, but it needs a new history op, a new field in the saved state, the library format and every MCP writer, and it can get out of step with the parts. Rejected for now; the per-part form can be lifted into a list later if nesting is added.
-- Outliner order: a folder sits where its first member is in `instances`; members are listed in their `instances` order. No reordering of `instances` is needed.
+- Outliner order: folders are listed before loose parts, in the order of their first members in `instances`; members are listed in their `instances` order. No reordering of `instances` is needed.
 
 ### 3. Pure helpers in `src/utils/partGroups.js`
 No React/DOM, so the check script and the server can import them:
