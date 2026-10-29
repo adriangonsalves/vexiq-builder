@@ -22,7 +22,7 @@
 - [x] 3.4b Add a `joint_graph` action in `vite.config.js` returning `jointGraph` for the app's current instances; verify with curl on the BaseBot starter that `connectedFrom` on one side plate gives its drive side and not the other side
 - [x] 3.5 Wire Select Connected in the app: fetch `joint_graph`, run `connectedFrom`, expand to groups, show "N parts selected", "Select a part first", or the failure message; verify on the BaseBot starter in the app
 
-- [ ] 3.6 Add Shift+wheel expand/contract: a first branch in the viewport's wheel capture (Shift, a selection, not hole picking / copy preview / ring selected; no zoom; `deltaY` or `deltaX`; ~120 ms per step) calling `onExpandSelection(±1)`; `expandState` in `App.jsx` (seed, layers, depth, fetched graph once) cleared by any other selection change; "Layer N · M parts" message; verify on the BaseBot starter: expand twice from a beam, contract once, contract past the start does nothing, a click resets, and the camera doesn't zoom
+- [x] 3.6 Add Shift+wheel expand/contract: a first branch in the viewport's wheel capture (Shift, a selection, not hole picking / copy preview / ring selected; no zoom; `deltaY` or `deltaX`; ~120 ms per step) calling `onExpandSelection(±1)`; `expandState` in `App.jsx` (seed, layers, depth, fetched graph once) cleared by any other selection change; "Layer N · M parts" message; verify on the BaseBot starter: expand twice from a beam, contract once, contract past the start does nothing, a click resets, and the camera doesn't zoom
 
 ## 4. Outliner
 

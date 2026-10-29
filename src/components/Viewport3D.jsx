@@ -1236,6 +1236,7 @@ export default function Viewport3D({
   selectedIds = EMPTY_IDS,
   selectMode = false,
   onSelect,
+  onExpandSelection,
   onUpdateTransform,
   onRegisterFlushMover,
   onRegisterScreenshot,
@@ -1344,6 +1345,8 @@ export default function Viewport3D({
   selectedIdsRef.current = selectedIds;
   const selectModeRef = useRef(selectMode);
   selectModeRef.current = selectMode;
+  const onExpandSelectionRef = useRef(onExpandSelection);
+  onExpandSelectionRef.current = onExpandSelection;
 
   const explodeModeRef = useRef(explodeMode);
   explodeModeRef.current = explodeMode;
@@ -3689,7 +3692,22 @@ export default function Viewport3D({
     const WHEEL_NOTCH = 100; // deltaY of one mouse-wheel notch in pixel mode; trackpad deltas add up
     let wheelAccum = 0;
     let pickWheelAccum = 0;
+    // One expand/contract step per notch at most every EXPAND_STEP_MS, so a trackpad flick isn't five layers
+    const EXPAND_STEP_MS = 120;
+    let lastExpandAt = -Infinity;
     const handleWheelCapture = (e) => {
+      // Shift+wheel grows the selection one layer of joined parts (away from the user) or takes the
+      // last layer off (towards); never zooms. Some mice report Shift+wheel as deltaX.
+      if (e.shiftKey && selectedIdsRef.current.length > 0 && !pickModeRef.current && selectedRingRef.current < 0) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const delta = e.deltaY || e.deltaX;
+        const now = performance.now();
+        if (!delta || now - lastExpandAt < EXPAND_STEP_MS) return;
+        lastExpandAt = now;
+        onExpandSelectionRef.current?.(delta < 0 ? 1 : -1);
+        return;
+      }
       // Picking with a hole highlighted: the wheel steps through fits instead of zooming
       if (pickModeRef.current?.hovered) {
         e.preventDefault();

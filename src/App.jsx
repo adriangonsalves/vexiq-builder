@@ -65,7 +65,7 @@ import LibraryDialog from './components/LibraryDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
 import { DEFAULT_SETTINGS, isLinearHistory, normalizeSettings } from './utils/appSettings.js';
 import { applyPatches as applyGroupPatches, expandToGroups, groupCollapse, groupParts, groupsOf, ungroupParts } from './utils/partGroups.js';
-import { connectedFrom } from './utils/jointLayers.js';
+import { connectedFrom, layersFrom } from './utils/jointLayers.js';
 import {
   applyOps,
   createHistory,
@@ -873,6 +873,41 @@ export default function App() {
     } catch (err) {
       setActionFeedback({ message: `Couldn't find connected parts: ${err.message}`, isError: true });
     }
+  };
+
+  /**
+   * Shift+wheel: grow the selection one layer of joined parts (+1) or take the last layer off (-1).
+   * Remembers where it started until the selection changes some other way (its last ids no longer match).
+   */
+  const expandRef = useRef(null); // { layers, depth, lastIds } or { pending: true } while the joints load
+  const handleExpandSelection = async (dir) => {
+    let st = expandRef.current;
+    const current = selectedIds;
+    const same = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
+    if (!st || (!st.pending && !same(st.lastIds, current))) {
+      if (dir < 0 || current.length === 0) return;
+      st = { pending: true };
+      expandRef.current = st;
+      try {
+        const graph = await fetchJointGraph(instances);
+        st.layers = layersFrom(graph, current, { collapse: groupCollapse(instances) });
+        st.depth = 0;
+        st.pending = false;
+      } catch (err) {
+        expandRef.current = null;
+        setActionFeedback({ message: `Couldn't find connected parts: ${err.message}`, isError: true });
+        return;
+      }
+      if (expandRef.current !== st) return;
+    } else if (st.pending) {
+      return;
+    }
+    const depth = Math.max(0, Math.min(st.layers.length - 1, st.depth + dir));
+    if (depth === st.depth && st.lastIds) return;
+    st.depth = depth;
+    st.lastIds = st.layers.slice(0, depth + 1).flat();
+    changeSelection(st.lastIds);
+    setActionFeedback({ message: `Layer ${depth} · ${partCount(st.lastIds.length)}`, isError: false });
   };
 
   const handleGroupSelected = () => {
@@ -1790,6 +1825,7 @@ export default function App() {
             selectedIds={preview ? EMPTY_IDS : selectedIds}
             selectMode={selectMode}
             onSelect={preview ? noop : handleSelectInstance}
+            onExpandSelection={preview ? noop : handleExpandSelection}
             onUpdateTransform={preview ? noop : handleUpdateTransform}
             onRegisterFlushMover={handleRegisterFlushMover}
             onRegisterScreenshot={handleRegisterScreenshot}
