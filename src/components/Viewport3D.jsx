@@ -1103,9 +1103,14 @@ const EMPTY_IDS = [];
 // How strongly a part is lit as selected: 2 = the primary (last) part, 1 = another selected part, 0 = not selected
 const selectLevel = (ids, id) => (ids.at(-1) === id ? 2 : ids.includes(id) ? 1 : 0);
 
+// Part meshes of selected parts are also on this layer, which the selection contour is drawn from
+const SELECT_LAYER = 5;
+
 // Selection look: an amber glow and amber edges, which stand out on blue parts and the blue grid.
 // Primary (or only) selected part / other parts of a multi-selection.
 const SELECT_COLOR = 0xff9f1c;
+// The contour around selected parts: a bright yellow line with a dark rim
+const SELECT_CONTOUR_COLOR = 0xffd400;
 const SELECT_GLOW = { 2: 0.42, 1: 0.24 };
 const SELECT_EDGE_OPACITY = { 2: 1, 1: 0.75 };
 
@@ -1124,6 +1129,8 @@ function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) 
     }
     if (!child.isMesh || !child.userData.isPartMesh || !child.material) return;
     const mat = child.material;
+    if (isSelected) child.layers.enable(SELECT_LAYER);
+    else child.layers.disable(SELECT_LAYER);
 
     if (isIntersecting) {
       mat.color.set('#9ca3af');
@@ -1250,6 +1257,8 @@ export default function Viewport3D({
   selectedId,
   selectedIds = EMPTY_IDS,
   selectMode = false,
+  boxSelect = false,
+  onBoxSelect,
   onSelect,
   onExpandSelection,
   onUpdateTransform,
@@ -1361,6 +1370,11 @@ export default function Viewport3D({
   selectedIdsRef.current = selectedIds;
   const selectModeRef = useRef(selectMode);
   selectModeRef.current = selectMode;
+  // Box select: a left-drag draws a rectangle instead of turning the camera
+  const boxSelectRef = useRef(boxSelect);
+  boxSelectRef.current = boxSelect;
+  const onBoxSelectRef = useRef(onBoxSelect);
+  onBoxSelectRef.current = onBoxSelect;
   const onExpandSelectionRef = useRef(onExpandSelection);
   onExpandSelectionRef.current = onExpandSelection;
   const onUpdateSetRef = useRef(onUpdateSet);
@@ -3571,10 +3585,83 @@ export default function Viewport3D({
     const pointerDownPos = new THREE.Vector2();
     let lastArrowClickAt = -Infinity; // the dblclick that follows an arrow click must not mate again
 
+    // Box select: the rectangle being drawn, in canvas px ({ x0, y0, x1, y1 }), or null
+    let boxDrag = null;
+    const boxEl = document.createElement('div');
+    boxEl.className = 'select-box';
+    boxEl.style.display = 'none';
+    container.appendChild(boxEl);
+    const showBox = () => {
+      const { x0, y0, x1, y1 } = boxDrag;
+      Object.assign(boxEl.style, {
+        display: 'block',
+        left: `${Math.min(x0, x1)}px`,
+        top: `${Math.min(y0, y1)}px`,
+        width: `${Math.abs(x1 - x0)}px`,
+        height: `${Math.abs(y1 - y0)}px`
+      });
+      // Dragged right to left: parts it touches (dashed); left to right: parts wholly inside (solid)
+      boxEl.classList.toggle('crossing', x1 < x0);
+    };
+
+    /**
+     * Visible parts in the box (canvas px). `crossing`: any of the part's points inside; otherwise all of
+     * them. Big meshes are sampled (about 4000 points each), which is plenty for a box drawn by hand.
+     */
+    const partsInBox = ({ x0, y0, x1, y1 }, crossing) => {
+      const cam = pointerCameraRef.current();
+      const rect = inputEl.getBoundingClientRect();
+      const [left, right, top, bottom] = [Math.min(x0, x1), Math.max(x0, x1), Math.min(y0, y1), Math.max(y0, y1)];
+      const v = new THREE.Vector3();
+      const ids = [];
+      for (const [id, group] of meshMapRef.current.entries()) {
+        if (!group.visible) continue;
+        group.updateMatrixWorld();
+        let any = false;
+        let all = true;
+        let seen = 0;
+        group.traverse((child) => {
+          if (!child.isMesh || !child.userData.isPartMesh || !child.geometry?.attributes.position) return;
+          const pos = child.geometry.attributes.position;
+          const step = Math.max(1, Math.floor(pos.count / 4000));
+          for (let i = 0; i < pos.count; i += step) {
+            v.fromBufferAttribute(pos, i).applyMatrix4(child.matrixWorld).project(cam);
+            const sx = ((v.x + 1) / 2) * rect.width;
+            const sy = ((1 - v.y) / 2) * rect.height;
+            const inside = v.z > -1 && v.z < 1 && sx >= left && sx <= right && sy >= top && sy <= bottom;
+            seen += 1;
+            if (inside) any = true;
+            else all = false;
+          }
+        });
+        if (seen > 0 && (crossing ? any : all)) ids.push(id);
+      }
+      return ids;
+    };
+
     const handlePointerDown = (e) => {
       pointerDownPos.set(e.clientX, e.clientY);
       // A new press that isn't grabbing the gizmo starts clean, so a missed drag end can't block clicks
       if (!transform.dragging) wasDraggingRef.current = false;
+      if (
+        boxSelectRef.current &&
+        e.button === 0 &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !pickModeRef.current &&
+        !transform.dragging &&
+        !transform.axis &&
+        !rotateGestureRef.current &&
+        !ringClickHandled
+      ) {
+        const rect = inputEl.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        boxDrag = { x0: x, y0: y, x1: x, y1: y };
+        // OrbitControls would pan on Shift+drag: the camera stays still while a box is drawn
+        orbit.enabled = false;
+        inputEl.setPointerCapture?.(e.pointerId);
+      }
     };
 
     const projectToCanvas = (point) => {
@@ -3748,6 +3835,19 @@ export default function Viewport3D({
     const handlePointerUp = (e) => {
       const dx = e.clientX - pointerDownPos.x;
       const dy = e.clientY - pointerDownPos.y;
+      if (boxDrag && e.button === 0) {
+        const box = boxDrag;
+        boxDrag = null;
+        boxEl.style.display = 'none';
+        orbit.enabled = true;
+        // A short drag is just a click
+        if (Math.hypot(dx, dy) > 5) {
+          cancelPendingSelect();
+          const ids = partsInBox(box, box.x1 < box.x0);
+          onBoxSelectRef.current?.(ids, { additive: e.shiftKey || selectModeRef.current });
+          return;
+        }
+      }
       // A click with Ctrl/Cmd in the copy preview never selects or toggles Move/Rotate
       if (pickModeRef.current?.kind === 'copy' && (e.ctrlKey || e.metaKey) && (e.button === 0 || e.button === 2)) {
         handleCopyPointerUp(e, Math.hypot(dx, dy) > 5);
@@ -3830,6 +3930,12 @@ export default function Viewport3D({
     let pickHoverAt = null;
     const handlePointerMove = (e) => {
       const rect = inputEl.getBoundingClientRect();
+      if (boxDrag) {
+        boxDrag.x1 = e.clientX - rect.left;
+        boxDrag.y1 = e.clientY - rect.top;
+        showBox();
+        return;
+      }
       copyPointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       // The copy preview follows Ctrl/Cmd (a missed keyup ends it here) and steps aside for a drag
       const modifier = e.ctrlKey || e.metaKey;
@@ -4494,15 +4600,115 @@ export default function Viewport3D({
       renderer.autoClear = true;
     };
 
+    /**
+     * Selection contour: the selected parts' silhouettes drawn white into a mask, then a thick bright
+     * line with a dark rim traced around them on top of the pane. It shows through other parts and
+     * reads by brightness rather than hue, so it stays visible on any part color.
+     */
+    const contourSlots = new Map(); // slot -> { target, width, height }
+    const contourMaskMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    const contourMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        mask: { value: null },
+        texel: { value: new THREE.Vector2() },
+        coreR: { value: 3 },
+        rimR: { value: 5 },
+        // The shader writes straight to the screen, so the colors are given as they should look
+        coreColor: { value: new THREE.Color().setHex(SELECT_CONTOUR_COLOR, THREE.LinearSRGBColorSpace) },
+        rimColor: { value: new THREE.Color(0x000000) }
+      },
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `
+        varying vec2 vUv;
+        uniform sampler2D mask;
+        uniform vec2 texel;
+        uniform float coreR;
+        uniform float rimR;
+        uniform vec3 coreColor;
+        uniform vec3 rimColor;
+        void main() {
+          if (texture2D(mask, vUv).r > 0.5) discard;
+          float nearest = 1e6;
+          for (int i = 0; i < 16; i++) {
+            float a = float(i) * 0.39269908;
+            vec2 dir = vec2(cos(a), sin(a));
+            for (int k = 1; k <= 8; k++) {
+              float r = float(k) * rimR / 8.0;
+              if (texture2D(mask, vUv + dir * r * texel).r > 0.5) nearest = min(nearest, r);
+            }
+          }
+          if (nearest <= coreR) gl_FragColor = vec4(coreColor, 1.0);
+          else if (nearest <= rimR) gl_FragColor = vec4(rimColor, 0.85);
+          else discard;
+        }`,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    });
+    contourMaterial.toneMapped = false;
+    const contourQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), contourMaterial);
+    contourQuad.frustumCulled = false;
+    const contourScene = new THREE.Scene();
+    contourScene.add(contourQuad);
+    const contourCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const drawSelectionContour = (rect, cam, slot) => {
+      if (selectedIdsRef.current.length === 0) return;
+      const pixelRatio = renderer.getPixelRatio();
+      const width = Math.max(1, Math.round(rect.width * pixelRatio));
+      const height = Math.max(1, Math.round(rect.height * pixelRatio));
+      let entry = contourSlots.get(slot);
+      if (!entry) {
+        entry = { target: new THREE.WebGLRenderTarget(width, height), width, height };
+        contourSlots.set(slot, entry);
+      } else if (entry.width !== width || entry.height !== height) {
+        entry.target.setSize(width, height);
+        Object.assign(entry, { width, height });
+      }
+      // Mask: only the selected parts' meshes (on SELECT_LAYER), flat white on black
+      const savedTarget = renderer.getRenderTarget();
+      const savedLayers = cam.layers.mask;
+      const savedBackground = scene.background;
+      const savedClear = renderer.getClearColor(new THREE.Color());
+      const savedAlpha = renderer.getClearAlpha();
+      const savedScissor = renderer.getScissorTest();
+      cam.layers.set(SELECT_LAYER);
+      scene.overrideMaterial = contourMaskMaterial;
+      scene.background = null;
+      renderer.setRenderTarget(entry.target);
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, rect.width, rect.height);
+      renderer.setClearColor(0x000000, 1);
+      renderer.clear();
+      renderer.render(scene, cam);
+      scene.overrideMaterial = null;
+      scene.background = savedBackground;
+      cam.layers.mask = savedLayers;
+      renderer.setRenderTarget(savedTarget);
+      renderer.setClearColor(savedClear, savedAlpha);
+      renderer.setScissorTest(savedScissor);
+      // Contour over the pane
+      contourMaterial.uniforms.mask.value = entry.target.texture;
+      contourMaterial.uniforms.texel.value.set(1 / width, 1 / height);
+      contourMaterial.uniforms.coreR.value = 3.5 * pixelRatio;
+      contourMaterial.uniforms.rimR.value = 5.5 * pixelRatio;
+      setPane(rect);
+      const autoClear = renderer.autoClear;
+      renderer.autoClear = false;
+      renderer.render(contourScene, contourCamera);
+      renderer.autoClear = autoClear;
+    };
+
     /** Draws `cam`'s view into one pane, optionally without the overlays; `slot` names the pane for AO. */
     const renderView = (rect, cam, { overlays = true, slot = 'main' } = {}) => {
       if (aoRef.current) {
         renderViewAO(rect, cam, slot, overlays);
+        if (overlays) drawSelectionContour(rect, cam, slot);
         return;
       }
       setPane(rect);
       if (overlays) {
         renderer.render(scene, cam);
+        drawSelectionContour(rect, cam, slot);
         return;
       }
       const hidden = editOverlays().filter((o) => o.visible);
@@ -4671,11 +4877,16 @@ export default function Viewport3D({
       inputEl.removeEventListener('pointermove', handleCubePointerMove, true);
       inputEl.removeEventListener('contextmenu', handleCubeContextMenu, true);
       viewCube.dispose();
+      boxEl.remove();
       for (const { composer, aoPass } of aoSlots.values()) {
         aoPass.dispose();
         composer.dispose();
       }
       depthOnlyMaterial.dispose();
+      for (const { target } of contourSlots.values()) target.dispose();
+      contourMaskMaterial.dispose();
+      contourMaterial.dispose();
+      contourQuad.geometry.dispose();
       envTexture.dispose();
       miniCleanups.forEach((cleanup) => cleanup());
       cancelPendingSelect();
@@ -5032,6 +5243,11 @@ export default function Viewport3D({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collisionRecheck]);
+
+  // Box select takes the left drag, so the camera doesn't turn with it (right-drag pan and wheel zoom stay)
+  useEffect(() => {
+    if (orbitRef.current) orbitRef.current.enableRotate = !boxSelect;
+  }, [boxSelect]);
 
   // Camera Focus / Frame trigger (key 'F' or toolbar button)
   useEffect(() => {

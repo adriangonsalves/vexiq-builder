@@ -158,6 +158,8 @@ export default function App() {
   const [transformMode, setTransformMode] = useState('translate'); // 'translate' | 'rotate'
   // Select mode: a plain click in the 3D view adds or removes parts; never saved
   const [selectMode, setSelectMode] = useState(false);
+  // Box select: a left-drag in the 3D view draws a box that selects parts; never saved
+  const [boxSelect, setBoxSelect] = useState(false);
   const [snapPitchFactor, setSnapPitchFactor] = useState(0.5); // 1 = 12.7mm, 0.5 = 6.35mm, 0.25 = 3.175mm, 0 = Free
   const [rotationSnapDeg, setRotationSnapDeg] = useState(15); // 15, 45, 90, 0
   const [showGrid, setShowGrid] = useState(true);
@@ -1005,6 +1007,15 @@ export default function App() {
     }
   };
 
+  // A box drawn in the 3D view: its parts (with their whole groups) replace the selection, or are added
+  // to it with Shift or in Select mode
+  const handleBoxSelect = (ids, { additive }) => {
+    const picked = expandToGroups(ids, instances);
+    const next = additive ? [...selectedIds.filter((id) => !picked.includes(id)), ...picked] : picked;
+    changeSelection(next);
+    if (picked.length === 0) setActionFeedback({ message: 'No parts in the box.', isError: false });
+  };
+
   const handleGroupSelected = () => {
     if (selectedIds.length < 2) {
       setActionFeedback({ message: 'Select two or more parts to make a group.', isError: true });
@@ -1348,6 +1359,10 @@ export default function App() {
         handleSelectAll();
         return;
       }
+      if (!mod && !e.altKey && key === 'b') {
+        setBoxSelect((on) => !on);
+        return;
+      }
       if (!mod && !e.altKey && key === 'c') {
         handleSelectConnected();
         return;
@@ -1376,8 +1391,9 @@ export default function App() {
       } else if (e.key === 'Escape') {
         if (explodeMode !== 'off') {
           setExplodeMode('off');
-        } else if (selectMode) {
-          // Esc first leaves Select mode and keeps the selection
+        } else if (boxSelect || selectMode) {
+          // Esc first leaves Box select / Select mode and keeps the selection
+          setBoxSelect(false);
           setSelectMode(false);
         } else {
           setInstances((prev) => resolveIntersectingInstances(prev, null), { label: moveBackLabel });
@@ -1701,6 +1717,8 @@ export default function App() {
             <SelectMenu
               selectMode={selectMode}
               onToggleSelectMode={() => setSelectMode((on) => !on)}
+              boxSelect={boxSelect}
+              onToggleBoxSelect={() => setBoxSelect((on) => !on)}
               hasSelection={selectedIds.length > 0}
               canGroup={selectedIds.length >= 2}
               canUngroup={selectedGroupIds.length > 0}
@@ -1927,6 +1945,8 @@ export default function App() {
             selectedId={preview ? null : selectedId}
             selectedIds={preview ? EMPTY_IDS : selectedIds}
             selectMode={selectMode}
+            boxSelect={boxSelect && !preview}
+            onBoxSelect={handleBoxSelect}
             onSelect={preview ? noop : handleSelectInstance}
             onExpandSelection={preview ? noop : handleExpandSelection}
             onUpdateTransform={preview ? noop : handleUpdateTransform}

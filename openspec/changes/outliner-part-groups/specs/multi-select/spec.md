@@ -5,7 +5,7 @@ Lets the user select more than one part at a time, by clicking or by following t
 ## ADDED Requirements
 
 ### Requirement: Selection holds several parts
-The selection SHALL be a set of parts, possibly empty, with one of them, the one selected last, as the primary part. Every selected part SHALL be highlighted in the 3D view and its row highlighted in the Outliner, with the primary part shown more strongly. Selecting a part that belongs to a group from the 3D view SHALL select the whole group (see part-groups). Everything that works on one part (the position and rotation fields, color, label, hole picking, mating, copy-insert, the assistant's `selectedId`) SHALL keep working on the primary part when exactly one part is selected. Changing the selection SHALL NOT create a history step. Parts that are deleted, or that disappear on undo, SHALL drop out of the selection.
+The selection SHALL be a set of parts, possibly empty, with one of them, the one selected last, as the primary part. Every selected part SHALL be highlighted in the 3D view and its row highlighted in the Outliner, with the primary part shown more strongly. In the 3D view a selected part SHALL also get a thick contour around its outline, light with a dark rim so it shows on parts of any color, visible through parts in front of it. Selecting a part that belongs to a group from the 3D view SHALL select the whole group (see part-groups). Everything that works on one part (the position and rotation fields, color, label, hole picking, mating, copy-insert, the assistant's `selectedId`) SHALL keep working on the primary part when exactly one part is selected. Changing the selection SHALL NOT create a history step. Parts that are deleted, or that disappear on undo, SHALL drop out of the selection.
 
 #### Scenario: Two parts highlighted
 - **WHEN** a beam is selected and the user Shift+clicks a plate
@@ -50,6 +50,17 @@ The selected parts SHALL be listed first, under a "Selected (N)" heading with a 
 #### Scenario: Range
 - **WHEN** row 3 is selected and the user Shift+clicks row 7
 - **THEN** rows 3 to 7 are selected
+
+### Requirement: Box select
+The Select menu SHALL have a Box select mode, also toggled with `B`. While it is on, a left-drag in the 3D view that does not start on the Move arrows or a rotate ring SHALL draw a rectangle instead of turning the camera, and on release SHALL select the visible parts in it: dragged left to right, the parts wholly inside the rectangle; dragged right to left, every part it touches (the two are drawn differently). A part in a group SHALL bring in its whole group. The parts SHALL replace the selection, or be added to it with Shift held or while Select mode is on. A short drag SHALL count as a click. The camera SHALL NOT move while a box is drawn; right-drag panning and wheel zoom keep working. Esc SHALL turn Box select off, and it SHALL NOT be saved with the build.
+
+#### Scenario: Box around parts
+- **WHEN** Box select is on and the user drags left to right around two beams
+- **THEN** the two beams, and nothing only partly inside the box, are selected
+
+#### Scenario: Touching box
+- **WHEN** the user drags right to left across the edge of a plate
+- **THEN** the plate is selected
 
 ### Requirement: Selection count
 While at least one part is selected, the 3D view SHALL show how many parts are selected (for example "3 parts selected") with a Clear button that unselects everything. With nothing selected it SHALL not be shown.

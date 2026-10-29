@@ -696,6 +696,20 @@ body,
   text-decoration: underline;
 }
 
+/* Box select rectangle: solid = parts wholly inside, dashed (dragged right to left) = parts it touches */
+.select-box {
+  position: absolute;
+  pointer-events: none;
+  border: 1.5px solid #ffd400;
+  background: rgba(255, 212, 0, 0.1);
+  z-index: 5;
+}
+
+.select-box.crossing {
+  border-style: dashed;
+  background: rgba(255, 212, 0, 0.06);
+}
+
 /* Selection count over the 3D view */
 .hud-pill-selection {
   border-color: rgba(255, 159, 28, 0.7);

@@ -1,14 +1,16 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ChevronDown, FolderMinus, FolderPlus, MousePointerClick, Network, SquareDashed } from 'lucide-react';
+import { BoxSelect, ChevronDown, FolderMinus, FolderPlus, MousePointerClick, Network, SquareDashed } from 'lucide-react';
 import PopoverMenu, { MenuDivider, MenuItem } from './PopoverMenu.jsx';
 
 /**
- * The toolbar's Select menu (openspec outliner-part-groups): Select mode, Select Connected, Select All,
- * Select None, Invert, Group and Ungroup. The button reads "Select mode" while that mode is on.
+ * The toolbar's Select menu (openspec outliner-part-groups): Select mode, Box select, Select Connected, Select All,
+ * Select None, Invert, Group and Ungroup. The button reads "Box select" or "Select mode" while one is on.
  */
 export default function SelectMenu({
   selectMode,
   onToggleSelectMode,
+  boxSelect,
+  onToggleBoxSelect,
   hasSelection,
   canGroup,
   canUngroup,
@@ -39,20 +41,34 @@ export default function SelectMenu({
       <button
         ref={buttonRef}
         type="button"
-        className={`btn ${at || selectMode ? 'active' : ''}`}
+        className={`btn ${at || selectMode || boxSelect ? 'active' : ''}`}
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={Boolean(at)}
-        title={selectMode ? 'Select mode is on: clicks add or remove parts (Esc to leave)' : 'Select several parts, connected parts, groups'}
+        title={
+          boxSelect
+            ? 'Box select is on: drag a box around parts (Esc to leave)'
+            : selectMode
+              ? 'Select mode is on: clicks add or remove parts (Esc to leave)'
+              : 'Select several parts, connected parts, groups'
+        }
       >
-        <MousePointerClick size={14} />
-        {selectMode ? 'Select mode' : 'Select'}
+        {boxSelect ? <BoxSelect size={14} /> : <MousePointerClick size={14} />}
+        {boxSelect ? 'Box select' : selectMode ? 'Select mode' : 'Select'}
         <ChevronDown size={12} />
       </button>
       {at && (
         <PopoverMenu at={at} onClose={close} label="Select">
           <MenuItem checked={selectMode} onSelect={choose(onToggleSelectMode)} title="While on, a click in the 3D view adds or removes a part">
             Select mode
+          </MenuItem>
+          <MenuItem
+            checked={boxSelect}
+            onSelect={choose(onToggleBoxSelect)}
+            shortcut="B"
+            title="Drag a box: left to right takes parts wholly inside, right to left every part it touches"
+          >
+            Box select
           </MenuItem>
           <MenuDivider />
           <MenuItem icon={Network} disabled={!hasSelection} onSelect={choose(onConnected)} shortcut="C" title="Every part joined to the selection by pins, pegs and shafts">
