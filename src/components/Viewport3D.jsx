@@ -3628,6 +3628,17 @@ export default function Viewport3D({
     const GIZMO_CENTER_AXES = new Set(['XYZ', 'XYZE']);
     const handleDoubleClick = (e) => {
       if (performance.now() - lastCubeClickAt < 600) return; // clicks on the view cube
+      // Mating, hole picking and copy-insert work on one part: with several selected, say so
+      const multi = selectedIdsRef.current;
+      if (multi.length > 1 && !pickModeRef.current && !transform.dragging) {
+        if (pickPartsAt(e).some((id) => multi.includes(id))) {
+          onMateFeedbackRef.current?.(
+            e.ctrlKey || e.metaKey ? 'Copies are inserted one part at a time: select a single part.' : 'Mating works on one part: select a single part.',
+            true
+          );
+        }
+        return;
+      }
       if (e.ctrlKey || e.metaKey) return; // Ctrl/Cmd+double-click inserts a copy, never mates
       if (pickModeRef.current) return; // picking: single clicks insert
       if (transform.dragging) return;

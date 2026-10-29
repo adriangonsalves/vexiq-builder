@@ -41,7 +41,7 @@
 
 - [x] 6.1 Wire Group / Ungroup / Rename through `partGroups.js` patches as one `setInstances` step each, labeled "Group N parts as <name>", "Ungroup <name>", "Rename <old> to <new>"; verify in the history timeline
 - [x] 6.2 Make Delete and Clone work on the whole selection: delete all as one step; clone all with a one-pitch offset, new `groupId` and "<name> copy" for groups, copies selected; verify a cloned beam with pins keeps the pins in its holes
-- [ ] 6.3 Turn off hole picking, mate arrows, double-click mating and copy-insert while more than one part is selected, with a short message when the user tries; verify each gives the message and changes nothing
+- [x] 6.3 Turn off hole picking, mate arrows, double-click mating and copy-insert while more than one part is selected, with a short message when the user tries; verify each gives the message and changes nothing
 
 ## 7. Moving and turning a set
 
