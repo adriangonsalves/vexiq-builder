@@ -1309,6 +1309,7 @@ export default function Viewport3D({
   onInsertCopyRef.current = onInsertCopy;
   const holeOverlayRef = useRef(null);
   const otherFeaturesRef = useRef([]); // [{ instanceId, box, features }] for visible non-selected parts
+  const lastSceneSyncRef = useRef(null); // what the scene sync effect last applied, to spot selection-only changes
   const lastAlignedRef = useRef([]); // latest findAlignedOpenings result for the selected part
   const arrowOverlayRef = useRef(null);
   const arrowPlansRef = useRef([]); // mate plans behind the arrows currently shown
@@ -1567,15 +1568,35 @@ export default function Viewport3D({
       const partMeta = catalogMapRef.current.get(group.userData.partId);
       if (!partMeta) continue;
       group.updateMatrixWorld();
-      const features = collectWorldFeatures(
+      const measured = getMeshMeasurements(group, partMeta);
+      // A part that hasn't moved (and whose measurements haven't arrived since) keeps its last entry
+      const cached = group.userData.featureCache;
+      if (
+        cached &&
+        cached.partMeta === partMeta &&
+        cached.matrix.equals(group.matrixWorld) &&
+        cached.surfaces === measured?.surfaces &&
+        cached.passRadii === measured?.passRadii
+      ) {
+        if (cached.entry) entries.push(cached.entry);
+        continue;
+      }
+      const features = collectWorldFeatures(partMeta, group.matrixWorld, instId, measured);
+      const entry = features.length === 0
+        ? null
+        : {
+            instanceId: instId,
+            box: worldPartBox(partMeta, group.matrixWorld)?.expandByScalar(MAX_AXIAL_GAP_MM),
+            features
+          };
+      group.userData.featureCache = {
         partMeta,
-        group.matrixWorld,
-        instId,
-        getMeshMeasurements(group, partMeta)
-      );
-      if (features.length === 0) continue;
-      const box = worldPartBox(partMeta, group.matrixWorld)?.expandByScalar(MAX_AXIAL_GAP_MM);
-      entries.push({ instanceId: instId, box, features });
+        matrix: group.matrixWorld.clone(),
+        surfaces: measured?.surfaces,
+        passRadii: measured?.passRadii,
+        entry
+      };
+      if (entry) entries.push(entry);
     }
     otherFeaturesRef.current = entries;
   };
@@ -4406,6 +4427,42 @@ export default function Viewport3D({
     const explodeLinesGroup = explodeLinesGroupRef.current;
     const transform = transformRef.current;
     if (!partsRoot || !transform || !explodeLinesGroup) return;
+
+    // Only the selection changed: nothing moved, so skip the per-part overlap checks and just
+    // re-light the parts that were and are selected
+    const lastSync = lastSceneSyncRef.current;
+    lastSceneSyncRef.current = { instances, catalogMap, showConnectors, explodeMode, selectedId };
+    if (
+      lastSync &&
+      lastSync.instances === instances &&
+      lastSync.catalogMap === catalogMap &&
+      lastSync.showConnectors === showConnectors &&
+      lastSync.explodeMode === explodeMode
+    ) {
+      const byId = new Map(instances.map((i) => [i.instanceId, i]));
+      for (const id of new Set([lastSync.selectedId, selectedId])) {
+        const inst = id ? byId.get(id) : null;
+        const group = id ? meshMapRef.current.get(id) : null;
+        const partMeta = inst ? catalogMap.get(inst.partId) : null;
+        if (!inst || !group || !partMeta) continue;
+        const isSelected = id === selectedId;
+        applyGroupAppearance(group, {
+          baseColor: resolvePartBaseColor(inst, partMeta),
+          isSelected,
+          isIntersecting: Boolean(group.userData.isIntersecting)
+        });
+        const existingOverlay = group.getObjectByName('__connector_overlay__');
+        if (existingOverlay) group.remove(existingOverlay);
+        if (showConnectors && isSelected && (partMeta.ports?.length > 0 || partMeta.cylinders?.length > 0)) {
+          group.add(createConnectorAxesGroup(partMeta));
+        }
+      }
+      hideMateArrows();
+      rebuildOtherFeatures();
+      syncGizmos();
+      updateAlignedHoleHighlights();
+      return;
+    }
 
     const currentById = new Map(instances.map((i) => [i.instanceId, i]));
 
