@@ -40,6 +40,7 @@ import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
 import SelectMenu from './components/SelectMenu.jsx';
 import AssemblyOutliner from './components/AssemblyOutliner.jsx';
+import SetInspector from './components/SetInspector.jsx';
 import ViewMenu from './components/ViewMenu.jsx';
 import { STARTERS, starterById } from './starters.js';
 import {
@@ -60,7 +61,21 @@ import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
 import LibraryDialog from './components/LibraryDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
 import { DEFAULT_SETTINGS, isLinearHistory, normalizeSettings } from './utils/appSettings.js';
-import { applyPatches as applyGroupPatches, expandToGroups, groupCollapse, groupParts, groupsOf, ungroupParts } from './utils/partGroups.js';
+import {
+  applyPatches as applyGroupPatches,
+  applySetTransform,
+  axisTurn,
+  cloneSet,
+  expandToGroups,
+  groupCollapse,
+  groupParts,
+  groupsOf,
+  renameGroup,
+  setPivot,
+  setWorldBoxes,
+  ungroupParts,
+  wholeGroupOf
+} from './utils/partGroups.js';
 import { connectedFrom, layersFrom } from './utils/jointLayers.js';
 import {
   applyOps,
@@ -775,6 +790,21 @@ export default function App() {
     [selectedInstance, catalogMap]
   );
 
+  // The Inspector header: one part (label; catalog name · part number, in <group>), a group (name; N parts)
+  // or a loose set (N parts selected)
+  const selectionTitle = useMemo(() => {
+    if (selectedIds.length === 0) return null;
+    const allGroups = groupsOf(instances);
+    if (selectedInstance) {
+      const group = selectedInstance.groupId ? allGroups.get(selectedInstance.groupId) : null;
+      const catalogLine = selectedPartMeta ? `${selectedPartMeta.name} · ${selectedPartMeta.partNumber}` : '';
+      return { name: selectedInstance.label, sub: [catalogLine, group ? `in ${group.name}` : ''].filter(Boolean).join(' · ') };
+    }
+    const group = wholeGroupOf(instances, selectedIds, allGroups);
+    if (group) return { name: group.name, sub: `${group.ids.length} parts` };
+    return { name: `${selectedIds.length} parts selected`, sub: '' };
+  }, [instances, selectedIds, selectedInstance, selectedPartMeta]);
+
   // The sample starter (src/starters.js); File → Starter lists every starter
   function buildStarterAssembly(catalogList) {
     return starterById('sample').build(catalogList);
@@ -915,6 +945,66 @@ export default function App() {
     });
   };
 
+  // --- A set of parts: a group or a loose multi-selection, moved and turned as one ---
+  const isSet = selectedIds.length > 1;
+  const selectionGroup = useMemo(() => wholeGroupOf(instances, selectedIds, groups), [instances, selectedIds, groups]);
+  const setName = selectionGroup ? selectionGroup.name : partCount(selectedIds.length);
+  const setParts = useMemo(() => {
+    const wanted = new Set(selectedIds);
+    return instances.filter((i) => wanted.has(i.instanceId));
+  }, [instances, selectedIds]);
+  const setCentre = useMemo(
+    () => (isSet ? setPivot(instances, selectedIds, setWorldBoxes(instances, selectedIds, (i) => catalogMap.get(i.partId)?.bbox)) : null),
+    [isSet, instances, selectedIds, catalogMap]
+  );
+  const setMoveBlocked = () => {
+    const message = setParts.some((p) => p.locked) ? 'Part is locked' : setParts.some((p) => p.visible === false) ? 'Some parts are hidden' : null;
+    if (message) setActionFeedback({ message, isError: true });
+    return Boolean(message);
+  };
+  // One step for the whole set (also the viewport's drag of a set)
+  const handleUpdateSet = (ids, patches, meta = {}) => {
+    if (!patches.length) return;
+    setInstances((prev) => applyGroupPatches(prev, patches), meta);
+  };
+  const setKey = selectedIds.join(',');
+  const moveSetBy = (deltaPos, mergeKey) => {
+    if (setMoveBlocked()) return;
+    handleUpdateSet(selectedIds, applySetTransform(instances, selectedIds, setCentre, { deltaPos }), {
+      label: `Move ${setName}`,
+      mergeKey: `${mergeKey}:${setKey}`
+    });
+  };
+  const handleMoveSetCentreTo = (axis, value) => {
+    const delta = [0, 0, 0];
+    delta[axis] = value - setCentre[axis];
+    if (Math.abs(delta[axis]) < 1e-6) return;
+    moveSetBy(delta, `set-position-${axis}`);
+  };
+  const handleTurnSet90 = (axis) => {
+    if (setMoveBlocked()) return;
+    handleUpdateSet(selectedIds, applySetTransform(instances, selectedIds, setCentre, { deltaQuat: axisTurn('XYZ'[axis], 90) }), {
+      label: `Turn ${setName}`
+    });
+  };
+  const handleSetSetFlag = (field, value) => {
+    const verb = field === 'visible' ? (value ? 'Show' : 'Hide') : value ? 'Lock' : 'Unlock';
+    const wanted = new Set(selectedIds);
+    setInstances((prev) => prev.map((i) => (wanted.has(i.instanceId) ? { ...i, [field]: value } : i)), { label: `${verb} ${setName}` });
+  };
+  // Returns false when the name is refused (empty)
+  const handleRenameGroup = (name) => {
+    if (!selectionGroup) return false;
+    try {
+      const renamed = renameGroup(instances, selectionGroup.id, name);
+      setInstances((prev) => applyGroupPatches(prev, renamed.patches), { label: `Rename ${renamed.oldName} to ${renamed.name}` });
+      return true;
+    } catch (err) {
+      setActionFeedback({ message: err.message, isError: true });
+      return false;
+    }
+  };
+
   const handleGroupSelected = () => {
     if (selectedIds.length < 2) {
       setActionFeedback({ message: 'Select two or more parts to make a group.', isError: true });
@@ -1005,6 +1095,13 @@ export default function App() {
   };
 
   const handleDuplicateSelected = () => {
+    if (selectedIds.length > 1) {
+      // A set: copies one pitch along X, keeping their places relative to one another; the copies are selected
+      const copies = cloneSet(instances, selectedIds, [VEX_PITCH_MM, 0, 0]);
+      setInstances((prev) => [...resolveIntersectingInstances(prev, null), ...copies], { label: `Clone ${setName}` });
+      setSelectedIds(copies.map((c) => c.instanceId));
+      return;
+    }
     if (!selectedInstance) return;
     const copyPos = [
       Number((selectedInstance.position[0] + VEX_PITCH_MM).toFixed(3)),
@@ -1062,9 +1159,10 @@ export default function App() {
   };
 
   const handleDeleteSelected = () => {
-    if (!selectedId) return;
-    setInstances((prev) => prev.filter((i) => i.instanceId !== selectedId));
-    setSelectedId(null);
+    if (selectedIds.length === 0) return;
+    const doomed = new Set(selectedIds);
+    setInstances((prev) => prev.filter((i) => !doomed.has(i.instanceId)), selectedIds.length > 1 ? { label: `Delete ${setName}` } : {});
+    setSelectedIds([]);
   };
 
   // Right-click on the selected part in the viewport: switch between Move and Rotate
@@ -1993,8 +2091,21 @@ export default function App() {
           <section className="inspector-section scroller">
             <div className="panel-header" style={{ padding: '10px 14px' }}>
               <div className="panel-title-row">
-                <span>Part Inspector</span>
-                {selectedInstance && (
+                {selectionTitle ? (
+                  <div className="inspector-title">
+                    <span className="inspector-name" title={selectionTitle.name}>
+                      {selectionTitle.name}
+                    </span>
+                    {selectionTitle.sub && (
+                      <span className="inspector-sub" title={selectionTitle.sub}>
+                        {selectionTitle.sub}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span>Part Inspector</span>
+                )}
+                {selectedIds.length > 0 && (
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button
                       type="button"
@@ -2020,7 +2131,19 @@ export default function App() {
               </div>
             </div>
 
-            {selectedInstance && selectedPartMeta ? (
+            {isSet ? (
+              <SetInspector
+                group={selectionGroup}
+                parts={setParts}
+                pivot={setCentre}
+                snapPitchFactor={snapPitchFactor}
+                onRename={handleRenameGroup}
+                onMoveBy={(delta) => moveSetBy(delta, 'set-nudge')}
+                onMoveCentreTo={handleMoveSetCentreTo}
+                onTurn={handleTurnSet90}
+                onSetFlag={handleSetSetFlag}
+              />
+            ) : selectedInstance && selectedPartMeta ? (
               <div className="inspector-body">
                 {/* Position in mm + Pitch */}
                 <div className="field-group">

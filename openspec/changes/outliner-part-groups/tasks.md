@@ -34,13 +34,13 @@
 
 ## 5. Inspector
 
-- [ ] 5.1 Replace the "Part Inspector" header text with the selection name block: label + catalog name · part number (+ "in <group>"), group name · N parts, or "N parts selected"; ellipsis with full name on hover; verify each case
-- [ ] 5.2 Add the set view of the Inspector for groups and loose sets: group name field (rename, empty refused), set position with nudges, quick 90° turns, hide/lock/clone/delete; hide per-part sections; verify rename is one undoable step
+- [x] 5.1 Replace the "Part Inspector" header text with the selection name block: label + catalog name · part number (+ "in <group>"), group name · N parts, or "N parts selected"; ellipsis with full name on hover; verify each case
+- [x] 5.2 Add the set view of the Inspector for groups and loose sets: group name field (rename, empty refused), set position with nudges, quick 90° turns, hide/lock/clone/delete; hide per-part sections; verify rename is one undoable step
 
 ## 6. Group actions
 
-- [ ] 6.1 Wire Group / Ungroup / Rename through `partGroups.js` patches as one `setInstances` step each, labeled "Group N parts as <name>", "Ungroup <name>", "Rename <old> to <new>"; verify in the history timeline
-- [ ] 6.2 Make Delete and Clone work on the whole selection: delete all as one step; clone all with a one-pitch offset, new `groupId` and "<name> copy" for groups, copies selected; verify a cloned beam with pins keeps the pins in its holes
+- [x] 6.1 Wire Group / Ungroup / Rename through `partGroups.js` patches as one `setInstances` step each, labeled "Group N parts as <name>", "Ungroup <name>", "Rename <old> to <new>"; verify in the history timeline
+- [x] 6.2 Make Delete and Clone work on the whole selection: delete all as one step; clone all with a one-pitch offset, new `groupId` and "<name> copy" for groups, copies selected; verify a cloned beam with pins keeps the pins in its holes
 - [ ] 6.3 Turn off hole picking, mate arrows, double-click mating and copy-insert while more than one part is selected, with a short message when the user tries; verify each gives the message and changes nothing
 
 ## 7. Moving and turning a set
@@ -50,7 +50,7 @@
 - [ ] 7.3 Collision for sets: ignore pairs inside the set, check members against outside parts on drag end and throttled during the drag, mark overlaps as for one part; skip flush stop and hole snap; verify a group dragged into a beam marks it overlapping and pins inside the group don't
 - [ ] 7.4 No gizmo and the "Part is locked" / "Some parts are hidden" messages for sets with locked or hidden parts, and no gizmo in Explode view; verify each
 - [ ] 7.4b Check the set path runs for a loose (ungrouped) multi-selection with "Move N parts" / "Turn N parts" labels and no group made; verify by Shift+clicking a beam and its pins and dragging
-- [ ] 7.5 Wire Inspector set position, nudges (merged with a `mergeKey`) and quick 90° turns to `applySetTransform`; verify typing a centre X moves the whole group and repeated nudges are one step
+- [x] 7.5 Wire Inspector set position, nudges (merged with a `mergeKey`) and quick 90° turns to `applySetTransform`; verify typing a centre X moves the whole group and repeated nudges are one step
 
 ## 8. MCP server and docs
 

@@ -217,3 +217,67 @@ export function syncSelection(state) {
   const selectedIds = ids.filter((id) => present.has(id));
   return { ...state, selectedIds, selectedId: selectedIds.at(-1) ?? null };
 }
+
+/** A part's world box from its catalog `bbox` ({ min, max }), as { min, max } arrays. */
+export function worldBoxOf(inst, bbox) {
+  if (!bbox?.min || !bbox?.max) return null;
+  const matrix = new THREE.Matrix4().compose(
+    toVec(inst.position),
+    new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(...(inst.rotation || [0, 0, 0]).map((d) => THREE.MathUtils.degToRad(d || 0)), 'XYZ')
+    ),
+    new THREE.Vector3(1, 1, 1)
+  );
+  const box = new THREE.Box3(new THREE.Vector3(...bbox.min), new THREE.Vector3(...bbox.max)).applyMatrix4(matrix);
+  return { min: box.min.toArray(), max: box.max.toArray() };
+}
+
+/** World boxes for `ids`, from `bboxOf(inst)` (the catalog box of the part). */
+export function setWorldBoxes(instances, ids, bboxOf) {
+  const wanted = new Set(ids);
+  const boxes = new Map();
+  for (const inst of instances) {
+    if (!wanted.has(inst.instanceId)) continue;
+    const box = worldBoxOf(inst, bboxOf(inst));
+    if (box) boxes.set(inst.instanceId, box);
+  }
+  return boxes;
+}
+
+/** The group `ids` make up exactly, or null (a loose set, a group and more, or part of a group). */
+export function wholeGroupOf(instances, ids, groups = groupsOf(instances)) {
+  if (ids.length < 2) return null;
+  const first = instances.find((p) => p.instanceId === ids[0]);
+  const group = first?.groupId ? groups.get(first.groupId) : null;
+  if (!group || group.ids.length !== ids.length) return null;
+  const wanted = new Set(ids);
+  return group.ids.every((id) => wanted.has(id)) ? group : null;
+}
+
+/**
+ * Copies of the set `ids`, moved by `offset` [x, y, z] mm, keeping their places relative to one another.
+ * A whole group's copies make a new group "<name> copy"; copies of a loose set are in no group.
+ */
+export function cloneSet(instances, ids, offset, { newId, groupId = newGroupId() } = {}) {
+  const group = wholeGroupOf(instances, ids);
+  const wanted = new Set(ids);
+  const makeId = newId || (() => `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+  return instances
+    .filter((inst) => wanted.has(inst.instanceId))
+    .map((inst) => {
+      const position = inst.position.map((v, i) => round3(v + (offset[i] || 0)));
+      const copy = {
+        ...inst,
+        instanceId: makeId(),
+        label: `${inst.label} (Copy)`,
+        position,
+        lastValidPosition: [...position],
+        lastValidRotation: [...inst.rotation],
+        isIntersecting: false
+      };
+      delete copy.groupId;
+      delete copy.groupName;
+      if (group) Object.assign(copy, { groupId, groupName: `${group.name} copy` });
+      return copy;
+    });
+}
