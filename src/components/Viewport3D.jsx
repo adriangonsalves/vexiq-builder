@@ -1238,6 +1238,7 @@ export default function Viewport3D({
   onSelect,
   onExpandSelection,
   onUpdateTransform,
+  onUpdateSet,
   onRegisterFlushMover,
   onRegisterScreenshot,
   transformMode,
@@ -1347,6 +1348,12 @@ export default function Viewport3D({
   selectModeRef.current = selectMode;
   const onExpandSelectionRef = useRef(onExpandSelection);
   onExpandSelectionRef.current = onExpandSelection;
+  const onUpdateSetRef = useRef(onUpdateSet);
+  onUpdateSetRef.current = onUpdateSet;
+  // Moving several parts as one (openspec outliner-part-groups): the Move arrows sit on this pivot at
+  // the set's centre; a drag moves every member from where it started
+  const setPivotRef = useRef(null);
+  const setDragRef = useRef(null); // { ids, ignore, starts: Map<id, Vector3>, lastCheckAt }
 
   const explodeModeRef = useRef(explodeMode);
   explodeModeRef.current = explodeMode;
@@ -1428,7 +1435,8 @@ export default function Viewport3D({
     group.updateMatrixWorld(true);
   };
 
-  const checkGroupCollision = (targetGroup, useAssembledPositions = false) => {
+  // ignoreIds: parts moving together with the target (a set), which never count as overlapping it
+  const checkGroupCollision = (targetGroup, useAssembledPositions = false, ignoreIds = null) => {
     if (!targetGroup || !targetGroup.visible) return false;
     const colGeosA = targetGroup.userData.collisionGeometries;
     const localBoxA = targetGroup.userData.localBox;
@@ -1456,6 +1464,7 @@ export default function Viewport3D({
     let featuresA; // worked out only when a shaft and a hole meet
     for (const [otherId, otherGroup] of meshMapRef.current.entries()) {
       if (otherId === targetGroup.userData.instanceId) continue;
+      if (ignoreIds?.has(otherId)) continue;
       if (!otherGroup.visible) continue;
 
       const colGeosB = otherGroup.userData.collisionGeometries;
@@ -2566,10 +2575,114 @@ export default function Viewport3D({
    * Explode on, or held on several axis lines -> no rings and a message. Ring angles carry over while
    * the same part keeps the same rings and start at 0° otherwise.
    */
+  /** The selected set's members as [{ id, group, inst }], or null with fewer than two parts selected. */
+  const selectedSetMembers = () => {
+    const ids = selectedIdsRef.current;
+    if (ids.length < 2) return null;
+    const out = [];
+    for (const id of ids) {
+      const group = meshMapRef.current.get(id);
+      const inst = instancesRef.current.find((i) => i.instanceId === id);
+      if (group && inst) out.push({ id, group, inst });
+    }
+    return out.length > 1 ? out : null;
+  };
+
+  /** Centre of the members' combined world box. */
+  const setCentreOf = (members) => {
+    const box = new THREE.Box3();
+    for (const { group } of members) {
+      group.updateMatrixWorld();
+      if (group.userData.localBox && !group.userData.localBox.isEmpty()) box.union(group.userData.localBox.clone().applyMatrix4(group.matrixWorld));
+      else box.expandByPoint(group.position);
+    }
+    return box.getCenter(new THREE.Vector3());
+  };
+
+  // Why a set can't be moved, or null
+  const setBlockedMessage = (members) =>
+    members.some((m) => m.inst.locked) ? 'Part is locked' : members.some((m) => m.inst.visible === false) ? 'Some parts are hidden' : null;
+
+  /** Rotate rings for a set: X, Y and Z about the set's centre (kept with the set between turns). */
+  const refreshSetRotateSetup = (members) => {
+    const gizmo = rotateGizmoRef.current;
+    const labels = angleLabelsRef.current;
+    const prev = rotateSetupRef.current;
+    const ids = members.map((m) => m.id);
+    const setKey = ids.join(',');
+    const clear = (message = '') => {
+      rotateSetupRef.current = null;
+      if (selectedRingRef.current >= 0) selectRing(-1);
+      gizmo.hide();
+      labels.hide();
+      const key = message ? `${setKey}:${message}` : '';
+      if (message && rotateMessageKeyRef.current !== key) onMateFeedbackRef.current?.(message, true);
+      rotateMessageKeyRef.current = key;
+    };
+    if (transformModeRef.current !== 'rotate') return clear();
+    const blocked = setBlockedMessage(members);
+    if (blocked) return clear(blocked);
+    if (explodeModeRef.current !== 'off') return clear("Can't rotate in Explode view");
+
+    const ref = members[0].group;
+    ref.updateMatrixWorld();
+    // The pivot stays in the first member's frame between turns, so repeated turns go about one point
+    const pivot =
+      prev?.setKey === setKey && prev.localPivot ? prev.localPivot.clone().applyMatrix4(ref.matrixWorld) : setCentreOf(members);
+    const rings = [
+      { name: 'X', axis: new THREE.Vector3(1, 0, 0) },
+      { name: 'Y', axis: new THREE.Vector3(0, 1, 0) },
+      { name: 'Z', axis: new THREE.Vector3(0, 0, 1) }
+    ];
+    const corners = [];
+    for (const { group } of members) {
+      const lb = group.userData.localBox;
+      if (!lb || lb.isEmpty()) continue;
+      for (const x of [lb.min.x, lb.max.x]) {
+        for (const y of [lb.min.y, lb.max.y]) {
+          for (const z of [lb.min.z, lb.max.z]) corners.push(new THREE.Vector3(x, y, z).applyMatrix4(group.matrixWorld));
+        }
+      }
+    }
+    const minRadiusFor = (axis) => Math.max(10, ...corners.map((c) => c.clone().sub(pivot).projectOnPlane(axis).length())) * 1.05 + 2;
+    const same = prev?.setKey === setKey && prev.pivot.distanceTo(pivot) < 0.5;
+    const angles = same ? prev.angles : rings.map(() => 0);
+    if (!same && selectedRingRef.current >= 0) selectRing(-1);
+    const localPivot = pivot.clone().applyMatrix4(ref.matrixWorld.clone().invert());
+    rotateSetupRef.current = { instanceId: null, ids, setKey, pivot, localPivot, rings, angles };
+    rotateMessageKeyRef.current = '';
+    gizmo.show(
+      pivot,
+      rings.map((r) => ({ axis: r.axis, color: ROTATE_RING_COLORS[r.name], minRadius: minRadiusFor(r.axis) }))
+    );
+    if (cameraRef.current) gizmo.updateScale(cameraRef.current);
+    gizmo.setSelected(selectedRingRef.current);
+    labels.show(rings.map((r) => r.name));
+    angles.forEach((deg, i) => labels.setAngle(i, deg));
+  };
+
+  // Members of a moving set marked overlapping only by parts outside the set
+  const markSetOverlaps = (members, ignore) => {
+    const overlaps = new Map();
+    for (const { id, group, inst } of members) {
+      const isColliding = checkGroupCollision(group, false, ignore);
+      group.userData.isIntersecting = isColliding;
+      overlaps.set(id, isColliding);
+      applyGroupAppearance(group, {
+        baseColor: resolvePartBaseColor(inst, catalogMapRef.current.get(inst.partId)),
+        isSelected: selectLevel(selectedIdsRef.current, id),
+        isIntersecting: isColliding
+      });
+    }
+    return overlaps;
+  };
+
   const refreshRotateSetup = () => {
     const gizmo = rotateGizmoRef.current;
     const labels = angleLabelsRef.current;
     if (!gizmo || !labels || rotateGestureRef.current) return;
+    const members = selectedSetMembers();
+    if (members) return refreshSetRotateSetup(members);
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
@@ -2668,6 +2781,16 @@ export default function Viewport3D({
   /** Starts a turn of the selected part around ring `ring`, remembering the pose it started from. */
   const beginRotateGesture = (kind, ring, extra = {}) => {
     const setup = rotateSetupRef.current;
+    if (setup?.ids) {
+      // A set: every member turns from where it started
+      const starts = new Map();
+      for (const id of setup.ids) {
+        const g = meshMapRef.current.get(id);
+        if (g) starts.set(id, { pos: g.position.clone(), quat: g.quaternion.clone() });
+      }
+      rotateGestureRef.current = { kind, ring, ids: setup.ids, starts, startAngle: setup.angles[ring], ...extra };
+      return rotateGestureRef.current;
+    }
     const group = setup ? meshMapRef.current.get(setup.instanceId) : null;
     if (!group) return null;
     rotateGestureRef.current = {
@@ -2689,6 +2812,26 @@ export default function Viewport3D({
   const turnSelectedTo = (ring, totalDeg) => {
     const setup = rotateSetupRef.current;
     const gesture = rotateGestureRef.current;
+    if (setup?.ids && gesture?.ids) {
+      const q = new THREE.Quaternion().setFromAxisAngle(setup.rings[ring].axis, THREE.MathUtils.degToRad(totalDeg - gesture.startAngle));
+      for (const [id, start] of gesture.starts) {
+        const g = meshMapRef.current.get(id);
+        if (!g) continue;
+        g.position.copy(start.pos).sub(setup.pivot).applyQuaternion(q).add(setup.pivot);
+        g.quaternion.copy(q).multiply(start.quat);
+        g.updateMatrixWorld();
+      }
+      setup.angles[ring] = totalDeg;
+      angleLabelsRef.current?.setAngle(ring, totalDeg);
+      // Overlaps with outside parts, at most every 150 ms while turning (and again when it's saved)
+      const now = performance.now();
+      if (!gesture.lastCheckAt || now - gesture.lastCheckAt > 150) {
+        gesture.lastCheckAt = now;
+        const members = selectedSetMembers();
+        if (members) markSetOverlaps(members, new Set(gesture.ids));
+      }
+      return;
+    }
     const group = setup ? meshMapRef.current.get(setup.instanceId) : null;
     if (!group || !gesture) return;
     const q = new THREE.Quaternion().setFromAxisAngle(
@@ -2720,6 +2863,10 @@ export default function Viewport3D({
     if (gesture?.wheelTimer) clearTimeout(gesture.wheelTimer);
     rotateGizmoRef.current?.setDragging(-1);
     rotateGizmoRef.current?.clearSlices();
+    if (gesture?.ids) {
+      commitSetPoses(gesture.ids, 'turn');
+      return;
+    }
     const group = gesture ? meshMapRef.current.get(gesture.instanceId) : null;
     if (!group) return;
     const isColliding = checkGroupCollision(group, false);
@@ -2737,6 +2884,22 @@ export default function Viewport3D({
       ],
       isIntersecting: isColliding
     });
+  };
+
+  /** Saves a set's moved or turned poses as one step (`kind`: 'move' | 'turn'), with overlaps against outside parts. */
+  const commitSetPoses = (ids, kind) => {
+    const members = ids.map((id) => ({ id, group: meshMapRef.current.get(id), inst: instancesRef.current.find((i) => i.instanceId === id) })).filter((m) => m.group && m.inst);
+    if (!members.length) return;
+    const overlaps = markSetOverlaps(members, new Set(ids));
+    const patches = members.map(({ id, group }) => ({
+      id,
+      fields: {
+        position: group.position.toArray().map((v) => Number(v.toFixed(3))),
+        rotation: [group.rotation.x, group.rotation.y, group.rotation.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2))),
+        isIntersecting: overlaps.get(id)
+      }
+    }));
+    onUpdateSetRef.current?.(ids, patches, { kind });
   };
 
   /** Typed angle on a ring label: turn so the label reads `value` (exact, not snapped), then save. */
@@ -2757,6 +2920,30 @@ export default function Viewport3D({
     const transform = transformRef.current;
     if (!transform) return;
     if (rotateGestureRef.current?.kind === 'wheel' && transformModeRef.current !== 'rotate') commitRotation();
+    const members = selectedSetMembers();
+    if (members) {
+      // A set: the Move arrows on a pivot at its centre; none while exploded, locked or hidden
+      const pivotObj = setPivotRef.current;
+      const blocked = setBlockedMessage(members);
+      const canMoveSet = transformModeRef.current === 'translate' && explodeModeRef.current === 'off' && !blocked && pivotObj;
+      if (canMoveSet) {
+        if (!transform.dragging) {
+          pivotObj.position.copy(setCentreOf(members));
+          pivotObj.quaternion.identity();
+          pivotObj.updateMatrixWorld();
+        }
+        if (transform.object !== pivotObj) transform.attach(pivotObj);
+      } else {
+        transform.detach();
+        if (blocked && transformModeRef.current === 'translate') {
+          const key = `${members.map((m) => m.id).join(',')}:${blocked}`;
+          if (rotateMessageKeyRef.current !== key) onMateFeedbackRef.current?.(blocked, true);
+          rotateMessageKeyRef.current = key;
+        }
+      }
+      refreshRotateSetup();
+      return;
+    }
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
@@ -3131,10 +3318,43 @@ export default function Viewport3D({
     transform.setSize(0.95);
     enhanceTranslatePlaneHandles(transform);
 
+    const setPivotObj = new THREE.Object3D();
+    setPivotObj.name = '__set_pivot__';
+    setPivotObj.userData.isSetPivot = true;
+    scene.add(setPivotObj);
+    setPivotRef.current = setPivotObj;
+
     transform.addEventListener('objectChange', () => {
       const obj = transform.object;
       if (!obj) return;
       dragMovedRef.current = true;
+      if (obj.userData.isSetPivot) {
+        // A set: snap the pivot in whole steps from where it started, move every member by as much.
+        // No hole snap or flush stop for sets.
+        const drag = setDragRef.current;
+        if (!drag) return;
+        const factor = snapPitchFactorRef.current;
+        const step = factor && factor > 0 ? VEX_PITCH_MM * factor : 0;
+        const start = dragStartPosRef.current;
+        if (step > 0) {
+          for (const ax of ['x', 'y', 'z']) obj.position[ax] = Number((start[ax] + Math.round((obj.position[ax] - start[ax]) / step) * step).toFixed(3));
+        }
+        const delta = obj.position.clone().sub(start);
+        for (const [id, startPos] of drag.starts) {
+          const g = meshMapRef.current.get(id);
+          if (g) {
+            g.position.copy(startPos).add(delta);
+            g.updateMatrixWorld();
+          }
+        }
+        const now = performance.now();
+        if (now - drag.lastCheckAt > 150) {
+          drag.lastCheckAt = now;
+          const members = selectedSetMembers();
+          if (members) markSetOverlaps(members, drag.ignore);
+        }
+        return;
+      }
       const instId = obj.userData.instanceId;
       const inst = instancesRef.current.find((i) => i.instanceId === instId);
       const partMeta = inst ? catalogMapRef.current.get(inst.partId) : null;
@@ -3279,7 +3499,12 @@ export default function Viewport3D({
         hideMateArrows();
         rebuildOtherFeatures();
         lineSettleCacheRef.current = { key: '', settled: null };
-        if (transform.object) {
+        if (transform.object?.userData.isSetPivot) {
+          dragStartPosRef.current.copy(transform.object.position);
+          const ids = selectedIdsRef.current.filter((id) => meshMapRef.current.has(id));
+          const starts = new Map(ids.map((id) => [id, meshMapRef.current.get(id).position.clone()]));
+          setDragRef.current = { ids, ignore: new Set(ids), starts, lastCheckAt: 0 };
+        } else if (transform.object) {
           dragStartPosRef.current.copy(transform.object.position);
           const startColliding = checkGroupCollision(transform.object, false);
           if (!startColliding) {
@@ -3289,6 +3514,10 @@ export default function Viewport3D({
             hasClearDragPosRef.current = false;
           }
         }
+      } else if (transform.object?.userData.isSetPivot) {
+        const drag = setDragRef.current;
+        setDragRef.current = null;
+        if (drag && dragMovedRef.current) commitSetPoses(drag.ids, 'move');
       } else if (transform.object) {
         const obj = transform.object;
         const instId = obj.userData.instanceId;

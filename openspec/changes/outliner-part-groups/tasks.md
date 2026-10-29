@@ -45,11 +45,11 @@
 
 ## 7. Moving and turning a set
 
-- [ ] 7.1 In the viewport, attach TransformControls to a pivot `Object3D` at the set centre when more than one part is selected; move members live from their start matrices; apply grid snap to the pivot; on drag end call a new `onUpdateSet(ids, patches, meta)`; verify dragging a group moves every part and one undo moves them back
-- [ ] 7.2 Show the rotate rings on the pivot for sets (turning about the set centre, angle snap applied), committing through `onUpdateSet`; verify a 90° ring turn keeps pins seated
-- [ ] 7.3 Collision for sets: ignore pairs inside the set, check members against outside parts on drag end and throttled during the drag, mark overlaps as for one part; skip flush stop and hole snap; verify a group dragged into a beam marks it overlapping and pins inside the group don't
-- [ ] 7.4 No gizmo and the "Part is locked" / "Some parts are hidden" messages for sets with locked or hidden parts, and no gizmo in Explode view; verify each
-- [ ] 7.4b Check the set path runs for a loose (ungrouped) multi-selection with "Move N parts" / "Turn N parts" labels and no group made; verify by Shift+clicking a beam and its pins and dragging
+- [x] 7.1 In the viewport, attach TransformControls to a pivot `Object3D` at the set centre when more than one part is selected; move members live from their start matrices; apply grid snap to the pivot; on drag end call a new `onUpdateSet(ids, patches, meta)`; verify dragging a group moves every part and one undo moves them back
+- [x] 7.2 Show the rotate rings on the pivot for sets (turning about the set centre, angle snap applied), committing through `onUpdateSet`; verify a 90° ring turn keeps pins seated
+- [x] 7.3 Collision for sets: ignore pairs inside the set, check members against outside parts on drag end and throttled during the drag, mark overlaps as for one part; skip flush stop and hole snap; verify a group dragged into a beam marks it overlapping and pins inside the group don't
+- [x] 7.4 No gizmo and the "Part is locked" / "Some parts are hidden" messages for sets with locked or hidden parts, and no gizmo in Explode view; verify each
+- [x] 7.4b Check the set path runs for a loose (ungrouped) multi-selection with "Move N parts" / "Turn N parts" labels and no group made; verify by Shift+clicking a beam and its pins and dragging
 - [x] 7.5 Wire Inspector set position, nudges (merged with a `mergeKey`) and quick 90° turns to `applySetTransform`; verify typing a centre X moves the whole group and repeated nudges are one step
 
 ## 8. MCP server and docs

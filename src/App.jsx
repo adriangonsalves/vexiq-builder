@@ -1930,6 +1930,7 @@ export default function App() {
             onSelect={preview ? noop : handleSelectInstance}
             onExpandSelection={preview ? noop : handleExpandSelection}
             onUpdateTransform={preview ? noop : handleUpdateTransform}
+            onUpdateSet={preview ? noop : (ids, patches, { kind }) => handleUpdateSet(ids, patches, { label: `${kind === 'turn' ? 'Turn' : 'Move'} ${setName}` })}
             onRegisterFlushMover={handleRegisterFlushMover}
             onRegisterScreenshot={handleRegisterScreenshot}
             transformMode={transformMode}
