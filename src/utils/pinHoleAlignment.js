@@ -751,14 +751,20 @@ export const HOLE_SNAP_AXIAL_REACH_MM = MAX_AXIAL_GAP_MM;
 // Pulls this close in length count as equal; the pair nearer along the line then wins
 const HOLE_SNAP_TIE_MM = 0.25;
 export const HOLE_SNAP_SETTLE_MM = 1.0;
+// The bigger sideways settle allowed when another of the moving part's lines agrees on the same move
+// (a whole pattern a little off, like a brain's eight side holes 2.7 mm off its pins)
+export const HOLE_SNAP_PATTERN_SETTLE_MM = HOLE_SNAP_RADIUS_MM;
+const HOLE_SNAP_AGREE_MM = 0.25; // two pairs' moves this close count as the same move
+const HOLE_SNAP_MAX_PAIRS = 64; // pairs compared for agreement (nearest first)
+const SAME_LINE_MM = 0.5; // features whose lines are this close are one line (some holes are listed twice)
 
 /**
  * The move, using only `directions` (unit world vectors being dragged along), that best puts the
  * line of `axis` through `fromPoint` onto the parallel line through `toPoint`. Null when the drag
- * directions can't line them up to within HOLE_SNAP_SETTLE_MM; a smaller leftover miss is closed
- * by also moving straight across the line.
+ * directions can't line them up to within `settleMm`; a smaller leftover miss is closed by also
+ * moving straight across the line. Also returns that leftover as `settle` (mm).
  */
-function moveOntoLine(fromPoint, toPoint, axis, directions) {
+function moveOntoLine(fromPoint, toPoint, axis, directions, settleMm = HOLE_SNAP_SETTLE_MM) {
   const offset = new THREE.Vector3().subVectors(toPoint, fromPoint);
   offset.addScaledVector(axis, -offset.dot(axis)); // perpendicular part: what has to be closed
   // Each drag direction's effect on that gap (its part across the line); along the line does nothing
@@ -792,12 +798,19 @@ function moveOntoLine(fromPoint, toPoint, axis, directions) {
     move = dir.clone().multiplyScalar(across.dot(offset) / across.dot(across));
   }
 
-  // Whatever the drag directions can't close, up to HOLE_SNAP_SETTLE_MM, is closed straight across
+  // Whatever the drag directions can't close, up to settleMm, is closed straight across
   const reached = move.clone().addScaledVector(axis, -move.dot(axis));
   const miss = offset.clone().sub(reached);
-  if (miss.length() > HOLE_SNAP_SETTLE_MM) return null;
-  return move.add(miss);
+  const settle = miss.length();
+  if (settle > settleMm) return null;
+  return { move: move.add(miss), settle };
 }
+
+const onSameLine = (a, b) => {
+  _v.subVectors(b.origin, a.origin);
+  const along = _v.dot(a.axis);
+  return Math.abs(a.axis.dot(b.axis)) >= PARALLEL_MIN_DOT && _v.lengthSq() - along * along <= SAME_LINE_MM * SAME_LINE_MM;
+};
 
 /**
  * Hole snapping while dragging: the smallest move of the selected part, along the dragged
@@ -806,6 +819,8 @@ function moveOntoLine(fromPoint, toPoint, axis, directions) {
  * opening/pin/shaft of another part (same pairing rules as the hole highlights, axes parallel within
  * 2°). The move must be at most `radiusMm`, and the two must be within `axialReachMm` of each other
  * along the line, or overlapping. Works at any part angle, since it uses the real hole lines.
+ * A sideways settle over HOLE_SNAP_SETTLE_MM (up to HOLE_SNAP_PATTERN_SETTLE_MM) only counts when
+ * another pair, on a different line of the selected part, needs the same move within 0.25 mm.
  * Returns { offset: Vector3 (world mm), insert, opening } or null.
  */
 export function findHoleSnap(
@@ -814,7 +829,7 @@ export function findHoleSnap(
   directions,
   { radiusMm = HOLE_SNAP_RADIUS_MM, axialReachMm = HOLE_SNAP_AXIAL_REACH_MM } = {}
 ) {
-  let best = null;
+  const pairs = [];
   for (const s of selectedFeatures) {
     for (const o of otherFeatures) {
       if (s.instanceId === o.instanceId) continue;
@@ -829,17 +844,110 @@ export function findHoleSnap(
       const [oMin, oMax] = projectRange(o.start, o.end, o.origin, axis);
       const gap = Math.max(0, oMin - sMax, sMin - oMax);
       if (gap > axialReachMm) continue;
-      const move = moveOntoLine(s.origin, o.origin, axis, directions);
-      if (!move || move.length() > radiusMm) continue;
-      const pull = move.length();
-      const better =
-        !best ||
-        pull < best.pull - HOLE_SNAP_TIE_MM ||
-        (Math.abs(pull - best.pull) <= HOLE_SNAP_TIE_MM && (gap < best.gap || (gap === best.gap && pull < best.pull)));
-      if (better) best = { offset: move, pull, gap, ...roles };
+      const fit = moveOntoLine(s.origin, o.origin, axis, directions, HOLE_SNAP_PATTERN_SETTLE_MM);
+      if (!fit || fit.move.length() > radiusMm) continue;
+      pairs.push({ s, offset: fit.move, settle: fit.settle, pull: fit.move.length(), gap, roles });
     }
   }
+  pairs.sort((a, b) => a.pull - b.pull);
+  const compared = pairs.slice(0, HOLE_SNAP_MAX_PAIRS);
+  const agreed = (p) =>
+    compared.some((q) => q !== p && q.offset.distanceTo(p.offset) <= HOLE_SNAP_AGREE_MM && !onSameLine(q.s, p.s));
+
+  let best = null;
+  for (const p of pairs) {
+    if (p.settle > HOLE_SNAP_SETTLE_MM && !agreed(p)) continue;
+    const { pull, gap } = p;
+    const better =
+      !best ||
+      pull < best.pull - HOLE_SNAP_TIE_MM ||
+      (Math.abs(pull - best.pull) <= HOLE_SNAP_TIE_MM && (gap < best.gap || (gap === best.gap && pull < best.pull)));
+    if (better) best = { offset: p.offset, pull, gap, ...p.roles };
+  }
   return best;
+}
+
+/**
+ * Rotate mode's turning point for a free part: the point nearest `center` (world) that sits on the
+ * same `gridMm` grid as the part's hole lines, so a turn by any multiple of 90° about a world axis
+ * through it keeps every line on that grid. A line along X sets the grid offset for Y and Z, and so
+ * on; lines that disagree go with the offset most of them share, and an axis no line sets takes
+ * another axis's offset (Y's first). Returns `center` when there are no features or any of them is
+ * tilted off the world axes.
+ */
+const LINE_SETTLE_STEP_MM = 0.1; // search step along the line
+const LINE_SETTLE_NARROW_MM = 2; // a clear spot this short is between parts: land in its middle
+
+/**
+ * Dragging a part that is lined up on a hole's line but overlaps something (a pitch step left it
+ * pressed into the pins it is going onto): the offset along the line, within `reachMm` either way, of
+ * the nearest clear spot, or null. `isClearAt(t)` says whether the part is clear at offset t (mm).
+ * Steps out 0.1 mm at a time both ways, then closes in on the spot's edge. When the spot is under
+ * 2 mm long (held between parts on both sides, like a brain between its pins), returns its middle.
+ */
+export function clearSpotAlongLine(isClearAt, reachMm, { stepMm = LINE_SETTLE_STEP_MM, narrowMm = LINE_SETTLE_NARROW_MM } = {}) {
+  let found = null;
+  for (let d = stepMm; d <= reachMm + 1e-6 && found === null; d += stepMm) {
+    if (isClearAt(-d)) found = -d;
+    else if (isClearAt(d)) found = d;
+  }
+  if (found === null) return null;
+  // From a clear offset toward a blocked one, as far as it stays clear
+  const edge = (clear, blocked) => {
+    for (let i = 0; i < 4; i++) {
+      const mid = (clear + blocked) / 2;
+      if (isClearAt(mid)) clear = mid;
+      else blocked = mid;
+    }
+    return clear;
+  };
+  const dir = Math.sign(found);
+  const near = edge(found, found - dir * stepMm);
+  for (let d = found + dir * stepMm; Math.abs(d - near) <= narrowMm; d += dir * stepMm) {
+    if (!isClearAt(d)) return (near + edge(d - dir * stepMm, d)) / 2;
+  }
+  return near;
+}
+
+const GRID_PIVOT_SAME_MM = 0.3;
+export function gridPivot(features, center, { gridMm = VEX_PITCH_MM / 2 } = {}) {
+  if (!features.length) return center.clone();
+  const mod = (v) => {
+    const r = Number((((v % gridMm) + gridMm) % gridMm).toFixed(2));
+    return r >= gridMm - 0.01 ? 0 : r;
+  };
+  const counts = [new Map(), new Map(), new Map()];
+  for (const f of features) {
+    const along = [0, 1, 2].find((k) => Math.abs(f.axis.getComponent(k)) >= PARALLEL_MIN_DOT);
+    if (along === undefined) return center.clone();
+    for (const k of [0, 1, 2]) {
+      if (k === along) continue;
+      const r = mod(f.origin.getComponent(k));
+      counts[k].set(r, (counts[k].get(r) || 0) + 1);
+    }
+  }
+  // Circular distance between two offsets on the grid
+  const apart = (a, b) => Math.min(Math.abs(a - b), gridMm - Math.abs(a - b));
+  // Offsets this close are one offset: CAD models are a little uneven (the brain's two rows of side
+  // holes sit 0.15 mm apart in height). Ties go to the offset nearest the world grid.
+  const offsets = counts.map((map) => {
+    let best = null;
+    for (const r of map.keys()) {
+      let n = 0;
+      for (const [q, m] of map) if (apart(q, r) <= GRID_PIVOT_SAME_MM) n += m;
+      if (!best || n > best.n || (n === best.n && apart(r, 0) < apart(best.r, 0))) best = { r, n };
+    }
+    return best?.r;
+  });
+  const fallback = offsets[1] ?? offsets[0] ?? offsets[2];
+  const pivot = center.clone();
+  for (const k of [0, 1, 2]) {
+    const r = offsets[k] ?? fallback;
+    const c = center.getComponent(k);
+    const below = c - ((((c - r) % gridMm) + gridMm) % gridMm);
+    pivot.setComponent(k, Number((c - below <= below + gridMm - c ? below : below + gridMm).toFixed(3)));
+  }
+  return pivot;
 }
 
 const maxAlong = (a, b, dir) => Math.max(a.dot(dir), b.dot(dir));

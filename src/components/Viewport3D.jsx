@@ -25,7 +25,9 @@ import {
   findHoleSnap,
   findTooWideInserts,
   getLocalFeatures,
+  gridPivot,
   boreTargets,
+  clearSpotAlongLine,
   insertFitsOpening,
   isBorePart,
   isOpeningTaken,
@@ -1292,6 +1294,7 @@ export default function Viewport3D({
   const dragMovedRef = useRef(false); // the last gizmo drag actually moved/rotated the part
   const dragStartPosRef = useRef(new THREE.Vector3());
   const lastClearDragPosRef = useRef(new THREE.Vector3());
+  const lineSettleCacheRef = useRef({ key: '', settled: null }); // last along-the-line settle, per snapped pose
   const hasClearDragPosRef = useRef(false);
   const altKeyRef = useRef(false); // Alt held: drag without snapping onto holes
   // Hole picking (double-click with nothing lined up): { selId, ... } while picking, else null
@@ -1780,11 +1783,25 @@ export default function Viewport3D({
         if (transform.space !== 'local') snapped[ax] = gridPos[ax];
       }
     });
-    return new THREE.Vector3(
-      Number(snapped.x.toFixed(3)),
-      Number(snapped.y.toFixed(3)),
-      Number(snapped.z.toFixed(3))
-    );
+    return {
+      position: new THREE.Vector3(Number(snapped.x.toFixed(3)), Number(snapped.y.toFixed(3)), Number(snapped.z.toFixed(3))),
+      axis: snap.opening.axis.clone()
+    };
+  };
+
+  /**
+   * A part lined up on a hole's line but overlapping something (a pitch step left it pressed into the
+   * pins it is going onto): the nearest clear position along that line, within `reachMm`, or null.
+   */
+  const settleAlongLine = (obj, position, axis, reachMm) => {
+    const d = clearSpotAlongLine((t) => {
+      obj.position.copy(position).addScaledVector(axis, t);
+      return !checkGroupCollision(obj, false);
+    }, reachMm);
+    const settled = position.clone().addScaledVector(axis, d ?? 0);
+    obj.position.copy(settled);
+    if (d === null) return null;
+    return new THREE.Vector3(Number(settled.x.toFixed(3)), Number(settled.y.toFixed(3)), Number(settled.z.toFixed(3)));
   };
 
   /**
@@ -2560,7 +2577,13 @@ export default function Viewport3D({
     let pivot;
     let rings;
     if (lines.length === 0) {
-      pivot = center;
+      // On the part's own hole grid, so quarter turns keep its holes lined up. Kept in the part's
+      // frame between turns: turning about it leaves it in place, and it moves along with the part.
+      if (prev?.instanceId === selId && prev.localPivot) {
+        pivot = prev.localPivot.clone().applyMatrix4(group.matrixWorld);
+      } else {
+        pivot = gridPivot(selectedFeatures, center);
+      }
       rings = [
         { name: 'X', axis: new THREE.Vector3(1, 0, 0) },
         { name: 'Y', axis: new THREE.Vector3(0, 1, 0) },
@@ -2592,7 +2615,8 @@ export default function Viewport3D({
     const angles = same ? prev.angles : rings.map(() => 0);
     if (!same && selectedRingRef.current >= 0) selectRing(-1);
 
-    rotateSetupRef.current = { instanceId: selId, pivot, rings, angles };
+    const localPivot = lines.length === 0 ? pivot.clone().applyMatrix4(group.matrixWorld.clone().invert()) : null;
+    rotateSetupRef.current = { instanceId: selId, pivot, localPivot, rings, angles };
     rotateMessageKeyRef.current = '';
     gizmo.show(
       pivot,
@@ -3128,9 +3152,13 @@ export default function Viewport3D({
         }
 
         // Near a hole that a pin/shaft (or one of its own holes) can line up with: snap onto it
+        let snapLine = null;
         if (!altKeyRef.current) {
           const holeSnapped = snapDragToHoles(obj, partMeta, rawPos, snappedPos);
-          if (holeSnapped) snappedPos.copy(holeSnapped);
+          if (holeSnapped) {
+            snappedPos.copy(holeSnapped.position);
+            snapLine = holeSnapped.axis;
+          }
         }
 
         obj.position.copy(snappedPos);
@@ -3140,6 +3168,23 @@ export default function Viewport3D({
           snappedPos.copy(obj.position);
         }
         let isColliding = checkGroupCollision(obj, false);
+        // Lined up but pressed into what it's going onto: slide along the line to the nearest clear
+        // spot, so a part that looks lined up drops into place
+        if (isColliding && snapLine) {
+          const key = `${snappedPos.toArray().join(',')}|${snapLine.toArray().join(',')}`;
+          if (lineSettleCacheRef.current.key !== key) {
+            const reach = Math.max(VEX_PITCH_MM * 0.25, step / 2);
+            let settled = settleAlongLine(obj, snappedPos, snapLine, reach);
+            if (settled && hasClearDragPosRef.current && firstTooNarrowCrossing(obj, lastClearDragPosRef.current)) settled = null;
+            lineSettleCacheRef.current = { key, settled };
+          }
+          const { settled } = lineSettleCacheRef.current;
+          if (settled) {
+            snappedPos.copy(settled);
+            isColliding = false;
+          }
+          obj.position.copy(snappedPos);
+        }
         let blockedAt = snappedPos;
         // A whole grid step can carry a shaft's cap past a beam's lip; stop at the lip instead
         if (!isColliding && hasClearDragPosRef.current) {
@@ -3196,6 +3241,7 @@ export default function Viewport3D({
         dragMovedRef.current = false;
         hideMateArrows();
         rebuildOtherFeatures();
+        lineSettleCacheRef.current = { key: '', settled: null };
         if (transform.object) {
           dragStartPosRef.current.copy(transform.object.position);
           const startColliding = checkGroupCollision(transform.object, false);

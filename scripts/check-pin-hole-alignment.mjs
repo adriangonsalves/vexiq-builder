@@ -11,6 +11,8 @@ import {
   findAlignedOpenings,
   findEngagedJoints,
   findHoleSnap,
+  gridPivot,
+  clearSpotAlongLine,
   findSeatedPairs,
   insertLeadEnds,
   insertPose,
@@ -958,6 +960,106 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   );
   const pinHoles = holesFilledByFit(fitsFor('0x2 Connector Pin')[0], { opening, face });
   check('copy-insert: a single pin fills 1 hole', pinHoles.length === 1 && pinHoles[0] === opening);
+}
+
+// ---------------------------------------------------------------------------
+// Rotate mode: a free part turns about a point on its hole grid (gridPivot)
+// ---------------------------------------------------------------------------
+{
+  const GRID = 6.35;
+  const BRAIN = 'VEX IQ Robot Brain with Battery';
+  const matrixOf = (position, rotation) => buildWorldMatrix(position, rotation);
+  const centerOf = (meta, matrix) => new THREE.Vector3(...meta.bbox.center).applyMatrix4(matrix);
+  const pivotOf = (name, position, rotation = [0, 0, 0]) => {
+    const meta = part(name);
+    const matrix = matrixOf(position, rotation);
+    return { meta, matrix, center: centerOf(meta, matrix), pivot: gridPivot(collectWorldFeatures(meta, matrix, name), centerOf(meta, matrix)) };
+  };
+  const v3 = (v) => JSON.stringify(v.toArray().map((x) => +x.toFixed(3)));
+
+  let r = pivotOf('1x6 Beam', [0, 0, 0]);
+  check('turning point: a 1x6 Beam turns about its own centre', r.pivot.distanceTo(r.center) < 0.01, v3(r.pivot));
+  r = pivotOf(BRAIN, [184.15, 69.7, 0], [0, 180, 0]);
+  check('turning point: the brain (turned 180° about Y at x = 184.15) turns about x = 184.15, z = 0, not its box centre 2.7 mm away', near(r.pivot.x, 184.15) && near(r.pivot.z, 0) && near(r.center.x, 186.85), `${v3(r.pivot)} centre ${v3(r.center)}`);
+  r = pivotOf('4x4 Plate', [10, 30, 50], [0, 30, 0]);
+  check('turning point: a plate tilted 30° turns about its box centre', r.pivot.distanceTo(r.center) < 1e-6, v3(r.pivot));
+  r = pivotOf('Chain Link', [3, 4, 5]);
+  check('turning point: a part with no holes, pins or shafts turns about its box centre', r.pivot.distanceTo(r.center) < 1e-6, v3(r.pivot));
+  r = pivotOf('Tire (200 mm Travel)', [38.1, 23.87, 73.39]);
+  check('turning point: a tire on an off-grid axle turns about a point on its own axle line', near(r.pivot.x, 38.1) && near(r.pivot.y, 23.87), v3(r.pivot));
+
+  // Quarter turns about the pivot keep every line on the grid offsets it started on (within 0.3 mm:
+  // the brain's CAD holes are a little uneven)
+  const residue = (v) => (((v % GRID) + GRID) % GRID);
+  const apart = (a, b) => Math.min(Math.abs(a - b), GRID - Math.abs(a - b));
+  const offsetsOf = (features) =>
+    features.flatMap((f) => {
+      const along = [0, 1, 2].find((k) => Math.abs(f.axis.getComponent(k)) > 0.999);
+      return [0, 1, 2].filter((k) => k !== along).map((k) => residue(f.origin.getComponent(k)));
+    });
+  const turnAbout = (matrix, pivot, axis) =>
+    new THREE.Matrix4().makeTranslation(pivot.x, pivot.y, pivot.z)
+      .multiply(new THREE.Matrix4().makeRotationAxis(axis, Math.PI / 2))
+      .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z))
+      .multiply(matrix);
+  const positionOf = (m) => new THREE.Vector3().setFromMatrixPosition(m);
+  for (const [name, position, rotation] of [
+    [BRAIN, [184.15, 69.7, 0], [0, 180, 0]],
+    ['1x6 Beam', [12.7, 3.05, -6.35]],
+    ['4x4 Plate', [6.35, 1.5, 19.05], [90, 0, 0]]
+  ]) {
+    const { meta, matrix, pivot } = pivotOf(name, position, rotation);
+    const allowed = [...offsetsOf(collectWorldFeatures(meta, matrix, name)), ...pivot.toArray().map(residue)];
+    let detail = '';
+    for (const axis of [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)]) {
+      let m = matrix.clone();
+      for (let i = 0; i < 4; i++) {
+        m = turnAbout(m, pivot, axis);
+        const off = offsetsOf(collectWorldFeatures(meta, m, name)).find((o) => !allowed.some((a) => apart(a, o) <= 0.3));
+        if (off !== undefined) detail ||= `turn ${i + 1} about ${v3(axis)}: a line at grid offset ${off.toFixed(2)} mm`;
+      }
+      if (positionOf(m).distanceTo(positionOf(matrix)) > 0.001) detail ||= `four quarter turns about ${v3(axis)} did not come back to the start`;
+    }
+    check(`turning point: ${name}, four quarter turns about each axis keep every hole line on its 6.35 mm grid`, !detail, detail);
+  }
+
+  // The current scene's brain, turned about its old box centre: 2.7 mm off its eight pins in Z
+  const inst = (id, name, position, rotation = [0, 0, 0]) => ({ instanceId: id, label: id, partId: part(name).id, position, rotation });
+  const pins = [
+    [[-38.127, 63.226, 44.45], [0, 90, 0]], [[-38.127, 63.226, 31.75], [0, 90, 0]],
+    [[38.127, 63.226, 44.45], [0, -90, 0]], [[38.127, 63.226, 31.75], [0, -90, 0]],
+    [[-38.127, 63.226, -31.75], [0, -90, 0]], [[-38.127, 63.226, -44.45], [0, 90, 0]],
+    [[38.127, 63.275, -44.45], [0, 90, 0]], [[38.127, 63.275, -31.75], [0, -90, 0]]
+  ].flatMap(([p, rot], i) => worldFeaturesFor(inst(`pin${i}`, '1x1 Connector Pin', p, rot)));
+  const X = new THREE.Vector3(1, 0, 0);
+  const Z = new THREE.Vector3(0, 0, 1);
+  let snap = findHoleSnap(worldFeaturesFor(inst('brain', BRAIN, [5.875, 69.7, -2.7], [0, 90, 0])), pins, [X]);
+  check('hole snap: a brain 2.7 mm off its eight pins, dragged along the pins\' line (X), is pulled 2.7 mm across in Z', snap && near(snap.offset.z, 2.7, 0.02) && near(snap.offset.x, 0, 0.01), JSON.stringify(snap?.offset));
+  // Lined up but pressed into the pins along their line: slide to the nearest clear spot
+  const pinParts = [
+    [[-38.127, 63.226, 44.45], [0, 90, 0]], [[-38.127, 63.226, 31.75], [0, 90, 0]],
+    [[38.127, 63.226, 44.45], [0, -90, 0]], [[38.127, 63.226, 31.75], [0, -90, 0]],
+    [[-38.127, 63.226, -31.75], [0, -90, 0]], [[-38.127, 63.226, -44.45], [0, 90, 0]],
+    [[38.127, 63.275, -44.45], [0, 90, 0]], [[38.127, 63.275, -31.75], [0, -90, 0]]
+  ].map(([p, rot], i) => inst(`pin${i}`, '1x1 Connector Pin', p, rot));
+  const brainAt = (x) => inst('brain', BRAIN, [x, 69.7, 0], [0, 90, 0]);
+  const clearAt = (x0) => (t) => !checkCandidateCollision(brainAt(x0 + t), pinParts).isIntersecting;
+  for (const x0 of [-0.475, 2.7]) {
+    const d = clearSpotAlongLine(clearAt(x0), 3.175);
+    const x = d === null ? null : x0 + d;
+    const seated = x === null ? 0 : (auditAssembly({ instances: [brainAt(x), ...pinParts] }).joints || []).filter((j) => j.seatedIn.some((p) => p.part === 'brain')).length;
+    check(`line settle: a brain pressed into its pins at x = ${x0} slides to the middle of the clear spot (x = 0) with all 8 pins in its holes`, x !== null && near(x, 0, 0.05) && seated === 8, `x = ${x}, seated ${seated}`);
+  }
+  check('line settle: no clear spot within reach -> null', clearSpotAlongLine(clearAt(5.875), 3.175) === null);
+  check('line settle: a wide clear spot -> its near edge, not its middle', near(clearSpotAlongLine((t) => t >= 0.5 && t <= 10, 3.175), 0.5, 0.01));
+
+  // One pair alone keeps the 1 mm limit
+  const rail = worldFeaturesFor(inst('rail', '2x12 Beam', [0, 0, 0]));
+  snap = findHoleSnap(worldFeaturesFor(inst('shaft', '4x Pitch Shaft', [25.4 + 2, 0, 30])), rail, [Z]);
+  check('hole snap: a lone shaft 2 mm off a hole, dragged along the hole line, is not pulled across', !snap, JSON.stringify(snap?.offset));
+  // Two beams: every hole agrees, so a 2.5 mm miss closes while dragging along the hole lines
+  snap = findHoleSnap(worldFeaturesFor(inst('upper', '1x6 Beam', [2.5, 0, 6.1 + 4])), worldFeaturesFor(inst('lower', '1x6 Beam', [0, 0, 0])), [Z]);
+  check('hole snap: a 1x6 Beam 2.5 mm off another, dragged along their hole lines, is pulled into line', snap && near(snap.offset.x, -2.5, 0.01) && near(snap.offset.z, 0), JSON.stringify(snap?.offset));
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
