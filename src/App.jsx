@@ -1974,6 +1974,17 @@ export default function App() {
               )}
             </div>
 
+            {selectedIds.length > 0 && !preview && (
+              <div className="hud-pill hud-pill-selection" role="status" aria-live="polite">
+                <span>
+                  <strong>{selectedIds.length === 1 ? '1 part' : `${selectedIds.length} parts`}</strong> selected
+                </span>
+                <button type="button" className="link-btn" onClick={handleSelectNone} title="Unselect everything (Esc)">
+                  Clear
+                </button>
+              </div>
+            )}
+
             {pickStatus && (
               <div className={`hud-pill hud-pill-pick ${pickStatus.tone === 'warning' ? 'hud-pill-pick-warning' : ''}`} role="status">
                 <Crosshair size={14} />
