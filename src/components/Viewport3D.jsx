@@ -1103,10 +1103,25 @@ const EMPTY_IDS = [];
 // How strongly a part is lit as selected: 2 = the primary (last) part, 1 = another selected part, 0 = not selected
 const selectLevel = (ids, id) => (ids.at(-1) === id ? 2 : ids.includes(id) ? 1 : 0);
 
+// Selection look: an amber glow and amber edges, which stand out on blue parts and the blue grid.
+// Primary (or only) selected part / other parts of a multi-selection.
+const SELECT_COLOR = 0xff9f1c;
+const SELECT_GLOW = { 2: 0.42, 1: 0.24 };
+const SELECT_EDGE_OPACITY = { 2: 1, 1: 0.75 };
+
 // isSelected: true or 2 = the primary (or only) selected part, 1 = another part of a multi-selection
 function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) {
-  const tint = isSelected === 1 ? 0.16 : isSelected ? 0.32 : 0;
+  const level = isIntersecting || !isSelected ? 0 : isSelected === 1 ? 1 : 2;
   group.traverse((child) => {
+    // The part's CAD edges become a bright contour while it is selected
+    if (child.isLineSegments && child.name === '__cad_edges__' && child.material) {
+      const mat = child.material;
+      if (!child.userData.edgeLook) child.userData.edgeLook = { color: mat.color.getHex(), opacity: mat.opacity };
+      const { color, opacity } = child.userData.edgeLook;
+      mat.color.setHex(level ? SELECT_COLOR : color);
+      mat.opacity = level ? SELECT_EDGE_OPACITY[level] : opacity;
+      return;
+    }
     if (!child.isMesh || !child.userData.isPartMesh || !child.material) return;
     const mat = child.material;
 
@@ -1129,8 +1144,8 @@ function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) 
       mat.opacity = 1.0;
       mat.depthWrite = true;
       if (mat.emissive) {
-        mat.emissive.setHex(tint ? 0x1d4ed8 : 0x000000);
-        mat.emissiveIntensity = tint;
+        mat.emissive.setHex(level ? SELECT_COLOR : 0x000000);
+        mat.emissiveIntensity = level ? SELECT_GLOW[level] : 0;
       }
     }
     mat.needsUpdate = true;
