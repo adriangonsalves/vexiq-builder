@@ -15,12 +15,8 @@ import {
   Download,
   Expand,
   Fullscreen,
-  Eye,
-  EyeOff,
   Grid,
   History as HistoryIcon,
-  Layers,
-  Lock,
   Maximize2,
   Move,
   PanelLeftClose,
@@ -34,7 +30,6 @@ import {
   Sparkles,
   Trash2,
   Undo2,
-  Unlock,
   Upload,
   X
 } from 'lucide-react';
@@ -44,6 +39,7 @@ import HistoryTimeline from './components/HistoryTimeline.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
 import SelectMenu from './components/SelectMenu.jsx';
+import AssemblyOutliner from './components/AssemblyOutliner.jsx';
 import ViewMenu from './components/ViewMenu.jsx';
 import { STARTERS, starterById } from './starters.js';
 import {
@@ -908,6 +904,15 @@ export default function App() {
     st.lastIds = st.layers.slice(0, depth + 1).flat();
     changeSelection(st.lastIds);
     setActionFeedback({ message: `Layer ${depth} · ${partCount(st.lastIds.length)}`, isError: false });
+  };
+
+  // A folder's hide or lock button: every part of the group, one step
+  const handleSetGroupFlag = (group, field, value) => {
+    const verb = field === 'visible' ? (value ? 'Show' : 'Hide') : value ? 'Lock' : 'Unlock';
+    const members = new Set(group.ids);
+    setInstances((prev) => prev.map((i) => (members.has(i.instanceId) ? { ...i, [field]: value } : i)), {
+      label: `${verb} ${group.name}`
+    });
   };
 
   const handleGroupSelected = () => {
@@ -1969,95 +1974,20 @@ export default function App() {
         {/* Right Sidebar: Scene Assembly Outliner + Precision Inspector */}
         <aside className="panel panel-right">
           {/* Scene Outliner */}
-          <section className="outliner-section">
-            <div className="panel-header" style={{ padding: '10px 14px' }}>
-              <div className="panel-title-row">
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Layers size={14} />
-                  Assembly Outliner ({instances.length})
-                </span>
-                {instances.length > 0 && (
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    style={{ padding: '2px 7px', fontSize: 11 }}
-                    onClick={() => {
-                      setExplodeMode('off');
-                      setInstances([], { label: 'Clear assembly' });
-                      setSelectedId(null);
-                    }}
-                  >
-                    Clear All
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="instance-list scroller">
-              {instances.map((inst) => {
-                const isSelected = selectedIds.includes(inst.instanceId);
-                const isPrimary = inst.instanceId === primaryId;
-                return (
-                  <div
-                    key={inst.instanceId}
-                    className={`instance-row ${isSelected ? 'selected' : ''} ${isSelected && !isPrimary ? 'secondary' : ''}`}
-                    onClick={() => handleSelectInstance(inst.instanceId)}
-                  >
-                    <span
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 3,
-                        background: inst.isIntersecting ? '#9ca3af' : inst.color,
-                        opacity: inst.isIntersecting ? 0.5 : 1,
-                        flexShrink: 0
-                      }}
-                    />
-                    <span className="instance-row-name" title={inst.label}>
-                      {inst.label}
-                      {inst.isIntersecting && (
-                        <span style={{ color: '#fca5a5', marginLeft: 6, fontSize: 11 }}>
-                          (Intersecting)
-                        </span>
-                      )}
-                    </span>
-
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title={inst.visible === false ? 'Show Part' : 'Hide Part'}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleUpdateTransform(inst.instanceId, {
-                          visible: inst.visible === false
-                        });
-                      }}
-                    >
-                      {inst.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title={inst.locked ? 'Unlock Part' : 'Lock Part'}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleUpdateTransform(inst.instanceId, { locked: !inst.locked });
-                      }}
-                    >
-                      {inst.locked ? <Lock size={13} /> : <Unlock size={13} />}
-                    </button>
-                  </div>
-                );
-              })}
-
-              {instances.length === 0 && (
-                <div className="empty-state">
-                  Click any part in the left library to place it into the 3D workspace.
-                </div>
-              )}
-            </div>
-          </section>
+          <AssemblyOutliner
+            instances={instances}
+            groups={groups}
+            selectedIds={selectedIds}
+            primaryId={primaryId}
+            onSelectIds={changeSelection}
+            onTogglePart={(id, patch) => handleUpdateTransform(id, patch)}
+            onSetGroupFlag={handleSetGroupFlag}
+            onClearAll={() => {
+              setExplodeMode('off');
+              setInstances([], { label: 'Clear assembly' });
+              setSelectedId(null);
+            }}
+          />
 
           {/* Part Inspector */}
           <section className="inspector-section scroller">

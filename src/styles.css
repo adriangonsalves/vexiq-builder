@@ -656,6 +656,43 @@ body,
   background: var(--bg-hover);
 }
 
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  background: none;
+}
+
+/* Some parts of a group are hidden or locked */
+.icon-btn.mixed {
+  opacity: 0.55;
+}
+
+/* Locate pinned: follows every new selection */
+.icon-btn.locate-btn.active {
+  color: var(--accent);
+  background: rgba(59, 130, 246, 0.18);
+}
+
+/* Group folders in the Assembly Outliner (openspec outliner-part-groups) */
+.instance-row.folder-row {
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.folder-toggle {
+  padding: 1px;
+}
+
+.folder-count {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.instance-row.in-folder {
+  margin-left: 18px;
+}
+
 .inspector-body {
   padding: 12px 14px;
   display: flex;

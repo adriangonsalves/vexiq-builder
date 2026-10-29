@@ -26,11 +26,11 @@
 
 ## 4. Outliner
 
-- [ ] 4.1 Turn the Outliner list into folders + rows: folder row (arrow, name, count, hide/lock with mixed state) at its first member's place, indented member rows when open, open state kept in component state; verify with a group made in the app
-- [ ] 4.2 Outliner clicks: plain selects (folder = whole group, member row = that part only), Ctrl/Cmd+click toggles, Shift+click selects a range in display order; verify each
-- [ ] 4.3 Folder hide/lock apply to all members as one step; verify one undo restores all
-- [ ] 4.4 Add the locate button (`LocateFixed`) with click-to-scroll (opening the folder), disabled with no selection; verify on a 100-part build
-- [ ] 4.5 Add long-press pin (500 ms, pointer events, swallows the click), pressed look, `localStorage` persistence, and scroll-on-selection-change while pinned (including selections from MCP); verify pin, follow, unpin and reload
+- [x] 4.1 Turn the Outliner list into folders + rows: folder row (arrow, name, count, hide/lock with mixed state) at its first member's place, indented member rows when open, open state kept in component state; verify with a group made in the app
+- [x] 4.2 Outliner clicks: plain selects (folder = whole group, member row = that part only), Ctrl/Cmd+click toggles, Shift+click selects a range in display order; verify each
+- [x] 4.3 Folder hide/lock apply to all members as one step; verify one undo restores all
+- [x] 4.4 Add the locate button (`LocateFixed`) with click-to-scroll (opening the folder), disabled with no selection; verify on a 100-part build
+- [x] 4.5 Add long-press pin (500 ms, pointer events, swallows the click), pressed look, `localStorage` persistence, and scroll-on-selection-change while pinned (including selections from MCP); verify pin, follow, unpin and reload
 
 ## 5. Inspector
 
