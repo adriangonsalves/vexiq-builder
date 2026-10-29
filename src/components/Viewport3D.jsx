@@ -1099,7 +1099,13 @@ function resolvePartBaseColor(inst, partMeta) {
  * Applies either normal VEX appearance or transparent-grey intersecting appearance
  * strictly to actual CAD part meshes (`child.userData.isPartMesh === true`).
  */
+const EMPTY_IDS = [];
+// How strongly a part is lit as selected: 2 = the primary (last) part, 1 = another selected part, 0 = not selected
+const selectLevel = (ids, id) => (ids.at(-1) === id ? 2 : ids.includes(id) ? 1 : 0);
+
+// isSelected: true or 2 = the primary (or only) selected part, 1 = another part of a multi-selection
 function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) {
+  const tint = isSelected === 1 ? 0.16 : isSelected ? 0.32 : 0;
   group.traverse((child) => {
     if (!child.isMesh || !child.userData.isPartMesh || !child.material) return;
     const mat = child.material;
@@ -1123,8 +1129,8 @@ function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) 
       mat.opacity = 1.0;
       mat.depthWrite = true;
       if (mat.emissive) {
-        mat.emissive.setHex(isSelected ? 0x1d4ed8 : 0x000000);
-        mat.emissiveIntensity = isSelected ? 0.32 : 0;
+        mat.emissive.setHex(tint ? 0x1d4ed8 : 0x000000);
+        mat.emissiveIntensity = tint;
       }
     }
     mat.needsUpdate = true;
@@ -1227,6 +1233,8 @@ export default function Viewport3D({
   instances,
   catalogMap,
   selectedId,
+  selectedIds = EMPTY_IDS,
+  selectMode = false,
   onSelect,
   onUpdateTransform,
   onRegisterFlushMover,
@@ -1331,6 +1339,11 @@ export default function Viewport3D({
 
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
+  // Every selected part (openspec outliner-part-groups); the last is the primary part
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  const selectModeRef = useRef(selectMode);
+  selectModeRef.current = selectMode;
 
   const explodeModeRef = useRef(explodeMode);
   explodeModeRef.current = explodeMode;
@@ -3549,6 +3562,11 @@ export default function Viewport3D({
       const front = ids[0] ?? null;
       const selId = selectedIdRef.current;
       cancelPendingSelect();
+      // Shift+click, or any click in Select mode, adds or removes the part; empty space leaves the selection
+      if (e.shiftKey || selectModeRef.current) {
+        if (front) onSelectRef.current(front, { additive: true });
+        return;
+      }
       // Wait for a possible double-click before selecting: on the selected part behind another, or on
       // a brain the selected battery fits (the double-click slides it in)
       if (selId && front !== selId && (ids.includes(selId) || batteryFitsBrain(selId, front))) {
@@ -3857,6 +3875,11 @@ export default function Viewport3D({
     inputEl.addEventListener('pointerup', handlePointerUp);
     inputEl.addEventListener('pointermove', handlePointerMove);
     inputEl.addEventListener('dblclick', handleDoubleClick);
+    // Shift+click selects parts; without this the browser also extends a text selection across the page
+    const preventShiftTextSelect = (e) => {
+      if (e.shiftKey) e.preventDefault();
+    };
+    inputEl.addEventListener('mousedown', preventShiftTextSelect);
     inputEl.addEventListener('wheel', handleWheelCapture, { capture: true, passive: false });
     container.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('keydown', handleKeyDownCapture, true);
@@ -4360,6 +4383,7 @@ export default function Viewport3D({
       inputEl.removeEventListener('pointerup', handlePointerUp);
       inputEl.removeEventListener('pointermove', handlePointerMove);
       inputEl.removeEventListener('dblclick', handleDoubleClick);
+      inputEl.removeEventListener('mousedown', preventShiftTextSelect);
       inputEl.removeEventListener('wheel', handleWheelCapture, { capture: true });
       container.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('keydown', handleKeyDownCapture, true);
@@ -4431,7 +4455,7 @@ export default function Viewport3D({
     // Only the selection changed: nothing moved, so skip the per-part overlap checks and just
     // re-light the parts that were and are selected
     const lastSync = lastSceneSyncRef.current;
-    lastSceneSyncRef.current = { instances, catalogMap, showConnectors, explodeMode, selectedId };
+    lastSceneSyncRef.current = { instances, catalogMap, showConnectors, explodeMode, selectedId, selectedIds };
     if (
       lastSync &&
       lastSync.instances === instances &&
@@ -4440,7 +4464,7 @@ export default function Viewport3D({
       lastSync.explodeMode === explodeMode
     ) {
       const byId = new Map(instances.map((i) => [i.instanceId, i]));
-      for (const id of new Set([lastSync.selectedId, selectedId])) {
+      for (const id of new Set([...lastSync.selectedIds, ...selectedIds])) {
         const inst = id ? byId.get(id) : null;
         const group = id ? meshMapRef.current.get(id) : null;
         const partMeta = inst ? catalogMap.get(inst.partId) : null;
@@ -4448,7 +4472,7 @@ export default function Viewport3D({
         const isSelected = id === selectedId;
         applyGroupAppearance(group, {
           baseColor: resolvePartBaseColor(inst, partMeta),
-          isSelected,
+          isSelected: selectLevel(selectedIds, id),
           isIntersecting: Boolean(group.userData.isIntersecting)
         });
         const existingOverlay = group.getObjectByName('__connector_overlay__');
@@ -4597,7 +4621,7 @@ export default function Viewport3D({
             const latestInst = instancesRef.current.find(
               (i) => i.instanceId === inst.instanceId
             );
-            const isSelectedNow = selectedIdRef.current === inst.instanceId;
+            const isSelectedNow = selectLevel(selectedIdsRef.current, inst.instanceId);
             const isColliding = checkGroupCollision(
               group,
               explodeModeRef.current !== 'off'
@@ -4657,7 +4681,7 @@ export default function Viewport3D({
 
       applyGroupAppearance(group, {
         baseColor: resolvePartBaseColor(inst, partMeta),
-        isSelected,
+        isSelected: selectLevel(selectedIds, inst.instanceId),
         isIntersecting: isColliding
       });
 
@@ -4678,7 +4702,7 @@ export default function Viewport3D({
     // Move gizmo or rotate rings (none while exploded, to prevent offset confusion)
     syncGizmos();
     updateAlignedHoleHighlights();
-  }, [instances, selectedId, catalogMap, showConnectors, explodeMode]);
+  }, [instances, selectedId, selectedIds, catalogMap, showConnectors, explodeMode]);
 
   // Hole picking ends when its part is no longer the one being picked for, or the mode around it
   // changes: another selection, Move/Rotate, Explode, or the part moved/hidden/locked/removed by
@@ -4726,7 +4750,7 @@ export default function Viewport3D({
       const partMeta = catalogMapRef.current.get(inst.partId);
       applyGroupAppearance(group, {
         baseColor: resolvePartBaseColor(inst, partMeta),
-        isSelected: selectedIdRef.current === id,
+        isSelected: selectLevel(selectedIdsRef.current, id),
         isIntersecting: isColliding
       });
       if (isColliding !== Boolean(inst.isIntersecting)) {

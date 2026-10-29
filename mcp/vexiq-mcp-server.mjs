@@ -757,6 +757,7 @@ async function executeTool(name, args = {}) {
     return {
       updatedAt: state.updatedAt,
       selectedId: state.selectedId,
+      selectedIds: state.selectedIds || (state.selectedId ? [state.selectedId] : []),
       viewport: state.viewport,
       // Only where the build is in its history; get_history lists the steps
       history: headPosition(state.history),

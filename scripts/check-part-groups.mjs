@@ -13,6 +13,7 @@ import {
   nextGroupName,
   renameGroup,
   setPivot,
+  syncSelection,
   ungroupParts
 } from '../src/utils/partGroups.js';
 
@@ -133,6 +134,19 @@ const relative = (a, b) => matrixOf(a).invert().multiply(matrixOf(b));
 
   const boxes = new Map([['beam', { min: [0, 0, 0], max: [10, 10, 10] }], ['pin1', { min: [20, -5, 0], max: [30, 5, 4] }]]);
   check('pivot: combined world box centre', setPivot(parts, ['beam', 'pin1'], boxes).join() === '15,2.5,5');
+}
+
+// --- Saved selection ---------------------------------------------------------------------------------
+{
+  const instances = ['a', 'b', 'c'].map((id) => part(id));
+  const kept = syncSelection({ instances, selectedIds: ['a', 'b'], selectedId: 'b' });
+  check('selection: matching selectedIds are kept', kept.selectedIds.join() === 'a,b' && kept.selectedId === 'b');
+  const older = syncSelection({ instances, selectedIds: ['a', 'b'], selectedId: 'c' });
+  check('selection: a writer setting only selectedId replaces the selection', older.selectedIds.join() === 'c');
+  const cleared = syncSelection({ instances, selectedIds: ['a', 'b'], selectedId: null });
+  check('selection: selectedId null clears it', cleared.selectedIds.length === 0);
+  const pruned = syncSelection({ instances: instances.slice(1), selectedIds: ['a', 'b'], selectedId: 'b' });
+  check('selection: removed parts drop out', pruned.selectedIds.join() === 'b' && pruned.selectedId === 'b');
 }
 
 console.log(failures === 0 ? '\nAll part group checks passed.' : `\n${failures} part group check(s) failed.`);

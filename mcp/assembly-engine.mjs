@@ -26,6 +26,7 @@ import { squareFitRoll } from '../src/utils/shaftGroups.js';
 import { settlePlacement, turnAboutLine } from '../src/utils/placementFit.js';
 import { isTireOnHub } from '../src/utils/tireFit.js';
 import { seatedBatteryBay } from '../src/utils/batteryBay.js';
+import { syncSelection } from '../src/utils/partGroups.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -461,13 +462,13 @@ export async function writeAssemblyState(nextState, options = {}) {
     }
   }
 
-  const state = {
+  const state = syncSelection({
     ...nextState,
     instances,
     history,
     historyRev: history?.rev ?? 0,
     updatedAt: new Date().toISOString()
-  };
+  });
   fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
 
   if (notifyVite) {

@@ -199,3 +199,16 @@ export function applySetTransform(instances, ids, pivot, { deltaPos, deltaQuat }
   }
   return patches;
 }
+
+/**
+ * Keep a saved state's `selectedIds` and `selectedId` (the primary, last id) in step. A writer that only
+ * sets `selectedId` (older tools) replaces the selection with that one part. Ids not in the build drop out.
+ */
+export function syncSelection(state) {
+  if (!state || !Array.isArray(state.instances)) return state;
+  const present = new Set(state.instances.map((p) => p.instanceId));
+  const primary = state.selectedId ?? null;
+  const ids = Array.isArray(state.selectedIds) && (state.selectedIds.at(-1) ?? null) === primary ? state.selectedIds : primary ? [primary] : [];
+  const selectedIds = ids.filter((id) => present.has(id));
+  return { ...state, selectedIds, selectedId: selectedIds.at(-1) ?? null };
+}

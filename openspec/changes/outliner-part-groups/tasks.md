@@ -7,10 +7,10 @@
 
 ## 2. Selection model
 
-- [ ] 2.1 Replace `selectedId` state in `App.jsx` with `selectedIds` (ordered, last = primary) and derive `selectedId` (single) and `primaryId`; prune ids missing from `instances`; verify every single-part feature (Inspector fields, hole pick, mate, copy-insert, rotate rings) still works with one part selected
-- [ ] 2.2 Send `selectedIds` alongside `selectedId` to the bridge, WebMCP context and saved state, and accept either on load; verify `get_assembly` from MCP shows the primary as `selectedId` after a multi-select
-- [ ] 2.3 Change the viewport's `onSelect(id)` to `onSelect(id, { additive })`, add a `selectedIds` prop, and highlight every selected part (primary stronger); verify visually with two parts selected
-- [ ] 2.4 In `handlePointerUp`, make Shift+click (and any click in Select mode) toggle the clicked part, skip the double-click wait, and leave the selection alone on empty space; verify Shift+click adds/removes, plain click replaces, and Shift while hole picking still steps fits backwards
+- [x] 2.1 Replace `selectedId` state in `App.jsx` with `selectedIds` (ordered, last = primary) and derive `selectedId` (single) and `primaryId`; prune ids missing from `instances`; verify every single-part feature (Inspector fields, hole pick, mate, copy-insert, rotate rings) still works with one part selected
+- [x] 2.2 Send `selectedIds` alongside `selectedId` to the bridge, WebMCP context and saved state, and accept either on load; verify `get_assembly` from MCP shows the primary as `selectedId` after a multi-select
+- [x] 2.3 Change the viewport's `onSelect(id)` to `onSelect(id, { additive })`, add a `selectedIds` prop, and highlight every selected part (primary stronger); verify visually with two parts selected
+- [x] 2.4 In `handlePointerUp`, make Shift+click (and any click in Select mode) toggle the clicked part, skip the double-click wait, and leave the selection alone on empty space; verify Shift+click adds/removes, plain click replaces, and Shift while hole picking still steps fits backwards
 - [ ] 2.5 In `App.jsx`, expand a 3D-view selection to whole groups with `expandToGroups`; verify clicking a grouped part selects the group
 
 ## 3. Select menu, keys and Select Connected

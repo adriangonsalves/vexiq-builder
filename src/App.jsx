@@ -63,6 +63,7 @@ import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
 import LibraryDialog from './components/LibraryDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
 import { DEFAULT_SETTINGS, isLinearHistory, normalizeSettings } from './utils/appSettings.js';
+import { expandToGroups } from './utils/partGroups.js';
 import {
   applyOps,
   createHistory,
@@ -96,6 +97,7 @@ const VEX_COLORS = [
 
 const TIMELINE_KEY = 'vexiq_history_timeline_visible';
 // This tab's id: its own saves come back over SSE and are skipped; other tabs' saves are taken
+const EMPTY_IDS = [];
 const TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const EXPLODE_MODES = ['off', 'x', 'y', 'z', 'all'];
 const PROJECTIONS = ['perspective', 'orthographic'];
@@ -129,8 +131,20 @@ export default function App() {
   // Parts and their history change together: every change to the parts is recorded as a step
   const [build, setBuild] = useState(() => ({ instances: [], history: createHistory() }));
   const { instances, history } = build;
-  const [selectedId, setSelectedId] = useState(null);
+  // Selection (openspec outliner-part-groups): ordered ids, the last one is the primary part.
+  // selectedId is the part when exactly one is selected, so single-part tools turn off for sets.
+  const [selectedIds, setSelectedIds] = useState([]);
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+  const primaryId = selectedIds.at(-1) ?? null;
+  const setSelectedId = useCallback((id) => setSelectedIds(id ? [id] : []), []);
+  // A saved or sent state's selection: selectedIds when given, else the older single selectedId
+  const adoptSelection = useCallback((state) => {
+    if (Array.isArray(state?.selectedIds)) setSelectedIds(state.selectedIds.filter(Boolean));
+    else if (state?.selectedId !== undefined) setSelectedIds(state.selectedId ? [state.selectedId] : []);
+  }, []);
   const [transformMode, setTransformMode] = useState('translate'); // 'translate' | 'rotate'
+  // Select mode: a plain click in the 3D view adds or removes parts; never saved
+  const [selectMode, setSelectMode] = useState(false);
   const [snapPitchFactor, setSnapPitchFactor] = useState(0.5); // 1 = 12.7mm, 0.5 = 6.35mm, 0.25 = 3.175mm, 0 = Free
   const [rotationSnapDeg, setRotationSnapDeg] = useState(15); // 15, 45, 90, 0
   const [showGrid, setShowGrid] = useState(true);
@@ -374,10 +388,11 @@ export default function App() {
 
   const historyPosition = useMemo(() => headPosition(history), [history]);
 
-  // Undo, redo or an MCP change can remove the selected part
+  // Undo, redo or an MCP change can remove selected parts
   useEffect(() => {
-    if (selectedId && !instances.some((i) => i.instanceId === selectedId)) setSelectedId(null);
-  }, [instances, selectedId]);
+    const ids = new Set(instances.map((i) => i.instanceId));
+    if (selectedIds.some((id) => !ids.has(id))) setSelectedIds((prev) => prev.filter((id) => ids.has(id)));
+  }, [instances, selectedIds]);
 
   const auditDialogRef = useRef(null);
   const suppressNextServerSyncRef = useRef(false);
@@ -434,7 +449,7 @@ export default function App() {
         if (hasSavedBuild) {
           suppressNextServerSyncRef.current = true;
           adoptServerState(serverState);
-          if (serverState.selectedId !== undefined) setSelectedId(serverState.selectedId);
+          adoptSelection(serverState);
           if (serverState.viewport) {
             if (serverState.viewport.transformMode) setTransformMode(serverState.viewport.transformMode);
             if (serverState.viewport.snapPitchFactor !== undefined) {
@@ -598,9 +613,7 @@ export default function App() {
         if (nextState && Array.isArray(nextState.instances)) {
           suppressNextServerSyncRef.current = true;
           adoptServerState(nextState);
-          if (nextState.selectedId !== undefined) {
-            setSelectedId(nextState.selectedId);
-          }
+          adoptSelection(nextState);
           if (nextState.viewport) {
             const vp = nextState.viewport;
             if (vp.transformMode) setTransformMode(vp.transformMode);
@@ -651,7 +664,8 @@ export default function App() {
         ...(switching ? {} : { baseHistoryRev: base.baseRev }),
         ...(sendHistory ? { history } : {}),
         ...(currentBuild ? { build: currentBuild } : {}),
-        selectedId,
+        selectedId: primaryId,
+        selectedIds,
         viewport: {
           transformMode,
           snapPitchFactor,
@@ -701,7 +715,7 @@ export default function App() {
     catalog.length,
     instances,
     history,
-    selectedId,
+    selectedIds,
     transformMode,
     snapPitchFactor,
     rotationSnapDeg,
@@ -768,12 +782,14 @@ export default function App() {
     return starterById('sample').build(catalogList);
   }
 
-  const resolveIntersectingInstances = (list, keepInstanceId = null) => {
+  // keep: an id or a list of ids left where they are (the parts being selected)
+  const resolveIntersectingInstances = (list, keep = null) => {
+    const kept = new Set(Array.isArray(keep) ? keep : keep ? [keep] : []);
     // Nothing to move back: keep the same list, so a plain selection isn't treated as a build change
-    if (!list.some((inst) => inst.isIntersecting && inst.instanceId !== keepInstanceId)) return list;
+    if (!list.some((inst) => inst.isIntersecting && !kept.has(inst.instanceId))) return list;
     const out = [];
     for (const inst of list) {
-      if (inst.instanceId === keepInstanceId) {
+      if (kept.has(inst.instanceId)) {
         out.push(inst);
         continue;
       }
@@ -793,9 +809,21 @@ export default function App() {
     return out;
   };
 
-  const handleSelectInstance = (nextId) => {
-    setInstances((prev) => resolveIntersectingInstances(prev, nextId), { label: moveBackLabel });
-    setSelectedId(nextId);
+  /**
+   * Select a part. A grouped part brings its whole group unless `exact` (an Outliner row inside a folder).
+   * `additive` (Shift+click, Select mode) adds the part, or removes it when it is already selected.
+   */
+  const handleSelectInstance = (nextId, { additive = false, exact = false } = {}) => {
+    const picked = !nextId ? [] : exact ? [nextId] : expandToGroups([nextId], instances);
+    let next = picked;
+    if (additive) {
+      const all = picked.length > 0 && picked.every((id) => selectedIds.includes(id));
+      next = all
+        ? selectedIds.filter((id) => !picked.includes(id))
+        : [...selectedIds.filter((id) => !picked.includes(id)), ...picked];
+    }
+    setInstances((prev) => resolveIntersectingInstances(prev, next), { label: moveBackLabel });
+    setSelectedIds(next);
   };
 
   const handleRevertSelectedIntersection = () => {
@@ -988,7 +1016,8 @@ export default function App() {
     mcpEnabled: settings.mcpEnabled,
     catalog,
     instances,
-    selectedId,
+    selectedId: primaryId,
+    selectedIds,
     placePartAt: (part, pos, color) => handleAddPart(part, pos, color, { source: 'assistant' }),
     configureViewport: ({
       transformMode: tm,
@@ -1320,7 +1349,8 @@ export default function App() {
         body: JSON.stringify({
           action,
           state: {
-            selectedId,
+            selectedId: primaryId,
+            selectedIds,
             viewport: {
               transformMode,
               snapPitchFactor,
@@ -1351,9 +1381,7 @@ export default function App() {
         if (data.state && Array.isArray(data.state.instances)) {
           suppressNextServerSyncRef.current = true;
           adoptServerState(data.state);
-          if (data.state.selectedId !== undefined) {
-            setSelectedId(data.state.selectedId);
-          }
+          adoptSelection(data.state);
         }
         if (data.message) {
           setActionFeedback({ message: data.message, isError: Boolean(data.isIntersecting) });
@@ -1657,6 +1685,8 @@ export default function App() {
             instances={preview ? preview.parts : instances}
             catalogMap={catalogMap}
             selectedId={preview ? null : selectedId}
+            selectedIds={preview ? EMPTY_IDS : selectedIds}
+            selectMode={selectMode}
             onSelect={preview ? noop : handleSelectInstance}
             onUpdateTransform={preview ? noop : handleUpdateTransform}
             onRegisterFlushMover={handleRegisterFlushMover}
@@ -1827,11 +1857,12 @@ export default function App() {
 
             <div className="instance-list scroller">
               {instances.map((inst) => {
-                const isSelected = inst.instanceId === selectedId;
+                const isSelected = selectedIds.includes(inst.instanceId);
+                const isPrimary = inst.instanceId === primaryId;
                 return (
                   <div
                     key={inst.instanceId}
-                    className={`instance-row ${isSelected ? 'selected' : ''}`}
+                    className={`instance-row ${isSelected ? 'selected' : ''} ${isSelected && !isPrimary ? 'secondary' : ''}`}
                     onClick={() => handleSelectInstance(inst.instanceId)}
                   >
                     <span

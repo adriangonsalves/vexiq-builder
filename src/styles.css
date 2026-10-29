@@ -627,6 +627,12 @@ body,
   border-color: var(--accent);
 }
 
+/* Other parts of a multi-selection; the primary (last selected) row keeps the full look */
+.instance-row.selected.secondary {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
 .instance-row-name {
   flex: 1;
   white-space: nowrap;

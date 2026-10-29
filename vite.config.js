@@ -15,6 +15,7 @@ import {
   mirrorSubassembly
 } from './mcp/assembly-engine.mjs';
 import { applyOps, diffParts, loadHistory, mergeBrowserSave, recordStep, summarize } from './src/utils/buildHistory.js';
+import { syncSelection } from './src/utils/partGroups.js';
 import { MCP_OFF_MESSAGE, isLinearHistory, normalizeSettings } from './src/utils/appSettings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,7 @@ function vexiqMcpBridgePlugin() {
 
   // clientId: the browser tab that sent the change, so only that tab skips its own echo
   function broadcastState(payload, source = 'ui-action', clientId = undefined) {
+    payload = syncSelection(payload);
     fs.writeFileSync(STATE_FILE, JSON.stringify(payload, null, 2));
     const msg = `data: ${JSON.stringify({ source, clientId, state: payload })}\n\n`;
     for (const client of sseClients) {

@@ -85,6 +85,7 @@ export function registerVexIqWebMcpTools(contextRef) {
         if (!ctx) return { error: 'Application context is not ready.' };
         return {
           selectedId: ctx.selectedId,
+          selectedIds: ctx.selectedIds,
           instances: ctx.instances
         };
       },
