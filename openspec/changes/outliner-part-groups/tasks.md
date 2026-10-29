@@ -68,4 +68,4 @@
 ## 10. Docs and final pass
 
 - [x] 10.1 Update `features.md` with multi-select, Select mode, Select Connected, Shift+wheel expand/contract, moving a loose selection, groups and the locate button
-- [ ] 10.2 Final pass: run all `node scripts/check-*.mjs`, then in the app make a group from Select Connected on the BaseBot starter, move it, turn it, undo, reload, and confirm with `capture_screenshot` from two views that the parts kept their places relative to one another; repeat the group, move and turn through the MCP tools and check the app shows each change live
+- [x] 10.2 Final pass: run all `node scripts/check-*.mjs`, then in the app make a group from Select Connected on the BaseBot starter, move it, turn it, undo, reload, and confirm with `capture_screenshot` from two views that the parts kept their places relative to one another; repeat the group, move and turn through the MCP tools and check the app shows each change live
