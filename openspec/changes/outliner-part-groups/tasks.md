@@ -54,15 +54,15 @@
 
 ## 8. MCP server and docs
 
-- [ ] 8.1 Make `mirror_subassembly`, `place_parts`, gear train and auto-fasten create parts without group fields; confirm `update_part` keeps them; keep `selectedIds` and `selectedId` in step in the saved state; verify `node scripts/check-mcp-tools.mjs` passes and an MCP `update_part` on a grouped part keeps its group
-- [ ] 8.2 Check the build library save/load keeps groups and older saved builds load ungrouped; verify `node scripts/check-build-library.mjs` passes and a saved grouped build reopens with its folders
+- [x] 8.1 Make `mirror_subassembly`, `place_parts`, gear train and auto-fasten create parts without group fields; confirm `update_part` keeps them; keep `selectedIds` and `selectedId` in step in the saved state; verify `node scripts/check-mcp-tools.mjs` passes and an MCP `update_part` on a grouped part keeps its group
+- [x] 8.2 Check the build library save/load keeps groups and older saved builds load ungrouped; verify `node scripts/check-build-library.mjs` passes and a saved grouped build reopens with its folders
 ## 9. MCP tools
 
-- [ ] 9.1 Extend `get_assembly` with `selectedIds`, each part's `groupId`/`groupName`, and a `groups` list (id, name, part ids, centre); verify with a check case on a build with two groups and one without
-- [ ] 9.2 Add `select_parts` (modes replace/add/remove/all/none/invert, `connected`, `expandLayers`, `expandGroups`, unknown ids refused, `connected` with `expandLayers` refused, no history step) using `jointGraph` and `jointLayers.js`; verify check cases: `connected` returns the same ids as the app's Select Connected, `expandLayers: 1` from a beam returns the beam and its pins only, and that the open app highlights the selection
-- [ ] 9.3 Add `group_parts` and `ungroup_parts` using `partGroups.js` patches, one `mcp` step each, group selected after grouping, fewer than two parts refused; verify check cases for group, regroup, ungroup and undo
-- [ ] 9.4 Add `update_group` (name, visible, locked, moveBy, moveCentreTo, turn) as one step, refusing locked sets, setting overlap flags against outside parts only, replying with centre and `summarizeAudit`; verify a check case turns a beam-and-pins group 90° and reports no floating or half-seated pins
-- [ ] 9.5 Add `groupId` to `remove_part` (whole group, one step; both ids or unknown group refused); verify with a check case and one undo
+- [x] 9.1 Extend `get_assembly` with `selectedIds`, each part's `groupId`/`groupName`, and a `groups` list (id, name, part ids, centre); verify with a check case on a build with two groups and one without
+- [x] 9.2 Add `select_parts` (modes replace/add/remove/all/none/invert, `connected`, `expandLayers`, `expandGroups`, unknown ids refused, `connected` with `expandLayers` refused, no history step) using `jointGraph` and `jointLayers.js`; verify check cases: `connected` returns the same ids as the app's Select Connected, `expandLayers: 1` from a beam returns the beam and its pins only, and that the open app highlights the selection
+- [x] 9.3 Add `group_parts` and `ungroup_parts` using `partGroups.js` patches, one `mcp` step each, group selected after grouping, fewer than two parts refused; verify check cases for group, regroup, ungroup and undo
+- [x] 9.4 Add `update_group` (name, visible, locked, moveBy, moveCentreTo, turn) as one step, refusing locked sets, setting overlap flags against outside parts only, replying with centre and `summarizeAudit`; verify a check case turns a beam-and-pins group 90° and reports no floating or half-seated pins
+- [x] 9.5 Add `groupId` to `remove_part` (whole group, one step; both ids or unknown group refused); verify with a check case and one undo
 - [ ] 9.6 Add the new tools to `scripts/check-mcp-tools.mjs`'s tool list and to `features.md`'s MCP section; verify the script exits 0
 
 ## 10. Docs and final pass

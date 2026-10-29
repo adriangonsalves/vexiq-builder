@@ -420,7 +420,9 @@ export const appSyncContext = new AsyncLocalStorage();
 export const appUrl = () => `http://localhost:${process.env.VEXIQ_APP_PORT || 5173}`;
 
 // "<tool>: <summary>", e.g. "place_parts: 72 parts"; clearing says only the tool
-function mcpStepLabel(toolName, ops) {
+// `stepLabel`: the tool's own wording (e.g. "Move Left Drive"), used instead of the op summary
+function mcpStepLabel(toolName, ops, stepLabel) {
+  if (stepLabel) return toolName ? `${toolName}: ${stepLabel}` : stepLabel;
   if (!toolName) return summarize(ops);
   if (toolName === 'clear_assembly') {
     return ops.every((op) => op.op === 'remove') ? 'clear_assembly' : 'clear_assembly: starter';
@@ -435,7 +437,7 @@ function mcpStepLabel(toolName, ops) {
  * app's instead of overwriting it.
  */
 export async function writeAssemblyState(nextState, options = {}) {
-  const { notifyVite = true, recordHistory = true } =
+  const { notifyVite = true, recordHistory = true, stepLabel } =
     typeof options === 'boolean' ? { notifyVite: options } : options;
   const store = appSyncContext.getStore();
   let instances = nextState.instances || [];
@@ -449,7 +451,7 @@ export async function writeAssemblyState(nextState, options = {}) {
     }
     const recorded = recordStep(saved.history, saved.instances, instances, {
       source: 'mcp',
-      label: (ops) => mcpStepLabel(store?.toolName, ops),
+      label: (ops) => mcpStepLabel(store?.toolName, ops, stepLabel),
       mergeKey: store?.callId ? `mcp:${store.callId}` : undefined,
       mergeWindowMs: Infinity,
       linear: isLinearHistory(readAppSettings())
@@ -2454,6 +2456,9 @@ function mirrorPlacedParts(placed, mirror) {
     const part = catalogById.get(p.inst.partId);
     const pose = mirrorPose(part, p.inst, axisIdx, offsetMm);
     const mirroredInst = { ...p.inst, instanceId: `inst-${stamp}-m${items.length.toString(36)}-${Math.random().toString(36).slice(2, 6)}`, position: pose.position, rotation: pose.rotation };
+    // New parts are added outside any group
+    delete mirroredInst.groupId;
+    delete mirroredInst.groupName;
     // Its own mirror image: every feature lands where the original's are
     const original = worldFeaturesFor(p.inst).map((f) => [f.start, f.end]);
     const image = worldFeaturesFor(mirroredInst).map((f) => [f.start, f.end]);
