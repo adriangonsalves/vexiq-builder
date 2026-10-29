@@ -63,9 +63,9 @@
 - [x] 9.3 Add `group_parts` and `ungroup_parts` using `partGroups.js` patches, one `mcp` step each, group selected after grouping, fewer than two parts refused; verify check cases for group, regroup, ungroup and undo
 - [x] 9.4 Add `update_group` (name, visible, locked, moveBy, moveCentreTo, turn) as one step, refusing locked sets, setting overlap flags against outside parts only, replying with centre and `summarizeAudit`; verify a check case turns a beam-and-pins group 90° and reports no floating or half-seated pins
 - [x] 9.5 Add `groupId` to `remove_part` (whole group, one step; both ids or unknown group refused); verify with a check case and one undo
-- [ ] 9.6 Add the new tools to `scripts/check-mcp-tools.mjs`'s tool list and to `features.md`'s MCP section; verify the script exits 0
+- [x] 9.6 Add the new tools to `scripts/check-mcp-tools.mjs`'s tool list and to `features.md`'s MCP section; verify the script exits 0
 
 ## 10. Docs and final pass
 
-- [ ] 10.1 Update `features.md` with multi-select, Select mode, Select Connected, Shift+wheel expand/contract, moving a loose selection, groups and the locate button
+- [x] 10.1 Update `features.md` with multi-select, Select mode, Select Connected, Shift+wheel expand/contract, moving a loose selection, groups and the locate button
 - [ ] 10.2 Final pass: run all `node scripts/check-*.mjs`, then in the app make a group from Select Connected on the BaseBot starter, move it, turn it, undo, reload, and confirm with `capture_screenshot` from two views that the parts kept their places relative to one another; repeat the group, move and turn through the MCP tools and check the app shows each change live

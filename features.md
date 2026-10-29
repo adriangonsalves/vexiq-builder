@@ -154,6 +154,18 @@
   - `Del` / `Backspace`: Delete selected part
   - `Esc`: Hide mate arrows if shown; otherwise exit Explode mode / revert intersecting part & deselect
   - Double-click selected part: Mate with lined-up holes / pins (shows direction arrows when there is more than one way); with nothing lined up, pick any hole to insert into (a gear, hub or pulley: an axle end or hole to go onto)
+  - `C`: Select Connected · `G`: Group · `Shift+G`: Ungroup · `Ctrl/Cmd+A`: Select all visible parts · `Shift`+wheel: grow or shrink the selection by joints
+
+### Selecting several parts and groups
+
+- **Several parts at once:** `Shift`+click in the 3D view adds or removes a part (empty space keeps the selection); a plain click still replaces it. In the Outliner, `Ctrl/Cmd`+click adds or removes a row and `Shift`+click selects every row between the last selected one and the clicked one. The part picked last is the *primary* part, lit more strongly; everything that works on one part (Inspector fields, hole picking, mating, copy-insert, the rotate rings' joint pivot) works when exactly one part is selected. Ctrl/Cmd isn't used for selecting in the 3D view because copy-insert uses it.
+- **Select menu** (toolbar): **Select mode** (a plain click adds or removes parts; the button reads "Select mode" while on; Esc turns it off and keeps the selection; not saved), **Select Connected**, **Select All**, **Select None**, **Invert Selection**, **Group** and **Ungroup** (greyed out when they don't apply).
+- **Select Connected** (`C`) selects every part joined to the selection through seated pins, pegs and shafts, with the fasteners between them, using the audit's own joint graph (`jointGraph` in `mcp/assembly-engine.mjs`, fetched through the bridge's `joint_graph` action), so a motor on its shaft, a battery in the brain's bay and meshing gears count as joined, and parts only touching don't (except the audit's clamp rule: a part squeezed between two parts fastened to each other). A message gives the count.
+- **Grow or shrink by joints:** with parts selected, `Shift` + mouse wheel over the 3D view adds one layer of directly joined parts per notch (a beam, then its pins, then what the pins go into), and turning it back takes the last layer off, never below where it started; a message shows "Layer N · M parts". It doesn't zoom, and starts again after any other selection change.
+- **Groups:** Group (`G`) makes the selection a named component ("Group 1", "Group 2", …); a part already in a group moves to the new one, and a group left with one part goes away. Ungroup (`Shift+G`) breaks up the selected groups. Clicking any part of a group in the 3D view selects the whole group. Groups are stored on the parts (`groupId`, `groupName`), so they are undoable, saved in the build, the library and the history, and kept by the MCP server.
+- **Assembly Outliner folders:** each group is a folder row (arrow, name, part count, hide and lock for every part, mixed when only some are) in the place of its first part; its parts are listed indented while it's open (open folders aren't saved). Clicking a folder selects the group; clicking a row inside selects just that part. The title still counts parts.
+- **Locate button** (Outliner header): scrolls the primary part's row into view, opening its folder. Hold it for half a second to pin it: while pinned (shown pressed, remembered in this browser) every new selection, including ones made over MCP, is scrolled to. Hold again to unpin.
+- **Moving a set:** a group or any multi-selection moves and turns as one, keeping the parts' places relative to one another: the Move arrows and rotate rings sit at the centre of the parts' combined bounding box (grid and angle snap apply; no hole snap or flush stop), and parts in the set never count as overlapping one another, while outside parts they overlap are marked. A set with a locked or hidden part shows no arrows and says "Part is locked" / "Some parts are hidden"; no arrows in Explode view. Each drag is one step ("Move Left Drive", "Turn 5 parts"). Double-clicking a group says mating works on one part.
 
 ---
 
@@ -188,7 +200,11 @@
 
 ## 3. Manual CAD Inspector & Smart Assembly Tools
 
-Located in the right-hand **Part Inspector** ([`src/App.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/App.jsx)) whenever a part is selected:
+Located in the right-hand **Part Inspector** ([`src/App.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/App.jsx)) whenever a part is selected. Its header names the selection: one part's label with its catalog name and part number (and "in <group>"), a group's name and part count, or "N parts selected"; long names end in "…" and show in full on hover. Clone and Delete stay in the header and act on the whole selection (a cloned group becomes "<name> copy", one pitch away, selected).
+
+With a group or several parts selected, the Inspector shows the set instead ([`src/components/SetInspector.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/SetInspector.jsx)): the group's name (rename in place; an empty name is refused), the centre's X / Y / Z in mm and pitch (typing moves the whole set), nudge buttons (repeated nudges are one step), quick 90° turns about the centre, and Hide all / Lock all. The per-part sections below aren't shown.
+
+With one part selected:
 
 1. **Precision Transform & Nudge Controls:**
    - Direct numeric `X`, `Y`, `Z` inputs in millimeters with live VEX Pitch (`P`) readout.
@@ -236,7 +252,13 @@ Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP 
 ## 5. Dual MCP Integration (Node Stdio MCP + Browser WebMCP) & Persistence
 
 - **Node Stdio MCP Server ([`mcp/vexiq-mcp-server.mjs`](file:///Users/adriangonsalves/projects/vexiq_builder/mcp/vexiq-mcp-server.mjs)):**
-  - Exposes 20 tools to external AI agents (`search_parts`, `get_part_details`, `get_assembly`, `place_part`, `place_parts`, `update_part`, `align_part_to_hole`, `mate_parts`, `auto_fasten_joint`, `mesh_gear_train`, `mirror_subassembly`, `audit_assembly`, `capture_viewport_views`, `capture_screenshot`, `remove_part`, `clear_assembly`, `configure_viewport`, `get_history`, `undo`, `redo`).
+  - Exposes 24 tools to external AI agents (`search_parts`, `get_part_details`, `get_assembly`, `place_part`, `place_parts`, `update_part`, `align_part_to_hole`, `mate_parts`, `auto_fasten_joint`, `mesh_gear_train`, `mirror_subassembly`, `audit_assembly`, `capture_viewport_views`, `capture_screenshot`, `remove_part`, `clear_assembly`, `configure_viewport`, `select_parts`, `group_parts`, `ungroup_parts`, `update_group`, `get_history`, `undo`, `redo`).
+  - **Selection and groups over MCP** (the same rules and helpers as the app: `src/utils/partGroups.js`, `src/utils/jointLayers.js`):
+    - `select_parts` changes the open app's selection, with no undo step: `mode` `replace` / `add` / `remove` / `all` / `none` / `invert`, then `connected: true` (every part joined to them, as Select Connected) or `expandLayers: n` (n layers of directly joined parts). A grouped part brings its whole group unless `expandGroups: false`. Unknown ids are refused by name. Replies with the selected parts, the primary part and their groups.
+    - `group_parts` groups the given parts (or the selection) with an optional `name` ("Group N" by default) and selects the group; `ungroup_parts` takes a `groupId` or `instanceIds`. Fewer than two parts is refused.
+    - `update_group` acts on a `groupId` or a list of `instanceIds`: `name`, `visible`, `locked`, `moveBy`, `moveCentreTo` (the centre of the parts' combined bounding box) and `turn: { axis, deg }` about that centre, all as one step labeled with the group's name or the part count. Moving or turning a set with a locked part is refused ("Part is locked"). Replies with the new centre and the `place_parts` check summary; parts in the set never count as overlapping one another.
+    - `remove_part` also takes a `groupId` and removes the whole group as one step.
+    - `get_assembly` reports `selectedIds` (the primary last, also `selectedId`), each part's `groupId` / `groupName`, and a `groups` list (id, name, part ids, centre). Tools that add parts add them outside any group; tools that change a part keep its group.
   - **Build history over MCP:**
     - Every tool call that changes parts is one history step labeled with the tool and a summary, for example `place_parts: 72 parts`. One undo removes the whole call.
     - Calls that change nothing (`dryRun`, refused `rejectIntersecting`, reading tools, `configure_viewport`) add no step.
@@ -273,8 +295,8 @@ Shared history code: [`src/utils/buildHistory.js`](file:///Users/adriangonsalves
 
 - **Steps:**
   - Every change to the parts becomes one step with a label, a time and a source: `app`, `mcp`, `assistant` (in-page WebMCP) or `action` (smart actions).
-  - Recorded changes: add, move, rotate, mate, delete, duplicate, recolor, hide/show, lock/unlock, clear, starter, and moving an overlapping part back.
-  - Not recorded: selection, the camera, explode view, viewport settings, and the app's own overlap-flag updates.
+  - Recorded changes: add, move, rotate, mate, delete, duplicate, recolor, hide/show, lock/unlock, group, ungroup, rename a group, clear, starter, and moving an overlapping part back. A change to a group or several selected parts (move, turn, hide, lock, delete, clone) is one step listing every part.
+  - Not recorded: selection, the camera, explode view, viewport settings, Select mode, open Outliner folders, the locate pin, and the app's own overlap-flag updates.
   - Steps store only what changed, so long histories stay small.
 - **Typing:** typing in an Inspector field, dragging the color picker, or repeated nudges on one part within 1 s merge into one step.
 - **Undo / Redo:**
