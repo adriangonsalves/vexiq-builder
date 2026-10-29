@@ -2089,6 +2089,7 @@ export default function App() {
             groups={groups}
             selectedIds={selectedIds}
             primaryId={primaryId}
+            selectMode={selectMode}
             onSelectIds={changeSelection}
             onTogglePart={(id, patch) => handleUpdateTransform(id, patch)}
             onSetGroupFlag={handleSetGroupFlag}

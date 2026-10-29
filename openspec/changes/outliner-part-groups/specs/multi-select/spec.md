@@ -31,12 +31,12 @@ In the 3D view, a click with Shift held on a part SHALL add it to the selection,
 - **THEN** only the fourth part is selected
 
 ### Requirement: Selecting in the Outliner
-In the Assembly Outliner, a plain click on a row SHALL select only that row's part or group. Ctrl+click, or Cmd+click on macOS, SHALL add or remove that row. Every row SHALL have a checkbox that adds or removes its part (a folder's: its whole group, shown mixed when only some of its parts are selected) without changing the rest of the selection. Shift+click SHALL select every part between the primary part and the clicked row in build order, adding them to the selection. Clicking a part's row inside a group folder SHALL select just that part, not the whole group.
+In the Assembly Outliner, a plain click on a row SHALL select only that row's part or group. Ctrl+click, or Cmd+click on macOS, SHALL add or remove that row. While Select mode is on, every row SHALL have a checkbox, and a plain click on a row or its checkbox SHALL add or remove its part (a folder's: its whole group, shown mixed when only some of its parts are selected) without changing the rest of the selection; with Select mode off the checkboxes SHALL NOT be shown. Shift+click SHALL select every part between the primary part and the clicked row in build order, adding them to the selection. Clicking a part's row inside a group folder SHALL select just that part, not the whole group.
 
 The selected parts SHALL be listed first, under a "Selected (N)" heading with a Clear button, in build order: a wholly selected group as its folder, and a selected part of a partly selected group as its own row naming the group. The other parts SHALL follow under "Other parts".
 
 #### Scenario: Checkbox adds and removes
-- **WHEN** a beam is selected and the user ticks a plate's checkbox, then unticks the beam's
+- **WHEN** Select mode is on, a beam is selected, and the user ticks a plate's checkbox, then unticks the beam's
 - **THEN** the plate is added while the beam stays selected, and then only the plate is selected
 
 #### Scenario: Selected parts on top

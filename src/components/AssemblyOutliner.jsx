@@ -16,7 +16,8 @@ const readPinned = () => {
  * The Assembly Outliner (openspec outliner-part-groups): the selected parts first, under "Selected (N)",
  * then the rest; loose parts as rows, each group as a folder row in the place of its first part with its
  * parts indented under it while open. Clicks select (folder = whole group, a row inside a folder = that
- * part only), Ctrl/Cmd+click or a row's checkbox adds or removes, Shift+click selects a range in the
+ * part only), Ctrl/Cmd+click adds or removes, and in Select mode a plain click or the row's checkbox
+ * (shown only then) does too; Shift+click selects a range in the
  * order shown. The locate button scrolls to the selection; a long press pins it so every new selection
  * is scrolled to.
  */
@@ -25,6 +26,7 @@ export default function AssemblyOutliner({
   groups,
   selectedIds,
   primaryId,
+  selectMode = false,
   onSelectIds,
   onTogglePart,
   onSetGroupFlag,
@@ -84,7 +86,8 @@ export default function AssemblyOutliner({
       onSelectIds([...selectedIds.filter((id) => !inRange.has(id)), ...range]);
       return;
     }
-    if (e.ctrlKey || e.metaKey) {
+    // Ctrl/Cmd+click, or any click in Select mode, adds or removes the row
+    if (e.ctrlKey || e.metaKey || selectMode) {
       const all = ids.every((id) => selectedSet.has(id));
       onSelectIds(all ? selectedIds.filter((id) => !ids.includes(id)) : [...selectedIds.filter((id) => !ids.includes(id)), ...ids]);
       return;
@@ -98,22 +101,24 @@ export default function AssemblyOutliner({
     const all = ids.every((id) => selectedSet.has(id));
     onSelectIds(all ? selectedIds.filter((id) => !ids.includes(id)) : [...selectedIds.filter((id) => !ids.includes(id)), ...ids]);
   };
-  const checkbox = (row, state, label) => (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={state}
-      aria-label={label}
-      title={state === true ? 'Unselect' : 'Add to the selection'}
-      className={`row-check ${state === true ? 'on' : state === 'mixed' ? 'mixed' : ''}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        toggleRow(row);
-      }}
-    >
-      {state === true ? <Check size={11} strokeWidth={3} /> : state === 'mixed' ? <Minus size={11} strokeWidth={3} /> : null}
-    </button>
-  );
+  // Shown only in Select mode, where clicks add to and take from the selection
+  const checkbox = (row, state, label) =>
+    selectMode && (
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={state}
+        aria-label={label}
+        title={state === true ? 'Unselect' : 'Add to the selection'}
+        className={`row-check ${state === true ? 'on' : state === 'mixed' ? 'mixed' : ''}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleRow(row);
+        }}
+      >
+        {state === true ? <Check size={11} strokeWidth={3} /> : state === 'mixed' ? <Minus size={11} strokeWidth={3} /> : null}
+      </button>
+    );
 
   const toggleFolder = (groupId) =>
     setOpenFolders((prev) => {
