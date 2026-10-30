@@ -18,6 +18,7 @@ import { isMeshingGear, meshTurn, worldToothed } from '../utils/gearMeshing.js';
 import { squareFitRoll } from '../utils/shaftGroups.js';
 import { settlePlacement } from '../utils/placementFit.js';
 import { isTireOnHub } from '../utils/tireFit.js';
+import { isChainFit } from '../utils/chainFit.js';
 import { batteryBayPose } from '../utils/batteryBay.js';
 import {
   HOLE_SNAP_AXIAL_REACH_MM,
@@ -1426,6 +1427,7 @@ export default function Viewport3D({
   const wasDraggingRef = useRef(false);
   const dragMovedRef = useRef(false); // the last gizmo drag actually moved/rotated the part
   const dragStartPosRef = useRef(new THREE.Vector3());
+  const dragStartQuatRef = useRef(new THREE.Quaternion()); // the part's turn when the drag began (its own axes)
   const lastClearDragPosRef = useRef(new THREE.Vector3());
   const lineSettleCacheRef = useRef({ key: '', settled: null }); // last along-the-line settle, per snapped pose
   const hasClearDragPosRef = useRef(false);
@@ -1611,6 +1613,7 @@ export default function Viewport3D({
       const partA = catalogMap.get(targetGroup.userData.partId);
       const partB = catalogMap.get(otherGroup.userData.partId);
       if (isTireOnHub(partA, targetGroup.matrixWorld, partB, otherGroup.matrixWorld)) continue;
+      if (isChainFit(partA, targetGroup.matrixWorld, partB, otherGroup.matrixWorld)) continue;
 
       matrixBtoA.multiplyMatrices(invMatrixA, otherGroup.matrixWorld);
       // A turned motor hub's collision piece is posed by its own local matrix inside its group
@@ -1931,7 +1934,7 @@ export default function Viewport3D({
     if (!letters || !partMeta) return null;
     const directions = [...letters].map((l) => {
       const dir = new THREE.Vector3(l === 'X' ? 1 : 0, l === 'Y' ? 1 : 0, l === 'Z' ? 1 : 0);
-      return transform.space === 'local' ? dir.applyQuaternion(obj.quaternion) : dir;
+      return transform.space === 'local' ? dir.applyQuaternion(dragStartQuatRef.current) : dir;
     });
 
     obj.position.copy(rawPos);
@@ -1955,10 +1958,9 @@ export default function Viewport3D({
 
     const snapped = rawPos.clone().add(snap.offset);
     // Dragged axes along the hole's line don't affect lining up: keep them on the drag grid
-    directions.forEach((dir, i) => {
+    directions.forEach((dir) => {
       if (Math.abs(dir.dot(snap.opening.axis)) > 0.999) {
-        const ax = letters[i].toLowerCase();
-        if (transform.space !== 'local') snapped[ax] = gridPos[ax];
+        snapped.addScaledVector(dir, gridPos.clone().sub(snapped).dot(dir));
       }
     });
     return {
@@ -2928,10 +2930,12 @@ export default function Viewport3D({
         const axis = line.axis.clone().normalize();
         return axis.dot(worldAxis) < 0 ? axis.negate() : axis;
       };
+      // The rings follow the part's own axes, like the Move arrows; Alt shows the world's
+      const own = altKeyRef.current ? new THREE.Quaternion() : group.getWorldQuaternion(new THREE.Quaternion());
       rings = [
-        { name: 'X', axis: ringAxis(new THREE.Vector3(1, 0, 0)) },
-        { name: 'Y', axis: ringAxis(new THREE.Vector3(0, 1, 0)) },
-        { name: 'Z', axis: ringAxis(new THREE.Vector3(0, 0, 1)) }
+        { name: 'X', axis: ringAxis(new THREE.Vector3(1, 0, 0).applyQuaternion(own)) },
+        { name: 'Y', axis: ringAxis(new THREE.Vector3(0, 1, 0).applyQuaternion(own)) },
+        { name: 'Z', axis: ringAxis(new THREE.Vector3(0, 0, 1).applyQuaternion(own)) }
       ];
     } else {
       const { origin, axis } = lines[0];
@@ -3179,6 +3183,7 @@ export default function Viewport3D({
           pivotObj.updateMatrixWorld();
         }
         if (transform.object !== pivotObj) transform.attach(pivotObj);
+        if (!transform.dragging) transform.setSpace('world'); // a set has no axes of its own
       } else {
         transform.detach();
         if (blocked && transformModeRef.current === 'translate') {
@@ -3202,6 +3207,8 @@ export default function Viewport3D({
       !inst.locked;
     if (canMove) {
       if (transform.object !== group) transform.attach(group);
+      // The arrows follow the part's own axes; Alt shows the world's
+      if (!transform.dragging) transform.setSpace(altKeyRef.current ? 'world' : 'local');
     } else {
       transform.detach();
     }
@@ -3609,45 +3616,36 @@ export default function Viewport3D({
         const snappedPos = rawPos.clone();
 
         // Steps are counted from where the drag started, so a part that starts lined up with holes
-        // (wherever they are, e.g. axles at wheel-radius height) moves in whole steps from there
+        // (wherever they are, e.g. axles at wheel-radius height) moves in whole steps from there. They
+        // are counted along the arrows' axes: the part's own axes (local, the default) or the world's
+        // (Alt), so a part on a slanted beam steps along the beam.
         const start = dragStartPosRef.current;
         if (step > 0) {
-          for (const ax of ['x', 'y', 'z']) {
-            if (Math.abs(rawPos[ax] - start[ax]) <= 0.005) {
-              snappedPos[ax] = start[ax];
-              continue;
+          const turn = transform.space === 'local' ? dragStartQuatRef.current : new THREE.Quaternion();
+          const dirs = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)].map((d) => d.applyQuaternion(turn));
+          const moved = rawPos.clone().sub(start);
+          const offsets = dirs.map((d) => moved.dot(d));
+          const posFrom = (offs) => offs.reduce((p, o, k) => p.addScaledVector(dirs[k], o), start.clone());
+          const snappedOffsets = offsets.map((o) => (Math.abs(o) <= 0.005 ? 0 : o));
+          offsets.forEach((o, k) => {
+            if (Math.abs(o) <= 0.005) return;
+            const gridVal = Math.round(o / step) * step;
+            const qVal = Math.round(o / quarterStep) * quarterStep;
+            snappedOffsets[k] = gridVal;
+            // If the pointer is closer to a 0.25P (3.175mm) step than the coarse grid one, keep it
+            // there when that step is a flush contact boundary
+            if (step > quarterStep && Math.abs(qVal - gridVal) > 0.1 && Math.abs(o - qVal) <= quarterStep * 0.55) {
+              const at = (v) => {
+                const offs = [...snappedOffsets];
+                offs[k] = v;
+                obj.position.copy(posFrom(offs));
+                return checkGroupCollision(obj, false);
+              };
+              if (!at(qVal) && (at(qVal + quarterStep) || at(qVal - quarterStep))) snappedOffsets[k] = qVal;
             }
-            const gridVal = Number((start[ax] + Math.round((rawPos[ax] - start[ax]) / step) * step).toFixed(3));
-            const qVal = Number(
-              (start[ax] + Math.round((rawPos[ax] - start[ax]) / quarterStep) * quarterStep).toFixed(3)
-            );
-
-            // If cursor is closer to a 0.25P (3.175mm) coordinate than the coarse gridVal,
-            // check if that 0.25P coordinate is a physical flush contact boundary!
-            if (step > quarterStep && Math.abs(qVal - gridVal) > 0.1 && Math.abs(rawPos[ax] - qVal) <= quarterStep * 0.55) {
-              const testQ = snappedPos.clone();
-              testQ[ax] = qVal;
-              obj.position.copy(testQ);
-              const qClear = !checkGroupCollision(obj, false);
-              if (qClear) {
-                const testPlus = testQ.clone();
-                testPlus[ax] = Number((qVal + quarterStep).toFixed(3));
-                obj.position.copy(testPlus);
-                const plusHit = checkGroupCollision(obj, false);
-
-                const testMinus = testQ.clone();
-                testMinus[ax] = Number((qVal - quarterStep).toFixed(3));
-                obj.position.copy(testMinus);
-                const minusHit = checkGroupCollision(obj, false);
-
-                if (plusHit || minusHit) {
-                  snappedPos[ax] = qVal;
-                  continue;
-                }
-              }
-            }
-            snappedPos[ax] = gridVal;
-          }
+          });
+          const p = posFrom(snappedOffsets);
+          snappedPos.set(Number(p.x.toFixed(3)), Number(p.y.toFixed(3)), Number(p.z.toFixed(3)));
         }
 
         // Near a hole that a pin/shaft (or one of its own holes) can line up with: snap onto it
@@ -3735,6 +3733,8 @@ export default function Viewport3D({
 
     transform.addEventListener('dragging-changed', (event) => {
       orbit.enabled = !event.value;
+      // Alt pressed or let go during the drag: the arrows catch up once it ends
+      if (!event.value && transform.object && !transform.object.userData.isSetPivot) transform.setSpace(altKeyRef.current ? 'world' : 'local');
       if (event.value) {
         wasDraggingRef.current = true;
         dragMovedRef.current = false;
@@ -3748,6 +3748,7 @@ export default function Viewport3D({
           setDragRef.current = { ids, ignore: new Set(ids), starts, lastCheckAt: 0 };
         } else if (transform.object) {
           dragStartPosRef.current.copy(transform.object.position);
+          dragStartQuatRef.current.copy(transform.object.quaternion);
           const startColliding = checkGroupCollision(transform.object, false);
           if (!startColliding) {
             lastClearDragPosRef.current.copy(transform.object.position);
@@ -4006,7 +4007,11 @@ export default function Viewport3D({
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1
       );
-      raycaster.setFromCamera(mouse, pointerCameraRef.current());
+      const cam = pointerCameraRef.current();
+      raycaster.setFromCamera(mouse, cam);
+      // An orthographic ray starts halfway between near and far, at the camera itself; its near plane
+      // reaches behind the camera (parts there are drawn), so start the ray there too or they can't be picked
+      if (cam.isOrthographicCamera) raycaster.ray.origin.addScaledVector(raycaster.ray.direction, cam.near);
     };
 
     // Instance ids of the visible parts under the pointer, nearest first
@@ -4357,9 +4362,15 @@ export default function Viewport3D({
     };
 
     const handleContextMenu = (e) => e.preventDefault();
-    // Alt held while dragging turns hole snapping off (read before the gizmo moves the part)
+    // Alt held: the Move arrows and rotate rings show the world's axes instead of the part's, and a drag doesn't snap
+    // onto holes (read before the gizmo moves the part). The arrows don't change during a drag.
     const trackAltKey = (e) => {
-      altKeyRef.current = e.altKey;
+      const held = e.type === 'blur' ? false : e.key === 'Alt' ? e.type === 'keydown' : e.altKey;
+      if (held === altKeyRef.current) return;
+      altKeyRef.current = held;
+      if (!transform.dragging && transform.object && !transform.object.userData.isSetPivot) transform.setSpace(held ? 'world' : 'local');
+      // The rotate rings switch too (not during a turn)
+      if (transformModeRef.current === 'rotate' && !rotateGestureRef.current) refreshRotateSetup();
     };
 
     // View cube over the main view's top-right corner (not in stereo, small views or screenshots)
@@ -4489,6 +4500,9 @@ export default function Viewport3D({
     inputEl.addEventListener('contextmenu', handleCubeContextMenu, true);
 
     inputEl.addEventListener('pointerdown', trackAltKey, true);
+    window.addEventListener('keydown', trackAltKey, true);
+    window.addEventListener('keyup', trackAltKey, true);
+    window.addEventListener('blur', trackAltKey);
     inputEl.addEventListener('pointermove', trackAltKey, true);
     inputEl.addEventListener('pointerdown', handleRingPointerDown, true);
     inputEl.addEventListener('pointerup', handleRingPointerUp, true);
@@ -5112,6 +5126,9 @@ export default function Viewport3D({
       window.removeEventListener('blur', handleWindowBlur);
       inputEl.removeEventListener('pointerleave', handlePointerLeave);
       inputEl.removeEventListener('pointerdown', trackAltKey, true);
+      window.removeEventListener('keydown', trackAltKey, true);
+      window.removeEventListener('keyup', trackAltKey, true);
+      window.removeEventListener('blur', trackAltKey);
       inputEl.removeEventListener('pointermove', trackAltKey, true);
       container.removeEventListener('pointermove', handleStereoSideMove, true);
       inputEl.removeEventListener('pointerdown', handleCubePointerDown, true);

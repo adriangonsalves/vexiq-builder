@@ -7,6 +7,7 @@ import {
   appUrl,
   auditAssembly,
   buildDefaultStarterState,
+  buildChain,
   buildMeshedGearTrain,
   buildWorldMatrix,
   checkCandidateCollision,
@@ -683,6 +684,20 @@ const TOOLS = [
     }
   },
   {
+    name: 'build_chain',
+    description:
+      'Wrap a chain or a tank track round two or more sprockets (8/16/24/32/40 Tooth Sprocket) whose axles are parallel and whose teeth are in one plane, as the app\'s Build menu does. A chain is Chain Links; a track is Tank Tread Attachment Links, with a Traction Link rubber gripper plugged into every link unless grippers is false. The loop goes round the outside of the sprockets; selected sprockets it doesn\'t touch are left out. Links sit on each sprocket\'s pitch circle one tooth apart and run straight between sprockets; the count is the fewest links that reach round the path (never more than 0.5 mm short, at most a link longer; a slack chain sags on one run), and the reply gives the gap (mm, < 0: the chain is longer than the path) and which sprocket to move for an exact fit. Each sprocket is turned, with its axle and the parts on it, so its teeth sit in the chain. The new parts become one group "Chain N" / "Track N" (selected), all one undo step. Spur gears are refused.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['chain', 'track'], description: 'Default "chain".' },
+        instanceIds: { type: 'array', items: { type: 'string' }, description: 'The sprockets. Default: the current selection (other parts in it are ignored).' },
+        grippers: { type: 'boolean', description: 'Track only: plug a Traction Link into every tread link. Default true.' },
+        name: { type: 'string', description: 'Group name. Default "Chain N" / "Track N".' }
+      }
+    }
+  },
+  {
     name: 'ungroup_parts',
     description: 'Dissolve a group (groupId), or every group the given parts are in (instanceIds). The parts stay where they are. One undo step.',
     inputSchema: {
@@ -845,6 +860,7 @@ async function executeTool(name, args = {}) {
       ...(part.rackSpecs ? { rackSpecs: part.rackSpecs } : {}),
       fastenerSpecs: part.fastenerSpecs || null,
       ...(part.hubSpecs ? { hubSpecs: part.hubSpecs } : {}),
+      ...(part.chainSpecs ? { chainSpecs: part.chainSpecs } : {}),
       connections: describePartConnections(part)
     };
     if (!args.verbose) return compact;
@@ -941,6 +957,32 @@ async function executeTool(name, args = {}) {
       { stepLabel: `Group ${members.length} parts as ${made.name}` }
     );
     return { ok: true, groupId: made.groupId, name: made.name, instanceIds: members };
+  }
+
+  if (name === 'build_chain') {
+    const state = readAssemblyState();
+    const kind = args.kind === undefined ? 'chain' : args.kind;
+    const built = buildChain(state, { kind, instanceIds: args.instanceIds, grippers: args.grippers !== false, name: args.name });
+    if (built.error) return { isError: true, error: built.error };
+    await writeAssemblyState(
+      { ...state, instances: built.instances, selectedIds: built.newIds, selectedId: built.newIds.at(-1) },
+      { stepLabel: built.message.split('. ')[0] }
+    );
+    const r = built.result;
+    return {
+      ok: true,
+      groupId: built.groupId,
+      name: built.name,
+      linkCount: r.linkCount,
+      gripperCount: r.grippers.length,
+      onLoop: r.onLoop,
+      leftOut: r.leftOut,
+      gapMm: r.gapMm,
+      moveHint: r.moveHint,
+      turned: built.turned,
+      message: built.message,
+      audit: summarizeAudit(auditAssembly(readAssemblyState()))
+    };
   }
 
   if (name === 'ungroup_parts') {

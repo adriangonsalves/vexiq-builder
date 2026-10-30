@@ -42,6 +42,8 @@ import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
 import ExplodePanel from './components/ExplodePanel.jsx';
 import SelectMenu from './components/SelectMenu.jsx';
+import BuildMenu, { TrackBuilderDialog } from './components/BuildMenu.jsx';
+import { checkSprocketsForChain } from './utils/chainPath.js';
 import AssemblyOutliner from './components/AssemblyOutliner.jsx';
 import SetInspector from './components/SetInspector.jsx';
 import ViewMenu from './components/ViewMenu.jsx';
@@ -76,6 +78,7 @@ import {
   renameGroup,
   setPivot,
   setWorldBoxes,
+  spotBesideBuild,
   ungroupParts,
   wholeGroupOf
 } from './utils/partGroups.js';
@@ -1156,11 +1159,8 @@ export default function App() {
             selectedInstance.position[1],
             selectedInstance.position[2]
           ]
-        : [
-            ((instances.length % 5) - 2) * VEX_PITCH_MM * 2,
-            VEX_PITCH_MM,
-            Math.floor(instances.length / 5) * VEX_PITCH_MM * 2
-          ]);
+        : // In front of the build, so it lands in view however many parts there are
+          spotBesideBuild(instances, part.bbox, (i) => catalogMap.get(i.partId)?.bbox, VEX_PITCH_MM) || [0, VEX_PITCH_MM, 0]);
 
     const newInst = {
       instanceId: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1635,6 +1635,10 @@ export default function App() {
 
   // --- Builds: New, Starter, the library, Open from computer (openspec build-library) -------------
   const [libraryOpen, setLibraryOpen] = useState(false);
+  // Build menu (openspec chain-track-builder): the track dialog, and its grippers choice for this page
+  const [trackDialogOpen, setTrackDialogOpen] = useState(false);
+  const [trackGrippers, setTrackGrippers] = useState(true);
+  const closeTrackDialog = useCallback(() => setTrackDialogOpen(false), []);
   const [libraryBuilds, setLibraryBuilds] = useState([]);
   const closeLibrary = useCallback(() => setLibraryOpen(false), []);
 
@@ -1844,6 +1848,28 @@ export default function App() {
     }
   };
 
+  // Can the selection carry a chain? Drives the Build menu's items and their hover text
+  const chainCheck = useMemo(() => {
+    const byId = new Map(instances.map((i) => [i.instanceId, i]));
+    const parts = selectedIds
+      .map((id) => byId.get(id))
+      .filter((i) => i && i.visible !== false)
+      .map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogMap.get(i.partId), position: i.position, rotation: i.rotation }));
+    return checkSprocketsForChain(parts);
+  }, [instances, selectedIds, catalogMap]);
+
+  const handleBuildChain = (kind, { grippers = false } = {}) => {
+    if (previewRef.current) {
+      setActionFeedback({ message: "This is a preview of an earlier point. Go to a step's end to edit.", isError: true });
+      return;
+    }
+    if (!chainCheck.ok) {
+      setActionFeedback({ message: chainCheck.error, isError: true });
+      return;
+    }
+    handleRunSmartAction('build_chain', { kind, grippers, instanceIds: selectedIds });
+  };
+
   const handleOpenAuditDialog = async () => {
     const data = await handleRunSmartAction('audit_and_blueprint', {});
     if (data && data.ok) {
@@ -1936,6 +1962,12 @@ export default function App() {
               onInvert={handleInvertSelection}
               onGroup={handleGroupSelected}
               onUngroup={handleUngroupSelected}
+            />
+            <BuildMenu
+              chainCheck={chainCheck}
+              disabledReason={preview ? "This is a preview of an earlier point. Go to a step's end to edit." : isRunningAction ? 'Working…' : null}
+              onChain={() => handleBuildChain('chain')}
+              onTrack={() => setTrackDialogOpen(true)}
             />
           </div>
 
@@ -2352,8 +2384,8 @@ export default function App() {
                 <span title="Drag a colored square on the Move gizmo to slide the part within that plane">
                   <kbd className="kbd">▢</kbd> Plane Drag
                 </span>
-                <span title="Dragging snaps a pin or shaft onto a nearby hole's line; hold Alt to drag without it">
-                  <kbd className="kbd">Alt</kbd> Drag w/o Hole Snap
+                <span title="The Move arrows and rotate rings follow the selected part's own axes; hold Alt for the world's axes. Dragging snaps a pin or shaft onto a nearby hole's line; with Alt held it doesn't">
+                  <kbd className="kbd">Alt</kbd> World axes, no hole snap
                 </span>
                 <span title="With a part that has pins selected, hold Ctrl/Cmd to light the holes a copy would fill; double-click a hole to insert a copy">
                   <kbd className="kbd">Ctrl/Cmd</kbd> + double-click: insert a copy
@@ -3069,6 +3101,15 @@ export default function App() {
           }}
         />
       )}
+      <TrackBuilderDialog
+        open={trackDialogOpen}
+        grippers={trackGrippers}
+        onClose={closeTrackDialog}
+        onBuild={(grippers) => {
+          setTrackGrippers(grippers);
+          handleBuildChain('track', { grippers });
+        }}
+      />
       <LibraryDialog
         open={libraryOpen}
         onClose={closeLibrary}

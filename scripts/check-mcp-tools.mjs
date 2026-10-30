@@ -956,6 +956,49 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// chain-track-builder: sprocket tooth data, build_chain
+// ---------------------------------------------------------------------------
+{
+  const s16 = (await call('get_part_details', { partQuery: '16 Tooth Sprocket' })).data;
+  check(
+    'get_part_details returns measured sprocket tooth data',
+    s16?.gearSpecs?.measured === true && s16.gearSpecs.teeth === 16 && Math.abs(s16.gearSpecs.pitchRadiusMm - 16.27) < 0.02,
+    JSON.stringify(s16?.gearSpecs)
+  );
+  const link = (await call('get_part_details', { partQuery: 'Chain Link' })).data;
+  check('get_part_details returns chain link data', link?.chainSpecs?.role === 'chain_link' && link.gearSpecs === null, JSON.stringify(link?.chainSpecs));
+
+  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.json'), 'utf8'));
+  const cat = Array.isArray(catalog) ? catalog : catalog.parts || Object.values(catalog);
+  const partId = (name) => cat.find((p) => p.name === name).id;
+  const part = (instanceId, name, position) => ({ instanceId, partId: partId(name), label: instanceId, position, rotation: [0, 0, 0], visible: true });
+  writeState({ ...emptyState(), instances: [part('S16', '16 Tooth Sprocket', [0, 0, 0]), part('S32', '32 Tooth Sprocket', [101.6, 0, 0]), part('G36', '36 Tooth Gear', [0, 80, 0])] });
+  let res = await callRaw('build_chain', { instanceIds: ['G36', 'S16'] });
+  check('build_chain refuses gears with one sprocket', res.isError && /sprockets, not gears/.test(res.data?.error), JSON.stringify(res.data));
+  res = await call('build_chain', { kind: 'track', instanceIds: ['S16', 'S32', 'G36'] });
+  const st = readState();
+  const members = st.instances.filter((i) => i.groupId === res.data?.groupId);
+  check(
+    'build_chain track: a "Track 1" group of tread links and grippers, selected',
+    res.data?.ok && res.data.name === 'Track 1' && members.length === res.data.linkCount + res.data.gripperCount && res.data.gripperCount === res.data.linkCount && st.selectedIds?.length === members.length,
+    JSON.stringify({ ...res.data, audit: undefined })
+  );
+  check('  the reply gives the gap and the sprockets on the loop', typeof res.data?.gapMm === 'number' && res.data.onLoop.length === 2 && res.data.leftOut.length === 0);
+  check('  one history step labeled with what was built', /^build_chain: Track builder: \d+ tread links and \d+ grippers round 2 sprockets$/.test(st.history.steps.at(-1).label), st.history.steps.at(-1).label);
+  const groupIds = new Set(members.map((m) => m.instanceId));
+  const audit = (await call('audit_assembly')).data;
+  const auditOf = audit.audit || audit;
+  const unsecured = (auditOf.unsecuredParts || []).filter((u) => groupIds.has(u.instanceId));
+  const chainCollisions = (auditOf.collisions || []).filter((c) => groupIds.has(c.instanceId));
+  check('  the audit counts the track as held, with no collisions and no islands from it', unsecured.length === 0 && chainCollisions.length === 0 && auditOf.disconnectedIslandCount === 1, JSON.stringify({ unsecured: unsecured.length, chainCollisions: chainCollisions.length, islands: auditOf.disconnectedIslandCount }));
+  await call('undo');
+  check('  one undo removes the whole track', readState().instances.length === 3);
+  res = await call('build_chain', { instanceIds: ['S16', 'S32'] });
+  check('build_chain chain: a "Chain 1" group', res.data?.ok && res.data.name === 'Chain 1' && res.data.gripperCount === 0, JSON.stringify(res.data?.name));
+}
+
+// ---------------------------------------------------------------------------
 server.stdin.end();
 server.kill();
 await stopBridge().catch(() => {});

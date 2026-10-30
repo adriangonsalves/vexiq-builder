@@ -6,6 +6,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import {
   auditAssembly,
+  buildChain,
   buildMeshedGearTrain,
   checkCandidateCollision,
   computeMateTransform,
@@ -218,7 +219,7 @@ function vexiqMcpBridgePlugin() {
             // A smart action's change is one history step (source 'action'), applied on top of the
             // saved build. Fills in nextState's parts and history so the reply carries them too.
             const baseInstances = state.instances;
-            const recordAction = (nextState) => {
+            const recordAction = (nextState, stepLabel = null) => {
               const saved = readSaved();
               if (!saved) return nextState;
               const ops = diffParts(baseInstances, nextState.instances);
@@ -226,7 +227,7 @@ function vexiqMcpBridgePlugin() {
                 diffParts(baseInstances, saved.instances).length > 0 ? applyOps(saved.instances, ops) : nextState.instances;
               const { history } = recordStep(saved.history, saved.instances, instances, {
                 source: 'action',
-                label: (stepOps) => `${action}: ${summarize(stepOps)}`,
+                label: (stepOps) => stepLabel || `${action}: ${summarize(stepOps)}`,
                 linear: isLinearHistory(readSettingsFile())
               });
               return Object.assign(nextState, { instances, history, historyRev: history.rev });
@@ -440,6 +441,31 @@ function vexiqMcpBridgePlugin() {
                   message: `Placed ${gearRes.placedGears.length} meshed gears and ${gearRes.placedShafts.length} shafts.`
                 })
               );
+              return;
+            }
+
+            if (action === 'build_chain') {
+              // Chain or track builder (openspec chain-track-builder): one step labeled with what was built
+              const built = buildChain(state, {
+                kind: params.kind,
+                instanceIds: Array.isArray(params.instanceIds) ? params.instanceIds : null,
+                grippers: params.grippers !== false,
+                name: params.name || null
+              });
+              res.setHeader('Content-Type', 'application/json');
+              if (built.error) {
+                res.end(JSON.stringify({ ok: false, error: built.error }));
+                return;
+              }
+              const nextState = {
+                ...state,
+                instances: built.instances,
+                selectedIds: built.newIds,
+                selectedId: built.newIds.at(-1),
+                updatedAt: new Date().toISOString()
+              };
+              broadcastState(recordAction(nextState, built.message.split('. ')[0]), 'mcp-server');
+              res.end(JSON.stringify({ ok: true, state: nextState, groupId: built.groupId, name: built.name, message: built.message }));
               return;
             }
 

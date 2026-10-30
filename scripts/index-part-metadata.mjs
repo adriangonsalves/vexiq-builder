@@ -16,7 +16,8 @@ import {
   measureOpeningShape,
   measureRack,
   measureShaftFlat,
-  measureSpurGear
+  measureSpurGear,
+  measureSprocket
 } from './measure-part-geometry.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -421,10 +422,24 @@ function measureHoleWallSpan(raycast, perpOrigin, axis, anchorT, bbox) {
 }
 
 /**
+ * Chain and tank tread parts (openspec chain-track-builder), read off their models: a link's roller
+ * pivot is its origin and the next pivot is 6.35 mm along its −Z, the pivot axis is X and +Y is the
+ * outer side of the loop. A tread link takes a Traction Link's two pegs in holes on its +Y face; the
+ * gripper's model isn't centred, so `seatInLink` is its position in the tread link's frame (no turn).
+ */
+const CHAIN_LINK = { pitchMm: 6.35, pivots: [[0, 0, 0], [0, 0, -6.35]], pivotAxis: [1, 0, 0], outward: [0, 1, 0] };
+const CHAIN_SPECS = {
+  '228-2500-230': { role: 'chain_link', ...CHAIN_LINK },
+  '228-2500-231': { role: 'tread_link', ...CHAIN_LINK, gripperHoles: [[-6.35, 8.636, 0], [6.35, 8.636, 0]] },
+  '228-2500-239': { role: 'gripper', seatInLink: [-6.73, 4.086, -18.2] }
+};
+
+/**
  * Infers gear & sprocket mechanical specifications from part name and bounding box.
  */
 function inferGearSpecs(part) {
   if (part.category !== 'Gears, Sprockets & Pulleys') return null;
+  if (CHAIN_SPECS[part.partNumber]) return null; // a chain link, not a toothed part
   const toothMatch = part.name.match(/(\d+)\s*Tooth/i);
   const teeth = toothMatch ? parseInt(toothMatch[1], 10) : null;
   const lower = part.name.toLowerCase();
@@ -578,6 +593,13 @@ function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasu
       tMin: part.bbox.min[2],
       tMax: part.bbox.max[2]
     }).shape;
+  } else if (gearSpecs?.gearType === 'sprocket') {
+    const m = measureSprocket(part, gearSpecs.teeth);
+    if (m.measured) Object.assign(gearSpecs, m);
+    else {
+      gearSpecs.measured = false;
+      unmeasured.push(`${part.name}: ${m.reason}`);
+    }
   } else if (gearSpecs?.gearType === 'rack') {
     const m = measureRack(part);
     if (m.measured) rackSpecs = m;
@@ -901,6 +923,7 @@ async function main() {
       originType,
       gearSpecs,
       ...(rackSpecs ? { rackSpecs } : {}),
+      ...(CHAIN_SPECS[part.partNumber] ? { chainSpecs: CHAIN_SPECS[part.partNumber] } : {}),
       fastenerSpecs,
       ...(hubSpecs ? { hubSpecs } : {}),
       mountingRules,
@@ -915,6 +938,8 @@ async function main() {
     part.originType = originType;
     part.gearSpecs = gearSpecs;
     if (rackSpecs) part.rackSpecs = rackSpecs;
+    if (CHAIN_SPECS[part.partNumber]) part.chainSpecs = CHAIN_SPECS[part.partNumber];
+    else delete part.chainSpecs;
     part.fastenerSpecs = fastenerSpecs;
     if (hubSpecs) part.hubSpecs = hubSpecs;
     part.mountingRules = mountingRules;

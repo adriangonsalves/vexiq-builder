@@ -152252,12 +152252,22 @@
     "gearSpecs": {
       "gearType": "sprocket",
       "teeth": 8,
-      "pitchRadiusMm": 9.245,
+      "pitchRadiusMm": 8.297,
       "phaseOffsetDeg": 22.5,
       "boreAxis": [
         0,
         0,
         1
+      ],
+      "measured": true,
+      "chainPitchMm": 6.35,
+      "tipRadiusMm": 9.94,
+      "rootRadiusMm": 6.654,
+      "toothPhaseDeg": 22.5,
+      "gapPhaseDeg": 45,
+      "faceSpanMm": [
+        -2.68,
+        2.67
       ]
     },
     "fastenerSpecs": null,
@@ -173867,12 +173877,22 @@
     "gearSpecs": {
       "gearType": "sprocket",
       "teeth": 16,
-      "pitchRadiusMm": 17.765,
+      "pitchRadiusMm": 16.275,
       "phaseOffsetDeg": 11.25,
       "boreAxis": [
         0,
         0,
         1
+      ],
+      "measured": true,
+      "chainPitchMm": 6.35,
+      "tipRadiusMm": 18.097,
+      "rootRadiusMm": 14.625,
+      "toothPhaseDeg": 11.25,
+      "gapPhaseDeg": 0,
+      "faceSpanMm": [
+        -2.68,
+        2.67
       ]
     },
     "fastenerSpecs": null,
@@ -177710,12 +177730,22 @@
     "gearSpecs": {
       "gearType": "sprocket",
       "teeth": 24,
-      "pitchRadiusMm": 25.97,
+      "pitchRadiusMm": 24.325,
       "phaseOffsetDeg": 7.5,
       "boreAxis": [
         0,
         0,
         1
+      ],
+      "measured": true,
+      "chainPitchMm": 6.35,
+      "tipRadiusMm": 26.193,
+      "rootRadiusMm": 22.675,
+      "toothPhaseDeg": 7.5,
+      "gapPhaseDeg": 15,
+      "faceSpanMm": [
+        -2.68,
+        2.67
       ]
     },
     "fastenerSpecs": null,
@@ -181023,12 +181053,22 @@
     "gearSpecs": {
       "gearType": "sprocket",
       "teeth": 32,
-      "pitchRadiusMm": 34.12,
+      "pitchRadiusMm": 32.392,
       "phaseOffsetDeg": 5.625,
       "boreAxis": [
         0,
         0,
         1
+      ],
+      "measured": true,
+      "chainPitchMm": 6.35,
+      "tipRadiusMm": 34.27,
+      "rootRadiusMm": 30.742,
+      "toothPhaseDeg": 5.62,
+      "gapPhaseDeg": 11.25,
+      "faceSpanMm": [
+        -2.68,
+        2.67
       ]
     },
     "fastenerSpecs": null,
@@ -184970,12 +185010,22 @@
     "gearSpecs": {
       "gearType": "sprocket",
       "teeth": 40,
-      "pitchRadiusMm": 42.24,
+      "pitchRadiusMm": 40.467,
       "phaseOffsetDeg": 4.5,
       "boreAxis": [
         0,
         0,
         1
+      ],
+      "measured": true,
+      "chainPitchMm": 6.35,
+      "tipRadiusMm": 42.362,
+      "rootRadiusMm": 38.842,
+      "toothPhaseDeg": 4.5,
+      "gapPhaseDeg": 0,
+      "faceSpanMm": [
+        -2.67,
+        2.68
       ]
     },
     "fastenerSpecs": null,
@@ -199152,19 +199202,7 @@
       0.85
     ],
     "originType": "end_shoulder",
-    "gearSpecs": {
-      "gearType": "spur",
-      "teeth": null,
-      "pitchRadiusMm": 5.92,
-      "phaseOffsetDeg": 0,
-      "boreAxis": [
-        0,
-        0,
-        1
-      ],
-      "measured": false,
-      "boreShape": "square"
-    },
+    "gearSpecs": null,
     "fastenerSpecs": null,
     "mountingRules": {
       "massClass": "light",
@@ -199176,7 +199214,33 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "chainSpecs": {
+      "role": "chain_link",
+      "pitchMm": 6.35,
+      "pivots": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          -6.35
+        ]
+      ],
+      "pivotAxis": [
+        1,
+        0,
+        0
+      ],
+      "outward": [
+        0,
+        1,
+        0
+      ]
+    }
   },
   {
     "id": "dial-knob-228-2500-355-365",
@@ -236661,7 +236725,45 @@
         ],
         "verified": true
       }
-    ]
+    ],
+    "chainSpecs": {
+      "role": "tread_link",
+      "pitchMm": 6.35,
+      "pivots": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          -6.35
+        ]
+      ],
+      "pivotAxis": [
+        1,
+        0,
+        0
+      ],
+      "outward": [
+        0,
+        1,
+        0
+      ],
+      "gripperHoles": [
+        [
+          -6.35,
+          8.636,
+          0
+        ],
+        [
+          6.35,
+          8.636,
+          0
+        ]
+      ]
+    }
   },
   {
     "id": "tire-100-mm-travel-228-2500-207-447",
@@ -237693,7 +237795,15 @@
         ],
         "verified": true
       }
-    ]
+    ],
+    "chainSpecs": {
+      "role": "gripper",
+      "seatInLink": [
+        -6.73,
+        4.086,
+        -18.2
+      ]
+    }
   },
   {
     "id": "triple-1-2-1x-wide-1x2-corner-connector-228-2500-1251-454",

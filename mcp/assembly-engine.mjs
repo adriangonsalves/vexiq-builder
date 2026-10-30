@@ -22,11 +22,13 @@ import { applyOps, diffParts, fromLegacy, loadHistory, recordStep, summarize } f
 import { hubFrame, hubMatrix, splitHubTriangles } from '../src/utils/motorHub.js';
 import { isLinearHistory, normalizeSettings } from '../src/utils/appSettings.js';
 import { isMeshingGear, meshTurn, quaternionToEulerDeg, turnQuaternion, worldToothed } from '../src/utils/gearMeshing.js';
-import { squareFitRoll } from '../src/utils/shaftGroups.js';
+import { groupOf, shaftGroups, squareFitRoll, turnGroup } from '../src/utils/shaftGroups.js';
 import { settlePlacement, turnAboutLine } from '../src/utils/placementFit.js';
 import { isTireOnHub } from '../src/utils/tireFit.js';
 import { seatedBatteryBay } from '../src/utils/batteryBay.js';
-import { syncSelection } from '../src/utils/partGroups.js';
+import { areChainNeighbours, isChainFit, isChainPart, isGripperOnLink, isLink, isLinkOnSprocket, unsupportedBends } from '../src/utils/chainFit.js';
+import { applyPatches, groupParts, syncSelection } from '../src/utils/partGroups.js';
+import { buildChainPath, chainMessage, nextChainName } from '../src/utils/chainPath.js';
 import { buildExplodePlan } from '../src/utils/explodePlan.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -262,6 +264,7 @@ export function checkCandidateCollision(candidate, instances) {
 
     if (!worldBoxA.intersectsBox(worldBoxB)) continue;
     if (isTireOnHub(partA, matA, partB, matB)) continue;
+    if (isChainFit(partA, matA, partB, matB)) continue;
 
     matBtoA.multiplyMatrices(invMatA, matB);
     const piecesB = posedPieces(bvhB, other);
@@ -814,6 +817,55 @@ function findJoints(state) {
     }
   }
 
+  // Chain and track (openspec chain-track-builder): links join their neighbours and the sprockets
+  // they sit on, grippers the tread links they plug into. A chain held by a sprocket with no bend
+  // away from one counts as mounted; one left bending in mid-air (a sprocket moved) does not.
+  const chainBends = [];
+  const chainParts = nonFasteners.filter((n) => isChainPart(n.part));
+  if (chainParts.length) {
+    const sprockets = nonFasteners.filter((n) => n.part.gearSpecs?.gearType === 'sprocket');
+    const parent = new Map(chainParts.map((c) => [c.inst.instanceId, c.inst.instanceId]));
+    const find = (id) => (parent.get(id) === id ? id : find(parent.get(id)));
+    const join = (a, b) => parent.set(find(a), find(b));
+    const held = new Set();
+    for (let i = 0; i < chainParts.length; i++) {
+      const a = chainParts[i];
+      for (let j = i + 1; j < chainParts.length; j++) {
+        const b = chainParts[j];
+        if (!rawWorldBoxes.get(a.inst.instanceId).intersectsBox(rawWorldBoxes.get(b.inst.instanceId))) continue;
+        if (
+          areChainNeighbours(a.part, a.mat, b.part, b.mat) ||
+          isGripperOnLink(a.part, a.mat, b.part, b.mat) ||
+          isGripperOnLink(b.part, b.mat, a.part, a.mat)
+        ) {
+          link(a.inst.instanceId, b.inst.instanceId);
+          join(a.inst.instanceId, b.inst.instanceId);
+        }
+      }
+      for (const s of sprockets) {
+        if (!isLinkOnSprocket(a.part, a.mat, s.part, s.mat)) continue;
+        link(a.inst.instanceId, s.inst.instanceId);
+        held.add(a.inst.instanceId);
+      }
+    }
+    const loose = unsupportedBends(
+      chainParts.filter((c) => isLink(c.part)).map((c) => ({ id: c.inst.instanceId, part: c.part, matrix: c.mat })),
+      sprockets.map((s) => ({ part: s.part, matrix: s.mat }))
+    );
+    const heldRoots = new Set([...held].map(find));
+    const looseRoots = new Set([...loose].map(find));
+    for (const c of chainParts) {
+      const root = find(c.inst.instanceId);
+      if (!heldRoots.has(root) || looseRoots.has(root)) continue;
+      const required = c.part.mountingRules?.minFastenersRequired || 1;
+      fastenerCountByPartInstance.set(c.inst.instanceId, Math.max(fastenerCountByPartInstance.get(c.inst.instanceId) || 0, required));
+    }
+    for (const root of looseRoots) {
+      const ids = chainParts.filter((c) => find(c.inst.instanceId) === root && loose.has(c.inst.instanceId)).map((c) => c.inst.instanceId);
+      chainBends.push({ linkIds: ids, links: ids.map(labelOf) });
+    }
+  }
+
   // Kinematic Gear-Meshing & Motor-to-Wheel Power Tracing
   const placedGears = nonFasteners
     .filter((nf) => nf.part.gearSpecs != null)
@@ -896,6 +948,7 @@ function findJoints(state) {
     directJoints,
     pegJoints,
     batteryBays,
+    chainBends,
     placedGears,
     meshedGearPairs
   };
@@ -1042,6 +1095,7 @@ export function auditAssembly(state) {
     joints,
     pegJoints,
     batteryBays,
+    chainBends,
     placedGears,
     meshedGearPairs
   } = found;
@@ -1295,6 +1349,8 @@ export function auditAssembly(state) {
     joints,
     pegJoints,
     batteryBays,
+    // Chains or tracks that bend away from any sprocket: their links are counted unsecured
+    chainBends,
     kinematics: {
       motorCount: motors.length,
       meshedGearPairCount: meshedGearPairs.length,
@@ -2104,6 +2160,88 @@ export function summarizeAudit(audit) {
       }).filter(([, v]) => v.length > 0)
     )
   };
+}
+
+/**
+ * Chain or track round the selected sprockets (openspec chain-track-builder), as the app's Build menu
+ * and the build_chain tool do it: link (and gripper) instances made into one new "Chain N" /
+ * "Track N" group, and each loop sprocket turned with its shaft group so its teeth sit in the chain.
+ * `instanceIds` default to the selection. Returns { error } or { instances (all, new state),
+ * groupId, name, newIds, result (buildChainPath), message, turned: [instanceId] }.
+ */
+export function buildChain(state, { kind = 'chain', instanceIds = null, grippers = true, name = null } = {}) {
+  const { catalog, catalogById } = getCatalog();
+  if (kind !== 'chain' && kind !== 'track') return { error: 'kind must be "chain" or "track".' };
+  const ids = Array.isArray(instanceIds) && instanceIds.length ? instanceIds : state.selectedIds?.length ? state.selectedIds : state.selectedId ? [state.selectedId] : [];
+  const byId = new Map(state.instances.map((i) => [i.instanceId, i]));
+  const unknown = ids.filter((id) => !byId.has(id));
+  if (unknown.length) return { error: `Not in the build: ${unknown.join(', ')}` };
+  const chosen = ids.map((id) => byId.get(id)).filter((i) => i.visible !== false);
+  const res = buildChainPath(
+    chosen.map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogById.get(i.partId), position: i.position, rotation: i.rotation })),
+    { kind, grippers: kind === 'track' && grippers !== false, metaByPartNumber: (pn) => catalog.find((p) => p.partNumber === pn) }
+  );
+  if (!res.ok) return { error: res.error };
+
+  // Turn each loop sprocket, with its axle and the parts on it, so a tooth gap sits at a pivot
+  let instances = state.instances;
+  const visible = instances.filter((i) => i.visible !== false);
+  const groups = shaftGroups(
+    visible.map((i) => ({ instanceId: i.instanceId, features: worldFeaturesFor(i), hasHub: Boolean(catalogById.get(i.partId)?.hubSpecs) }))
+  );
+  const turned = new Set();
+  for (const t of res.sprocketTurns) {
+    const axis = new THREE.Vector3(...t.axis);
+    const current = new Map(instances.map((i) => [i.instanceId, i]));
+    const group = groupOf(groups, t.instanceId);
+    let patches;
+    if (group) {
+      const deg = t.deg * (Math.sign(axis.dot(group.axis)) || 1);
+      patches = turnGroup(
+        group,
+        deg,
+        (id) => current.get(id),
+        (id) => worldFeaturesFor(current.get(id)).find((f) => f.kind === 'shaft_socket')?.axis || null
+      );
+    } else {
+      const pose = turnAboutLine(current.get(t.instanceId), axis, new THREE.Vector3(...t.point), t.deg);
+      patches = [{ instanceId: t.instanceId, position: pose.position, rotation: pose.rotation }];
+    }
+    instances = applyPosePatches(instances, patches);
+    for (const pch of patches) turned.add(pch.instanceId);
+  }
+
+  // The new parts, labeled like other added parts ("Chain Link #12")
+  const stamp = Date.now().toString(36);
+  const counts = new Map();
+  const newInstances = [...res.links, ...res.grippers].map((pose, i) => {
+    const part = catalogById.get(pose.partId);
+    const n = (counts.get(part.id) ?? instances.filter((x) => x.partId === part.id).length) + 1;
+    counts.set(part.id, n);
+    return {
+      instanceId: `inst-${stamp}-${kind}-${i + 1}-${Math.random().toString(36).slice(2, 6)}`,
+      partId: part.id,
+      label: `${part.name} #${n}`,
+      position: pose.position,
+      rotation: pose.rotation,
+      lastValidPosition: pose.position,
+      lastValidRotation: pose.rotation,
+      isIntersecting: false,
+      color: part.defaultColor,
+      visible: true,
+      locked: false
+    };
+  });
+  instances = [...instances, ...newInstances];
+  const newIds = newInstances.map((i) => i.instanceId);
+  const groupName = typeof name === 'string' && name.trim() ? name.trim() : nextChainName(instances, kind);
+  const made = groupParts(instances, newIds, groupName);
+  instances = applyPatches(instances, made.patches);
+  const labelOf = (id) => instances.find((i) => i.instanceId === id)?.label || id;
+  const others = [...turned].filter((id) => !res.onLoop.includes(id));
+  let message = chainMessage(res, labelOf);
+  if (others.length) message += ` Turned with the sprockets: ${others.map(labelOf).join(', ')}.`;
+  return { instances, groupId: made.groupId, name: groupName, newIds, result: res, message, turned: [...turned] };
 }
 
 /**

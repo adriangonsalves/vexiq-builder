@@ -14,6 +14,7 @@ import {
   nextGroupName,
   renameGroup,
   setPivot,
+  spotBesideBuild,
   syncSelection,
   ungroupParts
 } from '../src/utils/partGroups.js';
@@ -171,6 +172,17 @@ const relative = (a, b) => matrixOf(a).invert().multiply(matrixOf(b));
   const grouped = layersFrom(graph, ['beam'], { collapse });
   check('layers: a group is one step', sorted(grouped[2]) === 'pin3,plate1' && sorted(grouped[3]) === 'plate2', JSON.stringify(grouped));
   check('layers: seeding with one member starts from the whole group', sorted(layersFrom(graph, ['pin3'], { collapse })[0]) === 'pin3,plate1');
+}
+
+// A part added with nothing selected lands just in front of the build, however many parts it has
+{
+  const beamBox = { min: [-76.2, -6.35, -3.175], max: [76.2, 6.35, 3.175] };
+  const many = Array.from({ length: 250 }, (_, i) => part(`p${i}`, { position: [(i % 5) * 10, 0, (i % 7) * 10] }));
+  const spot = spotBesideBuild(many, beamBox, () => ({ min: [-5, -5, -5], max: [5, 5, 5] }));
+  check('a new part goes in front of the build (+X), a pitch clear of it', spot && spot[0] - 76.2 >= 45 + 12.7 - 1e-6 && spot[0] - 76.2 < 45 + 12.7 + 6.35, JSON.stringify(spot));
+  check('  across from the build\'s middle, one pitch up', spot && spot[1] === 12.7 && Math.abs(spot[2] - 30) <= 3.175, JSON.stringify(spot));
+  check('  hidden parts are left out', spotBesideBuild([part('h', { position: [500, 0, 0], visible: false }), part('v')], beamBox, () => ({ min: [-5, -5, -5], max: [5, 5, 5] }))[0] < 200);
+  check('  an empty build gives no spot', spotBesideBuild([], beamBox, () => null) === null);
 }
 
 console.log(failures === 0 ? '\nAll part group checks passed.' : `\n${failures} part group check(s) failed.`);

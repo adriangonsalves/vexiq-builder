@@ -15,6 +15,8 @@ export const RAY_COUNT = 1440; // 0.25° steps
 // 1-pitch diameter) and the 34 DP pair. A measured tooth size is snapped to the nearest of these.
 export const DIAMETRAL_PITCHES = [16, 24, 34];
 const DP_TOLERANCE = 0.1;
+// VEX IQ chain: link pivots are a quarter pitch (6.35 mm) apart
+export const CHAIN_PITCH_MM = 6.35;
 // Toothed parts that are not meshing gears (ratchet teeth take pawls)
 const NOT_MESHING_PATTERN = /ratchet|thrust washer|belt|pawl|cam|chain/i;
 const MIN_TOOTH_AMPLITUDE = 0.08; // the k = teeth Fourier amplitude must be this share of tooth depth
@@ -108,12 +110,12 @@ function tipAndRoot(thetas, radii, teeth) {
 }
 
 /**
- * Spur gear teeth about the part's local Z axis through the origin (every VEX IQ spur gear's bore).
- * Returns the new gearSpecs fields, or { measured: false, reason }.
+ * The tooth ring of a gear or sprocket about the part's local Z axis through the origin: the axial
+ * band where the k = teeth pattern is strongest, its tip and root radius and the tooth phase (deg, at
+ * a tooth's middle). Returns { measured: true, tip, root, phaseDeg, faceLo, faceHi } or
+ * { measured: false, reason }.
  */
-export function measureSpurGear(part, teeth) {
-  if (!teeth || teeth < 6) return { measured: false, reason: 'no tooth count' };
-  if (NOT_MESHING_PATTERN.test(part.name)) return { measured: false, reason: 'not a meshing gear' };
+function measureToothRing(part, teeth) {
   const cast = makeRaycaster(part);
   const axis = new THREE.Vector3(0, 0, 1);
   const { min, max } = part.bbox;
@@ -142,6 +144,19 @@ export function measureSpurGear(part, teeth) {
   const clipped = radii.map((r) => (r == null ? null : Math.min(tip, Math.max(root, r))));
   const { phaseDeg, amplitude } = fourierPhase(thetas, clipped, teeth);
   if (amplitude < MIN_TOOTH_AMPLITUDE * (tip - root)) return { measured: false, reason: 'no tooth pattern found' };
+  return { measured: true, tip, root, phaseDeg, faceLo, faceHi };
+}
+
+/**
+ * Spur gear teeth about the part's local Z axis through the origin (every VEX IQ spur gear's bore).
+ * Returns the new gearSpecs fields, or { measured: false, reason }.
+ */
+export function measureSpurGear(part, teeth) {
+  if (!teeth || teeth < 6) return { measured: false, reason: 'no tooth count' };
+  if (NOT_MESHING_PATTERN.test(part.name)) return { measured: false, reason: 'not a meshing gear' };
+  const ring = measureToothRing(part, teeth);
+  if (!ring.measured) return ring;
+  const { tip, root, phaseDeg, faceLo, faceHi } = ring;
 
   // Standard involute tip = (teeth + 2)·m / 2; snapped to the nearest VEX IQ tooth size
   const rawModule = (2 * tip) / (teeth + 2);
@@ -160,6 +175,30 @@ export function measureSpurGear(part, teeth) {
     pitchRadiusMm: round((teeth * moduleMm) / 2),
     toothSpacingMm: round(Math.PI * moduleMm),
     toothPhaseDeg: round(phaseDeg, 2),
+    faceSpanMm: [round(faceLo, 2), round(faceHi, 2)]
+  };
+}
+
+/**
+ * Sprocket teeth for VEX IQ chain (CHAIN_PITCH_MM between link pivots). The pitch radius, where the
+ * pivots sit, follows from the pitch: a link is a chord spanning one tooth, r = p / (2·sin(180°/N)).
+ * The tooth phase is measured like a spur gear's; a chain pivot sits in the gap half a tooth on.
+ */
+export function measureSprocket(part, teeth) {
+  if (!teeth || teeth < 6) return { measured: false, reason: 'no tooth count' };
+  const ring = measureToothRing(part, teeth);
+  if (!ring.measured) return ring;
+  const { tip, root, phaseDeg, faceLo, faceHi } = ring;
+  const pitchRadius = CHAIN_PITCH_MM / (2 * Math.sin(Math.PI / teeth));
+  if (!(tip > pitchRadius)) return { measured: false, reason: `tip ${tip.toFixed(2)} mm is inside the chain pitch circle` };
+  return {
+    measured: true,
+    chainPitchMm: CHAIN_PITCH_MM,
+    tipRadiusMm: round(tip),
+    rootRadiusMm: round(root),
+    pitchRadiusMm: round(pitchRadius),
+    toothPhaseDeg: round(phaseDeg, 2),
+    gapPhaseDeg: round(mod(phaseDeg + 180 / teeth, 360 / teeth), 2),
     faceSpanMm: [round(faceLo, 2), round(faceHi, 2)]
   };
 }

@@ -244,6 +244,26 @@ export function setWorldBoxes(instances, ids, bboxOf) {
   return boxes;
 }
 
+/**
+ * Where a part added with nothing selected goes: on the floor (one pitch up), in front of the build
+ * (+X is the front) with a pitch of space between, across from the build's middle, on the half-pitch
+ * grid. `bbox` is the new part's catalog box; `bboxOf(inst)` the catalog box of a placed part.
+ * Returns null for an empty build (the caller picks a spot near the origin).
+ */
+export function spotBesideBuild(instances, bbox, bboxOf, pitch = 12.7) {
+  const box = new THREE.Box3();
+  for (const inst of instances) {
+    if (inst.visible === false) continue;
+    const b = worldBoxOf(inst, bboxOf(inst));
+    if (b) box.union(new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)));
+  }
+  if (box.isEmpty()) return null;
+  const half = pitch / 2;
+  const x = Math.ceil((box.max.x + pitch - (bbox?.min?.[0] ?? 0)) / half) * half;
+  const z = Math.round((box.min.z + box.max.z) / 2 / half) * half;
+  return [x, pitch, z].map((v) => Number(v.toFixed(3)) + 0);
+}
+
 /** The group `ids` make up exactly, or null (a loose set, a group and more, or part of a group). */
 export function wholeGroupOf(instances, ids, groups = groupsOf(instances)) {
   if (ids.length < 2) return null;
