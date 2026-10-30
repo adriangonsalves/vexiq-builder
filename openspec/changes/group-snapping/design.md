@@ -44,12 +44,20 @@ At drag end, with the members at their dropped poses: compute overlaps with outs
 ### 5. Server parity
 `update_group` uses `stepDelta` for `moveCentreTo` and `setGridPivot` for `turn`; `moveBy` stays exact (an explicit distance). The reply's `centre` is the one reached. No hole pull on the server (an assistant uses `place_parts` inserts to seat parts).
 
+### 6. Straightening small tilts
+New pure helper `findStraighten(movingFeatures, candidates, { maxDeg = 5, minDeg = 0.1 })` in `pinHoleAlignment.js`: for each fitting pair in reach (same pairing and reach tests as `findHoleSnap`, but parallel within 5°), the turn that makes the moving axis parallel to the other (axis = cross of the two directions, sign-corrected for opposite-facing pairs) and its pivot (the moving feature's point). Pairs whose turns agree within 0.5° (axis and angle) are grouped; the largest group wins, ties to the smallest sideways pull. Returns `{ quaternion, pivot }` or null.
+- Single-part drag (`objectChange`, before `snapDragToHoles`): if not Alt, compute from the features at the drag's start rotation; set `obj.quaternion = turn × startQuat` and turn the position about the pivot, then run the existing snap. The turn is recomputed from the start pose every frame, so it never accumulates; moving away from the pair returns the part to its start rotation.
+- Set drag: same, with the combined set features; the turn is applied to every member's start pose about the pivot, and the set features are turned with it before `findHoleSnap`.
+- `findHoleSnap`'s 2° parallel test stays as is: after straightening the pair is parallel to within rounding.
+- Alternative: widen `findHoleSnap` to 5° without turning. Rejected: it would pull tilted parts onto lines they can't seat on.
+
 ## Risks / Trade-offs
 
 - [Per-frame snap cost on big sets: 45 parts can carry several hundred features] → Features are collected once at drag start and only translated; `findHoleSnap` caps pairs (`HOLE_SNAP_MAX_PAIRS`); candidates filtered by the set's reach box.
 - [A set snaps onto the wrong plate when two are equally near] → Same as single parts: nearest pair, agreement wins; Alt to drag freely; undo.
 - [Rounding a typed centre surprises a user who wanted an exact value] → The field shows the reached value; Free snap gives exact moves.
 - [Put-back hides a drop the user wanted, e.g. deliberately overlapping a tire on a hub] → Overlap rules already exclude tire-on-hub; sets that overlap at drag start aren't put back, so a user can still drag a set out of an overlap.
+- [A part angled on purpose within 5° of a hole line gets straightened while dragged near it] → Only within pull distance of a matching pair; Alt drags freely; the 5° limit leaves deliberate angles beyond it alone.
 - [Turn pivot moves compared with today (box centre → grid point)] → Visible only as a slightly different ring centre; the turn result is what was asked for.
 
 ## Migration Plan

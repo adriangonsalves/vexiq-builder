@@ -20,11 +20,15 @@ Moving a set (a group or several selected parts) SHALL keep every part on the ho
 - **THEN** its parts' holes are still on the grid they were on before, so it can still be pinned to the plate it came off
 
 ### Requirement: A dragged set pulls onto holes
-While the Move arrows drag a set, its parts' pins, pegs, shafts and openings SHALL be matched against the openings, pins, pegs and shafts of visible parts outside the set, by the same rules as dragging one part: matching kinds, axes parallel within 2°, within the same pull distance and reach along the line. When a match is found, the whole set SHALL jump by the move that lines that pair up. When several pairs need the same move (within 0.25 mm), that move SHALL win over a single pair; otherwise the nearest pair wins. Parts inside the set SHALL NOT pull on one another. The set's parts SHALL keep their places relative to one another. Holding Alt while dragging SHALL turn the pull off, as for one part. The aligned-hole highlights SHALL show the pairs the set lines up with.
+While the Move arrows drag a set, its parts' pins, pegs, shafts and openings SHALL be matched against the openings, pins, pegs and shafts of visible parts outside the set, by the same rules as dragging one part: matching kinds, axes parallel within 5°, within the same pull distance and reach along the line. A pair between 0.1° and 5° off parallel SHALL first turn the whole set, about the point of its matched pin, peg, shaft or hole, so the axes are exactly parallel, with the same choice rules as for one part (see drag-hole-snap: "Small tilts are straightened while dragging"); pairs 5° or more off SHALL NOT turn or pull it. When a match is found, the whole set SHALL jump by the move that lines that pair up. When several pairs need the same move (within 0.25 mm), that move SHALL win over a single pair; otherwise the nearest pair wins. Parts inside the set SHALL NOT pull on one another. The set's parts SHALL keep their places relative to one another. Holding Alt while dragging SHALL turn the pull off, as for one part. The aligned-hole highlights SHALL show the pairs the set lines up with.
 
 #### Scenario: Claw onto the wrist plate
 - **WHEN** the user drags the "Claw" group, whose two 1x1 pins and corner-connector pegs face the Wrist 4x4 Plate's holes, to within a couple of millimetres of them
 - **THEN** the whole Claw jumps so its pins and pegs are on the plate's hole lines
+
+#### Scenario: Tilted group straightened
+- **WHEN** the "Claw" group is 2° off square to the Wrist 4x4 Plate and is dragged onto it
+- **THEN** the whole Claw turns square to the plate and its pins and pegs line up with the plate's holes
 
 #### Scenario: Pairs inside the set ignored
 - **WHEN** a group holds a beam and the pins seated in it, and is dragged
@@ -35,7 +39,7 @@ While the Move arrows drag a set, its parts' pins, pegs, shafts and openings SHA
 - **THEN** the group does not jump onto them
 
 ### Requirement: A set lands clear or goes back
-When a drag of a set ends: if the set is lined up on a hole line (it pulled onto holes) but overlaps a part outside it, it SHALL slide along that line to the nearest spot where it overlaps nothing, within the same reach as for one part. If it overlaps a part outside it that it did not overlap when the drag began, and no clear spot is found, the set SHALL go back to where it was before the drag, nothing SHALL be saved, no history step SHALL be made, and a message SHALL say "Can't place it there: it would overlap another part. Put back." Otherwise the move SHALL be saved as one step, as now. Overlaps with outside parts SHALL still be shown while dragging. Parts inside the set SHALL NOT count as overlapping one another.
+When a drag of a set ends: if the set is lined up on a hole line (it pulled onto holes) but overlaps a part outside it, it SHALL slide along that line to the nearest spot where it overlaps nothing, within the same reach as for one part. If it overlaps a part outside it that it did not overlap when the drag began, and no clear spot is found, the set SHALL go back to where it was before the drag, undoing any straightening turn too, nothing SHALL be saved, no history step SHALL be made, and a message SHALL say "Can't place it there: it would overlap another part. Put back." Otherwise the move SHALL be saved as one step, as now. Overlaps with outside parts SHALL still be shown while dragging. Parts inside the set SHALL NOT count as overlapping one another.
 
 #### Scenario: Pressed onto pins
 - **WHEN** a group snaps onto a plate's hole lines one snap step too deep, so its pins' shoulders overlap the plate, and the user lets go

@@ -14,10 +14,16 @@
 - [ ] 3.2 At set drag start collect the members' world features once; in `objectChange` translate them by the current delta and run `findHoleSnap` with the dragged axes and reach-box-filtered candidates; apply the offset to the pivot (axes along the hole line stay on the drag grid), remember the snap line, skip with Alt; verify in the app that dragging the Claw toward the Wrist 4x4 Plate jumps it onto the plate's hole lines, and that Alt drags freely
 - [ ] 3.3 Show the aligned-hole highlights for the set's lined-up pairs while dragging (throttled with the overlap check); verify the plate's holes highlight as the Claw lines up
 
+## 3a. Straightening small tilts
+
+- [ ] 3a.1 Add `findStraighten` to `src/utils/pinHoleAlignment.js` and cases to `scripts/check-pin-hole-alignment.mjs`: a pin 3° off a hole gives a 3° turn about the pin's point, 6° gives none, 0.05° gives none, three agreeing pairs beat one nearer pair; verify the script exits 0
+- [ ] 3a.2 Single-part drag straightens before the hole pull (from the drag's start rotation, skipped with Alt); verify in the app that a 1x6 Beam tilted 3° dragged onto two standing pins ends square and seated, a beam angled 20° isn't turned, and Alt keeps the tilt
+- [ ] 3a.3 Set drag straightens with the combined features, turning every member about the pivot; verify the Claw turned 2° off the wrist plate ends square with its pins and pegs on the plate's hole lines
+
 ## 4. Release: settle or put back
 
 - [ ] 4.1 Record `startOverlap` at set drag start; on release, if a snap line was used and members overlap outside parts, slide all members along the line with `clearSpotAlongLine` (set-level clear test, broad phase by box) within the single-part reach and commit there; verify a Claw snapped one step too deep into the plate settles flush and is saved as one "Move Claw" step
-- [ ] 4.2 If the set still overlaps something it didn't at drag start, restore the start poses, re-mark overlaps, show "Can't place it there: it would overlap another part. Put back.", and save nothing; verify dropping a group inside a beam puts it back with the message and adds no history step, and that a set already overlapping a part can still be dragged a step and saved
+- [ ] 4.2 If the set still overlaps something it didn't at drag start, restore the start poses, re-mark overlaps, show "Can't place it there: it would overlap another part. Put back.", and save nothing (a straightening turn is undone too); verify dropping a group inside a beam puts it back with the message and adds no history step, and that a set already overlapping a part can still be dragged a step and saved
 
 ## 5. Server parity
 
@@ -25,5 +31,5 @@
 
 ## 6. Docs and final pass
 
-- [ ] 6.1 Update `features.md` (group moves keep their hole grid, pull onto holes while dragged, settle or are put back on release; `update_group` grid rules)
+- [ ] 6.1 Update `features.md` (group moves keep their hole grid, pull onto holes while dragged, settle or are put back on release; parts and groups straighten small tilts onto hole lines; `update_group` grid rules)
 - [ ] 6.2 Final pass: run all `node scripts/check-*.mjs`; in the app, on a copy of the Clawbot build with the Claw 0.58 mm off, drag the Claw a step away and back onto the wrist plate and confirm the audit shows no overlap between the Claw and the plate and that the wrist pins and Wrist Chassis Corner L are seated (Corner R is 0.338 mm off within the group itself, which a group move can't fix)
