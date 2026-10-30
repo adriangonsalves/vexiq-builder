@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-28T05:17:24.907Z",
+  "generatedAt": "2026-10-30T01:43:30.386Z",
   "partCount": 480,
-  "totalVerifiedPorts": 4163,
+  "totalVerifiedPorts": 4198,
   "parts": {
     "5x-pitch-idler-pulley-228-2500-1413-0": {
       "id": "5x-pitch-idler-pulley-228-2500-1413-0",
@@ -830,12 +830,32 @@
         "minFastenersRequired": 2
       },
       "portCounts": {
-        "total": 0,
+        "total": 1,
         "pinHoles": 0,
         "shaftBores": 0,
-        "pinPegs": 0
+        "pinPegs": 1
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "peg_1",
+          "type": "pin_peg",
+          "origin": [
+            0,
+            0,
+            -3.155
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "spanMm": [
+            -6.28,
+            -0.03
+          ],
+          "verified": true
+        }
+      ]
     },
     "1-5x-pitch-screw-segment-cw-228-2500-324-16": {
       "id": "1-5x-pitch-screw-segment-cw-228-2500-324-16",
@@ -10440,12 +10460,32 @@
         "minFastenersRequired": 2
       },
       "portCounts": {
-        "total": 0,
+        "total": 1,
         "pinHoles": 0,
         "shaftBores": 0,
-        "pinPegs": 0
+        "pinPegs": 1
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "peg_1",
+          "type": "pin_peg",
+          "origin": [
+            0,
+            0,
+            -5.325
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "spanMm": [
+            -11.7,
+            1.05
+          ],
+          "verified": true
+        }
+      ]
     },
     "2x-pitch-plastic-shaft-228-2500-074-89": {
       "id": "2x-pitch-plastic-shaft-228-2500-074-89",
@@ -10547,8 +10587,8 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 1,
-        "pinHoles": 1,
+        "total": 2,
+        "pinHoles": 2,
         "shaftBores": 0,
         "pinPegs": 0
       },
@@ -10574,6 +10614,31 @@
           "pitchCoord": [
             0,
             0,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_2",
+          "type": "pin_hole",
+          "origin": [
+            0,
+            88.9,
+            0
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "through": true,
+          "spanMm": [
+            -17.678,
+            17.678
+          ],
+          "pitchCoord": [
+            0,
+            7,
             0
           ],
           "verified": true
@@ -14174,10 +14239,10 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 3,
+        "total": 5,
         "pinHoles": 3,
         "shaftBores": 0,
-        "pinPegs": 0
+        "pinPegs": 2
       },
       "ports": [
         {
@@ -14252,6 +14317,44 @@
             0,
             0,
             -1
+          ],
+          "verified": true
+        },
+        {
+          "portId": "peg_1",
+          "type": "pin_peg",
+          "origin": [
+            12.7,
+            0,
+            3.475
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "spanMm": [
+            0.85,
+            6.1
+          ],
+          "verified": true
+        },
+        {
+          "portId": "peg_2",
+          "type": "pin_peg",
+          "origin": [
+            0,
+            0,
+            3.475
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "spanMm": [
+            0.85,
+            6.1
           ],
           "verified": true
         }
@@ -61392,8 +61495,8 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 1,
-        "pinHoles": 0,
+        "total": 6,
+        "pinHoles": 5,
         "shaftBores": 1,
         "pinPegs": 0
       },
@@ -61423,6 +61526,131 @@
           ],
           "verified": true,
           "shape": "round"
+        },
+        {
+          "portId": "hole_1",
+          "type": "pin_hole",
+          "origin": [
+            80.161,
+            -30.354,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            1,
+            3.175
+          ],
+          "pitchCoord": [
+            6.31,
+            -2.39,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_2",
+          "type": "pin_hole",
+          "origin": [
+            92.861,
+            -30.354,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.275,
+            2.275
+          ],
+          "pitchCoord": [
+            7.31,
+            -2.39,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_3",
+          "type": "pin_hole",
+          "origin": [
+            67.461,
+            -30.354,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.275,
+            2.275
+          ],
+          "pitchCoord": [
+            5.31,
+            -2.39,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_4",
+          "type": "pin_hole",
+          "origin": [
+            80.161,
+            -17.654,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.275,
+            2.275
+          ],
+          "pitchCoord": [
+            6.31,
+            -1.39,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_5",
+          "type": "pin_hole",
+          "origin": [
+            80.161,
+            -43.054,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.275,
+            2.275
+          ],
+          "pitchCoord": [
+            6.31,
+            -3.39,
+            0
+          ],
+          "verified": true
         }
       ]
     },
@@ -71018,8 +71246,8 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 1,
-        "pinHoles": 1,
+        "total": 3,
+        "pinHoles": 3,
         "shaftBores": 0,
         "pinPegs": 0
       },
@@ -71028,7 +71256,7 @@
           "portId": "hole_1",
           "type": "pin_hole",
           "origin": [
-            73.85,
+            -73.85,
             0,
             0
           ],
@@ -71039,11 +71267,61 @@
           ],
           "through": false,
           "spanMm": [
-            1.7,
-            7.35
+            -62.8,
+            62.8
           ],
           "pitchCoord": [
-            5.81,
+            -5.81,
+            0,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_2",
+          "type": "pin_hole",
+          "origin": [
+            69.85,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.286,
+            2.264
+          ],
+          "pitchCoord": [
+            5.5,
+            0,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_3",
+          "type": "pin_hole",
+          "origin": [
+            -69.85,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.264,
+            2.286
+          ],
+          "pitchCoord": [
+            -5.5,
             0,
             0
           ],
@@ -86214,12 +86492,88 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 0,
-        "pinHoles": 0,
+        "total": 3,
+        "pinHoles": 3,
         "shaftBores": 0,
         "pinPegs": 0
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "hole_1",
+          "type": "pin_hole",
+          "origin": [
+            98.439,
+            6.676,
+            10.615
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            8.349,
+            12.899
+          ],
+          "pitchCoord": [
+            7.75,
+            0.53,
+            0.84
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_2",
+          "type": "pin_hole",
+          "origin": [
+            -142.861,
+            6.676,
+            10.615
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            8.349,
+            12.899
+          ],
+          "pitchCoord": [
+            -11.25,
+            0.53,
+            0.84
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_3",
+          "type": "pin_hole",
+          "origin": [
+            -146.86,
+            6.676,
+            10.613
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            -135.811,
+            91.389
+          ],
+          "pitchCoord": [
+            -11.56,
+            0.53,
+            0.84
+          ],
+          "verified": true
+        }
+      ]
     },
     "20x-pitch-shaft-228-2500-267-312": {
       "id": "20x-pitch-shaft-228-2500-267-312",
@@ -87082,8 +87436,8 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 1,
-        "pinHoles": 1,
+        "total": 2,
+        "pinHoles": 2,
         "shaftBores": 0,
         "pinPegs": 0
       },
@@ -87092,22 +87446,47 @@
           "portId": "hole_1",
           "type": "pin_hole",
           "origin": [
-            150.05,
+            -146.05,
             0,
             0
           ],
           "axis": [
-            1,
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.264,
+            2.286
+          ],
+          "pitchCoord": [
+            -11.5,
             0,
             0
           ],
-          "through": false,
+          "verified": true
+        },
+        {
+          "portId": "hole_2",
+          "type": "pin_hole",
+          "origin": [
+            146.05,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
           "spanMm": [
-            3.9,
-            4.25
+            -2.264,
+            2.286
           ],
           "pitchCoord": [
-            11.81,
+            11.5,
             0,
             0
           ],
@@ -90794,8 +91173,8 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 1,
-        "pinHoles": 1,
+        "total": 3,
+        "pinHoles": 3,
         "shaftBores": 0,
         "pinPegs": 0
       },
@@ -90804,7 +91183,7 @@
           "portId": "hole_1",
           "type": "pin_hole",
           "origin": [
-            302.45,
+            -302.45,
             0,
             0
           ],
@@ -90815,11 +91194,61 @@
           ],
           "through": false,
           "spanMm": [
-            2.65,
-            4.15
+            -291.4,
+            291.4
           ],
           "pitchCoord": [
-            23.81,
+            -23.81,
+            0,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_2",
+          "type": "pin_hole",
+          "origin": [
+            -298.45,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.264,
+            2.286
+          ],
+          "pitchCoord": [
+            -23.5,
+            0,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_3",
+          "type": "pin_hole",
+          "origin": [
+            298.45,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.286,
+            2.264
+          ],
+          "pitchCoord": [
+            23.5,
             0,
             0
           ],
@@ -92598,8 +93027,8 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 1,
-        "pinHoles": 1,
+        "total": 3,
+        "pinHoles": 3,
         "shaftBores": 0,
         "pinPegs": 0
       },
@@ -92608,7 +93037,7 @@
           "portId": "hole_1",
           "type": "pin_hole",
           "origin": [
-            759.65,
+            -759.65,
             0,
             0
           ],
@@ -92619,11 +93048,61 @@
           ],
           "through": false,
           "spanMm": [
-            3.95,
-            5.6
+            -748.6,
+            748.6
           ],
           "pitchCoord": [
-            59.81,
+            -59.81,
+            0,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_2",
+          "type": "pin_hole",
+          "origin": [
+            -755.65,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.264,
+            2.286
+          ],
+          "pitchCoord": [
+            -59.5,
+            0,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_3",
+          "type": "pin_hole",
+          "origin": [
+            755.65,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -2.286,
+            2.264
+          ],
+          "pitchCoord": [
+            59.5,
             0,
             0
           ],
@@ -93455,12 +93934,51 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 0,
+        "total": 2,
         "pinHoles": 0,
         "shaftBores": 0,
-        "pinPegs": 0
+        "pinPegs": 2
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "peg_1",
+          "type": "pin_peg",
+          "origin": [
+            0,
+            -6.715,
+            6.35
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "spanMm": [
+            -9.34,
+            -4.09
+          ],
+          "verified": true
+        },
+        {
+          "portId": "peg_2",
+          "type": "pin_peg",
+          "origin": [
+            0,
+            -6.715,
+            -6.35
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "spanMm": [
+            -9.34,
+            -4.09
+          ],
+          "verified": true
+        }
+      ]
     },
     "ant-front-plate-228-2500-315-352": {
       "id": "ant-front-plate-228-2500-315-352",
@@ -93781,12 +94299,51 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 0,
+        "total": 2,
         "pinHoles": 0,
         "shaftBores": 0,
-        "pinPegs": 0
+        "pinPegs": 2
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "peg_1",
+          "type": "pin_peg",
+          "origin": [
+            0,
+            -6.715,
+            -6.35
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "spanMm": [
+            -9.34,
+            -4.09
+          ],
+          "verified": true
+        },
+        {
+          "portId": "peg_2",
+          "type": "pin_peg",
+          "origin": [
+            0,
+            -6.715,
+            6.35
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "spanMm": [
+            -9.34,
+            -4.09
+          ],
+          "verified": true
+        }
+      ]
     },
     "ant-rear-plate-228-2500-317-354": {
       "id": "ant-rear-plate-228-2500-317-354",
@@ -100861,12 +101418,51 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 0,
+        "total": 2,
         "pinHoles": 0,
         "shaftBores": 0,
-        "pinPegs": 0
+        "pinPegs": 2
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "peg_1",
+          "type": "pin_peg",
+          "origin": [
+            -5.158,
+            -3.845,
+            18.9
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "spanMm": [
+            -6.47,
+            -1.22
+          ],
+          "verified": true
+        },
+        {
+          "portId": "peg_2",
+          "type": "pin_peg",
+          "origin": [
+            7.542,
+            -3.845,
+            18.9
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "spanMm": [
+            -6.47,
+            -1.22
+          ],
+          "verified": true
+        }
+      ]
     },
     "medium-rocket-engine-nozzle-228-2500-1911-400": {
       "id": "medium-rocket-engine-nozzle-228-2500-1911-400",
@@ -100963,12 +101559,51 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 0,
+        "total": 2,
         "pinHoles": 0,
         "shaftBores": 0,
-        "pinPegs": 0
+        "pinPegs": 2
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "peg_1",
+          "type": "pin_peg",
+          "origin": [
+            -16.215,
+            -11.5,
+            17.7
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "spanMm": [
+            -18.84,
+            -13.59
+          ],
+          "verified": true
+        },
+        {
+          "portId": "peg_2",
+          "type": "pin_peg",
+          "origin": [
+            -16.215,
+            -11.5,
+            5
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "spanMm": [
+            -18.84,
+            -13.59
+          ],
+          "verified": true
+        }
+      ]
     },
     "minifigure-shoulder-pin-228-2500-1853-403": {
       "id": "minifigure-shoulder-pin-228-2500-1853-403",
@@ -101585,12 +102220,38 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 0,
-        "pinHoles": 0,
+        "total": 1,
+        "pinHoles": 1,
         "shaftBores": 0,
         "pinPegs": 0
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "hole_1",
+          "type": "pin_hole",
+          "origin": [
+            -31.43,
+            5.461,
+            62.476
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            -34.592,
+            26.795
+          ],
+          "pitchCoord": [
+            -2.47,
+            0.43,
+            4.92
+          ],
+          "verified": true
+        }
+      ]
     },
     "right-shuttle-wing-228-2500-2012-410": {
       "id": "right-shuttle-wing-228-2500-2012-410",
@@ -103198,12 +103859,51 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 0,
+        "total": 2,
         "pinHoles": 0,
         "shaftBores": 0,
-        "pinPegs": 0
+        "pinPegs": 2
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "peg_1",
+          "type": "pin_peg",
+          "origin": [
+            7.836,
+            -1.405,
+            18.9
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "spanMm": [
+            -4.03,
+            1.22
+          ],
+          "verified": true
+        },
+        {
+          "portId": "peg_2",
+          "type": "pin_peg",
+          "origin": [
+            -4.864,
+            -1.405,
+            18.9
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "spanMm": [
+            -4.03,
+            1.22
+          ],
+          "verified": true
+        }
+      ]
     },
     "short-low-profile-pawl-228-2500-1411-421": {
       "id": "short-low-profile-pawl-228-2500-1411-421",
@@ -109004,12 +109704,51 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 0,
+        "total": 2,
         "pinHoles": 0,
         "shaftBores": 0,
-        "pinPegs": 0
+        "pinPegs": 2
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "peg_1",
+          "type": "pin_peg",
+          "origin": [
+            0.38,
+            1.925,
+            18.2
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "spanMm": [
+            -0.7,
+            4.55
+          ],
+          "verified": true
+        },
+        {
+          "portId": "peg_2",
+          "type": "pin_peg",
+          "origin": [
+            13.08,
+            1.925,
+            18.2
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "spanMm": [
+            -0.7,
+            4.55
+          ],
+          "verified": true
+        }
+      ]
     },
     "triple-1-2-1x-wide-1x2-corner-connector-228-2500-1251-454": {
       "id": "triple-1-2-1x-wide-1x2-corner-connector-228-2500-1251-454",
@@ -109698,8 +110437,8 @@
         "minFastenersRequired": 2
       },
       "portCounts": {
-        "total": 4,
-        "pinHoles": 4,
+        "total": 6,
+        "pinHoles": 6,
         "shaftBores": 0,
         "pinPegs": 0
       },
@@ -109781,6 +110520,56 @@
         },
         {
           "portId": "hole_4",
+          "type": "pin_hole",
+          "origin": [
+            6.35,
+            -3.05,
+            6.35
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            3.05,
+            23.837
+          ],
+          "pitchCoord": [
+            0.5,
+            -0.24,
+            0.5
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_5",
+          "type": "pin_hole",
+          "origin": [
+            0,
+            23.84,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "through": false,
+          "spanMm": [
+            19.264,
+            23.837
+          ],
+          "pitchCoord": [
+            0,
+            1.88,
+            0
+          ],
+          "verified": true
+        },
+        {
+          "portId": "hole_6",
           "type": "pin_hole",
           "origin": [
             19.05,
@@ -111486,7 +112275,7 @@
           ],
           "through": false,
           "spanMm": [
-            -51.35,
+            -50.35,
             0
           ],
           "pitchCoord": [
@@ -111661,7 +112450,7 @@
           ],
           "through": false,
           "spanMm": [
-            -51.35,
+            -50.35,
             0
           ],
           "pitchCoord": [

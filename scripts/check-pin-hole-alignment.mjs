@@ -1078,5 +1078,15 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   check('hole snap: a 1x6 Beam 2.5 mm off another, dragged along their hole lines, is pulled into line', snap && near(snap.offset.x, -2.5, 0.01) && near(snap.offset.z, 0), JSON.stringify(snap?.offset));
 }
 
+// ---------------------------------------------------------------------------
+// STEP files made of placed pieces: holes and pegs are found where the model shows them
+// ---------------------------------------------------------------------------
+{
+  const link = part('Traction Link');
+  const pegs = (link.ports || []).filter((p) => p.type === 'pin_peg');
+  const inBox = (o) => o.every((v, i) => v >= link.bbox.min[i] - 0.5 && v <= link.bbox.max[i] + 0.5);
+  check('Traction Link: its two split pegs are found, inside the model, one pitch apart', pegs.length === 2 && pegs.every((p) => inBox(p.origin)) && near(Math.abs(pegs[0].origin[0] - pegs[1].origin[0]), 12.7, 0.05), JSON.stringify(pegs));
+}
+
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

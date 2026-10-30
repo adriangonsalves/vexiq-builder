@@ -55,8 +55,14 @@ function extractAllStepCylinders(stepFilePath) {
     axes.set(m[1], { pt: m[2], zDir: m[3], xDir: m[4] });
   }
 
+  // A file made of placed pieces (an assembly) gives each piece's surfaces in that piece's own
+  // frame; the model the app shows has every piece moved into place, so the cylinders must be too.
+  const placementsOf = stepPiecePlacements(stepText, points, dirs, axes);
+
   const cylRegex =
     /#(\d+)\s*=\s*CYLINDRICAL_SURFACE\s*\([^,]*,\s*#(\d+)\s*,\s*([-\d.Ee+]+)\s*\)/g;
+  const p = new THREE.Vector3();
+  const d = new THREE.Vector3();
   while ((m = cylRegex.exec(stepText)) !== null) {
     const axis = axes.get(m[2]);
     const radius = parseFloat(m[3]);
@@ -64,13 +70,117 @@ function extractAllStepCylinders(stepFilePath) {
     const pt = points.get(axis.pt);
     const dir = dirs.get(axis.zDir);
     if (!pt || !dir) continue;
-    cylinders.push({
-      origin: [Number(pt[0].toFixed(3)), Number(pt[1].toFixed(3)), Number(pt[2].toFixed(3))],
-      axis: [Number(dir[0].toFixed(3)), Number(dir[1].toFixed(3)), Number(dir[2].toFixed(3))],
-      radius: Number(radius.toFixed(3))
-    });
+    for (const matrix of placementsOf(m[1])) {
+      p.set(...pt).applyMatrix4(matrix);
+      d.set(...dir).transformDirection(matrix);
+      cylinders.push({
+        origin: [Number(p.x.toFixed(3)), Number(p.y.toFixed(3)), Number(p.z.toFixed(3))],
+        axis: [Number(d.x.toFixed(3)), Number(d.y.toFixed(3)), Number(d.z.toFixed(3))],
+        radius: Number(radius.toFixed(3))
+      });
+    }
   }
   return cylinders;
+}
+
+/**
+ * For a STEP assembly: returns `placementsOf(entityId)`, the matrices (piece frame -> whole part)
+ * for the piece whose shape holds that entity, one per place the piece is used. Pieces are joined by
+ * REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION (an ITEM_DEFINED_TRANSFORMATION of two
+ * placements: the piece's place in the parent and its origin in its own frame) and by plain
+ * SHAPE_REPRESENTATION_RELATIONSHIPs (same frame). A single-body file gives the identity.
+ */
+function stepPiecePlacements(stepText, points, dirs, axes) {
+  const IDENTITY = [new THREE.Matrix4()];
+  if (!/REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION/.test(stepText)) return () => IDENTITY;
+
+  // Every entity's references, and the item lists of the shape representations
+  const refs = new Map();
+  const repItems = new Map();
+  const entityRegex = /#(\d+)\s*=\s*([\s\S]*?);\s*(?=#\d+\s*=|ENDSEC)/g;
+  let m;
+  while ((m = entityRegex.exec(stepText)) !== null) {
+    const body = m[2];
+    refs.set(m[1], [...body.matchAll(/#(\d+)/g)].map((r) => r[1]));
+    // Shape representations only (colour/style "presentation" records point at the same geometry)
+    const rep = /^\s*\w*SHAPE_REPRESENTATION\s*\(\s*'[^']*'\s*,\s*\(([^)]*)\)/.exec(body);
+    if (rep) repItems.set(m[1], [...rep[1].matchAll(/#(\d+)/g)].map((r) => r[1]));
+  }
+
+  const placement = (id) => {
+    const a = axes.get(id);
+    const origin = points.get(a?.pt);
+    if (!a || !origin) return new THREE.Matrix4();
+    const z = new THREE.Vector3(...(dirs.get(a.zDir) || [0, 0, 1])).normalize();
+    let x = new THREE.Vector3(...(dirs.get(a.xDir) || [1, 0, 0]));
+    x = x.sub(z.clone().multiplyScalar(x.dot(z)));
+    if (x.lengthSq() < 1e-9) x = new THREE.Vector3(Math.abs(z.x) < 0.9 ? 1 : 0, Math.abs(z.x) < 0.9 ? 0 : 1, 0).sub(z.clone().multiplyScalar(Math.abs(z.x) < 0.9 ? z.x : z.y));
+    x.normalize();
+    const y = new THREE.Vector3().crossVectors(z, x);
+    return new THREE.Matrix4().makeBasis(x, y, z).setPosition(...origin);
+  };
+
+  // child rep -> [{ parent rep, matrix child frame -> parent frame }]; same-frame links both ways
+  const parents = new Map();
+  const sameFrame = new Map();
+  const addSame = (a, b) => {
+    if (!sameFrame.has(a)) sameFrame.set(a, []);
+    sameFrame.get(a).push(b);
+  };
+  const transformed = /#\d+\s*=\s*\(\s*REPRESENTATION_RELATIONSHIP\s*\([^,]*,[^,]*,\s*#(\d+)\s*,\s*#(\d+)\s*\)\s*REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION\s*\(\s*#(\d+)\s*\)/g;
+  while ((m = transformed.exec(stepText)) !== null) {
+    const [, rep1, rep2, transformId] = m;
+    const t = /ITEM_DEFINED_TRANSFORMATION\s*\([^,]*,[^,]*,\s*#(\d+)\s*,\s*#(\d+)\s*\)/.exec(
+      stepText.slice(stepText.search(new RegExp(`#${transformId}\\s*=`)))
+    );
+    if (!t) continue;
+    const [, item1, item2] = t;
+    // item1 is the piece's place in the parent: the parent is the rep that lists it
+    const parent = repItems.get(rep2)?.includes(item1) && !repItems.get(rep1)?.includes(item1) ? rep2 : rep1;
+    const child = parent === rep1 ? rep2 : rep1;
+    const matrix = placement(item1).multiply(placement(item2).invert());
+    if (!parents.has(child)) parents.set(child, []);
+    parents.get(child).push({ parent, matrix });
+  }
+  const plain = /#\d+\s*=\s*SHAPE_REPRESENTATION_RELATIONSHIP\s*\([^,]*,[^,]*,\s*#(\d+)\s*,\s*#(\d+)\s*\)/g;
+  while ((m = plain.exec(stepText)) !== null) {
+    addSame(m[1], m[2]);
+    addSame(m[2], m[1]);
+  }
+
+  // All matrices from a rep's frame to the whole part (several when a piece is used several times)
+  const toRootCache = new Map();
+  const toRoot = (rep, seen = new Set()) => {
+    if (toRootCache.has(rep)) return toRootCache.get(rep);
+    seen.add(rep);
+    const group = [rep];
+    for (let i = 0; i < group.length; i++) {
+      for (const other of sameFrame.get(group[i]) || []) if (!group.includes(other)) group.push(other);
+    }
+    const out = [];
+    for (const r of group) {
+      for (const { parent, matrix } of parents.get(r) || []) {
+        if (seen.has(parent)) continue;
+        for (const up of toRoot(parent, new Set(seen))) out.push(up.clone().multiply(matrix));
+      }
+    }
+    const result = out.length ? out : IDENTITY;
+    toRootCache.set(rep, result);
+    return result;
+  };
+
+  // Which rep each entity's geometry belongs to: walk down from each rep's items
+  const owner = new Map();
+  for (const [rep, items] of repItems) {
+    const stack = [...items];
+    while (stack.length) {
+      const id = stack.pop();
+      if (owner.has(id)) continue;
+      owner.set(id, rep);
+      for (const r of refs.get(id) || []) stack.push(r);
+    }
+  }
+  return (entityId) => (owner.has(entityId) ? toRoot(owner.get(entityId)) : IDENTITY);
 }
 
 /**
@@ -216,6 +326,45 @@ function eulerFromZAxis(axis) {
 /**
  * Fast direct MeshBVH probe check between a probe geometry (at world Pos + Rot) and target part's BVH.
  */
+/**
+ * The stretch [tStart, tEnd] of a coaxial group's line where the part is a peg the size of a pin's
+ * leg: looking in at the line from 4.6 mm away (in open air) in four directions, every look either
+ * meets an outer surface 1.9-2.6 mm from the line or passes through (the slot of a split peg, as on
+ * a pin's legs), and at least one opposite pair meets it. Looking in, not out, so a hole through a
+ * beam doesn't count (those points are inside the beam).
+ * Null when that stretch is shorter than 2.5 mm. `hit(origin, dir)` -> { distance, leaving } | null.
+ */
+function measurePegSpan(hit, g, bbox) {
+  const STEP = 0.25;
+  const axis = new THREE.Vector3(...g.axis);
+  const u = new THREE.Vector3(...(Math.abs(axis.x) < 0.9 ? [1, 0, 0] : [0, 1, 0])).projectOnPlane(axis).normalize();
+  const v = new THREE.Vector3().crossVectors(axis, u);
+  const dirs = [u, v, u.clone().negate(), v.clone().negate()].map((d) => d.toArray());
+  const corners = [];
+  for (const x of [bbox.min[0], bbox.max[0]]) for (const y of [bbox.min[1], bbox.max[1]]) for (const z of [bbox.min[2], bbox.max[2]]) corners.push(x * axis.x + y * axis.y + z * axis.z);
+  const [tLo, tHi] = [Math.min(...corners), Math.max(...corners)];
+  let best = null;
+  let runStart = null;
+  for (let t = tLo + STEP / 2; t <= tHi + STEP / 2; t += STEP) {
+    const c = g.perpOrigin.map((p, i) => p + t * g.axis[i]);
+    const looks = dirs.map((d) => {
+      const h = hit(c.map((p, i) => p + d[i] * 4.6), d.map((x) => -x));
+      if (!h || h.distance > 4.6 + 2.6) return 'through';
+      return !h.leaving && h.distance >= 4.6 - 2.6 && h.distance <= 4.6 - 1.9 ? 'peg' : 'other';
+    });
+    const solid =
+      t <= tHi &&
+      !looks.includes('other') &&
+      ((looks[0] === 'peg' && looks[2] === 'peg') || (looks[1] === 'peg' && looks[3] === 'peg'));
+    if (solid && runStart === null) runStart = t;
+    if (!solid && runStart !== null) {
+      if (!best || t - runStart > best[1] - best[0]) best = [runStart - STEP / 2, t - STEP / 2];
+      runStart = null;
+    }
+  }
+  return best && best[1] - best[0] >= 2.5 ? best : null;
+}
+
 function probeIntersectsPart(probeBvh, probePos, probeRotDeg, partBvh) {
   const matProbe = buildWorldMatrix(probePos, probeRotDeg);
   const worldBoxProbe = probeBvh.localBox.clone().applyMatrix4(matProbe);
@@ -486,6 +635,20 @@ async function main() {
       };
       return partRaycast;
     };
+    // First hit on the real mesh as { distance, leaving } (leaving: the ray started inside the solid)
+    let partHit = null;
+    const rawHit = () => {
+      if (partHit) return partHit;
+      const geo = getPartRawGeometry(part);
+      const ray = new THREE.Ray();
+      partHit = (o, d) => {
+        ray.origin.set(o[0], o[1], o[2]);
+        ray.direction.set(d[0], d[1], d[2]);
+        const hit = geo.boundsTree.raycastFirst(ray, THREE.DoubleSide);
+        return hit ? { distance: hit.distance, leaving: hit.face.normal.dot(ray.direction) > 0 } : null;
+      };
+      return partHit;
+    };
 
     const stepPath =
       stepFileMap.get(path.basename(part.file)) ||
@@ -617,6 +780,21 @@ async function main() {
           spanMm: [g.minT, g.maxT],
           verified: true
         });
+      } else if (g.hasPinBore) {
+        // Any other part: a solid round peg of pin size standing on the part (the Traction Link's
+        // two pegs that push into a connector's holes), found from the mesh itself
+        const span = measurePegSpan(rawHit(), g, part.bbox);
+        if (span) {
+          const midT = (span[0] + span[1]) / 2;
+          ports.push({
+            portId: `peg_${pegCounter++}`,
+            type: 'pin_peg',
+            origin: g.perpOrigin.map((v, i) => Number((v + midT * g.axis[i]).toFixed(3))),
+            axis: g.axis,
+            spanMm: span.map((t) => Number(t.toFixed(3))),
+            verified: true
+          });
+        }
       }
     }
 
