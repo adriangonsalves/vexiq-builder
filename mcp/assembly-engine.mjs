@@ -891,6 +891,7 @@ function findJoints(state) {
     joints,
     adjacency,
     directEdges,
+    directJoints,
     pegJoints,
     batteryBays,
     placedGears,
@@ -899,11 +900,12 @@ function findJoints(state) {
 }
 
 /** The graph from findJoints: every visible part a node, an edge from each fastener to each part it is seated in, plus the direct joins. */
-function graphFromJoints(found) {
+function graphFromJoints(found, { pinnedOnly = false } = {}) {
   const edges = [];
   for (const [fastenerId, ports] of found.seatedIn) for (const partId of ports.keys()) edges.push([fastenerId, partId]);
   const seen = new Set();
-  for (const [a, b] of found.directEdges) {
+  // Pinned only: a pin, shaft or peg in a hole; no gear meshes, battery bays or parts that only touch
+  for (const [a, b] of pinnedOnly ? found.directJoints : found.directEdges) {
     const key = a < b ? `${a}|${b}` : `${b}|${a}`;
     if (a === b || seen.has(key)) continue;
     seen.add(key);
@@ -915,10 +917,11 @@ function graphFromJoints(found) {
 /**
  * The assembly's joint graph (openspec outliner-part-groups): `{ nodes: [instanceId], edges: [[a, b]] }`.
  * Fasteners are nodes of their own, so walking it steps beam -> pin -> plate. The audit's connected
- * parts come from the same graph, so Select Connected and the audit can't disagree.
+ * parts come from the same graph, so Select Connected and the audit can't disagree. With
+ * `pinnedOnly`, the only edges are pins, shafts and integral pegs seated in holes (Shift+Ctrl+wheel).
  */
-export function jointGraph(state) {
-  return graphFromJoints(findJoints(state));
+export function jointGraph(state, { pinnedOnly = false } = {}) {
+  return graphFromJoints(findJoints(state), { pinnedOnly });
 }
 
 export function auditAssembly(state) {

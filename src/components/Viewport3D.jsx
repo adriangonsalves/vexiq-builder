@@ -4226,7 +4226,7 @@ export default function Viewport3D({
       // The copy preview follows Ctrl/Cmd (a missed keyup ends it here) and steps aside for a drag
       const modifier = e.ctrlKey || e.metaKey;
       if (pickModeRef.current?.kind === 'copy' && (!modifier || transform.dragging)) endPick();
-      else if (!pickModeRef.current && modifier) startCopy();
+      else if (!pickModeRef.current && modifier && !e.shiftKey) startCopy(); // Shift+Ctrl is for the wheel
       if (pickModeRef.current) {
         if (arrowOverlay.isShown()) {
           setRayFromEvent(e);
@@ -4312,7 +4312,7 @@ export default function Viewport3D({
     // App's deselect handler. Esc in an angle field is handled by the field itself.
     const handleKeyDownCapture = (e) => {
       if (document.querySelector('dialog[open]')) return; // Settings or Audit is open: its keys
-      if ((e.key === 'Control' || e.key === 'Meta') && !e.repeat && !pickModeRef.current && copyPointerRef.current) {
+      if ((e.key === 'Control' || e.key === 'Meta') && !e.repeat && !e.shiftKey && !pickModeRef.current && copyPointerRef.current) {
         if (startCopy()) updatePickHover(copyPointerRef.current.x, copyPointerRef.current.y);
       }
       if (pickModeRef.current && e.target?.tagName !== 'INPUT') {
@@ -4352,7 +4352,10 @@ export default function Viewport3D({
     let lastExpandAt = -Infinity;
     const handleWheelCapture = (e) => {
       // Shift+wheel grows the selection one layer of joined parts (away from the user) or takes the
-      // last layer off (towards); never zooms. Some mice report Shift+wheel as deltaX.
+      // last layer off (towards); never zooms. Some mice report Shift+wheel as deltaX. With Ctrl/Cmd
+      // too, only parts joined by a pin, shaft or peg in a hole count (a copy preview steps aside).
+      const pinnedOnly = e.ctrlKey || e.metaKey;
+      if (pinnedOnly && e.shiftKey && pickModeRef.current?.kind === 'copy') endPick();
       if (e.shiftKey && selectedIdsRef.current.length > 0 && !pickModeRef.current && selectedRingRef.current < 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -4360,7 +4363,7 @@ export default function Viewport3D({
         const now = performance.now();
         if (!delta || now - lastExpandAt < EXPAND_STEP_MS) return;
         lastExpandAt = now;
-        onExpandSelectionRef.current?.(delta < 0 ? 1 : -1);
+        onExpandSelectionRef.current?.(delta < 0 ? 1 : -1, { pinnedOnly });
         return;
       }
       // Picking with a hole highlighted: the wheel steps through fits instead of zooming

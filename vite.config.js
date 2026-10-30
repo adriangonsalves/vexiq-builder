@@ -400,7 +400,7 @@ function vexiqMcpBridgePlugin() {
             // The joints between parts, for Select Connected and expanding the selection (openspec outliner-part-groups)
             if (action === 'joint_graph') {
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ ok: true, graph: jointGraph(state) }));
+              res.end(JSON.stringify({ ok: true, graph: jointGraph(state, { pinnedOnly: Boolean(params.pinnedOnly) }) }));
               return;
             }
 

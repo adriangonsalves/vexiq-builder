@@ -873,11 +873,12 @@ export default function App() {
     changeSelection(instances.filter((i) => i.visible !== false && !selectedIds.includes(i.instanceId)).map((i) => i.instanceId));
 
   // The joints between the parts as they are now (unsaved drags included), from the bridge's audit code
-  const fetchJointGraph = async (parts) => {
+  // `pinnedOnly`: only pins, shafts and pegs seated in holes join parts (no gear meshes or parts that only touch)
+  const fetchJointGraph = async (parts, { pinnedOnly = false } = {}) => {
     const res = await fetch('/api/assembly/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'joint_graph', state: { instances: parts } })
+      body: JSON.stringify({ action: 'joint_graph', state: { instances: parts }, params: { pinnedOnly } })
     });
     const data = await res.json().catch(() => null);
     if (!data?.ok || !data.graph) throw new Error(data?.error || `the server replied ${res.status}`);
@@ -905,19 +906,21 @@ export default function App() {
 
   /**
    * Shift+wheel: grow the selection one layer of joined parts (+1) or take the last layer off (-1).
-   * Remembers where it started until the selection changes some other way (its last ids no longer match).
+   * Shift+Ctrl/Cmd+wheel (`pinnedOnly`) does the same through pins, shafts and pegs in holes only.
+   * Remembers where it started until the selection changes some other way (its last ids no longer
+   * match) or the other kind of step is used, which starts again from the current selection.
    */
-  const expandRef = useRef(null); // { layers, depth, lastIds } or { pending: true } while the joints load
-  const handleExpandSelection = async (dir) => {
+  const expandRef = useRef(null); // { layers, depth, lastIds, pinnedOnly } or { pending: true } while the joints load
+  const handleExpandSelection = async (dir, { pinnedOnly = false } = {}) => {
     let st = expandRef.current;
     const current = selectedIds;
     const same = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
-    if (!st || (!st.pending && !same(st.lastIds, current))) {
+    if (!st || (!st.pending && (!same(st.lastIds, current) || st.pinnedOnly !== pinnedOnly))) {
       if (dir < 0 || current.length === 0) return;
-      st = { pending: true };
+      st = { pending: true, pinnedOnly };
       expandRef.current = st;
       try {
-        const graph = await fetchJointGraph(instances);
+        const graph = await fetchJointGraph(instances, { pinnedOnly });
         st.layers = layersFrom(graph, current, { collapse: groupCollapse(instances) });
         st.depth = 0;
         st.pending = false;
@@ -935,7 +938,7 @@ export default function App() {
     st.depth = depth;
     st.lastIds = st.layers.slice(0, depth + 1).flat();
     changeSelection(st.lastIds);
-    setActionFeedback({ message: `Layer ${depth} · ${partCount(st.lastIds.length)}`, isError: false });
+    setActionFeedback({ message: `${st.pinnedOnly ? 'Pinned layer' : 'Layer'} ${depth} · ${partCount(st.lastIds.length)}`, isError: false });
   };
 
   // A folder's hide or lock button: every part of the group, one step

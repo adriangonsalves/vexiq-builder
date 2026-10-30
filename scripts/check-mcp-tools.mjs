@@ -832,6 +832,18 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   const appWay = connectedFrom(jointGraph(readState()), ['Top']);
   check('select_parts connected: same parts as the app\'s Select Connected', labelsOf(res.data.selected.map((x) => x.instanceId)) === labelsOf(appWay) && appWay.length === 4, labelsOf(appWay));
   check('select_parts writes the selection with the primary last', readState().selectedIds.length === 4 && readState().selectedId === res.data.primaryId);
+  // A beam lying against the side of the pinned stack only touches it: joined for the audit's clamp
+  // rule, but not for Shift+Ctrl+wheel (pinned only)
+  {
+    const side = { ...mk('Side', '1x6 Beam', [0, 12.7, -3.175]), instanceId: 'Side' };
+    const touching = { ...readState(), instances: [...readState().instances, side] };
+    const linked = (g, a, b) => g.edges.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+    const all = jointGraph(touching);
+    const pinned = jointGraph(touching, { pinnedOnly: true });
+    check('joint graph: a beam that only touches a pinned stack is joined to it', linked(all, 'Side', 'Beam') || linked(all, 'Side', 'Top'), JSON.stringify(all.edges.filter((e) => e.includes('Side'))));
+    check('joint graph pinnedOnly: the touching beam has no joins', !pinned.edges.some((e) => e.includes('Side')), JSON.stringify(pinned.edges.filter((e) => e.includes('Side'))));
+    check('joint graph pinnedOnly: pins still join the stack', labelsOf(connectedFrom(pinned, ['Top'])) === labelsOf(appWay), labelsOf(connectedFrom(pinned, ['Top'])));
+  }
   const selBefore = JSON.stringify(readState().selectedIds);
   res = await callRaw('select_parts', { instanceIds: ['Beam', 'Nope'] });
   check('select_parts refuses unknown ids by name, selection unchanged', res.isError && /Nope/.test(res.data?.error) && JSON.stringify(readState().selectedIds) === selBefore, JSON.stringify(res.data));
