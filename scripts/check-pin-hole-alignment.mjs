@@ -10,6 +10,7 @@ import {
   collectWorldFeatures,
   findAlignedOpenings,
   findEngagedJoints,
+  parallelLines,
   findHoleSnap,
   gridPivot,
   clearSpotAlongLine,
@@ -586,6 +587,21 @@ const placeFull = (name, position = [0, 0, 0], rotation = [0, 0, 0]) => {
   const pinThrough = place('0x2 Connector Pin', [hole.origin.x, hole.origin.y, -3.175]);
   lines = joints(pinThrough, [beamA, beamLow]);
   check('Pin seated in two stacked beams: held on 1 line with 2 pairs', lines.length === 1 && lines[0].pairs.length === 2, linesDetail(lines));
+
+  // rotate-about-anchor 1.2: anchor lines parallel to a ring
+  const twoPins = joints(beamA, [pinA, pinB]);
+  const X = new THREE.Vector3(1, 0, 0);
+  const Y = new THREE.Vector3(0, 1, 0);
+  const Z = new THREE.Vector3(0, 0, 1);
+  check('Anchors: two pins along Z give two lines parallel to Z', parallelLines(twoPins, Z).length === 2, linesDetail(twoPins));
+  check('Anchors: the same axis the other way round counts', parallelLines(twoPins, Z.clone().negate()).length === 2);
+  check('Anchors: none parallel to X or Y', parallelLines(twoPins, X).length === 0 && parallelLines(twoPins, Y).length === 0);
+  const onFirst = twoPins[0].origin.clone().addScaledVector(twoPins[0].axis, 7);
+  const left = parallelLines(twoPins, Z, { exclude: onFirst });
+  check('Anchors: excluding a point on one pin line leaves the other', left.length === 1 && left[0] === twoPins[1], linesDetail(left));
+  const tilted = (deg) => new THREE.Vector3(Math.sin(THREE.MathUtils.degToRad(deg)), 0, Math.cos(THREE.MathUtils.degToRad(deg)));
+  check('Anchors: a ring 1.5° off the pin lines still counts', parallelLines(twoPins, tilted(1.5)).length === 2);
+  check('Anchors: a ring 3° off does not', parallelLines(twoPins, tilted(3)).length === 0);
 }
 
 // ---------------------------------------------------------------------------

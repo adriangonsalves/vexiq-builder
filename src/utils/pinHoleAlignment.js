@@ -721,6 +721,23 @@ export function findEngagedJoints(selectedFeatures, otherFeatures) {
 }
 
 /**
+ * The joint lines (from findEngagedJoints) whose axis is within `maxAngleDeg` of `axis`, either way
+ * round, leaving out any line that passes within `excludeMm` of the point `exclude` (the line the
+ * Rotate rings already turn about).
+ */
+export function parallelLines(lines, axis, { exclude = null, maxAngleDeg = 2, excludeMm = 0.25 } = {}) {
+  const dir = axis.clone().normalize();
+  const minDot = Math.cos(THREE.MathUtils.degToRad(maxAngleDeg));
+  return lines.filter((line) => {
+    const lineAxis = line.axis.clone().normalize();
+    if (Math.abs(lineAxis.dot(dir)) < minDot) return false;
+    if (!exclude) return true;
+    const off = exclude.clone().sub(line.origin);
+    return off.sub(lineAxis.multiplyScalar(off.dot(lineAxis))).length() > excludeMm;
+  });
+}
+
+/**
  * Every pin/shaft-in-opening pair between features of `featuresA` and of `featuresB` (different
  * parts) that is seated: matching kinds, axes within 2° and 0.25 mm, and overlapping along the axis
  * by more than OUTSIDE_OVERLAP_ALLOWANCE_MM. [{ insert, opening, overlapMm, featureA }], where

@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
@@ -22,6 +25,7 @@ import {
   collectWorldFeatures,
   findAlignedOpenings,
   findEngagedJoints,
+  parallelLines,
   findHoleSnap,
   findTooWideInserts,
   getLocalFeatures,
@@ -639,6 +643,72 @@ function createRotateGizmo() {
   let selectedIndex = -1;
   let dragIndex = -1;
 
+  // Straight lines in world mm (the group is never scaled): the line the chosen ring turns about,
+  // and for a held part the anchor lines it could turn about instead, plus a dashed line back to
+  // its default centre. Each is centred on the point of its line nearest the part's centre.
+  // Fat lines (a set width in screen pixels), easier to see and to click than 1 px lines
+  const lineMaterial = (color, opacity, dashed = false, linewidth = dashed ? 2 : 3) =>
+    new LineMaterial({
+      color,
+      linewidth,
+      transparent: true,
+      opacity,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+      dashed,
+      dashSize: 3,
+      gapSize: 2
+    });
+  const makeLine = (material) => {
+    const line = new Line2(new LineGeometry(), material);
+    line.renderOrder = 1006;
+    line.visible = false;
+    line.frustumCulled = false;
+    group.add(line);
+    return line;
+  };
+  const axisLine = makeLine(lineMaterial(0xffffff, 0.95));
+  // A soft glow under the turning axis while its ring is selected or dragged, so it stands out
+  const axisHalo = makeLine(lineMaterial(0xffffff, 0.3, false, 14));
+  axisHalo.renderOrder = 1005;
+  const defaultLine = makeLine(lineMaterial(0xffffff, 0.7, true));
+  const anchorLines = []; // THREE.Line pool
+  let anchorDefs = []; // [{ origin, axis }] in world space, as shown
+  let defaultDef = null;
+  let anchorHover = null; // { kind: 'anchor', index } | { kind: 'default' } | null
+  // Anchor lines are thinner and fainter than the turning axis; the one under the pointer thickens
+  const refreshAnchorLooks = () => {
+    anchorLines.forEach((line, i) => {
+      const hot = anchorHover?.kind === 'anchor' && anchorHover.index === i;
+      line.material.linewidth = hot ? 4.5 : 2.5;
+      line.material.opacity = hot ? 1 : 0.75;
+    });
+    const hot = anchorHover?.kind === 'default';
+    defaultLine.material.linewidth = hot ? 3.5 : 2;
+    defaultLine.material.opacity = hot ? 1 : 0.7;
+  };
+  let lineCenter = new THREE.Vector3();
+  let lineHalfMm = 20;
+
+  /** Puts `line` along the world line (origin, axis), centred near the part's centre. */
+  const placeLine = (line, origin, axis) => {
+    const dir = axis.clone().normalize();
+    const mid = origin.clone().addScaledVector(dir, lineCenter.clone().sub(origin).dot(dir)).sub(group.position);
+    const a = mid.clone().addScaledVector(dir, -lineHalfMm);
+    const b = mid.clone().addScaledVector(dir, lineHalfMm);
+    line.geometry.dispose();
+    line.geometry = new LineGeometry().setPositions([a.x, a.y, a.z, b.x, b.y, b.z]);
+    if (line.material.dashed) line.computeLineDistances();
+    line.visible = true;
+  };
+  /** The line's two ends in world space, for picking. */
+  const lineEnds = (origin, axis) => {
+    const dir = axis.clone().normalize();
+    const mid = origin.clone().addScaledVector(dir, lineCenter.clone().sub(origin).dot(dir));
+    return [mid.clone().addScaledVector(dir, -lineHalfMm), mid.clone().addScaledVector(dir, lineHalfMm)];
+  };
+
   const makeRing = () => {
     const root = new THREE.Group();
     const band = new THREE.Mesh(bandGeo, overlayMaterial(0xffffff, 0.28));
@@ -670,12 +740,85 @@ function createRotateGizmo() {
       ring.ticks.material.color.copy(color);
       ring.slice.material.color.copy(ring.color);
     });
+    // One turning axis: the dragged ring's, else the selected ring's, else the hovered ring's
+    const shown = [dragIndex, selectedIndex, hoverIndex].find((i) => i >= 0 && i < shownCount);
+    if (shown === undefined || !group.visible) {
+      axisLine.visible = false;
+      axisHalo.visible = false;
+    } else {
+      const axis = zAxis.clone().applyQuaternion(rings[shown].root.quaternion);
+      const chosen = shown === dragIndex || shown === selectedIndex;
+      axisLine.material.color.copy(rings[shown].color);
+      axisLine.material.linewidth = chosen ? 5 : 3;
+      placeLine(axisLine, group.position, axis);
+      if (chosen) {
+        axisHalo.material.color.copy(rings[shown].color);
+        placeLine(axisHalo, group.position, axis);
+      } else {
+        axisHalo.visible = false;
+      }
+    }
   };
 
-  /** `rings`: [{ axis (unit), color (hex), minRadius (world mm) }], all turning about `pivot`. */
-  const show = (pivot, ringDefs) => {
+  /** Anchor lines `defs` ([{ origin, axis }], world) and the dashed default-centre line (or null). */
+  const setAnchorLines = (defs, dashed) => {
+    anchorDefs = group.visible ? defs : [];
+    defaultDef = group.visible ? dashed : null;
+    while (anchorLines.length < anchorDefs.length) anchorLines.push(makeLine(lineMaterial(HOLE_HIGHLIGHT_COLOR, 0.95)));
+    anchorLines.forEach((line, i) => {
+      if (i < anchorDefs.length) placeLine(line, anchorDefs[i].origin, anchorDefs[i].axis);
+      else line.visible = false;
+    });
+    if (defaultDef) placeLine(defaultLine, defaultDef.origin, defaultDef.axis);
+    else defaultLine.visible = false;
+    anchorHover = null;
+    refreshAnchorLooks();
+  };
+
+  /** Thickens the anchor or default line under the pointer (a pickAnchor result, or null). */
+  const setAnchorHover = (picked) => {
+    if (picked?.kind === anchorHover?.kind && picked?.index === anchorHover?.index) return;
+    anchorHover = picked;
+    refreshAnchorLooks();
+  };
+
+  /**
+   * The shown anchor or default line nearest the pointer on screen, within `maxPx`:
+   * { kind: 'anchor', index } | { kind: 'default' } | null. `project` maps a world point to canvas px.
+   */
+  const pickAnchor = (pointerPx, project, maxPx = 6) => {
+    if (!group.visible) return null;
+    const distTo = (def) => {
+      const [a, b] = lineEnds(def.origin, def.axis).map(project);
+      const ab = b.clone().sub(a);
+      const t = ab.lengthSq() > 1e-9 ? THREE.MathUtils.clamp(pointerPx.clone().sub(a).dot(ab) / ab.lengthSq(), 0, 1) : 0;
+      return a.addScaledVector(ab, t).distanceTo(pointerPx);
+    };
+    let best = null;
+    let bestPx = maxPx;
+    anchorDefs.forEach((def, index) => {
+      const px = distTo(def);
+      if (px <= bestPx) {
+        bestPx = px;
+        best = { kind: 'anchor', index };
+      }
+    });
+    if (defaultDef) {
+      const px = distTo(defaultDef);
+      if (px <= bestPx) best = { kind: 'default' };
+    }
+    return best;
+  };
+
+  /**
+   * `rings`: [{ axis (unit), color (hex), minRadius (world mm) }], all turning about `pivot`.
+   * `center` (the part's centre) and `lineHalfMm` place the axis and anchor lines.
+   */
+  const show = (pivot, ringDefs, { center = pivot, halfMm = 20 } = {}) => {
     while (rings.length < ringDefs.length) rings.push(makeRing());
     group.position.copy(pivot);
+    lineCenter = center.clone();
+    lineHalfMm = halfMm;
     rings.forEach((ring, i) => {
       const def = ringDefs[i];
       ring.root.visible = Boolean(def);
@@ -695,6 +838,9 @@ function createRotateGizmo() {
     group.visible = false;
     hoverIndex = -1;
     dragIndex = -1;
+    axisLine.visible = false;
+    axisHalo.visible = false;
+    setAnchorLines([], null);
   };
 
   /** Ring under the raycaster as { index, point } (world hit point), or null. */
@@ -765,8 +911,9 @@ function createRotateGizmo() {
     for (const ring of rings) ring.slice.visible = false;
   };
 
-  const updateScale = (camera) => {
+  const updateScale = (camera, width, height) => {
     if (!group.visible) return;
+    if (width && height) for (const line of [axisLine, axisHalo, defaultLine, ...anchorLines]) line.material.resolution.set(width, height);
     const factor = gizmoScaleFactor(camera, group.position);
     for (const ring of rings.slice(0, shownCount)) {
       ring.root.scale.setScalar(Math.max((factor * 0.95) / 6, ring.minRadius / OUTER));
@@ -779,6 +926,10 @@ function createRotateGizmo() {
     pickGeo.dispose();
     tickGeo.dispose();
     pickMaterial.dispose();
+    for (const line of [axisLine, axisHalo, defaultLine, ...anchorLines]) {
+      line.geometry.dispose();
+      line.material.dispose();
+    }
     for (const ring of rings) {
       ring.band.material.dispose();
       ring.rim.material.dispose();
@@ -800,6 +951,9 @@ function createRotateGizmo() {
     frame,
     setSlice,
     clearSlices,
+    setAnchorLines,
+    setAnchorHover,
+    pickAnchor,
     updateScale,
     isShown: () => group.visible,
     dispose
@@ -2596,6 +2750,54 @@ export default function Viewport3D({
     selectedRingRef.current = index;
     rotateGizmoRef.current?.setSelected(index);
     if (orbitRef.current) orbitRef.current.enableZoom = index < 0;
+    refreshAnchorLines();
+  };
+
+  /**
+   * For one part held on two or more joint lines with a ring selected: shows the joint lines parallel
+   * to that ring (other than the one the rings sit on) as anchors to click, and a dashed line through
+   * the part's default centre once the rings have been moved off it.
+   */
+  const refreshAnchorLines = () => {
+    const gizmo = rotateGizmoRef.current;
+    const setup = rotateSetupRef.current;
+    if (!gizmo) return;
+    const ring = selectedRingRef.current;
+    if (!setup?.instanceId || !setup.defaultPivot || (setup.lines?.length ?? 0) < 2 || ring < 0 || !setup.rings[ring]) {
+      if (setup) setup.shownAnchors = [];
+      gizmo.setAnchorLines([], null);
+      return;
+    }
+    const axis = setup.rings[ring].axis;
+    const anchors = parallelLines(setup.lines, axis, { exclude: setup.pivot });
+    setup.shownAnchors = anchors;
+    const off = setup.defaultPivot.clone().sub(setup.pivot).projectOnPlane(axis).length() > 0.25;
+    gizmo.setAnchorLines(
+      anchors.map((l) => ({ origin: l.origin, axis: l.axis })),
+      off ? { origin: setup.defaultPivot, axis } : null
+    );
+  };
+
+  /**
+   * Moves the rings' centre onto a picked anchor line (the point on it nearest the part's centre), or
+   * back to the default centre. The part doesn't move, the ring stays selected, angles carry on.
+   */
+  const chooseRotateAnchor = (picked) => {
+    const setup = rotateSetupRef.current;
+    const group = setup?.instanceId ? meshMapRef.current.get(setup.instanceId) : null;
+    if (!group || !picked || rotateGestureRef.current) return;
+    let pivot;
+    if (picked.kind === 'default') {
+      pivot = setup.defaultPivot.clone();
+    } else {
+      const line = setup.shownAnchors?.[picked.index];
+      if (!line) return;
+      const axis = line.axis.clone().normalize();
+      pivot = line.origin.clone().addScaledVector(axis, setup.center.clone().sub(line.origin).dot(axis));
+    }
+    group.updateMatrixWorld();
+    setup.localPivot = pivot.applyMatrix4(group.matrixWorld.clone().invert());
+    refreshRotateSetup();
   };
 
   /**
@@ -2680,14 +2882,18 @@ export default function Viewport3D({
     const localPivot = pivot.clone().applyMatrix4(ref.matrixWorld.clone().invert());
     rotateSetupRef.current = { instanceId: null, ids, setKey, pivot, localPivot, rings, angles };
     rotateMessageKeyRef.current = '';
+    const setCentre = setCentreOf(members);
+    const halfMm = Math.max(10, ...corners.map((c) => c.distanceTo(setCentre))) + 10;
     gizmo.show(
       pivot,
-      rings.map((r) => ({ axis: r.axis, color: ROTATE_RING_COLORS[r.name], minRadius: minRadiusFor(r.axis) }))
+      rings.map((r) => ({ axis: r.axis, color: ROTATE_RING_COLORS[r.name], minRadius: minRadiusFor(r.axis) })),
+      { center: setCentre, halfMm }
     );
     if (cameraRef.current) gizmo.updateScale(cameraRef.current);
     gizmo.setSelected(selectedRingRef.current);
     labels.show(rings.map((r) => r.name));
     angles.forEach((deg, i) => labels.setAngle(i, deg));
+    refreshAnchorLines();
   };
 
   // Members of a moving set marked overlapping only by parts outside the set
@@ -2753,20 +2959,30 @@ export default function Viewport3D({
     // Held on more than one axis line: it can still turn freely; a turn that ends overlapping is put back
 
     const center = group.userData.localBox.getCenter(new THREE.Vector3()).applyMatrix4(group.matrixWorld);
+    const samePart = prev?.instanceId === selId;
     let pivot;
     let rings;
+    let defaultPivot = null;
     if (lines.length !== 1) {
       // On the part's own hole grid, so quarter turns keep its holes lined up. Kept in the part's
       // frame between turns: turning about it leaves it in place, and it moves along with the part.
-      if (prev?.instanceId === selId && prev.localPivot) {
-        pivot = prev.localPivot.clone().applyMatrix4(group.matrixWorld);
-      } else {
-        pivot = gridPivot(selectedFeatures, center);
-      }
+      // The user can move it onto one of the joint lines that hold the part (chooseRotateAnchor).
+      defaultPivot =
+        samePart && prev.localDefaultPivot
+          ? prev.localDefaultPivot.clone().applyMatrix4(group.matrixWorld)
+          : gridPivot(selectedFeatures, center);
+      pivot = samePart && prev.localPivot ? prev.localPivot.clone().applyMatrix4(group.matrixWorld) : defaultPivot.clone();
+      // A ring whose axis runs along a joint line through the pivot turns about that line exactly
+      const ringAxis = (worldAxis) => {
+        const line = parallelLines(lines, worldAxis).find((l) => parallelLines([l], worldAxis, { exclude: pivot }).length === 0);
+        if (!line) return worldAxis;
+        const axis = line.axis.clone().normalize();
+        return axis.dot(worldAxis) < 0 ? axis.negate() : axis;
+      };
       rings = [
-        { name: 'X', axis: new THREE.Vector3(1, 0, 0) },
-        { name: 'Y', axis: new THREE.Vector3(0, 1, 0) },
-        { name: 'Z', axis: new THREE.Vector3(0, 0, 1) }
+        { name: 'X', axis: ringAxis(new THREE.Vector3(1, 0, 0)) },
+        { name: 'Y', axis: ringAxis(new THREE.Vector3(0, 1, 0)) },
+        { name: 'Z', axis: ringAxis(new THREE.Vector3(0, 0, 1)) }
       ];
     } else {
       const { origin, axis } = lines[0];
@@ -2785,26 +3001,32 @@ export default function Viewport3D({
     const minRadiusFor = (axis) =>
       Math.max(...corners.map((c) => c.clone().sub(pivot).projectOnPlane(axis).length())) * 1.1 + 2;
 
+    // X/Y/Z rings keep their angles while the part stays selected, even when the centre is moved
+    // onto an anchor; the single Joint ring starts again when it moves to another line.
     const same =
-      prev &&
-      prev.instanceId === selId &&
+      samePart &&
       prev.rings.length === rings.length &&
-      prev.rings.every((r, i) => r.axis.dot(rings[i].axis) > 0.9999) &&
-      prev.pivot.distanceTo(pivot) < 0.5;
+      prev.rings.every((r, i) => r.name === rings[i].name) &&
+      (rings[0].name !== 'Joint' || (prev.rings[0].axis.dot(rings[0].axis) > 0.9999 && prev.pivot.distanceTo(pivot) < 0.5));
     const angles = same ? prev.angles : rings.map(() => 0);
     if (!same && selectedRingRef.current >= 0) selectRing(-1);
 
-    const localPivot = lines.length !== 1 ? pivot.clone().applyMatrix4(group.matrixWorld.clone().invert()) : null;
-    rotateSetupRef.current = { instanceId: selId, pivot, localPivot, rings, angles };
+    const toLocal = group.matrixWorld.clone().invert();
+    const localPivot = lines.length !== 1 ? pivot.clone().applyMatrix4(toLocal) : null;
+    const localDefaultPivot = defaultPivot ? defaultPivot.clone().applyMatrix4(toLocal) : null;
+    rotateSetupRef.current = { instanceId: selId, pivot, localPivot, defaultPivot, localDefaultPivot, lines, center, rings, angles };
     rotateMessageKeyRef.current = '';
+    const halfMm = group.userData.localBox.getSize(new THREE.Vector3()).length() / 2 + 10;
     gizmo.show(
       pivot,
-      rings.map((r) => ({ axis: r.axis, color: ROTATE_RING_COLORS[r.name], minRadius: minRadiusFor(r.axis) }))
+      rings.map((r) => ({ axis: r.axis, color: ROTATE_RING_COLORS[r.name], minRadius: minRadiusFor(r.axis) })),
+      { center, halfMm }
     );
     if (cameraRef.current) gizmo.updateScale(cameraRef.current);
     gizmo.setSelected(selectedRingRef.current);
     labels.show(rings.map((r) => r.name));
     angles.forEach((deg, i) => labels.setAngle(i, deg));
+    refreshAnchorLines();
   };
 
   /** Starts a turn of the selected part around ring `ring`, remembering the pose it started from. */
@@ -3720,9 +3942,18 @@ export default function Viewport3D({
     // switched off for the drag). The angle comes from the pointer on the ring's plane; when the
     // plane is seen nearly edge-on, from the pointer's travel along the ring's on-screen tangent.
     let ringClickHandled = false; // the bubbling pointerup of a ring press must not change selection
+    let anchorPress = null; // a left press on an anchor line: a click moves the rings onto it
     const handleRingPointerDown = (e) => {
+      anchorPress = null;
       if (e.button !== 0 || !rotateSetupRef.current || rotateGestureRef.current) return;
       if (pickModeRef.current?.kind === 'copy' && (e.ctrlKey || e.metaKey)) return; // part of a copy click
+      // Anchor lines win over the rings and parts behind them; a drag from one still turns the camera
+      const rect = inputEl.getBoundingClientRect();
+      const anchor = rotateGizmo.pickAnchor(new THREE.Vector2(e.clientX - rect.left, e.clientY - rect.top), projectToCanvas);
+      if (anchor) {
+        anchorPress = { ...anchor, pressX: e.clientX, pressY: e.clientY };
+        return;
+      }
       setRayFromEvent(e);
       const hit = rotateGizmo.pick(raycaster);
       if (!hit) return;
@@ -3799,6 +4030,15 @@ export default function Viewport3D({
 
     // Release: a drag saves the turn; a click without movement selects/unselects the ring instead
     const handleRingPointerUp = (e) => {
+      if (e.button === 0 && anchorPress) {
+        const press = anchorPress;
+        anchorPress = null;
+        if (Math.hypot(e.clientX - press.pressX, e.clientY - press.pressY) < 5) {
+          ringClickHandled = true; // keeps the selection and the selected ring
+          chooseRotateAnchor(press);
+        }
+        return;
+      }
       const gesture = rotateGestureRef.current;
       if (e.button !== 0 || gesture?.kind !== 'drag') return;
       inputEl.releasePointerCapture?.(e.pointerId);
@@ -4006,6 +4246,14 @@ export default function Viewport3D({
         return;
       }
       if (rotateGizmo.isShown() && !arrowOverlay.isShown()) {
+        // An anchor line under the pointer comes first, as for a press
+        const anchor = rotateGizmo.pickAnchor(new THREE.Vector2(e.clientX - rect.left, e.clientY - rect.top), projectToCanvas);
+        rotateGizmo.setAnchorHover(anchor);
+        if (anchor) {
+          rotateGizmo.setHover(-1);
+          inputEl.style.cursor = 'pointer';
+          return;
+        }
         setRayFromEvent(e);
         const index = rotateGizmo.pick(raycaster)?.index ?? -1;
         rotateGizmo.setHover(index);
@@ -4855,7 +5103,7 @@ export default function Viewport3D({
       updateShadows();
       const active = cameraRef.current;
       arrowOverlay.updateScale(active);
-      rotateGizmo.updateScale(active);
+      rotateGizmo.updateScale(active, inputEl.clientWidth, inputEl.clientHeight);
       placeAngleLabels();
       const panes = panesRef.current;
       if (!panes) return;
