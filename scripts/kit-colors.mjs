@@ -66,11 +66,12 @@ const RULES = [
   [/Flywheel/, C.plate],
 
   // Specialty
+  [/Sheet Pin/, '#f8fafc'],
   [/^2x Wide Spool$|Silicone Rubber Band|Ball Pin Bushing/, C.orange],
   [/^1x Wide Spool$|Rubber Band Anchor/, C.blue],
   [/Intake Flap|Traction Link|Cable Anchor|Shock Absorber|Pitch Rope/, C.black],
   [/^2x8 Smooth Panel$/, '#c8c9c8'],
-  [/Plastic (Sheet|PET Sheet)/, '#f1f5f9']
+  [/Plastic (Sheet|PET Sheet)/, '#8fd0ee'] // a slight blue tint: drawn as see-through glossy plastic
 ];
 
 /** The kit colour for a part name, or null when the poster doesn't show it. */

@@ -20,6 +20,11 @@ export function isMetalShaftName(name) {
   );
 }
 
+/** The clear plastic sheets (2x12, 6x6 and 6x12): drawn see-through, tinted and glossy. */
+export function isClearPlasticPart(part) {
+  return /Plastic (PET )?Sheet/.test(part?.name || '');
+}
+
 export function isMetalPart(part) {
   return Boolean(part?.isMetal || isMetalShaftName(part?.name));
 }

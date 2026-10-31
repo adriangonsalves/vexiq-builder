@@ -11,7 +11,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { loadPartAsset, RUBBER_COLOR, isMetalPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
+import { loadPartAsset, RUBBER_COLOR, isMetalPart, isClearPlasticPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
 import { hubMatrix } from '../utils/motorHub.js';
 import { isMeshingGear, meshTurn, worldToothed } from '../utils/gearMeshing.js';
 import { squareFitRoll } from '../utils/shaftGroups.js';
@@ -1260,6 +1260,9 @@ const selectLevel = (ids, id) => (ids.at(-1) === id ? 2 : ids.includes(id) ? 1 :
 // Part meshes of selected parts are also on this layer, which the selection contour is drawn from
 const SELECT_LAYER = 5;
 
+// Clear plastic sheets: tinted, glossy, mostly see-through
+const CLEAR_PLASTIC_OPACITY = 0.2;
+
 // Selection look: an amber glow and amber edges, which stand out on blue parts and the blue grid.
 // Primary (or only) selected part / other parts of a multi-selection.
 const SELECT_COLOR = 0xff9f1c;
@@ -1301,9 +1304,11 @@ function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) 
         resolvedColor = METAL_SHAFT_COLOR;
       }
       mat.color.set(resolvedColor || '#64748b');
-      mat.transparent = false;
-      mat.opacity = 1.0;
-      mat.depthWrite = true;
+      // Clear plastic sheets stay see-through; everything else is solid
+      const clear = child.userData.clearPlastic;
+      mat.transparent = Boolean(clear);
+      mat.opacity = clear ? CLEAR_PLASTIC_OPACITY : 1.0;
+      mat.depthWrite = !clear;
       if (mat.emissive) {
         mat.emissive.setHex(level ? SELECT_COLOR : 0x000000);
         mat.emissiveIntensity = level ? SELECT_GLOW[level] : 0;
@@ -5347,11 +5352,26 @@ export default function Viewport3D({
 
             const isMetal = isMetalPart(partMeta);
             const baseColor = resolvePartBaseColor(inst, partMeta);
-            const material = new THREE.MeshStandardMaterial({
-              color: new THREE.Color(baseColor),
-              roughness: isMetal ? 0.22 : 0.38,
-              metalness: isMetal ? 0.85 : 0.12
-            });
+            const isClear = isClearPlasticPart(partMeta);
+            const material = isClear
+              ? new THREE.MeshPhysicalMaterial({
+                  color: new THREE.Color(baseColor),
+                  roughness: 0.06,
+                  metalness: 0,
+                  clearcoat: 1,
+                  clearcoatRoughness: 0.05,
+                  reflectivity: 0.9,
+                  envMapIntensity: 1.6,
+                  transparent: true,
+                  opacity: CLEAR_PLASTIC_OPACITY,
+                  depthWrite: false,
+                  side: THREE.DoubleSide
+                })
+              : new THREE.MeshStandardMaterial({
+                  color: new THREE.Color(baseColor),
+                  roughness: isMetal ? 0.22 : 0.38,
+                  metalness: isMetal ? 0.85 : 0.12
+                });
 
             const fixedMaterials = new Map();
             for (const geo of geometries) {
@@ -5383,6 +5403,7 @@ export default function Viewport3D({
               if (geo.userData.rubber) mesh.userData.fixedColor = RUBBER_COLOR;
               else if (geo.userData.fixedColor) mesh.userData.fixedColor = geo.userData.fixedColor;
               if (isMetal) mesh.userData.isMetal = true;
+              if (isClear) mesh.userData.clearPlastic = true;
               group.add(mesh);
 
               const edgesGeo = new THREE.EdgesGeometry(geo, 32);
