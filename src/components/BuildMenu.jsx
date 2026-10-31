@@ -147,3 +147,126 @@ export function ChainBuilderDialog({ open, kind = 'chain', grippers, slack = 'lo
     </dialog>
   );
 }
+
+/**
+ * Chain builder's over/under dialog (openspec chain-over-under): one row per enclosed sprocket or
+ * standoff with two toggle buttons, Under / inner and Over / outer, and no default. `initialRoute`
+ * (Map or plain object) holds any choices remembered for the page. Hovering or focusing a row calls
+ * `onHighlight(instanceId)` so the 3D view highlights that part; the first row is highlighted on
+ * open. Build is enabled only when every row has a choice.
+ */
+export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onHighlight, onClose, onBuild }) {
+  const ref = useRef(null);
+  const [choices, setChoices] = useState({});
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (open && !dialog.open) {
+      const next = {};
+      for (const item of enclosed) {
+        const val =
+          initialRoute instanceof Map ? initialRoute.get(item.instanceId) : initialRoute?.[item.instanceId];
+        if (val === 'over' || val === 'under') next[item.instanceId] = val;
+      }
+      setChoices(next);
+      onHighlight?.(enclosed[0]?.instanceId ?? null);
+      dialog.showModal();
+    }
+    if (!open && dialog.open) dialog.close();
+  }, [open, enclosed, initialRoute, onHighlight]);
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return undefined;
+    const onCloseEvent = () => onClose?.();
+    const onClick = (event) => {
+      if (event.target !== dialog) return;
+      const r = dialog.getBoundingClientRect();
+      const inside = r.top <= event.clientY && event.clientY <= r.bottom && r.left <= event.clientX && event.clientX <= r.right;
+      if (!inside) dialog.close();
+    };
+    dialog.addEventListener('close', onCloseEvent);
+    dialog.addEventListener('click', onClick);
+    return () => {
+      dialog.removeEventListener('close', onCloseEvent);
+      dialog.removeEventListener('click', onClick);
+    };
+  }, [onClose]);
+
+  const allChosen =
+    enclosed.length > 0 && enclosed.every((item) => choices[item.instanceId] === 'over' || choices[item.instanceId] === 'under');
+
+  const pick = (instanceId, side) => {
+    setChoices((prev) => ({ ...prev, [instanceId]: side }));
+    onHighlight?.(instanceId);
+  };
+
+  return (
+    <dialog ref={ref} closedby="any" className="settings-dialog" aria-labelledby="chainRouteTitle">
+      <div className="settings-header">
+        <strong id="chainRouteTitle">Chain builder</strong>
+        <button type="button" className="icon-btn" onClick={() => ref.current?.close()} aria-label="Close" title="Cancel (Esc)">
+          <X size={16} />
+        </button>
+      </div>
+      <div className="settings-body">
+        <p className="settings-note" style={{ marginTop: 10 }}>
+          Choose whether the chain passes under or over each part inside the loop.
+        </p>
+        {enclosed.map((item, idx) => {
+          const choice = choices[item.instanceId];
+          return (
+            <div
+              key={item.instanceId}
+              className="settings-row"
+              onMouseEnter={() => onHighlight?.(item.instanceId)}
+              onFocusCapture={() => onHighlight?.(item.instanceId)}
+            >
+              <span className="settings-row-text">
+                <span className="settings-row-label">{item.label}</span>
+              </span>
+              <div role="group" aria-label={`Route for ${item.label}`} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  className={`btn ${choice === 'under' ? 'active' : 'btn-outline'}`}
+                  aria-pressed={choice === 'under'}
+                  autoFocus={idx === 0}
+                  onClick={() => pick(item.instanceId, 'under')}
+                >
+                  Under / inner
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${choice === 'over' ? 'active' : 'btn-outline'}`}
+                  aria-pressed={choice === 'over'}
+                  onClick={() => pick(item.instanceId, 'over')}
+                >
+                  Over / outer
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+          <button type="button" className="btn btn-outline" onClick={() => ref.current?.close()}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={`btn ${allChosen ? 'active' : 'btn-outline'}`}
+            disabled={!allChosen}
+            onClick={() => {
+              if (!allChosen) return;
+              onBuild?.(choices);
+              ref.current?.close();
+            }}
+          >
+            Build
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+

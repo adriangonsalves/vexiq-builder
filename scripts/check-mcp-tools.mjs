@@ -154,7 +154,13 @@ const call = async (name, args = {}) => {
   return res;
 };
 
-await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'check', version: '0' } });
+const initMsg = await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'check', version: '0' } });
+check(
+  'initialize instructions include chain over/under and standoff guide note',
+  initMsg.result?.instructions?.includes('Standoffs in `instanceIds` act as smooth round chain guides') &&
+    initMsg.result?.instructions?.includes('pass `route: { "<id>": "over" | "under" }`'),
+  initMsg.result?.instructions?.slice(-300)
+);
 
 // ---------------------------------------------------------------------------
 // 1.1 Harness
@@ -1001,6 +1007,43 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   check('build_chain slack "upper": the reply says the upper run holds the slack', res.data?.ok && res.data.slack === 'upper', JSON.stringify(res.data?.slack));
   res = await callRaw('build_chain', { instanceIds: ['S16', 'S32'], slack: 'middle' });
   check('build_chain rejects an unknown slack run', res.isError && /slack must be "lower" or "upper"/.test(res.data?.error || ''), JSON.stringify(res.data));
+
+  // chain-over-under: enclosed parts, route, needsRoute, standoffs, wrapped & leftOut shape
+  writeState({
+    ...emptyState(),
+    instances: [
+      part('S24L', '24 Tooth Sprocket', [0, 0, 0]),
+      part('S24R', '24 Tooth Sprocket', [120, 0, 0]),
+      part('S8', '8 Tooth Sprocket', [45, 10, 0]),
+      part('ST1', '1x Pitch Standoff', [80, -8, 6])
+    ]
+  });
+  res = await callRaw('build_chain', { kind: 'chain', instanceIds: ['S24L', 'S24R', 'S8', 'ST1'] });
+  check(
+    'build_chain without route for enclosed parts refuses with needsRoute',
+    res.isError && Array.isArray(res.data?.needsRoute) && res.data.needsRoute.length === 2,
+    JSON.stringify(res.data)
+  );
+  res = await call('build_chain', { kind: 'track', instanceIds: ['S24L', 'S24R', 'S8'] });
+  check(
+    'build_chain track leaves enclosed sprocket out with reason outside-only',
+    res.data?.ok && res.data.leftOut?.length === 1 && res.data.leftOut[0].instanceId === 'S8' && res.data.leftOut[0].reason === 'outside-only',
+    JSON.stringify(res.data?.leftOut)
+  );
+  await call('undo');
+  res = await call('build_chain', {
+    kind: 'chain',
+    instanceIds: ['S24L', 'S24R', 'S8', 'ST1'],
+    route: { S8: 'under', ST1: 'over' }
+  });
+  check(
+    'build_chain with route wraps enclosed sprocket under and standoff over',
+    res.data?.ok &&
+      res.data.wrapped?.some((w) => w.instanceId === 'S8' && w.side === 'under') &&
+      res.data.wrapped?.some((w) => w.instanceId === 'ST1' && w.side === 'over') &&
+      res.data.audit?.collisionCount === 0,
+    JSON.stringify({ wrapped: res.data?.wrapped, audit: res.data?.audit })
+  );
 }
 
 // ---------------------------------------------------------------------------

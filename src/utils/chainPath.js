@@ -3,16 +3,20 @@ import { angleAbout, directionAt, refAxes, wrapDeg } from './axisFrame.js';
 import { quaternionToEulerDeg } from './gearMeshing.js';
 
 /**
- * Chain and track round sprockets (openspec chain-track-builder). Pure: part metadata + world poses
- * in, link poses and sprocket turns out, so the app, the MCP engine and Node checks agree.
+ * Chain and track round sprockets and standoffs (openspec chain-track-builder, chain-over-under).
+ * Pure: part metadata + world poses in, link poses and sprocket turns out, so the app, the MCP
+ * engine and Node checks agree.
  *
- * The sprockets' pitch circles are laid out in 2D in the frame of refAxes(n) (n: the first
- * sprocket's axle). The chain goes round the outside of them, counter-clockwise about n: along the
- * outer touching line from one sprocket to the next, round each one on its pitch circle. On a
- * sprocket the pivots step one tooth (each link a 6.35 mm chord); on a straight run they are spaced
- * evenly, as near 6.35 mm as a whole number of links allows. The count is the fewest links that reach
- * all the way round (a chain can't stretch, so it is never more than CHAIN_PLAY_MM short of the path);
- * what's left over is reported as the gap.
+ * The parts are laid out as circles in 2D in the frame of refAxes(n) (n: the first sprocket's
+ * axle): a sprocket's pitch circle, or a standoff's guide circle (its body radius plus a link's
+ * half-height, where the links' pivot line rests). The loop is a list of nodes { c, s }: circle c,
+ * wrapped counter-clockwise from inside the loop (s = +1, the outer parts) or clockwise from outside
+ * (s = −1, an enclosed part the chain bends round, over or under it). Between nodes the chain runs
+ * along the line touching both circles on those sides; round a sprocket the pivots step one tooth
+ * (each link a 6.35 mm chord); round a standoff the links lie flat on its body. On a straight run
+ * they are spaced evenly, as near 6.35 mm as a whole number of links allows. The count is the fewest
+ * links that reach all the way round (a chain can't stretch, so it is never more than CHAIN_PLAY_MM
+ * short of the path); what's left over is reported as the gap.
  *
  * Links (Chain Link, Tank Tread Attachment Link) have their roller pivot at the origin, the next
  * pivot 6.35 mm along local −Z, the pivot axis along X and +Y out of the loop (part chainSpecs).
@@ -24,7 +28,9 @@ export const SEATED_PIVOT_TOLERANCE_MM = 0.5;
 export const CHAIN_PLAY_MM = 0.75; // a chain this much short of the path still goes on (play in its joints)
 export const SAG_NOTE_MM = 3.175; // more slack than half a link: the chain sags a little
 export const SAG_ASK_MM = 1; // a run hanging this far below its straight line is slack worth placing
+export const LINK_HALF_HEIGHT_MM = 2.2; // a link's plates reach this far either side of its pivots
 const EASE_PER_LINK_MM = 0.2; // a run's links may be drawn this much apart past 6.35 mm (inside the chain's play)
+const NOT_NEIGHBOURS_MM = 13.2; // two points this far apart along the chain are on different runs
 const EPS = 1e-6;
 
 export const CHAIN_LINK_PART_NUMBER = '228-2500-230';
@@ -40,6 +46,7 @@ const toQuat = (r) => {
 const round3 = (x) => Math.round(x * 1000) / 1000 + 0;
 
 export const isSprocket = (meta) => meta?.gearSpecs?.gearType === 'sprocket' && meta.gearSpecs.measured === true;
+export const isStandoff = (meta) => meta?.fastenerSpecs?.fastenerType === 'standoff';
 const isToothedNonSprocket = (meta) => Boolean(meta?.gearSpecs) && meta.gearSpecs.gearType !== 'sprocket';
 export const chainRole = (meta) => meta?.chainSpecs?.role || null;
 
@@ -50,6 +57,7 @@ export function worldSprocket(meta, position, rotation, instanceId = null, label
   const axis = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
   const faceMid = g.faceSpanMm ? (g.faceSpanMm[0] + g.faceSpanMm[1]) / 2 : 0;
   return {
+    kind: 'sprocket',
     instanceId,
     label: label || meta.name,
     teeth: g.teeth,
@@ -60,6 +68,68 @@ export function worldSprocket(meta, position, rotation, instanceId = null, label
     axis,
     // Direction from the centre to a tooth gap, where a chain pivot sits
     gapDir: directionAt([0, 0, 1], g.gapPhaseDeg ?? 0).applyQuaternion(q)
+  };
+}
+
+/** The radius of a standoff's round body: its largest catalog cylinder on its Z axis. */
+export function standoffBodyRadius(meta) {
+  const onZ = (meta.cylinders || []).filter((c) => Math.abs(Math.abs(c.axis?.[2] ?? 0) - 1) < 1e-3 && Math.hypot(c.origin?.[0] ?? 0, c.origin?.[1] ?? 0) < 0.05);
+  if (onZ.length) return Math.max(...onZ.map((c) => c.radius));
+  const b = meta.bbox;
+  return b ? Math.min(b.size[0], b.size[1]) / 2 : 3.175;
+}
+
+/**
+ * A standoff as a chain guide in world space: { kind: 'guide', instanceId, label, bodyRadius,
+ * pitchRadius (where the links' pivot line rests: body + link half-height), tipRadius (body),
+ * center (on its axis), axis, span: [lo, hi] its body along its local Z, hasBody }.
+ */
+export function worldGuide(meta, position, rotation, instanceId = null, label = null, linkHalfMm = LINK_HALF_HEIGHT_MM) {
+  const f = meta.fastenerSpecs;
+  const q = toQuat(rotation);
+  const bodyRadius = standoffBodyRadius(meta);
+  return {
+    kind: 'guide',
+    instanceId,
+    label: label || meta.name,
+    bodyRadius,
+    pitchRadius: bodyRadius + linkHalfMm,
+    tipRadius: bodyRadius,
+    center: toVec(position),
+    axis: new THREE.Vector3(0, 0, 1).applyQuaternion(q),
+    span: [Math.min(f.shoulderNegZ, f.shoulderPosZ), Math.max(f.shoulderNegZ, f.shoulderPosZ)],
+    hasBody: (f.bodyLengthMm ?? 0) > 0 && f.shoulderNegZ < f.shoulderPosZ
+  };
+}
+
+/** Angle (rad) of a 2D vector. */
+const ang = (x, y) => Math.atan2(y, x);
+const mod2pi = (a) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+/**
+ * The line touching circle a (wrapped on side sa) and circle b (side sb), going a → b: { m: the
+ * loop's outward normal (right of travel), ta, tb: touching points, length } or null when there is
+ * none (opposite sides: the circles are too close for the chain to pass between them). With signed
+ * radii the same formula gives the outer line (same sides) and the crossing line (opposite sides).
+ */
+function signedTangent(a, sa, b, sb) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const L = Math.hypot(dx, dy);
+  const Ra = sa * a.r;
+  const Rb = sb * b.r;
+  if (L < EPS || Math.abs(Ra - Rb) >= L - EPS) return null;
+  const k = (Ra - Rb) / L;
+  const h = Math.sqrt(1 - k * k);
+  // d̂ and its right-hand normal (−90°): outer circles stay on the left going counter-clockwise
+  const ux = dx / L;
+  const uy = dy / L;
+  const m = [k * ux + h * uy, k * uy - h * ux];
+  return {
+    m,
+    ta: [a.x + Ra * m[0], a.y + Ra * m[1]],
+    tb: [b.x + Rb * m[0], b.y + Rb * m[1]],
+    length: Math.sqrt(Math.max(0, L * L - (Ra - Rb) ** 2))
   };
 }
 
@@ -76,20 +146,13 @@ function outerLoop(circles) {
       if (i === j) continue;
       const a = circles[i];
       const b = circles[j];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const L = Math.hypot(dx, dy);
-      if (L < EPS || Math.abs(a.r - b.r) >= L) continue;
-      const k = (a.r - b.r) / L;
-      const h = Math.sqrt(1 - k * k);
-      // d̂ and its right-hand normal (−90°): the circles stay on the left going counter-clockwise
-      const ux = dx / L;
-      const uy = dy / L;
-      const m = [k * ux + h * uy, k * uy - h * ux];
-      const tx = a.x + a.r * m[0];
-      const ty = a.y + a.r * m[1];
+      const t = signedTangent(a, 1, b, 1);
+      if (!t) continue;
+      const [tx, ty] = t.ta;
+      const m = t.m;
       const outside = circles.some((c, ci) => ci !== i && ci !== j && (c.x - tx) * m[0] + (c.y - ty) * m[1] > -c.r + 1e-4);
       if (outside) continue;
+      const L = Math.hypot(b.x - a.x, b.y - a.y);
       const prev = edges.get(i);
       if (!prev || L < prev.length) edges.set(i, { from: i, to: j, m, length: L });
     }
@@ -111,11 +174,82 @@ function outerLoop(circles) {
 }
 
 /**
- * Which of `parts` ([{ instanceId, label, meta, position, rotation }], the selection) can carry one
- * chain. Returns { ok, error?, sprockets (world, on the loop, in loop order), leftOut, normal, loop }.
+ * The runs and arcs of a loop of nodes [{ c, s }]: { ok, edges: [signedTangent from node k to k+1],
+ * arcs: [{ circle, s, thIn (angle of the point where the chain meets the circle), alpha (how far
+ * round it the chain goes, ≥ 0, in the node's direction) }] }, or { ok: false, tooClose: [ci, cj] }.
  */
-export function checkSprocketsForChain(parts) {
+function loopPath(circles, nodes) {
+  const K = nodes.length;
+  const edges = [];
+  for (let k = 0; k < K; k++) {
+    const A = nodes[k];
+    const B = nodes[(k + 1) % K];
+    const e = signedTangent(circles[A.c], A.s, circles[B.c], B.s);
+    if (!e) return { ok: false, tooClose: [A.c, B.c] };
+    edges.push(e);
+  }
+  const arcs = nodes.map((nd, k) => {
+    const mp = edges[(k - 1 + K) % K].m;
+    const mn = edges[k].m;
+    return {
+      circle: nd.c,
+      s: nd.s,
+      thIn: ang(nd.s * mp[0], nd.s * mp[1]),
+      alpha: mod2pi(nd.s * (ang(mn[0], mn[1]) - ang(mp[0], mp[1])))
+    };
+  });
+  return { ok: true, edges, arcs };
+}
+
+/** In-plane "above" in the loop frame: world +Y, or world −Z when the parts lie flat. */
+function aboveIn(frame) {
+  const up = [frame.u.y, frame.v.y];
+  if (Math.hypot(...up) >= 0.3) return up.map((x) => x / Math.hypot(...up));
+  const down = [-frame.u.z, -frame.v.z];
+  return down.map((x) => x / Math.hypot(...down));
+}
+
+/** Points along an arc of circle `c` from angle th going s·alpha, about every `stepMm` mm. */
+function arcPoints(c, th, alpha, s, stepMm = 1) {
+  const n = Math.max(1, Math.ceil((alpha * c.r) / stepMm));
+  return Array.from({ length: n + 1 }, (_, j) => {
+    const a = th + (s * alpha * j) / n;
+    return [c.x + c.r * Math.cos(a), c.y + c.r * Math.sin(a)];
+  });
+}
+
+/** Distance along a ray p + t·d to segment a–b, or Infinity. */
+function rayHit(p, d, a, b) {
+  const ex = b[0] - a[0];
+  const ey = b[1] - a[1];
+  const den = d[0] * ey - d[1] * ex;
+  if (Math.abs(den) < 1e-12) return Infinity;
+  const wx = a[0] - p[0];
+  const wy = a[1] - p[1];
+  const t = (wx * ey - wy * ex) / den;
+  const u = (wx * d[1] - wy * d[0]) / den;
+  return t > 1e-9 && u >= -1e-9 && u <= 1 + 1e-9 ? t : Infinity;
+}
+
+const segDist = (p, a, b) => {
+  const ex = b[0] - a[0];
+  const ey = b[1] - a[1];
+  const l2 = ex * ex + ey * ey;
+  const t = l2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / l2));
+  return Math.hypot(p[0] - a[0] - t * ex, p[1] - a[1] - t * ey);
+};
+
+/**
+ * Which of `parts` ([{ instanceId, label, meta, position, rotation }], the selection) can carry one
+ * chain: sprockets, and standoffs as smooth guides. `kind` 'chain' | 'track'. Returns { ok, error?,
+ * normal, frame, circles, all (world parts, sprockets then guides), loop (outer edges), sprockets
+ * (world, on the outer loop, in loop order), enclosed: [{ instanceId, label, kind, index, topRun,
+ * returnRun }] (selected parts inside the outer loop; runs as { index, fromId, toId }), leftOut:
+ * [{ instanceId, label, reason }] (a track's enclosed parts, reason 'outside-only') }.
+ */
+export function checkSprocketsForChain(parts, { kind = 'chain', route = null, linkHalfMm = LINK_HALF_HEIGHT_MM } = {}) {
   const sprocketParts = parts.filter((p) => isSprocket(p.meta));
+  const guideParts = parts.filter((p) => isStandoff(p.meta));
   if (sprocketParts.length < 2) {
     const gears = parts.filter((p) => isToothedNonSprocket(p.meta));
     if (gears.length >= 2 || (gears.length && sprocketParts.length)) {
@@ -123,22 +257,47 @@ export function checkSprocketsForChain(parts) {
     }
     return { ok: false, error: 'Select two or more sprockets in one plane.' };
   }
-  const all = sprocketParts.map((p) => worldSprocket(p.meta, p.position, p.rotation, p.instanceId, p.label));
-  const n = all[0].axis.clone().normalize();
-  for (const s of all.slice(1)) {
+  const sprockets = sprocketParts.map((p) => worldSprocket(p.meta, p.position, p.rotation, p.instanceId, p.label));
+  const n = sprockets[0].axis.clone().normalize();
+  for (const s of sprockets.slice(1)) {
     if (Math.abs(s.axis.dot(n)) < AXIS_PARALLEL_MIN_DOT) {
       return { ok: false, error: `The sprockets' axles aren't parallel (${s.label}).` };
     }
   }
-  const t0 = all[0].center.dot(n);
-  for (const s of all.slice(1)) {
+  const t0 = sprockets[0].center.dot(n);
+  for (const s of sprockets.slice(1)) {
     const off = Math.abs(s.center.dot(n) - t0);
     if (off > PLANE_TOLERANCE_MM) {
-      return { ok: false, error: `The sprockets aren't in one plane: ${s.label} is ${off.toFixed(1)} mm along its axle from ${all[0].label}.` };
+      return { ok: false, error: `The sprockets aren't in one plane: ${s.label} is ${off.toFixed(1)} mm along its axle from ${sprockets[0].label}.` };
     }
   }
+  // Standoffs: parallel, a round body, reaching across the chain's plane
+  const guides = guideParts.map((p) => worldGuide(p.meta, p.position, p.rotation, p.instanceId, p.label, linkHalfMm));
+  for (const g of guides) {
+    if (Math.abs(g.axis.dot(n)) < AXIS_PARALLEL_MIN_DOT) {
+      return { ok: false, error: `${g.label}'s axle isn't parallel to the sprockets'.` };
+    }
+    if (!g.hasBody) return { ok: false, error: `${g.label} has no round body for a chain to rest on.` };
+    const along = g.center.dot(n);
+    const dir = Math.sign(g.axis.dot(n));
+    const ends = g.span.map((z) => along + dir * z);
+    const lo = Math.min(...ends);
+    const hi = Math.max(...ends);
+    const short = t0 < lo ? lo - t0 : t0 > hi ? t0 - hi : 0;
+    if (short > 0.01) {
+      return { ok: false, error: `${g.label} doesn't reach the chain: its body ends ${short.toFixed(1)} mm short of the sprockets' plane.` };
+    }
+  }
+  const all = [...sprockets, ...guides];
   const [u, v] = refAxes(n);
-  const circles = all.map((s) => ({ x: s.center.dot(u), y: s.center.dot(v), r: s.pitchRadius }));
+  const circles = all.map((s) => ({
+    x: s.center.dot(u),
+    y: s.center.dot(v),
+    r: s.pitchRadius,
+    outer: s.tipRadius,
+    kind: s.kind,
+    teeth: s.teeth ?? null
+  }));
   for (let i = 0; i < all.length; i++) {
     for (let j = i + 1; j < all.length; j++) {
       const d = Math.hypot(circles[i].x - circles[j].x, circles[i].y - circles[j].y);
@@ -149,92 +308,287 @@ export function checkSprocketsForChain(parts) {
   }
   const loop = outerLoop(circles);
   if (!loop) return { ok: false, error: 'No chain fits round these sprockets.' };
+  const frame = { u, v, t0 };
+
+  // Enclosed parts: the selected ones inside the outer loop. Its top and return runs are the first
+  // straight runs a ray from its centre meets going up and down
   const onLoop = new Set(loop.map((e) => e.from));
-  return {
+  const outerNodes = loop.map((e) => ({ c: e.from, s: 1 }));
+  const path = loopPath(circles, outerNodes);
+  const up = aboveIn(frame);
+  const runRef = (k) => ({ index: k, fromId: all[loop[k].from].instanceId, toId: all[loop[k].to].instanceId });
+  const enclosed = [];
+  for (let i = 0; i < all.length; i++) {
+    if (onLoop.has(i)) continue;
+    const p = [circles[i].x, circles[i].y];
+    const runs = [];
+    for (const d of [up, [-up[0], -up[1]]]) {
+      let best = { t: Infinity, run: null, arc: null };
+      path.edges.forEach((e, k) => {
+        const t = rayHit(p, d, e.ta, e.tb);
+        if (t < best.t) best = { t, run: k, arc: null };
+      });
+      path.arcs.forEach((a, k) => {
+        const pts = arcPoints(circles[a.circle], a.thIn, a.alpha, a.s, 0.5);
+        for (let j = 0; j + 1 < pts.length; j++) {
+          const t = rayHit(p, d, pts[j], pts[j + 1]);
+          if (t < best.t - 1e-6) best = { t, run: null, arc: k };
+        }
+      });
+      if (best.arc != null) {
+        const next = all[loop[best.arc].from];
+        return { ok: false, error: `${all[i].label} sits right next to ${next.label}; move it so the chain passes it on a straight run.` };
+      }
+      if (best.run == null) return { ok: false, error: 'No chain fits round these sprockets.' };
+      runs.push(runRef(best.run));
+    }
+    enclosed.push({ instanceId: all[i].instanceId, label: all[i].label, kind: all[i].kind === 'guide' ? 'standoff' : 'sprocket', index: i, topRun: runs[0], returnRun: runs[1] });
+  }
+  const base = {
     ok: true,
+    kind,
     normal: n,
-    frame: { u, v, t0 },
+    frame,
     circles,
     all,
     loop,
-    sprockets: loop.map((e) => all[e.from]),
-    leftOut: all.filter((_, i) => !onLoop.has(i))
+    sprockets: loop.map((e) => all[e.from]).filter((s) => s.kind === 'sprocket'),
+    enclosed,
+    leftOut: kind === 'track' ? enclosed.map((e) => ({ instanceId: e.instanceId, label: e.label, reason: 'outside-only' })) : []
   };
+  if (route && kind !== 'track' && enclosed.length && enclosed.every((e) => route[e.instanceId] === 'over' || route[e.instanceId] === 'under')) {
+    const routed = routeLoop(base, { kind, route });
+    if (!routed.ok) return { ...routed, enclosed };
+    const valid = validateLoop(base, routed.nodes, linkHalfMm);
+    if (!valid.ok) return { ...valid, enclosed };
+  }
+  return base;
 }
 
-/** Angle (rad) of a 2D vector. */
-const ang = (x, y) => Math.atan2(y, x);
-const mod2pi = (a) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-
 /**
- * The true length of the loop in links (real number): whole teeth round each arc plus the straight
- * runs over the chain pitch. `circles`/`loop` as from checkSprocketsForChain.
+ * The loop's nodes once the route is applied: the outer loop, with each enclosed part (chain only)
+ * put into its top run (under) or return run (over), side −1, ordered along the run. Returns { ok,
+ * nodes, sides: Map(index → 'outer' | 'over' | 'under') } or a refusal with `needsRoute`.
  */
-function loopGeometry(circles, loop, pitch) {
-  const arcs = loop.map((e, k) => {
-    const prev = loop[(k - 1 + loop.length) % loop.length];
-    const thIn = ang(prev.m[0], prev.m[1]);
-    const thOut = ang(e.m[0], e.m[1]);
-    let alpha = mod2pi(thOut - thIn);
-    if (alpha < EPS) alpha = 2 * Math.PI; // a lone circle can't happen (loop ≥ 2), but stay safe
-    return { circle: e.from, thIn, alpha };
+function routeLoop(check, { kind, route }) {
+  const { loop, enclosed, circles } = check;
+  const sides = new Map(loop.map((e) => [e.from, 'outer']));
+  const inserts = loop.map(() => []);
+  if (kind !== 'track' && enclosed.length) {
+    const missing = enclosed.filter((e) => route?.[e.instanceId] !== 'over' && route?.[e.instanceId] !== 'under');
+    if (missing.length) {
+      return {
+        ok: false,
+        error: `Choose whether the chain goes over or under ${missing.map((e) => e.label).join(', ')}.`,
+        needsRoute: missing.map((e) => ({ instanceId: e.instanceId, label: e.label }))
+      };
+    }
+    for (const e of enclosed) {
+      const side = route[e.instanceId];
+      const run = side === 'under' ? e.topRun : e.returnRun;
+      const a = circles[loop[run.index].from];
+      const b = circles[loop[run.index].to];
+      const c = circles[e.index];
+      inserts[run.index].push({ c: e.index, along: (c.x - a.x) * (b.x - a.x) + (c.y - a.y) * (b.y - a.y) });
+      sides.set(e.index, side);
+    }
+  }
+  const nodes = [];
+  loop.forEach((e, k) => {
+    nodes.push({ c: e.from, s: 1 });
+    for (const ins of inserts[k].sort((p, q) => p.along - q.along)) nodes.push({ c: ins.c, s: -1 });
   });
-  const runs = loop.map((e) => {
-    const a = circles[e.from];
-    const b = circles[e.to];
-    const L = Math.hypot(b.x - a.x, b.y - a.y);
-    return Math.sqrt(Math.max(0, L * L - (a.r - b.r) ** 2));
-  });
-  return { arcs, runs, pitch };
+  return { ok: true, nodes, sides };
 }
 
-const exactLinks = (circles, loop, pitch, teethOf) => {
-  const { arcs, runs } = loopGeometry(circles, loop, pitch);
-  return arcs.reduce((s, a) => s + a.alpha / ((2 * Math.PI) / teethOf(a.circle)), 0) + runs.reduce((s, r) => s + r / pitch, 0);
-};
+/**
+ * The loop's path as points about every mm: [{ p: [x, y], at: mm along the chain, node (the part
+ * whose arc it's on, or null), run (the run it's on, or null) }] and its total length.
+ */
+function samplePath(circles, nodes, path) {
+  const K = nodes.length;
+  const pts = [];
+  let at = 0;
+  const add = (p, owner) => {
+    if (pts.length) at += Math.hypot(p[0] - pts.at(-1).p[0], p[1] - pts.at(-1).p[1]);
+    pts.push({ p, at, ...owner });
+  };
+  for (let k = 0; k < K; k++) {
+    const a = path.arcs[k];
+    for (const p of arcPoints(circles[a.circle], a.thIn, a.alpha, a.s, 1)) add(p, { node: k, run: null });
+    const e = path.edges[k];
+    const steps = Math.max(1, Math.ceil(e.length));
+    for (let j = 1; j < steps; j++) add([e.ta[0] + ((e.tb[0] - e.ta[0]) * j) / steps, e.ta[1] + ((e.tb[1] - e.ta[1]) * j) / steps], { node: null, run: k, frac: j / steps });
+  }
+  const last = pts.at(-1).p;
+  return { pts, total: at + Math.hypot(pts[0].p[0] - last[0], pts[0].p[1] - last[1]) };
+}
+
+/** True when open segments a–b and c–d cross each other. */
+function segmentsCross(a, b, c, d) {
+  const ccw = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const d1 = ccw(a, b, c);
+  const d2 = ccw(a, b, d);
+  const d3 = ccw(c, d, a);
+  const d4 = ccw(c, d, b);
+  return ((d1 > EPS && d2 < -EPS) || (d1 < -EPS && d2 > EPS)) && ((d3 > EPS && d4 < -EPS) || (d3 < -EPS && d4 > EPS));
+}
 
 /**
- * The whole chain. `parts` as for checkSprocketsForChain; `kind` 'chain' | 'track'; `grippers`
- * (track only); `slack` 'lower' | 'upper': which run holds a slack chain's spare length when the
- * sprockets stand up (the upper run hangs down into the loop); `metaByPartNumber(pn)` → part
- * metadata for the link and gripper parts.
- * Returns { ok, error?, linkPart, gripperPart, links: [{ partId, position, rotation }],
- *   grippers: [...], sprocketTurns: [{ instanceId, axis, point, deg }], onLoop, leftOut,
- *   linkCount, exactLinks, gapMm, moveHint, notes, slack, sagMm, slackChoice }. `sagMm` is how far
- *   the hanging run drops below its straight line; `slackChoice` is true when that is SAG_ASK_MM or
- *   more and the sprockets stand up, so the upper or lower run can hold it; `slack` is the run used
- *   ('lower', 'upper', or null when flat).
+ * Can the chain go this way round? Refuses (first failure wins, naming the parts) when two parts
+ * are too close for the chain to pass between them, an outer part would lose the chain or an
+ * enclosed one wouldn't be reached, the loop would cross itself, the chain would pass through a
+ * selected part, or two runs would touch. Returns { ok, path } or { ok: false, error }.
  */
-export function buildChainPath(parts, { kind = 'chain', grippers = false, slack = 'lower', metaByPartNumber }) {
-  const check = checkSprocketsForChain(parts);
-  if (!check.ok) return check;
+function validateLoop(check, nodes, linkHalfMm) {
+  const { circles, all } = check;
+  const label = (ci) => all[ci].label;
+  const path = loopPath(circles, nodes);
+  if (!path.ok) {
+    const [a, b] = path.tooClose;
+    return { ok: false, error: `${label(a)} and ${label(b)} are too close for the chain to pass between them.` };
+  }
+  const K = nodes.length;
+  const outerPath = loopPath(circles, check.loop.map((e) => ({ c: e.from, s: 1 })));
+  const outerAlpha = new Map(outerPath.ok ? outerPath.arcs.map((a) => [a.circle, a.alpha]) : []);
+  // One full turn: an outer part wrapped the wrong way adds a turn, an enclosed one takes one away
+  const turning = path.arcs.reduce((sum, a) => sum + a.s * a.alpha, 0);
+  if (Math.abs(turning - 2 * Math.PI) > 1e-3) {
+    const side = turning > 2 * Math.PI ? 1 : -1;
+    const culprit = path.arcs.filter((a) => a.s === side).sort((p, q) => q.alpha - p.alpha)[0];
+    return {
+      ok: false,
+      error: side > 0 ? `${label(culprit.circle)} would no longer touch the chain with this route.` : `The chain wouldn't reach ${label(culprit.circle)} with this route.`
+    };
+  }
+  const lostOuter = path.arcs.find((a) => a.s > 0 && outerAlpha.has(a.circle) && a.alpha - outerAlpha.get(a.circle) > Math.PI / 2);
+  if (lostOuter) {
+    return { ok: false, error: `${label(lostOuter.circle)} would no longer touch the chain with this route.` };
+  }
+  const edgePart = (k) => (nodes[k].s < 0 ? nodes[k].c : nodes[(k + 1) % K].c);
+  for (let i = 0; i < K; i++) {
+    for (let j = i + 1; j < K; j++) {
+      if (segmentsCross(path.edges[i].ta, path.edges[i].tb, path.edges[j].ta, path.edges[j].tb)) {
+        const a = label(edgePart(i));
+        const b = label(edgePart(j));
+        return { ok: false, error: a === b ? `The chain would cross itself round ${a}.` : `The chain would cross itself between ${a} and ${b}.` };
+      }
+    }
+  }
+  const { pts, total } = samplePath(circles, nodes, path);
+  // Passing through a part: a part it doesn't wrap, or one it wraps elsewhere on the loop
+  const nodeOf = new Map(nodes.map((nd, k) => [nd.c, k]));
+  for (let ci = 0; ci < circles.length; ci++) {
+    const c = circles[ci];
+    const k = nodeOf.get(ci);
+    const prevK = k != null ? (k - 1 + K) % K : -1;
+    const nextK = k != null ? (k + 1) % K : -1;
+    const own = (q) => k != null && (q.node === k || q.node === prevK || q.node === nextK || q.run === k || q.run === prevK);
+    const clear = (k == null ? c.outer + linkHalfMm : c.kind === 'guide' ? c.r : c.r + linkHalfMm) - 0.05;
+    for (let i = 0; i < pts.length; i++) {
+      const q = pts[i];
+      const next = pts[(i + 1) % pts.length];
+      if (own(q) || own(next)) continue;
+      if (segDist([c.x, c.y], q.p, next.p) < clear) return { ok: false, error: `The chain would pass through ${label(ci)}.` };
+    }
+  }
+  // Two runs touching: points far apart along the chain closer than two link half-heights
+  const partOf = (q) => (q.node != null ? nodes[q.node].c : nodes[q.frac < 0.5 ? q.run : (q.run + 1) % K].c);
+  const touchMm = 2 * linkHalfMm;
+  let worst = null;
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const along = Math.min(pts[j].at - pts[i].at, total - (pts[j].at - pts[i].at));
+      if (along <= NOT_NEIGHBOURS_MM) continue;
+      const d = Math.hypot(pts[i].p[0] - pts[j].p[0], pts[i].p[1] - pts[j].p[1]);
+      if (d < touchMm - 1e-6 && (!worst || d < worst.d)) worst = { d, a: pts[i], b: pts[j] };
+    }
+  }
+  if (worst) {
+    const a = label(partOf(worst.a));
+    const b = label(partOf(worst.b));
+    return { ok: false, error: a === b ? `The chain's runs would touch near ${a}.` : `The chain's runs would touch between ${a} and ${b}.` };
+  }
+  return { ok: true, path };
+}
+
+/** A standoff's turn per link: the angle a 6.35 mm chord on its guide circle spans. */
+const guideStep = (r, pitch) => 2 * Math.asin(Math.min(1, pitch / (2 * r)));
+
+/**
+ * The true length of the loop in links (real number): whole teeth round each sprocket arc, the arc
+ * length over the chain pitch round each standoff, plus the straight runs over the chain pitch.
+ */
+function exactLinks(circles, path, pitch) {
+  const arcLinks = path.arcs.reduce((sum, a) => {
+    const c = circles[a.circle];
+    if (c.kind === 'guide') return sum + (a.alpha * c.r) / pitch;
+    return sum + a.alpha / ((2 * Math.PI) / c.teeth);
+  }, 0);
+  return arcLinks + path.edges.reduce((sum, e) => sum + e.length / pitch, 0);
+}
+
+/**
+ * The whole chain. `parts` as for checkSprocketsForChain; `kind` 'chain' | 'track'; `route` (chain
+ * only) { instanceId: 'over' | 'under' } for each enclosed part; `grippers` (track only); `slack`
+ * 'lower' | 'upper': which run holds a slack chain's spare length when the parts stand up (the upper
+ * run hangs down into the loop); `metaByPartNumber(pn)` → part metadata for the link and gripper parts.
+ * Returns { ok, error?, needsRoute?, linkPart, gripperPart, links: [{ partId, position, rotation }],
+ *   grippers: [...], sprocketTurns: [{ instanceId, axis, point, deg }], onLoop, wrapped: [{ instanceId,
+ *   side: 'outer' | 'over' | 'under' }], leftOut: [{ instanceId, reason }], sprocketCount,
+ *   standoffCount, linkCount, exactLinks, gapMm, moveHint, notes, slack, sagMm, slackChoice }.
+ *   `sagMm` is how far the hanging run drops below its straight line; `slackChoice` is true when that
+ *   is SAG_ASK_MM or more and the parts stand up, so the upper or lower run can hold it; `slack` is
+ *   the run used ('lower', 'upper', or null when flat).
+ */
+export function buildChainPath(parts, { kind = 'chain', grippers = false, route = null, slack = 'lower', metaByPartNumber }) {
   const linkPart = metaByPartNumber(kind === 'track' ? TREAD_LINK_PART_NUMBER : CHAIN_LINK_PART_NUMBER);
+  const linkHalfMm = linkPart?.bbox ? Math.abs(linkPart.bbox.min[1]) : LINK_HALF_HEIGHT_MM;
+  const check = checkSprocketsForChain(parts, { kind, linkHalfMm });
+  if (!check.ok) return check;
   const gripperPart = kind === 'track' && grippers ? metaByPartNumber(GRIPPER_PART_NUMBER) : null;
   if (!linkPart?.chainSpecs) return { ok: false, error: `The ${kind === 'track' ? 'tread' : 'chain'} link part is missing from the library.` };
   if (kind === 'track' && grippers && !gripperPart?.chainSpecs) return { ok: false, error: 'The Traction Link part is missing from the library.' };
 
-  const { normal: n, frame, circles, loop, all } = check;
+  const routed = routeLoop(check, { kind, route });
+  if (!routed.ok) return routed;
+  const { nodes, sides } = routed;
+  const { normal: n, frame, circles, all } = check;
+  if (nodes.filter((nd) => circles[nd.c].kind === 'sprocket').length < 2) {
+    return { ok: false, error: `A ${kind} needs two or more sprockets on its outside.` };
+  }
+  const valid = validateLoop(check, nodes, linkHalfMm);
+  if (!valid.ok) return valid;
+  const { path } = valid;
   const pitch = linkPart.chainSpecs.pitchMm;
-  const teethOf = (i) => all[i].teeth;
-  const { arcs, runs } = loopGeometry(circles, loop, pitch);
-  const exact = exactLinks(circles, loop, pitch, teethOf);
+  const exact = exactLinks(circles, path, pitch);
 
   // Never tighter than the path allows: round up, unless it's within the chain's play
   const target = Math.max(2, Math.ceil(exact - CHAIN_PLAY_MM / pitch));
-  // A slack chain sags on one run: the one facing the floor (world −Y), or with `slack` 'upper' the
-  // one facing up; the longest when the sprockets lie flat
+  // A slack chain sags on one run: one between two outer parts (ending on a sprocket, where the walk
+  // starts), the one facing the floor (world −Y), or with `slack` 'upper' the one facing up; the
+  // longest when the parts lie flat
+  const K = nodes.length;
+  const endsOnSprocket = (k) => circles[nodes[(k + 1) % K].c].kind === 'sprocket';
+  const outerRun = (k) => nodes[k].s > 0 && nodes[(k + 1) % K].s > 0;
+  let candidates = nodes.map((_, k) => k).filter((k) => endsOnSprocket(k) && outerRun(k));
+  if (!candidates.length) {
+    // Every run touches an enclosed part: the longest takes the slack
+    const longest = nodes.map((_, k) => k).filter(endsOnSprocket);
+    candidates = [longest.reduce((best, k) => (path.edges[k].length > path.edges[best].length ? k : best), longest[0])];
+  }
   const down = new THREE.Vector3(0, -1, 0);
   const down2 = [down.dot(frame.u), down.dot(frame.v)];
   const standing = Math.hypot(...down2) > 0.3;
   const upper = standing && slack === 'upper';
-  const facing = (k) => (standing ? (upper ? -1 : 1) * (loop[k].m[0] * down2[0] + loop[k].m[1] * down2[1]) : runs[k]);
-  const sagRun = loop.reduce((best, _, k) => (facing(k) > facing(best) ? k : best), 0);
+  const facing = (k) => (standing ? (upper ? -1 : 1) * (path.edges[k].m[0] * down2[0] + path.edges[k].m[1] * down2[1]) : path.edges[k].length);
+  const sagRun = candidates.reduce((best, k) => (facing(k) > facing(best) ? k : best), candidates[0]);
   // The facing run unless closing on another needs fewer links
-  let walk = planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun, down2, upper);
+  let walk = planChain(circles, nodes, path, pitch, target, sagRun, down2, upper);
   if (!walk || walk.pivots2d.length > target) {
-    for (let k = 0; k < loop.length; k++) {
+    for (const k of candidates) {
       if (k === sagRun) continue;
-      const other = planChain(circles, loop, arcs, runs, pitch, teethOf, target, k, down2);
+      const other = planChain(circles, nodes, path, pitch, target, k, down2);
       if (other && (!walk || other.pivots2d.length < walk.pivots2d.length)) walk = other;
     }
   }
@@ -264,24 +618,25 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, slack 
     }
   }
 
-  // Sprocket turns: a tooth gap at the nearest pivot on its arc, the smallest turn
+  // Sprocket turns: a tooth gap at the nearest pivot on its arc, the smallest turn (standoffs stay)
   const sprocketTurns = [];
-  loop.forEach((e, k) => {
-    const s = all[e.from];
+  nodes.forEach((nd, k) => {
+    const s = all[nd.c];
+    if (s.kind !== 'sprocket') return;
     const idx = arcPivotIndex[k];
     if (idx == null) return;
-    const pts = [to3d(pivots2d[idx])];
     const a = s.axis.clone().normalize();
     const gap = angleAbout(a, s.gapDir);
-    const pivotAngle = angleAbout(a, pts[0].clone().sub(s.center));
+    const pivotAngle = angleAbout(a, to3d(pivots2d[idx]).sub(s.center));
     const deg = Math.round(wrapDeg(pivotAngle - gap, 360 / s.teeth) * 1000) / 1000 + 0;
     if (Math.abs(deg) >= 0.005) sprocketTurns.push({ instanceId: s.instanceId, axis: a.toArray(), point: s.center.toArray(), deg });
   });
 
   const gapMm = round3((exact - total) * pitch);
-  const moveHint = Math.abs(gapMm) >= 0.05 ? suggestMove(check, pitch, gapMm) : null;
+  const moveHint = Math.abs(gapMm) >= 0.05 ? suggestMove(check, nodes, pitch, gapMm) : null;
   const notes = [];
   if (-gapMm > SAG_NOTE_MM) notes.push('It will sag a little; move a sprocket for a snug fit.');
+  const onLoopParts = nodes.map((nd) => all[nd.c]);
   return {
     ok: true,
     kind,
@@ -290,14 +645,18 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, slack 
     links,
     grippers: gripperPoses,
     sprocketTurns,
-    onLoop: check.sprockets.map((s) => s.instanceId),
-    leftOut: check.leftOut.map((s) => s.instanceId),
+    onLoop: onLoopParts.map((s) => s.instanceId),
+    wrapped: nodes.map((nd) => ({ instanceId: all[nd.c].instanceId, side: sides.get(nd.c) })),
+    leftOut: check.leftOut.map((l) => ({ instanceId: l.instanceId, reason: l.reason })),
+    sprocketCount: onLoopParts.filter((s) => s.kind === 'sprocket').length,
+    standoffCount: onLoopParts.filter((s) => s.kind === 'guide').length,
     slack: standing ? (upper ? 'upper' : 'lower') : null,
     sagMm: walk.sag.depthMm,
     slackChoice: standing && walk.sag.depthMm >= SAG_ASK_MM,
     linkCount: links.length,
     exactLinks: Math.round(exact * 1000) / 1000,
     gapMm,
+    sag: walk.sag,
     moveHint,
     notes,
     labelOf: Object.fromEntries(all.map((s) => [s.instanceId, s.label]))
@@ -306,10 +665,10 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, slack 
 
 /**
  * The q − 1 inner pivots of a sagging run from `a` to `b` ([x, y]): q links of `pitch` on a circular
- * arc bowed to the right of a→b (out of a counter-clockwise loop). A run as long as its links is
- * straight.
+ * arc bowed to the right of a→b (side +1, out of a counter-clockwise loop) or to the left (side −1).
+ * A run as long as its links is straight.
  */
-function sagPoints(a, b, q, pitch) {
+function sagPoints(a, b, q, pitch, side = 1) {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const D = Math.hypot(dx, dy);
@@ -325,7 +684,7 @@ function sagPoints(a, b, q, pitch) {
   }
   const phi = (lo + hi) / 2;
   const rho = pitch / (2 * Math.sin(phi / 2));
-  const out = [dy / D, -dx / D]; // right of a→b
+  const out = [(side * dy) / D, (-side * dx) / D]; // the side it bows to
   const h = rho * Math.cos((q * phi) / 2);
   const c = [(a[0] + b[0]) / 2 - out[0] * h, (a[1] + b[1]) / 2 - out[1] * h];
   const a0 = ang(a[0] - c[0], a[1] - c[1]);
@@ -341,9 +700,9 @@ function sagPoints(a, b, q, pitch) {
  * of `pitch` walked along it land exactly on b. Falls back to sagPoints when the run is nearly
  * vertical (no sideways sag to show).
  */
-function hangPoints(a, b, q, pitch, down) {
+function hangPoints(a, b, q, pitch, down, side = 1) {
   const D = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  if (q < 2 || D >= q * pitch - 1e-9) return sagPoints(a, b, q, pitch);
+  if (q < 2 || D >= q * pitch - 1e-9) return sagPoints(a, b, q, pitch, side);
   // Frame: ey up (against gravity), ex across
   const ey = [-down[0], -down[1]];
   const ex = [ey[1], -ey[0]];
@@ -354,7 +713,7 @@ function hangPoints(a, b, q, pitch, down) {
   if (flip) [A, B] = [B, A];
   const h = B[0] - A[0];
   const v = B[1] - A[1];
-  if (h < 0.05 * D) return sagPoints(a, b, q, pitch);
+  if (h < 0.05 * D) return sagPoints(a, b, q, pitch, side);
 
   // y = k·cosh((x − x0)/k) + c with arc length S between A and B
   const curve = (S) => {
@@ -416,7 +775,7 @@ function hangPoints(a, b, q, pitch, down) {
     else lo = mid;
   }
   const pts = walk(curve((lo + hi) / 2));
-  if (pts.length < q - 1) return sagPoints(a, b, q, pitch);
+  if (pts.length < q - 1) return sagPoints(a, b, q, pitch, side);
   const out = (flip ? pts.reverse() : pts).map(fromF);
   return out;
 }
@@ -424,27 +783,36 @@ function hangPoints(a, b, q, pitch, down) {
 /**
  * The pivot loop, counter-clockwise: [x, y] points in the loop frame, `target` of them (one per link).
  * The walk starts where the chain leaves the sprocket after run `sagRun` and goes link by link: each
- * run lands where the chain meets the next sprocket (its touching point from the last pivot), with
- * the whole number of links that fits it best, straight and tight: eased a hair longer to reach the
- * touching point, or landing a little before it (wrapping a little more) when the links fall short;
- * round a sprocket the links step one tooth (a 6.35 mm chord). The last run, `sagRun`, closes the
- * loop: it lands on the first sprocket a whole number of teeth before the start, as near its touching
- * point as the link count allows, and holds what's left over: hanging on a catenary toward the floor
- * (`down2`, gravity in the loop frame; out of the loop when the sprockets lie flat or the run faces
- * up) when the chain is longer than the path, eased straight (within the chain's play) when shorter. Returns { pivots2d, arcPivotIndex:
- * [index of a pivot on each loop sprocket], sag: { run, mm } } or null.
+ * run lands where the chain meets the next part (its touching point from the last pivot), with the
+ * whole number of links that fits it best. A run onto a sprocket is straight and tight: eased a hair
+ * longer to reach the touching point, or landing a little before it (wrapping a little more) when
+ * the links fall short; a run onto a standoff with links to spare bows a little. Round a sprocket
+ * the links step one tooth (a 6.35 mm chord), in the node's direction; round a standoff they lie
+ * flat on its body (pivots on the circle where a link's middle touches the guide circle, or one
+ * pivot at the corner for a shallow wrap). The last run, `sagRun`, closes the loop: it lands on the
+ * first sprocket a whole number of teeth before the start, as near its touching point as the link
+ * count allows, and holds what's left over: hanging on a catenary toward the floor (`down2`, gravity
+ * in the loop frame; out of the loop when the parts lie flat or the run faces up, unless `inward`)
+ * when the chain is longer than the path, eased straight (within the chain's play) when shorter.
+ * Returns { pivots2d, arcPivotIndex: [index of a pivot on each loop part], sag: { run, mm, depthMm } }
+ * or null.
  */
-function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0, down2 = [0, 0], inward = false) {
-  const K = loop.length;
-  const tau = (k) => (2 * Math.PI) / teethOf(loop[k].from);
-  const circleOf = (k) => circles[loop[k].from];
-  const at = (k, th) => {
+function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 0], inward = false) {
+  const { arcs } = path;
+  const K = nodes.length;
+  const circleOf = (k) => circles[nodes[k].c];
+  const sOf = (k) => nodes[k].s;
+  const isGuide = (k) => circleOf(k).kind === 'guide';
+  const tau = (k) => (isGuide(k) ? guideStep(circleOf(k).r, pitch) : (2 * Math.PI) / circleOf(k).teeth);
+  const at = (k, th, r = circleOf(k).r) => {
     const c = circleOf(k);
-    return [c.x + c.r * Math.cos(th), c.y + c.r * Math.sin(th)];
+    return [c.x + r * Math.cos(th), c.y + r * Math.sin(th)];
   };
-  const thOut = (k) => arcs[k].thIn + arcs[k].alpha;
+  const thOut = (k) => arcs[k].thIn + sOf(k) * arcs[k].alpha;
   // `th` moved by whole turns to within half a turn of `ref`
   const near = (th, ref) => ref + (mod2pi(th - ref + Math.PI) - Math.PI);
+  // How far round part k the chain goes from angle th to where it leaves
+  const wrapFrom = (k, th) => sOf(k) * (near(thOut(k), th + sOf(k) * arcs[k].alpha) - th);
   // Where a chain from `from` meets circle k: the touching point nearest the loop's own
   const touching = (from, k) => {
     const c = circleOf(k);
@@ -456,6 +824,29 @@ function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0
     const both = [near(toFrom + half, ref), near(toFrom - half, ref)];
     const th = Math.abs(both[0] - ref) <= Math.abs(both[1] - ref) ? both[0] : both[1];
     return { th, length: Math.sqrt(d * d - c.r * c.r) };
+  };
+  // A run bows away from a standoff end, out of the loop between outer parts, in between enclosed ones
+  const bowSide = (k) => {
+    const a = sOf(k);
+    const b = sOf((k + 1) % K);
+    if (a === b) return a;
+    if (isGuide((k + 1) % K)) return b;
+    if (isGuide(k)) return a;
+    return 1;
+  };
+  // The pivots on part k from where the chain meets it at angle th
+  const onPart = (k, th) => {
+    const s = sOf(k);
+    const w = wrapFrom(k, th);
+    if (!isGuide(k)) {
+      const m = Math.max(0, Math.round(w / tau(k)));
+      return Array.from({ length: m + 1 }, (_, j) => at(k, th + s * j * tau(k)));
+    }
+    const step = tau(k);
+    const ww = Math.max(0, w);
+    const m = Math.floor(ww / step);
+    const startTh = th + (s * (ww - m * step)) / 2;
+    return Array.from({ length: m + 1 }, (_, j) => at(k, startTh + s * j * step));
   };
 
   // The point on circle k at distance L from `from`, on the same side as the touching angle `thT`
@@ -469,7 +860,7 @@ function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0
     return near(toFrom + side * Math.acos(cos), thT);
   };
 
-  const s0 = (sagRun + 1) % K;
+  const s0 = (sagRun + 1) % K; // always a sprocket
   const start = thOut(s0);
   const pts = [at(s0, start)];
   const firstOn = new Array(K).fill(null);
@@ -484,46 +875,53 @@ function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0
     const from = pts.at(-1);
     const t = touching(from, kn);
     if (!t) return null;
-    // A tight run is straight: q links eased to the touching point, or exactly q links landing a
-    // little before it, so the chain wraps the sprocket a little more
-    let q = Math.floor(t.length / pitch + 1e-9);
-    if (q < 1) {
-      q = 1;
-      pts.push(...sagPoints(from, at(kn, t.th), q, pitch));
-    } else if (t.length - q * pitch > stretchAllowed(t.length)) {
-      const th = landAt(from, kn, q * pitch, t.th);
-      if (th == null) return null;
-      t.th = th;
-    }
-    if (q > 1) {
-      const end = at(kn, t.th);
+    let on = onPart(kn, t.th);
+    let end = on[0];
+    const R = Math.hypot(end[0] - from[0], end[1] - from[1]);
+    if (isGuide(kn)) {
+      const q = Math.max(1, Math.ceil((R - stretchAllowed(R)) / pitch - 1e-9));
+      pts.push(...sagPoints(from, end, q, pitch, bowSide(k))); // a run with links to spare bows a little
+    } else {
+      // A run onto a sprocket is straight: q links eased to the touching point, or exactly q links
+      // landing a little before it, so the chain wraps the sprocket a little more
+      let q = Math.floor(R / pitch + 1e-9);
+      if (q < 1) {
+        q = 1;
+      } else if (R - q * pitch > stretchAllowed(R)) {
+        const th = landAt(from, kn, q * pitch, t.th);
+        if (th == null) return null;
+        on = onPart(kn, th);
+        end = on[0];
+      }
       for (let j = 1; j < q; j++) pts.push([from[0] + ((end[0] - from[0]) * j) / q, from[1] + ((end[1] - from[1]) * j) / q]);
     }
     firstOn[kn] = pts.length;
-    const m = Math.max(0, Math.round((near(thOut(kn), t.th + arcs[kn].alpha) - t.th) / tau(kn)));
-    for (let j = 0; j <= m; j++) pts.push(at(kn, t.th + j * tau(kn)));
+    pts.push(...on);
   }
   // The closing run onto the first sprocket. The chain may leave the last sprocket a tooth or two
   // sooner or later than planned (`e`), as a hanging run does, and lands c teeth before the start
   // with q links in the run.
   const t0 = tau(s0);
+  const s = sOf(s0);
   const tl = tau(sagRun);
+  const sl = sOf(sagRun);
   const lastOn = firstOn[sagRun];
   const lastTh = ang(pts.at(-1)[0] - circleOf(sagRun).x, pts.at(-1)[1] - circleOf(sagRun).y);
-  const onLast = pts.length - lastOn; // pivots on the last sprocket's arc
-  // Slack hangs toward the floor; out of the loop when gravity lies across the run's plane, or faces
-  // in unless `inward` (slack on the upper run hangs down into the loop)
+  const onLast = pts.length - lastOn; // pivots on the last part's arc
+  // Slack hangs toward the floor; out of the loop (the run's bow side) when gravity lies across the
+  // run's plane, or faces the other way unless `inward` (slack on the upper run hangs into the loop)
   const g = Math.hypot(down2[0], down2[1]);
+  const bow = bowSide(sagRun);
   const hang = (from, cd) => {
     const dx = cd.end[0] - from[0];
     const dy = cd.end[1] - from[1];
-    const out = [dy / Math.hypot(dx, dy), -dx / Math.hypot(dx, dy)]; // right of from→end: out of the loop
+    const out = [(bow * dy) / Math.hypot(dx, dy), (-bow * dx) / Math.hypot(dx, dy)];
     const facingOut = (down2[0] * out[0] + down2[1] * out[1]) / (g || 1);
     const down = g > 0.3 && (inward || facingOut > 0.25) ? [down2[0] / g, down2[1] / g] : out;
-    return hangPoints(from, cd.end, cd.q, pitch, down);
+    return hangPoints(from, cd.end, cd.q, pitch, down, bow);
   };
   const turn = (p0, p1, p2) => Math.abs(mod2pi(ang(p2[0] - p1[0], p2[1] - p1[1]) - ang(p1[0] - p0[0], p1[1] - p0[1]) + Math.PI) - Math.PI);
-  // A run pivot sinking into a sprocket's pitch circle would sit in its teeth
+  // A run pivot sinking into a part's circle would sit in its teeth or body
   const clear = (run) =>
     run.every((p, idx) => {
       const mid = idx ? [(p[0] + run[idx - 1][0]) / 2, (p[1] + run[idx - 1][1]) / 2] : p;
@@ -531,15 +929,17 @@ function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0
     });
 
   let best = null;
-  for (let e = -Math.min(2, onLast - 1); e <= 3; e++) {
-    const base = e < 0 ? pts.slice(0, pts.length + e) : [...pts, ...Array.from({ length: e }, (_, j) => at(sagRun, lastTh + (j + 1) * tl))];
+  const eMin = isGuide(sagRun) ? 0 : -Math.min(2, onLast - 1);
+  const eMax = isGuide(sagRun) ? 0 : 3;
+  for (let e = eMin; e <= eMax; e++) {
+    const base = e < 0 ? pts.slice(0, pts.length + e) : [...pts, ...Array.from({ length: e }, (_, j) => at(sagRun, lastTh + sl * (j + 1) * tl))];
     const from = base.at(-1);
     const t = touching(from, s0);
     if (!t) continue;
     // Land a tooth gap near where the chain meets the sprocket; the run takes the links left
     const cands = [];
-    for (let c = 0; c <= teethOf(loop[s0].from); c++) {
-      const th = start - c * t0;
+    for (let c = 0; c <= circleOf(s0).teeth; c++) {
+      const th = start - s * c * t0;
       const end = at(s0, th);
       const R = Math.hypot(end[0] - from[0], end[1] - from[1]);
       // The links left for the planned count, or one more if those would be too tight
@@ -552,13 +952,13 @@ function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0
     }
     if (!cands.length) continue;
     // Of the landings near the touching point without an extra link, the one whose run meets both
-    // sprockets most smoothly (a hanging chain leaves and lands at its own angle) and stays clear of
-    // the teeth; leaving as planned (e = 0) on a tie
+    // parts most smoothly (a hanging chain leaves and lands at its own angle) and stays clear of the
+    // teeth; leaving as planned (e = 0) on a tie
     const nearest = cands.reduce((m, cd) => (cd.score < m.score ? cd : m));
     for (const cd of cands) {
       if (cd.extra !== nearest.extra || cd.off > nearest.off + 3 * t0) continue;
       const inner = hang(from, cd);
-      const run = [base.at(-2), from, ...inner, cd.end, at(s0, cd.th + t0)];
+      const run = [base.at(-2), from, ...inner, cd.end, at(s0, cd.th + s * t0)];
       const kink = Math.max(turn(run[0], run[1], run[2]), turn(run.at(-3), run.at(-2), run.at(-1)));
       const score = (clear([from, ...inner, cd.end]) ? 0 : 10) + (cd.extra ? 5 : 0) + kink + (e === 0 ? 0 : 1e-3);
       if (!best || score < best.score - 1e-6) best = { ...cd, base, inner, kink, score };
@@ -566,7 +966,7 @@ function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0
   }
   if (!best) return null;
   const out = [...best.base, ...best.inner];
-  for (let j = 0; j < best.c; j++) out.push(at(s0, best.th + j * t0));
+  for (let j = 0; j < best.c; j++) out.push(at(s0, best.th + s * j * t0));
   // How far the hanging run drops below its straight line
   const [a, b] = [best.base.at(-1), best.end];
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -575,24 +975,30 @@ function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0
 }
 
 /**
- * Which sprocket to move, which way and how far for an exact fit: of the loop sprockets moved along
- * each of their runs, the one that changes the length fastest. Returns { instanceId, towardId, mm }
- * (mm > 0: toward that sprocket) or null.
+ * Which sprocket to move, which way and how far for an exact fit: of the loop's sprockets moved
+ * along each of their runs, the one that changes the length fastest. Returns { instanceId,
+ * towardId, mm } (mm > 0: toward that part) or null.
  */
-function suggestMove(check, pitch, gapMm) {
-  const { circles, loop, all } = check;
-  const teethOf = (i) => all[i].teeth;
-  const base = exactLinks(circles, loop, pitch, teethOf) * pitch;
+function suggestMove(check, nodes, pitch, gapMm) {
+  const { circles, all } = check;
+  const lengthOf = (cs) => {
+    const p = loopPath(cs, nodes);
+    return p.ok ? exactLinks(cs, p, pitch) * pitch : NaN;
+  };
+  const base = lengthOf(circles);
   let best = null;
-  for (const e of loop) {
-    for (const [mover, other] of [[e.from, e.to], [e.to, e.from]]) {
+  const K = nodes.length;
+  for (let k = 0; k < K; k++) {
+    const pair = [nodes[k].c, nodes[(k + 1) % K].c];
+    for (const [mover, other] of [pair, [pair[1], pair[0]]]) {
+      if (circles[mover].kind !== 'sprocket') continue;
       const a = circles[mover];
       const b = circles[other];
       const L = Math.hypot(b.x - a.x, b.y - a.y);
       const h = 0.01;
       const moved = circles.map((c, i) => (i === mover ? { ...c, x: c.x + ((b.x - a.x) / L) * h, y: c.y + ((b.y - a.y) / L) * h } : c));
-      const rate = (exactLinks(moved, loop, pitch, teethOf) * pitch - base) / h; // mm of path per mm moved toward
-      if (Math.abs(rate) < 1e-3) continue;
+      const rate = (lengthOf(moved) - base) / h; // mm of path per mm moved toward
+      if (!Number.isFinite(rate) || Math.abs(rate) < 1e-3) continue;
       if (!best || Math.abs(rate) > Math.abs(best.rate)) best = { mover, other, rate };
     }
   }
@@ -601,11 +1007,21 @@ function suggestMove(check, pitch, gapMm) {
   return { instanceId: all[best.mover].instanceId, towardId: all[best.other].instanceId, mm: round3(-gapMm / best.rate) };
 }
 
-/** Message for a built chain, e.g. "Chain builder: 48 Chain Links round 2 sprockets. Exact fit." */
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Message for a built chain, e.g. "Chain builder: 52 Chain Links round 3 sprockets and 1 standoff
+ * (under 8 Tooth Sprocket #3). Exact fit."
+ */
 export function chainMessage(result, labelOf = (id) => result.labelOf?.[id] || id) {
+  if (!result?.ok) return result?.error || '';
   const what = result.kind === 'track' ? 'Track builder' : 'Chain builder';
   const linkName = result.kind === 'track' ? 'tread links' : 'Chain Links';
-  const parts = [`${what}: ${result.linkCount} ${linkName}${result.grippers.length ? ` and ${result.grippers.length} grippers` : ''} round ${result.onLoop.length} sprockets`];
+  const sprocketCount = result.sprocketCount ?? result.onLoop.length;
+  const standoffs = result.standoffCount ? ` and ${plural(result.standoffCount, 'standoff', 'standoffs')}` : '';
+  const routed = (result.wrapped || []).filter((w) => w.side === 'over' || w.side === 'under');
+  const how = routed.length ? ` (${routed.map((w) => `${w.side} ${labelOf(w.instanceId)}`).join(', ')})` : '';
+  const parts = [`${what}: ${result.linkCount} ${linkName}${result.grippers.length ? ` and ${result.grippers.length} grippers` : ''} round ${sprocketCount} sprockets${standoffs}${how}`];
   if (Math.abs(result.gapMm) < 0.05) parts.push('Exact fit');
   else {
     const mm = Math.abs(result.gapMm).toFixed(1);
@@ -616,7 +1032,11 @@ export function chainMessage(result, labelOf = (id) => result.labelOf?.[id] || i
     }
   }
   parts.push(...result.notes.map((t) => t.replace(/\.$/, '')));
-  if (result.leftOut.length) parts.push(`Not touched by the chain: ${result.leftOut.map(labelOf).join(', ')}`);
+  const leftOut = (result.leftOut || []).map((l) => (typeof l === 'string' ? { instanceId: l, reason: null } : l));
+  const outside = leftOut.filter((l) => l.reason === 'outside-only');
+  const other = leftOut.filter((l) => l.reason !== 'outside-only');
+  if (outside.length) parts.push(`Left out, tracks only go round the outside: ${outside.map((l) => labelOf(l.instanceId)).join(', ')}`);
+  if (other.length) parts.push(`Not touched by the chain: ${other.map((l) => labelOf(l.instanceId)).join(', ')}`);
   return `${parts.join('. ')}.`;
 }
 

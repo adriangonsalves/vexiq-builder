@@ -1210,18 +1210,20 @@ const SELECT_COLOR = 0xff9f1c;
 const SELECT_CONTOUR_COLOR = 0xffd400;
 const SELECT_GLOW = { 2: 0.42, 1: 0.24 };
 const SELECT_EDGE_OPACITY = { 2: 1, 1: 0.75 };
+const ATTENTION_COLOR = new THREE.Color(HOLE_HIGHLIGHT_COLOR);
 
 // isSelected: true or 2 = the primary (or only) selected part, 1 = another part of a multi-selection
-function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) {
+function applyGroupAppearance(group, { baseColor, isSelected, isAttention = false, attentionPulse = 1, isIntersecting }) {
   const level = isIntersecting || !isSelected ? 0 : isSelected === 1 ? 1 : 2;
+  const attention = isAttention && !isIntersecting;
   group.traverse((child) => {
-    // The part's CAD edges become a bright contour while it is selected
+    // The part's CAD edges become a bright contour while it is selected or highlighted for attention
     if (child.isLineSegments && child.name === '__cad_edges__' && child.material) {
       const mat = child.material;
       if (!child.userData.edgeLook) child.userData.edgeLook = { color: mat.color.getHex(), opacity: mat.opacity };
       const { color, opacity } = child.userData.edgeLook;
-      mat.color.setHex(level ? SELECT_COLOR : color);
-      mat.opacity = level ? SELECT_EDGE_OPACITY[level] : opacity;
+      mat.color.setHex(attention ? HOLE_HIGHLIGHT_COLOR : level ? SELECT_COLOR : color);
+      mat.opacity = attention ? 1 : level ? SELECT_EDGE_OPACITY[level] : opacity;
       return;
     }
     if (!child.isMesh || !child.userData.isPartMesh || !child.material) return;
@@ -1244,14 +1246,22 @@ function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) 
         resolvedColor = METAL_SHAFT_COLOR;
       }
       mat.color.set(resolvedColor || '#64748b');
+      if (attention) {
+        mat.color.lerp(ATTENTION_COLOR, 0.35 + 0.35 * attentionPulse);
+      }
       // Clear plastic sheets stay see-through; everything else is solid
       const clear = child.userData.clearPlastic;
       mat.transparent = Boolean(clear);
       mat.opacity = clear ? CLEAR_PLASTIC_OPACITY : 1.0;
       mat.depthWrite = !clear;
       if (mat.emissive) {
-        mat.emissive.setHex(level ? SELECT_COLOR : 0x000000);
-        mat.emissiveIntensity = level ? SELECT_GLOW[level] : 0;
+        if (attention) {
+          mat.emissive.setHex(HOLE_HIGHLIGHT_COLOR);
+          mat.emissiveIntensity = 0.45 + 0.55 * attentionPulse;
+        } else {
+          mat.emissive.setHex(level ? SELECT_COLOR : 0x000000);
+          mat.emissiveIntensity = level ? SELECT_GLOW[level] : 0;
+        }
       }
     }
     mat.needsUpdate = true;
@@ -1355,6 +1365,7 @@ export default function Viewport3D({
   catalogMap,
   selectedId,
   selectedIds = EMPTY_IDS,
+  attentionIds = EMPTY_IDS,
   selectMode = false,
   boxSelect = false,
   onBoxSelect,
@@ -1469,6 +1480,10 @@ export default function Viewport3D({
   // Every selected part (openspec outliner-part-groups); the last is the primary part
   const selectedIdsRef = useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
+  // Highlighted parts for a modal question (openspec chain-over-under), separate from selection
+  const attentionIdsRef = useRef(attentionIds);
+  attentionIdsRef.current = attentionIds;
+  const prevAttentionIdsRef = useRef(EMPTY_IDS);
   const selectModeRef = useRef(selectMode);
   selectModeRef.current = selectMode;
   // Box select: a left-drag draws a rectangle instead of turning the camera
@@ -3276,14 +3291,21 @@ export default function Viewport3D({
       overlays.forEach((o) => {
         o.visible = false;
       });
-      const selId = selectedIdRef.current;
-      const selGroup = selId ? meshMapRef.current.get(selId) : null;
-      const selInst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
-      const selAppearance = selGroup && {
-        baseColor: resolvePartBaseColor(selInst, catalogMapRef.current.get(selGroup.userData.partId)),
-        isIntersecting: Boolean(selGroup.userData.isIntersecting)
-      };
-      if (selGroup) applyGroupAppearance(selGroup, { ...selAppearance, isSelected: false });
+      const selIds = selectedIdsRef.current;
+      const attIds = attentionIdsRef.current;
+      for (const id of new Set([...selIds, ...attIds])) {
+        const g = meshMapRef.current.get(id);
+        const inst = instancesRef.current.find((i) => i.instanceId === id);
+        if (g && inst) {
+          applyGroupAppearance(g, {
+            baseColor: resolvePartBaseColor(inst, catalogMapRef.current.get(g.userData.partId)),
+            isSelected: 0,
+            isAttention: attIds.includes(id),
+            attentionPulse: 1,
+            isIntersecting: Boolean(g.userData.isIntersecting)
+          });
+        }
+      }
 
       const pixelRatio = renderer.getPixelRatio();
       let png;
@@ -3300,7 +3322,18 @@ export default function Viewport3D({
         overlays.forEach((o, i) => {
           o.visible = wasVisible[i];
         });
-        if (selGroup) applyGroupAppearance(selGroup, { ...selAppearance, isSelected: true });
+        for (const id of selIds) {
+          const g = meshMapRef.current.get(id);
+          const inst = instancesRef.current.find((i) => i.instanceId === id);
+          if (g && inst) {
+            applyGroupAppearance(g, {
+              baseColor: resolvePartBaseColor(inst, catalogMapRef.current.get(g.userData.partId)),
+              isSelected: selectLevel(selIds, id),
+              isAttention: attentionIdsRef.current.includes(id),
+              isIntersecting: Boolean(g.userData.isIntersecting)
+            });
+          }
+        }
         renderFrameRef.current?.();
       }
       return png;
@@ -5062,6 +5095,22 @@ export default function Viewport3D({
     updateShadowsRef.current = updateShadows;
 
     const renderFrame = () => {
+      if (attentionIdsRef.current.length > 0) {
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.008);
+        for (const id of attentionIdsRef.current) {
+          const group = meshMapRef.current.get(id);
+          const inst = instancesRef.current.find((i) => i.instanceId === id);
+          const partMeta = inst ? catalogMapRef.current.get(inst.partId) : null;
+          if (!group || !inst || !partMeta) continue;
+          applyGroupAppearance(group, {
+            baseColor: resolvePartBaseColor(inst, partMeta),
+            isSelected: selectLevel(selectedIdsRef.current, id),
+            isAttention: true,
+            attentionPulse: pulse,
+            isIntersecting: Boolean(group.userData.isIntersecting)
+          });
+        }
+      }
       updateShadows();
       const active = cameraRef.current;
       arrowOverlay.updateScale(active);
@@ -5216,6 +5265,7 @@ export default function Viewport3D({
         applyGroupAppearance(group, {
           baseColor: resolvePartBaseColor(inst, partMeta),
           isSelected: selectLevel(selectedIds, id),
+          isAttention: attentionIdsRef.current.includes(id),
           isIntersecting: Boolean(group.userData.isIntersecting)
         });
         const existingOverlay = group.getObjectByName('__connector_overlay__');
@@ -5353,6 +5403,7 @@ export default function Viewport3D({
             applyGroupAppearance(group, {
               baseColor: resolvePartBaseColor(latestInst, partMeta),
               isSelected: isSelectedNow,
+              isAttention: attentionIdsRef.current.includes(inst.instanceId),
               isIntersecting: isColliding
             });
 
@@ -5404,6 +5455,7 @@ export default function Viewport3D({
       applyGroupAppearance(group, {
         baseColor: resolvePartBaseColor(inst, partMeta),
         isSelected: selectLevel(selectedIds, inst.instanceId),
+        isAttention: attentionIdsRef.current.includes(inst.instanceId),
         isIntersecting: isColliding
       });
 
@@ -5485,6 +5537,7 @@ export default function Viewport3D({
       applyGroupAppearance(group, {
         baseColor: resolvePartBaseColor(inst, partMeta),
         isSelected: selectLevel(selectedIdsRef.current, id),
+        isAttention: attentionIdsRef.current.includes(id),
         isIntersecting: isColliding
       });
       if (isColliding !== Boolean(inst.isIntersecting)) {
@@ -5493,6 +5546,29 @@ export default function Viewport3D({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collisionRecheck]);
+
+  // Highlighted parts for a modal question (openspec chain-over-under): apply or clear immediately
+  useEffect(() => {
+    const prev = prevAttentionIdsRef.current;
+    prevAttentionIdsRef.current = attentionIds;
+    const changed = new Set([...prev, ...attentionIds]);
+    if (changed.size === 0) return;
+    const byId = new Map(instancesRef.current.map((i) => [i.instanceId, i]));
+    for (const id of changed) {
+      const inst = id ? byId.get(id) : null;
+      const group = id ? meshMapRef.current.get(id) : null;
+      const partMeta = inst ? catalogMapRef.current.get(inst.partId) : null;
+      if (!inst || !group || !partMeta) continue;
+      applyGroupAppearance(group, {
+        baseColor: resolvePartBaseColor(inst, partMeta),
+        isSelected: selectLevel(selectedIdsRef.current, id),
+        isAttention: attentionIds.includes(id),
+        attentionPulse: 1,
+        isIntersecting: Boolean(group.userData.isIntersecting)
+      });
+    }
+    renderFrameRef.current?.();
+  }, [attentionIds]);
 
   // Box select takes the left drag, so the camera doesn't turn with it (right-drag pan and wheel zoom stay)
   useEffect(() => {

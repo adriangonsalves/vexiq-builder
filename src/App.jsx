@@ -42,7 +42,7 @@ import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
 import ExplodePanel from './components/ExplodePanel.jsx';
 import SelectMenu from './components/SelectMenu.jsx';
-import BuildMenu, { ChainBuilderDialog } from './components/BuildMenu.jsx';
+import BuildMenu, { ChainBuilderDialog, ChainRouteDialog } from './components/BuildMenu.jsx';
 import { buildChainPath, checkSprocketsForChain } from './utils/chainPath.js';
 import AssemblyOutliner from './components/AssemblyOutliner.jsx';
 import SetInspector from './components/SetInspector.jsx';
@@ -381,6 +381,10 @@ export default function App() {
     if (vp.ambientOcclusion !== undefined) setAmbientOcclusion(Boolean(vp.ambientOcclusion));
     if (vp.environmentReflections !== undefined) setEnvironmentReflections(Boolean(vp.environmentReflections));
     if (vp.reflectionIntensity !== undefined) setReflectionIntensity(Math.max(0, Math.min(2, Number(vp.reflectionIntensity) || 0.75)));
+    if (Array.isArray(vp.attentionIds)) {
+      setAttentionIds(vp.attentionIds);
+      setChainRouteDialogOpen(vp.attentionIds.length > 0);
+    }
     const trigger = vp.viewAlongTrigger;
     if (trigger && Number.isFinite(trigger.n)) {
       setViewAlongTrigger((prev) =>
@@ -1635,12 +1639,22 @@ export default function App() {
 
   // --- Builds: New, Starter, the library, Open from computer (openspec build-library) -------------
   const [libraryOpen, setLibraryOpen] = useState(false);
-  // Build menu (openspec chain-track-builder): the builder dialog ({ kind, slackMm } while open), and
-  // its grippers and slack choices for this page
+  // Build menu (openspec chain-track-builder, chain-over-under): the route dialog for enclosed parts,
+  // the builder dialog ({ kind, slackMm, route } while open), and their choices for this page
   const [builderDialog, setBuilderDialog] = useState(null);
   const [trackGrippers, setTrackGrippers] = useState(true);
   const [chainSlack, setChainSlack] = useState('lower');
   const closeBuilderDialog = useCallback(() => setBuilderDialog(null), []);
+  const [chainRouteDialogOpen, setChainRouteDialogOpen] = useState(false);
+  const [chainRoute, setChainRoute] = useState(() => new Map());
+  const [attentionIds, setAttentionIds] = useState(EMPTY_IDS);
+  const closeChainRouteDialog = useCallback(() => {
+    setChainRouteDialogOpen(false);
+    setAttentionIds(EMPTY_IDS);
+  }, []);
+  const handleHighlightAttention = useCallback((id) => {
+    setAttentionIds((prev) => (id ? (prev.length === 1 && prev[0] === id ? prev : [id]) : EMPTY_IDS));
+  }, []);
   const [libraryBuilds, setLibraryBuilds] = useState([]);
   const closeLibrary = useCallback(() => setLibraryOpen(false), []);
 
@@ -1858,22 +1872,32 @@ export default function App() {
       .filter((i) => i && i.visible !== false)
       .map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogMap.get(i.partId), position: i.position, rotation: i.rotation }));
   }, [instances, selectedIds, catalogMap]);
-  const chainCheck = useMemo(() => checkSprocketsForChain(chainParts), [chainParts]);
+  const chainCheck = useMemo(() => {
+    const remembered = {};
+    for (const [id, side] of chainRoute.entries()) remembered[id] = side;
+    return checkSprocketsForChain(chainParts, { route: remembered });
+  }, [chainParts, chainRoute]);
 
-  // Chain builder builds at once unless there is noticeable slack to place; Track builder always
-  // asks (grippers), with the slack question when there is a choice
-  const openChainBuilder = (kind) => {
+  // Chain builder first asks over or under for each enclosed part; then either builder asks where
+  // noticeable slack goes (Track builder always asks, for its grippers). Chain builder builds at once
+  // when there is nothing to ask.
+  const openChainBuilder = (kind, route = null) => {
+    if (kind === 'chain' && chainCheck.ok && chainCheck.enclosed?.length > 0 && !route) {
+      setAttentionIds([chainCheck.enclosed[0].instanceId]);
+      setChainRouteDialogOpen(true);
+      return;
+    }
     let slackMm = null;
     if (chainCheck.ok) {
       const catalogParts = [...catalogMap.values()];
-      const plan = buildChainPath(chainParts, { kind, grippers: false, metaByPartNumber: (pn) => catalogParts.find((p) => p.partNumber === pn) });
+      const plan = buildChainPath(chainParts, { kind, route, grippers: false, metaByPartNumber: (pn) => catalogParts.find((p) => p.partNumber === pn) });
       if (plan.ok && plan.slackChoice) slackMm = -plan.gapMm;
     }
-    if (kind === 'chain' && slackMm == null) handleBuildChain('chain');
-    else setBuilderDialog({ kind, slackMm });
+    if (kind === 'chain' && slackMm == null) handleBuildChain('chain', { route });
+    else setBuilderDialog({ kind, slackMm, route });
   };
 
-  const handleBuildChain = (kind, { grippers = false, slack = 'lower' } = {}) => {
+  const handleBuildChain = (kind, { grippers = false, slack = 'lower', route = null } = {}) => {
     if (previewRef.current) {
       setActionFeedback({ message: "This is a preview of an earlier point. Go to a step's end to edit.", isError: true });
       return;
@@ -1882,7 +1906,7 @@ export default function App() {
       setActionFeedback({ message: chainCheck.error, isError: true });
       return;
     }
-    handleRunSmartAction('build_chain', { kind, grippers, slack, instanceIds: selectedIds });
+    handleRunSmartAction('build_chain', { kind, grippers, slack, ...(route ? { route } : {}), instanceIds: selectedIds });
   };
 
   const handleOpenAuditDialog = async () => {
@@ -2263,6 +2287,7 @@ export default function App() {
             catalogMap={catalogMap}
             selectedId={preview ? null : selectedId}
             selectedIds={preview ? EMPTY_IDS : selectedIds}
+            attentionIds={preview ? EMPTY_IDS : attentionIds}
             selectMode={selectMode}
             boxSelect={boxSelect && !preview}
             onBoxSelect={handleBoxSelect}
@@ -3124,10 +3149,27 @@ export default function App() {
         slackMm={builderDialog?.slackMm ?? null}
         onClose={closeBuilderDialog}
         onBuild={({ grippers, slack }) => {
-          const { kind, slackMm } = builderDialog;
+          const { kind, slackMm, route } = builderDialog;
           if (kind === 'track') setTrackGrippers(grippers);
           if (slackMm != null) setChainSlack(slack);
-          handleBuildChain(kind, { grippers: kind === 'track' && grippers, slack: slackMm != null ? slack : 'lower' });
+          handleBuildChain(kind, { grippers: kind === 'track' && grippers, slack: slackMm != null ? slack : 'lower', route });
+        }}
+      />
+      <ChainRouteDialog
+        open={chainRouteDialogOpen}
+        enclosed={chainCheck.enclosed || EMPTY_IDS}
+        initialRoute={chainRoute}
+        onHighlight={handleHighlightAttention}
+        onClose={closeChainRouteDialog}
+        onBuild={(chosenRoute) => {
+          setChainRoute((prev) => {
+            const next = new Map(prev);
+            for (const [id, side] of Object.entries(chosenRoute)) next.set(id, side);
+            return next;
+          });
+          setAttentionIds(EMPTY_IDS);
+          setChainRouteDialogOpen(false);
+          openChainBuilder('chain', chosenRoute);
         }}
       />
       <LibraryDialog

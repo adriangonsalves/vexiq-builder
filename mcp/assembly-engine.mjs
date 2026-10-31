@@ -825,6 +825,7 @@ function findJoints(state) {
   const chainParts = nonFasteners.filter((n) => isChainPart(n.part));
   if (chainParts.length) {
     const sprockets = nonFasteners.filter((n) => n.part.gearSpecs?.gearType === 'sprocket');
+    const standoffs = fasteners.filter((f) => f.part.fastenerSpecs?.fastenerType === 'standoff');
     const parent = new Map(chainParts.map((c) => [c.inst.instanceId, c.inst.instanceId]));
     const find = (id) => (parent.get(id) === id ? id : find(parent.get(id)));
     const join = (a, b) => parent.set(find(a), find(b));
@@ -852,7 +853,7 @@ function findJoints(state) {
     }
     const loose = unsupportedBends(
       chainParts.filter((c) => isLink(c.part)).map((c) => ({ id: c.inst.instanceId, part: c.part, matrix: c.mat })),
-      sprockets.map((s) => ({ part: s.part, matrix: s.mat }))
+      [...sprockets, ...standoffs].map((s) => ({ part: s.part, matrix: s.mat }))
     );
     const heldRoots = new Set([...held].map(find));
     const looseRoots = new Set([...loose].map(find));
@@ -2174,7 +2175,7 @@ export function summarizeAudit(audit) {
  * `instanceIds` default to the selection. Returns { error } or { instances (all, new state),
  * groupId, name, newIds, result (buildChainPath), message, turned: [instanceId] }.
  */
-export function buildChain(state, { kind = 'chain', instanceIds = null, grippers = true, slack = 'lower', name = null } = {}) {
+export function buildChain(state, { kind = 'chain', instanceIds = null, route = null, grippers = true, slack = 'lower', name = null } = {}) {
   const { catalog, catalogById } = getCatalog();
   if (kind !== 'chain' && kind !== 'track') return { error: 'kind must be "chain" or "track".' };
   const ids = Array.isArray(instanceIds) && instanceIds.length ? instanceIds : state.selectedIds?.length ? state.selectedIds : state.selectedId ? [state.selectedId] : [];
@@ -2184,9 +2185,9 @@ export function buildChain(state, { kind = 'chain', instanceIds = null, grippers
   const chosen = ids.map((id) => byId.get(id)).filter((i) => i.visible !== false);
   const res = buildChainPath(
     chosen.map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogById.get(i.partId), position: i.position, rotation: i.rotation })),
-    { kind, grippers: kind === 'track' && grippers !== false, slack: slack === 'upper' ? 'upper' : 'lower', metaByPartNumber: (pn) => catalog.find((p) => p.partNumber === pn) }
+    { kind, route, grippers: kind === 'track' && grippers !== false, slack: slack === 'upper' ? 'upper' : 'lower', metaByPartNumber: (pn) => catalog.find((p) => p.partNumber === pn) }
   );
-  if (!res.ok) return { error: res.error };
+  if (!res.ok) return { error: res.error, ...(res.needsRoute ? { needsRoute: res.needsRoute } : {}) };
 
   // Turn each loop sprocket, with its axle and the parts on it, so a tooth gap sits at a pivot
   let instances = state.instances;
@@ -2246,7 +2247,17 @@ export function buildChain(state, { kind = 'chain', instanceIds = null, grippers
   const others = [...turned].filter((id) => !res.onLoop.includes(id));
   let message = chainMessage(res, labelOf);
   if (others.length) message += ` Turned with the sprockets: ${others.map(labelOf).join(', ')}.`;
-  return { instances, groupId: made.groupId, name: groupName, newIds, result: res, message, turned: [...turned] };
+  return {
+    instances,
+    groupId: made.groupId,
+    name: groupName,
+    newIds,
+    result: res,
+    wrapped: res.wrapped,
+    leftOut: res.leftOut,
+    message,
+    turned: [...turned]
+  };
 }
 
 /**

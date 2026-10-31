@@ -449,13 +449,20 @@ function vexiqMcpBridgePlugin() {
               const built = buildChain(state, {
                 kind: params.kind,
                 instanceIds: Array.isArray(params.instanceIds) ? params.instanceIds : null,
+                route: params.route && typeof params.route === 'object' ? params.route : null,
                 grippers: params.grippers !== false,
                 slack: params.slack === 'upper' ? 'upper' : 'lower',
                 name: params.name || null
               });
               res.setHeader('Content-Type', 'application/json');
               if (built.error) {
-                res.end(JSON.stringify({ ok: false, error: built.error }));
+                res.end(
+                  JSON.stringify({
+                    ok: false,
+                    error: built.error,
+                    ...(built.needsRoute ? { needsRoute: built.needsRoute } : {})
+                  })
+                );
                 return;
               }
               const nextState = {

@@ -8,9 +8,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { angleAbout } from '../src/utils/axisFrame.js';
-import { CHAIN_PLAY_MM, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName, worldSprocket } from '../src/utils/chainPath.js';
-import { areChainNeighbours, isChainFit, isGripperOnLink, isLinkOnSprocket, unsupportedBends } from '../src/utils/chainFit.js';
-import { buildChain, explodeInputs } from '../mcp/assembly-engine.mjs';
+import { CHAIN_PLAY_MM, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName, worldGuide, worldSprocket } from '../src/utils/chainPath.js';
+import { areChainNeighbours, isChainFit, isGripperOnLink, isLinkOnSprocket, isLinkOnStandoff, unsupportedBends } from '../src/utils/chainFit.js';
+import { auditAssembly, buildChain, explodeInputs } from '../mcp/assembly-engine.mjs';
 import { buildPieces } from '../src/utils/explodePlan.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -31,6 +31,10 @@ const sprocket = (teeth, position, rotation = [0, 0, 0]) => {
   n += 1;
   return { instanceId: `s${n}`, label: `${teeth}T #${n}`, meta: byName(`${teeth} Tooth Sprocket`), position, rotation };
 };
+const standoff = (pitchName, position, rotation = [0, 0, 0]) => {
+  n += 1;
+  return { instanceId: `g${n}`, label: `${pitchName} Standoff #${n}`, meta: byName(`${pitchName} Pitch Standoff`), position, rotation };
+};
 const gear = (teeth, position) => ({ instanceId: `g${teeth}${position[0]}`, label: `${teeth} Tooth Gear`, meta: byName(`${teeth} Tooth Gear`), position, rotation: [0, 0, 0] });
 const quat = (r) => new THREE.Quaternion().setFromEuler(new THREE.Euler(...r.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ'));
 const local = (pose, v) => new THREE.Vector3(...v).applyQuaternion(quat(pose.rotation)).add(new THREE.Vector3(...pose.position));
@@ -39,14 +43,25 @@ const local = (pose, v) => new THREE.Vector3(...v).applyQuaternion(quat(pose.rot
 function checkChain(name, input, res) {
   check(`${name}: built`, res.ok, res.error);
   if (!res.ok) return;
-  const sprockets = input.filter((p) => res.onLoop.includes(p.instanceId)).map((p) => worldSprocket(p.meta, p.position, p.rotation, p.instanceId));
+  const sprockets = input
+    .filter((p) => res.onLoop.includes(p.instanceId) && p.meta.gearSpecs?.gearType === 'sprocket')
+    .map((p) => worldSprocket(p.meta, p.position, p.rotation, p.instanceId));
+  const sideOf = new Map((res.wrapped || []).map((w) => [w.instanceId, w.side]));
   const normal = sprockets[0].axis;
   const pivots = res.links.map((l) => local(l, [0, 0, 0]));
   const ends = res.links.map((l) => local(l, [0, 0, -6.35]));
-  // No kinks: no link turns more than a tooth step of the smallest sprocket on the loop
+  // No kinks: no link turns more than a tooth step of the smallest sprocket on the loop, or one
+  // link's turn round a standoff it rests on (a round post has no teeth to spread the bend)
   const step = 360 / Math.min(...sprockets.map((sp) => sp.teeth));
+  const guides = input.filter((p) => res.onLoop.includes(p.instanceId) && p.meta.fastenerSpecs?.fastenerType === 'standoff').map((p) => worldGuide(p.meta, p.position, p.rotation, p.instanceId));
+  const offAxis = (p, g) => p.clone().sub(g.center).projectOnPlane(g.axis).length();
+  const allowed = (p) => {
+    const g = guides.find((gd) => offAxis(p, gd) < gd.pitchRadius + 0.5);
+    return g ? THREE.MathUtils.radToDeg(2 * Math.asin(Math.min(1, 6.35 / (2 * g.pitchRadius)))) : step;
+  };
   const turns = pivots.map((b, i) => THREE.MathUtils.radToDeg(b.clone().sub(pivots[(i - 1 + pivots.length) % pivots.length]).angleTo(pivots[(i + 1) % pivots.length].clone().sub(b))));
-  check(`${name}: no kink sharper than a tooth step (${step.toFixed(1)}°)`, Math.max(...turns) <= step + 0.5, Math.max(...turns).toFixed(1));
+  const worstKink = Math.max(...turns.map((t, i) => t - allowed(pivots[i])));
+  check(`${name}: no kink sharper than a tooth step (${step.toFixed(1)}°, or a link's turn on a standoff)`, worstKink <= 0.5, `${worstKink.toFixed(1)}° too sharp`);
   check(`${name}: the fewest whole links that reach round the path`, res.linkCount === res.links.length && res.linkCount === Math.ceil(res.exactLinks - CHAIN_PLAY_MM / 6.35 - 1e-9), `${res.linkCount} vs ${res.exactLinks}`);
   // The loop closes: each link's far pivot is near the next link's roller (eased runs differ a little)
   const worstJoin = Math.max(...ends.map((e, i) => e.distanceTo(pivots[(i + 1) % pivots.length])));
@@ -70,28 +85,14 @@ function checkChain(name, input, res) {
   });
   check(`${name}: pivots on each sprocket sit on its pitch circle`, sprockets.every((s) => pivots.some((p) => near(p.distanceTo(s.center), s.pitchRadius, 0.05))) && onCircle > 0);
   check(`${name}: neighbouring pivots on a sprocket are 6.35 mm apart`, arcStepsOk);
-  // +Y of every link points out of the loop (away from the loop's centre of sprockets)
-  // Inside the loop: the nearest point on a line between two sprocket centres (a run hanging into
-  // the loop still has the line below it)
-  const spine = (p) => {
-    let best = null;
-    for (const a of sprockets) {
-      for (const c of sprockets) {
-        if (a === c) continue;
-        const ac = c.center.clone().sub(a.center);
-        const t = Math.min(1, Math.max(0, p.clone().sub(a.center).dot(ac) / ac.lengthSq()));
-        const q = a.center.clone().addScaledVector(ac, t);
-        if (!best || q.distanceTo(p) < best.distanceTo(p)) best = q;
-      }
-    }
-    return best;
-  };
+  // +Y of every link on a sprocket points away from an outer sprocket and toward an enclosed one
   const outward = res.links.every((l, i) => {
     const y = new THREE.Vector3(0, 1, 0).applyQuaternion(quat(l.rotation));
     const mid = pivots[i].clone().add(pivots[(i + 1) % pivots.length]).multiplyScalar(0.5);
     const nearest = sprockets.reduce((a, s) => (s.center.distanceTo(mid) < a.center.distanceTo(mid) ? s : a));
-    const from = mid.distanceTo(nearest.center) < nearest.pitchRadius + 1 ? nearest.center : spine(mid);
-    return y.dot(mid.clone().sub(from)) > 0;
+    if (mid.distanceTo(nearest.center) >= nearest.pitchRadius + 1) return true;
+    const enclosed = sideOf.get(nearest.instanceId) === 'over' || sideOf.get(nearest.instanceId) === 'under';
+    return enclosed ? y.dot(mid.clone().sub(nearest.center)) < 0 : y.dot(mid.clone().sub(nearest.center)) > 0;
   });
   check(`${name}: every link's outer side faces out of the loop`, outward);
   // Sprocket turns are under half a tooth and leave a gap at a pivot
@@ -130,7 +131,32 @@ function checkChain(name, input, res) {
   check('overlapping sprockets: refused', !overlap.ok && /overlap/.test(overlap.error), overlap.error);
   const row = [sprocket(32, [0, 0, 0]), sprocket(8, [60, 0, 0]), sprocket(32, [120, 0, 0])];
   const inside = checkSprocketsForChain(row);
-  check('a small sprocket inside the loop is left out', inside.ok && inside.sprockets.length === 2 && inside.leftOut.map((s) => s.instanceId).join() === row[1].instanceId);
+  check(
+    'a small sprocket inside the loop is reported as enclosed with top/return runs',
+    inside.ok &&
+      inside.sprockets.length === 2 &&
+      inside.enclosed.length === 1 &&
+      inside.enclosed[0].instanceId === row[1].instanceId &&
+      inside.enclosed[0].topRun.fromId === row[2].instanceId &&
+      inside.enclosed[0].returnRun.fromId === row[0].instanceId
+  );
+  const insideTrack = checkSprocketsForChain(row, { kind: 'track' });
+  check(
+    'for a track, an enclosed sprocket goes to leftOut with reason outside-only',
+    insideTrack.ok && insideTrack.leftOut.length === 1 && insideTrack.leftOut[0].instanceId === row[1].instanceId && insideTrack.leftOut[0].reason === 'outside-only'
+  );
+  // Flat layout (axles along world Y): "above" is world −Z
+  const flatRow = [sprocket(32, [0, 0, 0], [90, 0, 0]), sprocket(8, [60, 0, 0], [90, 0, 0]), sprocket(32, [120, 0, 0], [90, 0, 0])];
+  const flatInside = checkSprocketsForChain(flatRow);
+  const flatMid = flatInside.enclosed?.[0];
+  // Top run is on the −Z side; verify its endpoints are the two outer sprockets and differ from returnRun
+  check(
+    'flat layout uses world −Z as above to distinguish top and return runs',
+    flatInside.ok && flatMid && flatMid.topRun.index !== flatMid.returnRun.index
+  );
+  // A part sitting right under a corner sprocket of a triangle so the vertical ray hits its arc before any straight run
+  const besideRes = checkSprocketsForChain([sprocket(24, [0, 0, 0]), sprocket(24, [120, 0, 0]), sprocket(24, [60, 60, 0]), sprocket(8, [60, 15, 0])]);
+  check('an enclosed part whose ray hits an outer arc first is refused naming both parts', !besideRes.ok && /sits right next to/.test(besideRes.error), besideRes.error);
   const mixed = checkSprocketsForChain([sprocket(16, [0, 0, 0]), sprocket(16, [80, 0, 0]), gear(36, [0, 60, 0])]);
   check('a gear in the selection is ignored', mixed.ok && mixed.all.length === 2);
   // Sprockets with their axles along the opposite way still share a plane
@@ -240,8 +266,186 @@ function checkChain(name, input, res) {
 }
 {
   const row = [sprocket(32, [0, 0, 0]), sprocket(8, [60, 0, 0]), sprocket(32, [120, 0, 0])];
-  const res = buildChainPath(row, { kind: 'chain', metaByPartNumber });
-  check('the left-out sprocket is named in the message', res.ok && /Not touched by the chain: 8T #/.test(chainMessage(res)), chainMessage(res));
+  const noRoute = buildChainPath(row, { kind: 'chain', metaByPartNumber });
+  check(
+    'a chain with an enclosed sprocket and no route returns needsRoute',
+    !noRoute.ok && Array.isArray(noRoute.needsRoute) && noRoute.needsRoute.length === 1 && noRoute.needsRoute[0].instanceId === row[1].instanceId,
+    JSON.stringify(noRoute)
+  );
+  const trackRes = buildChainPath(row, { kind: 'track', metaByPartNumber });
+  check(
+    'for a track, the enclosed sprocket is left out and named in the message',
+    trackRes.ok && /Left out, tracks only go round the outside: 8T #/.test(chainMessage(trackRes)),
+    chainMessage(trackRes)
+  );
+}
+
+// --- Standoff guides (design 4) ---------------------------------------------------------------
+{
+  const oneSprocketAndStandoff = checkSprocketsForChain([sprocket(24, [0, 0, 0]), standoff('1x', [60, 0, 6])]);
+  check('one sprocket + one standoff: refused, asks for two or more sprockets', !oneSprocketAndStandoff.ok && /two or more sprockets/.test(oneSprocketAndStandoff.error), oneSprocketAndStandoff.error);
+
+  const angledStandoff = checkSprocketsForChain([sprocket(24, [0, 0, 0]), sprocket(24, [100, 0, 0]), standoff('1x', [50, 30, 0], [0, 90, 0])]);
+  check('angled standoff: refused naming the standoff and parallel', !angledStandoff.ok && /Standoff.*parallel/.test(angledStandoff.error), angledStandoff.error);
+
+  const shortStandoff = checkSprocketsForChain([sprocket(24, [0, 0, 0]), sprocket(24, [100, 0, 0]), standoff('0.5x', [50, 30, -3])]);
+  check('standoff short of the plane: refused naming the standoff and distance', !shortStandoff.ok && /Standoff.*doesn't reach the chain.*3\.0 mm/.test(shortStandoff.error), shortStandoff.error);
+
+  // A 1x standoff on the outer loop (body z in [-12.7, 0], so at z = 6 world z is [-6.7, 6], spanning z = 0)
+  const guide = standoff('1x', [50, 32, 6]);
+  const withGuide = [sprocket(24, [0, 0, 0]), sprocket(24, [100, 0, 0]), guide];
+  const res = buildChainPath(withGuide, { kind: 'chain', metaByPartNumber });
+  checkChain('24T + 24T + outer 1x standoff', withGuide, res);
+  check('standoff is on the loop and never turned', res.ok && res.onLoop.includes(guide.instanceId) && !res.sprocketTurns.some((t) => t.instanceId === guide.instanceId));
+  const wg = worldGuide(guide.meta, guide.position, guide.rotation, guide.instanceId, guide.label);
+  const pivots = res.links.map((l) => local(l, [0, 0, 0]));
+  // Check distance from standoff axis in the plane to each link segment (and link inner plate)
+  const segDists = res.links.map((_, i) => {
+    const a = pivots[i];
+    const b = pivots[(i + 1) % pivots.length];
+    const ab = b.clone().sub(a);
+    const c = new THREE.Vector3(wg.center.x, wg.center.y, a.z);
+    const t = Math.max(0, Math.min(1, c.clone().sub(a).dot(ab) / ab.lengthSq()));
+    return a.clone().addScaledVector(ab, t).distanceTo(c);
+  });
+  const minPlateClearance = Math.min(...segDists) - 2.2 - wg.bodyRadius;
+  const touchingGuide = segDists.some((d) => near(d, wg.pitchRadius, 0.3));
+  check(
+    'links rest on the 1x standoff without cutting into its body by more than 0.2 mm',
+    touchingGuide && minPlateClearance >= -0.2,
+    `minClearance=${minPlateClearance.toFixed(3)} mm`
+  );
+}
+
+// --- Route over / under enclosed parts (design 2, 3, 5, 7, 9) ---------------------------------
+{
+  const sL = sprocket(24, [0, 0, 0]);
+  const idler = sprocket(8, [60, 0, 0]);
+  const sR = sprocket(24, [120, 0, 0]);
+  const set = [sL, idler, sR];
+  const underRes = buildChainPath(set, { kind: 'chain', route: { [idler.instanceId]: 'under' }, metaByPartNumber });
+  checkChain('24T + 8T (under) + 24T', set, underRes);
+  const wIdler = worldSprocket(idler.meta, idler.position, idler.rotation, idler.instanceId);
+  const underPivots = underRes.links
+    .map((l) => local(l, [0, 0, 0]))
+    .filter((p) => near(p.distanceTo(wIdler.center), wIdler.pitchRadius, 0.05));
+  check('under: pivots on the 8T idler sit on its underside (y < idler.y)', underPivots.length > 0 && underPivots.every((p) => p.y < wIdler.center.y));
+  check('under: idler is wrapped as under and message names the route', underRes.wrapped.some((w) => w.instanceId === idler.instanceId && w.side === 'under') && /round 3 sprockets \(under 8T #/.test(chainMessage(underRes)), chainMessage(underRes));
+
+  const overRes = buildChainPath(set, { kind: 'chain', route: { [idler.instanceId]: 'over' }, metaByPartNumber });
+  checkChain('24T + 8T (over) + 24T', set, overRes);
+  const overPivots = overRes.links
+    .map((l) => local(l, [0, 0, 0]))
+    .filter((p) => near(p.distanceTo(wIdler.center), wIdler.pitchRadius, 0.05));
+  check('over: pivots on the 8T idler sit on its top side (y > idler.y)', overPivots.length > 0 && overPivots.every((p) => p.y > wIdler.center.y));
+  check('over: idler is wrapped as over and message names the route', overRes.wrapped.some((w) => w.instanceId === idler.instanceId && w.side === 'over') && /round 3 sprockets \(over 8T #/.test(chainMessage(overRes)), chainMessage(overRes));
+
+  // Ensure the idler gets a sprocketTurn when its tooth gap isn't already aligned
+  const turnedIdler = sprocket(8, [60, 0, 0], [0, 0, 11]);
+  const turnedRes = buildChainPath([sL, turnedIdler, sR], { kind: 'chain', route: { [turnedIdler.instanceId]: 'under' }, metaByPartNumber });
+  check('enclosed idler gets a sprocketTurn', turnedRes.ok && turnedRes.sprocketTurns.some((t) => t.instanceId === turnedIdler.instanceId));
+
+  // Slack run selection (design 5): with Under on the top run, a slack chain sags on the bottom run (between the two outer sprockets)
+  const slackSet = [sprocket(24, [0, 0, 0]), sprocket(8, [60.8, 5, 0]), sprocket(24, [121.6, 0, 0])];
+  const slackRes = buildChainPath(slackSet, { kind: 'chain', route: { [slackSet[1].instanceId]: 'under' }, metaByPartNumber });
+  check(
+    'with Under on the top run, a slack chain chooses the outer bottom run for the slack',
+    slackRes.ok && slackRes.wrapped[slackRes.sag.run].side === 'outer' && slackRes.wrapped[(slackRes.sag.run + 1) % slackRes.wrapped.length].side === 'outer',
+    JSON.stringify(slackRes.sag)
+  );
+  // Bottom run pivots bow downward below −pitchRadius of the 24T sprockets
+  const minBottomY = Math.min(...slackRes.links.map((l) => l.position[1]));
+  check('  and the bottom run bows below the outer sprockets\' bottom line', minBottomY < -slackSet[0].meta.gearSpecs.pitchRadiusMm - 0.05, minBottomY.toFixed(3));
+}
+
+// --- Validation refusal reasons (design 3) ----------------------------------------------------
+{
+  // 1. Too close for the chain to pass between an outer sprocket and an enclosed standoff
+  const s1 = sprocket(24, [0, 0, 0]);
+  const s2 = sprocket(24, [100, 0, 0]);
+  const closeG = standoff('1x', [29.5, 0, 6]);
+  const r1 = buildChainPath([s1, s2, closeG], { kind: 'chain', route: { [closeG.instanceId]: 'under' }, metaByPartNumber });
+  check(
+    'refusal 1 (too close): names both parts',
+    !r1.ok && r1.error.includes(s1.label) && r1.error.includes(closeG.label) && /too close for the chain to pass between/.test(r1.error),
+    r1.error
+  );
+
+  // 2. Outer part losing the chain
+  const oLeft = sprocket(24, [0, 0, 0]);
+  const oMid = sprocket(8, [60, 20, 0]);
+  const oRight = sprocket(24, [120, 0, 0]);
+  const lowGuide = sprocket(8, [52, -10, 0]);
+  const r2 = buildChainPath([oLeft, oMid, oRight, lowGuide], { kind: 'chain', route: { [lowGuide.instanceId]: 'under' }, metaByPartNumber });
+  check(
+    'refusal 2 (outer part loses chain): names the outer sprocket',
+    !r2.ok && r2.error.includes(oMid.label) && /would no longer touch the chain/.test(r2.error),
+    r2.error
+  );
+
+  // 3. Enclosed part not reached
+  const eL = sprocket(32, [0, 0, 0]);
+  const eR = sprocket(32, [120, 0, 0]);
+  const deepIdler = sprocket(8, [80, -20, 0]);
+  const highIdler = sprocket(8, [40, 22, 0]);
+  const r3 = buildChainPath([eL, eR, deepIdler, highIdler], {
+    kind: 'chain',
+    route: { [deepIdler.instanceId]: 'under', [highIdler.instanceId]: 'under' },
+    metaByPartNumber
+  });
+  check(
+    'refusal 3 (enclosed part not reached): names the unreached enclosed part',
+    !r3.ok && r3.error.includes(highIdler.label) && /wouldn't reach/.test(r3.error),
+    r3.error
+  );
+
+  // 4. Runs touching between two enclosed standoffs
+  const tL = sprocket(24, [0, 0, 0]);
+  const tR = sprocket(24, [120, 0, 0]);
+  const topG = standoff('1x', [60, 6, 6]);
+  const botG = standoff('1x', [60, -6, 6]);
+  const r4 = buildChainPath([tL, tR, topG, botG], {
+    kind: 'chain',
+    route: { [topG.instanceId]: 'under', [botG.instanceId]: 'over' },
+    metaByPartNumber
+  });
+  check(
+    'refusal 4 (runs touching): names both standoffs',
+    !r4.ok && r4.error.includes(topG.label) && r4.error.includes(botG.label) && /runs would touch/.test(r4.error),
+    r4.error
+  );
+
+  // 5. Passing through a selected part
+  const pL = sprocket(8, [0, 0, 0]);
+  const pMid = sprocket(24, [50, -10, 0]);
+  const pR = sprocket(24, [120, 0, 0]);
+  const pIdler = standoff('1x', [85, -15, 6]);
+  const r5 = buildChainPath([pL, pMid, pR, pIdler], {
+    kind: 'chain',
+    route: { [pIdler.instanceId]: 'under' },
+    metaByPartNumber
+  });
+  check(
+    'refusal 5 (passing through a part): names the part the run hits',
+    !r5.ok && r5.error.includes(pMid.label) && /would pass through/.test(r5.error),
+    r5.error
+  );
+
+  // 6. Self-crossing loop
+  const cL = sprocket(16, [0, 0, 0]);
+  const cR = sprocket(16, [120, 0, 0]);
+  const cU = standoff('1x', [55, 6, 6]);
+  const cD = standoff('1x', [65, -6, 6]);
+  const r6 = buildChainPath([cL, cR, cU, cD], {
+    kind: 'chain',
+    route: { [cU.instanceId]: 'over', [cD.instanceId]: 'under' },
+    metaByPartNumber
+  });
+  check(
+    'refusal 6 (self-crossing loop): names the crossing parts',
+    !r6.ok && r6.error.includes(cU.label) && r6.error.includes(cD.label) && /would cross itself/.test(r6.error),
+    r6.error
+  );
 }
 
 // --- Track and grippers -----------------------------------------------------------------------
@@ -281,7 +485,12 @@ function checkChain(name, input, res) {
       const teeth = sizes[Math.floor(rand() * sizes.length)];
       const cand = sprocket(teeth, [rand() * 200 - 100, rand() * 200 - 100, 0]);
       const r = cand.meta.gearSpecs.tipRadiusMm;
-      if (set.every((o) => Math.hypot(o.position[0] - cand.position[0], o.position[1] - cand.position[1]) > r + o.meta.gearSpecs.tipRadiusMm + 8)) set.push(cand);
+      if (
+        set.every((o) => Math.hypot(o.position[0] - cand.position[0], o.position[1] - cand.position[1]) > r + o.meta.gearSpecs.tipRadiusMm + 8) &&
+        (set.length < 1 || checkSprocketsForChain([...set, cand]).enclosed?.length === 0)
+      ) {
+        set.push(cand);
+      }
     }
     const res = buildChainPath(set, { kind: 'chain', metaByPartNumber });
     if (!res.ok) {
@@ -337,12 +546,96 @@ function checkChain(name, input, res) {
 
   const moved = [sp[0], { part: sp[1].part, matrix: matrixOf({ position: [140, 0, 0], rotation: [0, 0, 0] }) }];
   check('after a sprocket moves 20 mm, the links that bent round it are flagged', unsupportedBends(links, moved).size > 5, String(unsupportedBends(links, moved).size));
+
+  // Routed chain with an enclosed 8T sprocket (under) and an enclosed 1x standoff (over)
+  {
+    const sA = sprocket(24, [0, 0, 0]);
+    const sB = sprocket(24, [120, 0, 0]);
+    const idler = sprocket(8, [45, 5, 0]);
+    const guide = standoff('1x', [80, -8, 6]);
+    const routedSet = [sA, sB, idler, guide];
+    const routedRes = buildChainPath(routedSet, {
+      kind: 'chain',
+      route: { [idler.instanceId]: 'under', [guide.instanceId]: 'over' },
+      metaByPartNumber
+    });
+    checkChain('24T + 24T + 8T (under) + 1x standoff (over)', routedSet, routedRes);
+    const rLinks = routedRes.links.map((l, i) => ({ id: `RL${i}`, part: meta(l.partId), matrix: matrixOf(l) }));
+    const rSupports = routedSet.map((p) => ({ part: p.meta, matrix: matrixOf(p) }));
+    const guideMat = matrixOf(guide);
+    const idlerMat = matrixOf(idler);
+    check(
+      'links over a standoff count as sitting on the standoff and as chain fits',
+      rLinks.some((l) => isLinkOnStandoff(l.part, l.matrix, guide.meta, guideMat)) &&
+        rLinks.some((l) => isChainFit(l.part, l.matrix, guide.meta, guideMat))
+    );
+    check(
+      'links under an enclosed sprocket count as sitting on the sprocket and as chain fits',
+      rLinks.some((l) => isLinkOnSprocket(l.part, l.matrix, idler.meta, idlerMat)) &&
+        rLinks.some((l) => isChainFit(l.part, l.matrix, idler.meta, idlerMat))
+    );
+    check('routed chain with enclosed sprocket and standoff has no unsupported bends', unsupportedBends(rLinks, rSupports).size === 0);
+    const msg = chainMessage(routedRes);
+    check(
+      'message names sprockets, standoffs and routes',
+      /round 3 sprockets and 1 standoff \(over 1x Standoff #\d+, under 8T #\d+\)/.test(msg),
+      msg
+    );
+  }
 }
 
-// --- Names ------------------------------------------------------------------------------------
+// --- Names & Engine (buildChain + auditAssembly) ----------------------------------------------
 {
   const inst = [{ groupName: 'Chain 1' }, { groupName: 'Chain 3' }, { groupName: 'Track 1' }, { groupName: 'Group 2' }];
   check('next chain name skips used numbers', nextChainName(inst, 'chain') === 'Chain 2' && nextChainName(inst, 'track') === 'Track 2');
+
+  const toInst = (p) => ({
+    instanceId: p.instanceId,
+    partId: p.meta.id,
+    label: p.label,
+    position: p.position,
+    rotation: p.rotation,
+    visible: true
+  });
+  const sA = sprocket(24, [0, 0, 0]);
+  const sB = sprocket(24, [120, 0, 0]);
+  const idler = sprocket(8, [45, 10, 0], [0, 0, 11]);
+  const guide = standoff('1x', [80, -8, 6]);
+  const baseInstances = [sA, sB, idler, guide].map(toInst);
+  const ids = baseInstances.map((i) => i.instanceId);
+
+  const missingRoute = buildChain({ instances: baseInstances }, { kind: 'chain', instanceIds: ids });
+  check(
+    'engine buildChain without route returns needsRoute for enclosed parts',
+    Boolean(missingRoute.error) && Array.isArray(missingRoute.needsRoute) && missingRoute.needsRoute.length === 2,
+    JSON.stringify(missingRoute)
+  );
+
+  const built = buildChain(
+    { instances: baseInstances },
+    { kind: 'chain', instanceIds: ids, route: { [idler.instanceId]: 'under', [guide.instanceId]: 'over' } }
+  );
+  check(
+    'engine buildChain with route builds group, turns idler, and returns wrapped & leftOut',
+    !built.error &&
+      built.name === 'Chain 1' &&
+      Boolean(built.groupId) &&
+      built.turned.includes(idler.instanceId) &&
+      built.wrapped.some((w) => w.instanceId === idler.instanceId && w.side === 'under') &&
+      built.wrapped.some((w) => w.instanceId === guide.instanceId && w.side === 'over') &&
+      Array.isArray(built.leftOut) &&
+      built.leftOut.length === 0,
+    built.error || JSON.stringify({ name: built.name, turned: built.turned, wrapped: built.wrapped })
+  );
+
+  const audit = auditAssembly({ instances: built.instances });
+  check('engine auditAssembly: no collisions on routed chain with standoff and idler', audit.collisions.length === 0, JSON.stringify(audit.collisions));
+  check('engine auditAssembly: no unsupported chain bends', audit.chainBends.length === 0, JSON.stringify(audit.chainBends));
+  check(
+    'engine auditAssembly: no unpinned chain links',
+    !audit.unsecuredParts.some((u) => built.newIds.includes(u.instanceId)),
+    JSON.stringify(audit.unsecuredParts.filter((u) => built.newIds.includes(u.instanceId)))
+  );
 }
 
 // --- Explode keeps a chain or track in one piece ----------------------------------------------
