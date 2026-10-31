@@ -6,8 +6,13 @@ import { loadPartAsset, RUBBER_COLOR, isMetalPart, METAL_SHAFT_COLOR } from '../
 const thumbnailDataUrlCache = new Map(); // "partId|defaultColor" -> string (dataURL)
 const thumbKey = (part) => `${part.id}|${part.defaultColor}`;
 
-export const THUMB_PX = 72; // shown size; rendered at 2x so it stays sharp on high-density screens
-const THUMB_RENDER_PX = THUMB_PX * 2;
+/** The part's rendered thumbnail (200 px) when it has been drawn, else null. */
+export const cachedThumbnail = (part) => thumbnailDataUrlCache.get(thumbKey(part)) || null;
+
+export const THUMB_PX = 72; // shown size in the list
+export const GRID_THUMB_PX = 100; // shown size in the grid
+export const ZOOM_THUMB_PX = 300; // shown size in the hover picture
+const THUMB_RENDER_PX = ZOOM_THUMB_PX * 2; // one render serves every size, sharp on high-density screens
 
 // Thumbnails sit on a light tile, and every part gets dark outlines, which contrast with the tile and
 // with the part: dark parts (beams, plates, gears) are lifted to a mid tone so both their shading and
@@ -15,7 +20,7 @@ const THUMB_RENDER_PX = THUMB_PX * 2;
 // The 3D view keeps the real colors.
 const LIGHT_PART_LUMINANCE = 0.85; // linear luminance; #f8fafc ≈ 0.94, Metal/Silver #e2e8f0 ≈ 0.77
 const luminance = (color) => color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722;
-const MIN_THUMB_LIGHTNESS = 0.4; // HSL lightness; #1f2937 is 0.17, #374151 0.25, #64748b 0.39
+const MIN_THUMB_LIGHTNESS = 0; // 0: no lifting, parts keep their real shade; raise (0.22-0.4) to lift dark parts; // HSL lightness; #1f2937 is 0.17, #374151 0.25, #64748b 0.39: black parts stay dark on the dark tile
 const THUMB_FILL = 0.95; // share of the tile the part's longest projected half-extent reaches
 
 /** The color a part is drawn with in its thumbnail: very dark colors lifted to a readable mid tone. */
@@ -187,7 +192,7 @@ function renderPartToDataUrl(part, geometries, localBox) {
   return dataUrl;
 }
 
-export default function PartThumbnail({ part, index }) {
+export default function PartThumbnail({ part, index, size = THUMB_PX }) {
   const [dataUrl, setDataUrl] = useState(() => thumbnailDataUrlCache.get(thumbKey(part)) || null);
   const containerRef = useRef(null);
 
@@ -250,13 +255,13 @@ export default function PartThumbnail({ part, index }) {
   }
 
   return (
-    <div ref={containerRef} className="part-thumb-box">
+    <div ref={containerRef} className="part-thumb-box" style={{ width: size, height: size }}>
       {dataUrl ? (
         <img
           src={dataUrl}
           alt={part.name}
-          width={THUMB_PX}
-          height={THUMB_PX}
+          width={size}
+          height={size}
           className="part-thumb-img"
           {...imgProps}
         />

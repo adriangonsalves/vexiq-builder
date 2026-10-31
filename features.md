@@ -27,8 +27,12 @@
 - **Live 3D Part Thumbnails & Search:**
   - Interactive category filter pills with part counts.
   - Instant search by part name, VEX part number (`228-2500-...`), or category.
+  - **List / Grid:** a switch in the library header. List is one card per row; Grid shows only thumbnails (100 px, three to a row), and each tile shows the part's longest side (for example `190 mm`). The choice is remembered in this browser, not in the build.
+  - **Hover:** in List and Grid, resting on a part shows its name, longest side and part number (faint) after a moment, and the 300 px picture after 1 second. Thumbnails are transparent, drawn on a dark tile, and dark parts keep their real shade.
+  - **Recent:** the first filter pill holds up to 20 parts added by clicking them in the library, ranked by a score that rises with each use and fades with every later add, so parts used often and lately stay on top. Parts placed by MCP, duplicated, copy-inserted or loaded don't count. Kept in this browser, the same for every build.
   - On-demand WebGL thumbnail rendering ([`src/components/PartThumbnail.jsx`](file:///Users/adriangonsalves/projects/vexiq_builder/src/components/PartThumbnail.jsx)) with viewport visibility deferral (`content-visibility: auto`).
   - 72 px thumbnails (rendered at 2x) on a light tile, framed to each part's size as seen from the thumbnail angle (short parts aren't cropped, long racks aren't tiny). Very dark parts are lifted to a mid tone in thumbnails only (the 3D view keeps real colors) and every part gets dark outlines, extra dense on near-white connectors, so holes and edges read. A thumbnail is redrawn whenever its part's default color changes. Long part names wrap to two lines.
+- **Assembly Outliner search and base name:** a search box under the Outliner title filters rows by label, catalog part name or part number (the title shows shown / total while searching; `Esc` or the clear button empties it). It only changes which rows are listed: selection, 3D view, history and Clear All are untouched. The selected part's row, and the top of the Inspector, show its catalog name and part number (for example "VEX IQ Smart Motor · 228-2560"), so a part with its own label can still be traced to its catalog part.
 - **4,137 BVH-Verified Semantic Connection Ports:**
   - Every part is indexed with typed, raycast-verified local connection ports:
     - `pin_hole` (Cyan) — $\varnothing 4.8\text{ mm}$ round pin holes with through/blind classification and axial span `spanMm`.

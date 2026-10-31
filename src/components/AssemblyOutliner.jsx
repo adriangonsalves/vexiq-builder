@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Folder, Layers, LocateFixed, Lock, Minus, Unlock } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Folder, Layers, LocateFixed, Lock, Minus, Search, Unlock, X } from 'lucide-react';
 
 const LOCATE_PINNED_KEY = 'vexiq.outlinerLocatePinned';
 const LONG_PRESS_MS = 500;
@@ -23,6 +23,7 @@ const readPinned = () => {
  */
 export default function AssemblyOutliner({
   instances,
+  catalogMap,
   groups,
   selectedIds,
   primaryId,
@@ -33,13 +34,15 @@ export default function AssemblyOutliner({
   onClearAll
 }) {
   const [openFolders, setOpenFolders] = useState(() => new Set());
+  const byId = useMemo(() => new Map(instances.map((i) => [i.instanceId, i])), [instances]);
+  const [query, setQuery] = useState(''); // narrows the rows shown; the selection and the build are untouched
   const listRef = useRef(null);
 
   // Display rows: { kind: 'part', inst, depth, groupName? } and { kind: 'folder', group, listed }.
   // Selected parts come first (a wholly selected group as its folder, other grouped parts on their own
   // row naming their group), then everything else. In each section the group folders come before the
   // loose parts, otherwise in build order.
-  const { selectedRows, otherRows } = useMemo(() => {
+  const { selectedRows: allSelectedRows, otherRows: allOtherRows } = useMemo(() => {
     const chosen = new Set(selectedIds);
     // Folders (with their open rows) and loose rows, per section
     const top = [];
@@ -70,7 +73,42 @@ export default function AssemblyOutliner({
     }
     return { selectedRows: [...topFolders, ...top], otherRows: [...restFolders, ...rest] };
   }, [instances, groups, openFolders, selectedIds]);
+
+  // Search: a part row stays when its label, catalog name or part number contains the text; a folder
+  // stays when its own name does (then all its parts show) or when any of its listed parts do
+  const q = query.trim().toLowerCase();
+  const partMatches = (inst) => {
+    if (!q) return true;
+    const meta = catalogMap?.get(inst.partId);
+    return (
+      inst.label.toLowerCase().includes(q) ||
+      !!meta && (meta.name.toLowerCase().includes(q) || meta.partNumber.toLowerCase().includes(q))
+    );
+  };
+  const filterRows = (list) => {
+    if (!q) return list;
+    const out = [];
+    let folderOpen = null; // { named, ids } of the folder whose parts follow
+    for (const row of list) {
+      if (row.kind === 'folder') {
+        const named = row.group.name.toLowerCase().includes(q);
+        const anyPart = row.listed.some((id) => partMatches(byId.get(id)));
+        folderOpen = { named };
+        if (named || anyPart) out.push(row);
+      } else if (row.depth > 0) {
+        if (folderOpen?.named || partMatches(row.inst)) out.push(row);
+      } else {
+        folderOpen = null;
+        if (partMatches(row.inst)) out.push(row);
+      }
+    }
+    return out;
+  };
+  const selectedRows = useMemo(() => filterRows(allSelectedRows), [allSelectedRows, q, catalogMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  const otherRows = useMemo(() => filterRows(allOtherRows), [allOtherRows, q, catalogMap]); // eslint-disable-line react-hooks/exhaustive-deps
   const rows = useMemo(() => [...selectedRows, ...otherRows], [selectedRows, otherRows]);
+  const shownCount = q ? instances.filter(partMatches).length : instances.length;
+
 
   const rowIds = (row) => (row.kind === 'folder' ? row.group.ids : [row.inst.instanceId]);
   const rowKey = (row) => (row.kind === 'folder' ? `folder:${row.group.id}` : row.inst.instanceId);
@@ -148,6 +186,7 @@ export default function AssemblyOutliner({
   const locate = (id) => {
     if (!id) return;
     const inst = instances.find((i) => i.instanceId === id);
+    if (q && !partMatches(inst)) setQuery('');
     const group = inst?.groupId ? groups.get(inst.groupId) : null;
     if (group && !openFolders.has(group.id)) setOpenFolders((prev) => new Set(prev).add(group.id));
     locateIdRef.current = id;
@@ -202,6 +241,18 @@ export default function AssemblyOutliner({
   };
 
   // --- Rows ---
+  // "Catalog name · part number" of the part's catalog entry
+  const baseName = (inst) => {
+    const meta = catalogMap?.get(inst.partId);
+    return meta ? (
+      <>
+        {meta.name} <span className="part-number">· {meta.partNumber}</span>
+      </>
+    ) : (
+      `Unknown part (${inst.partId})`
+    );
+  };
+
   const flagButtons = (members, onToggle, noun) => {
     const hidden = members.filter((m) => m.visible === false).length;
     const locked = members.filter((m) => m.locked).length;
@@ -235,15 +286,13 @@ export default function AssemblyOutliner({
     );
   };
 
-  const byId = useMemo(() => new Map(instances.map((i) => [i.instanceId, i])), [instances]);
-
   return (
     <section className="outliner-section">
       <div className="panel-header" style={{ padding: '10px 14px' }}>
         <div className="panel-title-row">
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Layers size={14} />
-            Assembly Outliner ({instances.length})
+            Assembly Outliner ({q ? `${shownCount} / ${instances.length}` : instances.length})
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button
@@ -264,6 +313,31 @@ export default function AssemblyOutliner({
             )}
           </div>
         </div>
+        {instances.length > 0 && (
+          <div className="search-box outliner-search">
+            <Search size={15} />
+            <input
+              type="search"
+              className="search-input"
+              placeholder="Search label, part name, 228-..."
+              aria-label="Search the assembly"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && query) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setQuery('');
+                }
+              }}
+            />
+            {query && (
+              <button type="button" className="clear-search-btn" onClick={() => setQuery('')} aria-label="Clear search">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="instance-list scroller" ref={listRef}>
@@ -346,6 +420,7 @@ export default function AssemblyOutliner({
                 {inst.label}
                 {row.groupName && <span className="folder-count">in {row.groupName}</span>}
                 {inst.isIntersecting && <span style={{ color: '#fca5a5', marginLeft: 6, fontSize: 11 }}>(Intersecting)</span>}
+                {isPrimary && <span className="instance-row-base">{baseName(inst)}</span>}
               </span>
               {flagButtons([inst], (field, value) => onTogglePart(inst.instanceId, { [field]: value }), 'Part')}
             </div>
@@ -353,6 +428,7 @@ export default function AssemblyOutliner({
           );
         })}
 
+        {instances.length > 0 && rows.length === 0 && <div className="empty-state">No parts match "{query.trim()}".</div>}
         {instances.length === 0 && (
           <div className="empty-state">Click any part in the left library to place it into the 3D workspace.</div>
         )}

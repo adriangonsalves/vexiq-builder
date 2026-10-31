@@ -17,6 +17,7 @@ import {
   Fullscreen,
   Grid,
   History as HistoryIcon,
+  List as ListIcon,
   Maximize2,
   Move,
   PanelLeftClose,
@@ -34,7 +35,8 @@ import {
   X
 } from 'lucide-react';
 import Viewport3D from './components/Viewport3D.jsx';
-import PartThumbnail from './components/PartThumbnail.jsx';
+import PartThumbnail, { GRID_THUMB_PX, ZOOM_THUMB_PX, cachedThumbnail } from './components/PartThumbnail.jsx';
+import { loadRecent, recordUse, saveRecent } from './utils/recentParts.js';
 import HistoryTimeline from './components/HistoryTimeline.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
@@ -117,6 +119,12 @@ const PROJECTIONS = ['perspective', 'orthographic'];
 const VIEW_LAYOUTS = ['single', 'four', 'stereo'];
 const VIEW_DIRECTIONS = ['+x', '-x', '+y', '-y', '+z', '-z'];
 const PANELS_HIDDEN_KEY = 'vexiq.panelsHidden';
+const LIBRARY_VIEW_KEY = 'vexiq.libraryView';
+const RECENT_CATEGORY = 'Recent';
+const TILE_TIP_DELAY_MS = 250;
+/** "190 mm": the longest side of the part's box */
+const sizeText = (part) => `${Math.round(Math.max(0, ...(part.bbox?.size || [])) * 10) / 10} mm`;
+const TILE_TIP_IMAGE_DELAY_MS = 1000; // resting this long on a tile adds the large picture
 const SETTINGS_KEY = 'vexiq.settings'; // fallback copy of the app settings when there is no bridge
 const clampStereoDepth =(v) => Math.min(3, Math.max(0.25, Number(v) || 1));
 
@@ -188,6 +196,32 @@ export default function App() {
       // storage unavailable: the choice just isn't remembered
     }
   }, [panelsHidden]);
+  // Library list or grid: a per-browser preference, not part of the build
+  const [libraryView, setLibraryView] = useState(() => {
+    try {
+      return window.localStorage.getItem(LIBRARY_VIEW_KEY) === 'grid' ? 'grid' : 'list';
+    } catch {
+      return 'list';
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LIBRARY_VIEW_KEY, libraryView);
+    } catch {
+      // storage unavailable: the choice just isn't remembered
+    }
+  }, [libraryView]);
+  // Parts recently added from the library, best first (part-library); per browser, not in the build
+  const [recentEntries, setRecentEntries] = useState(() => {
+    try {
+      return loadRecent(window.localStorage);
+    } catch {
+      return [];
+    }
+  });
+  const [tileTip, setTileTip] = useState(null); // { part, left, top } of the hovered grid tile
+  const tileTipTimerRef = useRef(null);
+  const tileTipImageTimerRef = useRef(null);
   const [shadows, setShadows] = useState(false); // optional soft shadows (render-shadows)
   const [ambientOcclusion, setAmbientOcclusion] = useState(false); // optional AO (render-ambient-occlusion)
   const [environmentReflections, setEnvironmentReflections] = useState(true); // optional studio environment reflections
@@ -767,10 +801,17 @@ export default function App() {
     return Array.from(counts.entries());
   }, [catalog]);
 
+  // Recent entries whose part is still in the catalog, in score order
+  const recentParts = useMemo(
+    () => recentEntries.map((e) => catalogMap.get(e.id)).filter(Boolean),
+    [recentEntries, catalogMap]
+  );
+
   const filteredCatalog = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return catalog.filter((part) => {
-      if (activeCategory !== 'All' && part.category !== activeCategory) {
+    const source = activeCategory === RECENT_CATEGORY ? recentParts : catalog;
+    return source.filter((part) => {
+      if (activeCategory !== 'All' && activeCategory !== RECENT_CATEGORY && part.category !== activeCategory) {
         return false;
       }
       if (!q) return true;
@@ -780,7 +821,7 @@ export default function App() {
         part.category.toLowerCase().includes(q)
       );
     });
-  }, [catalog, searchQuery, activeCategory]);
+  }, [catalog, recentParts, searchQuery, activeCategory]);
 
   const selectedInstance = useMemo(
     () => instances.find((i) => i.instanceId === selectedId) || null,
@@ -1088,6 +1129,48 @@ export default function App() {
     });
     setSelectedId(newInst.instanceId);
     return newInst;
+  };
+
+  // Adding by clicking a library part also counts as a use of it (the Recent list)
+  const handleLibraryAdd = (part) => {
+    const added = handleAddPart(part);
+    if (!added) return;
+    setRecentEntries((prev) => {
+      const next = recordUse(prev, part.id);
+      try {
+        saveRecent(window.localStorage, next);
+      } catch {
+        // storage unavailable: the list just isn't kept
+      }
+      return next;
+    });
+  };
+
+  const showTileTip = (part, el) => {
+    clearTimeout(tileTipTimerRef.current);
+    clearTimeout(tileTipImageTimerRef.current);
+    tileTipTimerRef.current = setTimeout(() => {
+      const tile = el.getBoundingClientRect();
+      const panel = el.closest('.panel-left')?.getBoundingClientRect();
+      setTileTip({
+        part,
+        centerX: tile.left + tile.width / 2,
+        top: tile.bottom + 6,
+        bottom: tile.top - 6,
+        minX: (panel?.left ?? 0) + 8,
+        maxX: (panel?.right ?? window.innerWidth) - 8,
+        panelBottom: panel?.bottom ?? window.innerHeight,
+        big: false
+      });
+      tileTipImageTimerRef.current = setTimeout(() => {
+        setTileTip((tip) => (tip ? { ...tip, big: true } : tip));
+      }, TILE_TIP_IMAGE_DELAY_MS);
+    }, TILE_TIP_DELAY_MS);
+  };
+  const hideTileTip = () => {
+    clearTimeout(tileTipTimerRef.current);
+    clearTimeout(tileTipImageTimerRef.current);
+    setTileTip(null);
   };
 
   // meta.extraPatches: other parts changed by the same placement (a shaft group turned to mesh, a
@@ -1865,8 +1948,30 @@ export default function App() {
           <div className="panel-header">
             <div className="panel-title-row">
               <span>VEX IQ Part Library</span>
-              <span>
-                {filteredCatalog.length} / {catalog.length}
+              <span className="library-title-tools">
+                <span>
+                  {filteredCatalog.length} / {catalog.length}
+                </span>
+                <span className="view-switch" role="group" aria-label="Library view">
+                  <button
+                    type="button"
+                    className={libraryView === 'list' ? 'active' : ''}
+                    aria-pressed={libraryView === 'list'}
+                    title="List view"
+                    onClick={() => setLibraryView('list')}
+                  >
+                    <ListIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={libraryView === 'grid' ? 'active' : ''}
+                    aria-pressed={libraryView === 'grid'}
+                    title="Grid view"
+                    onClick={() => setLibraryView('grid')}
+                  >
+                    <LayoutGrid size={14} />
+                  </button>
+                </span>
               </span>
             </div>
 
@@ -1892,7 +1997,7 @@ export default function App() {
             </div>
 
             <div className="category-pills">
-              {categories.map(([cat, count]) => (
+              {[[RECENT_CATEGORY, recentParts.length], ...categories].map(([cat, count]) => (
                 <button
                   key={cat}
                   type="button"
@@ -1905,34 +2010,80 @@ export default function App() {
             </div>
           </div>
 
-          <div className="catalog-list scroller">
-            {filteredCatalog.map((part, idx) => (
-              <button
-                key={part.id}
-                type="button"
-                className={`part-card ${idx >= 18 ? 'part-card-deferred' : ''}`}
-                onClick={() => handleAddPart(part)}
-              >
-                <PartThumbnail part={part} index={idx} />
-                <div className="part-info">
-                  <div className="part-name" title={part.name}>
-                    {part.name}
+          <div
+            className={`catalog-list scroller${libraryView === 'grid' ? ' grid' : ''}`}
+            onScroll={tileTip ? hideTileTip : undefined}
+          >
+            {filteredCatalog.map((part, idx) =>
+              libraryView === 'grid' ? (
+                <button
+                  key={part.id}
+                  type="button"
+                  className={`part-tile ${idx >= 18 ? 'part-card-deferred' : ''}`}
+                  aria-label={part.name}
+                  onClick={() => handleLibraryAdd(part)}
+                  onPointerEnter={(e) => showTileTip(part, e.currentTarget)}
+                  onPointerLeave={hideTileTip}
+                  onFocus={(e) => showTileTip(part, e.currentTarget)}
+                  onBlur={hideTileTip}
+                >
+                  <PartThumbnail part={part} index={idx} size={GRID_THUMB_PX} />
+                  <span className="tile-size">{sizeText(part)}</span>
+                </button>
+              ) : (
+                <button
+                  key={part.id}
+                  type="button"
+                  className={`part-card ${idx >= 18 ? 'part-card-deferred' : ''}`}
+                  onClick={() => handleLibraryAdd(part)}
+                  onPointerEnter={(e) => showTileTip(part, e.currentTarget)}
+                  onPointerLeave={hideTileTip}
+                  onFocus={(e) => showTileTip(part, e.currentTarget)}
+                  onBlur={hideTileTip}
+                >
+                  <PartThumbnail part={part} index={idx} />
+                  <div className="part-info">
+                    <div className="part-name" title={part.name}>
+                      {part.name}
+                    </div>
+                    <div className="part-meta">
+                      <span>{part.partNumber}</span>
+                      <span>{sizeText(part)}</span>
+                      <span className="part-meta-count">{part.connectorCount} holes/axes</span>
+                    </div>
                   </div>
-                  <div className="part-meta">
-                    <span>{part.partNumber}</span>
-                    <span className="part-meta-count">{part.connectorCount} holes/axes</span>
-                  </div>
-                </div>
-                <span className="part-add-badge">+ Add</span>
-              </button>
-            ))}
+                  <span className="part-add-badge">+ Add</span>
+                </button>
+              )
+            )}
 
             {filteredCatalog.length === 0 && (
               <div className="empty-state">
-                No VEX IQ parts match "{searchQuery}".
+                {activeCategory === RECENT_CATEGORY && !searchQuery.trim()
+                  ? 'Parts you add from the library will show up here.'
+                  : `No VEX IQ parts match "${searchQuery}".`}
               </div>
             )}
           </div>
+          {tileTip && (
+            <div
+              className="tile-tip"
+              role="tooltip"
+              style={{
+                left: Math.min(Math.max(tileTip.centerX, tileTip.minX + ZOOM_THUMB_PX / 2), tileTip.maxX - ZOOM_THUMB_PX / 2),
+                ...(tileTip.top + (tileTip.big ? ZOOM_THUMB_PX + 70 : 52) > tileTip.panelBottom
+                  ? { top: tileTip.bottom, transform: 'translate(-50%, -100%)' }
+                  : { top: tileTip.top, transform: 'translateX(-50%)' })
+              }}
+            >
+              {tileTip.big && cachedThumbnail(tileTip.part) && (
+                <img className="tile-tip-img" src={cachedThumbnail(tileTip.part)} alt="" width={ZOOM_THUMB_PX} height={ZOOM_THUMB_PX} />
+              )}
+              <strong>{tileTip.part.name}</strong>
+              <span className="tile-tip-size">{sizeText(tileTip.part)}</span>
+              <span className="tile-tip-number">{tileTip.part.partNumber}</span>
+            </div>
+          )}
         </aside>
 
         {/* Center 3D Viewport */}
@@ -2110,6 +2261,7 @@ export default function App() {
           {/* Scene Outliner */}
           <AssemblyOutliner
             instances={instances}
+            catalogMap={catalogMap}
             groups={groups}
             selectedIds={selectedIds}
             primaryId={primaryId}
