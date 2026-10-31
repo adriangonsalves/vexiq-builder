@@ -20,7 +20,6 @@ See proposal.md for why. The current state that shapes the approach:
 **Non-Goals:**
 - Group mating, hole snap or flush stop for sets (later change).
 - Nested groups.
-- Box (marquee) selection in the 3D view.
 - Cloning a group over MCP, and group tools for the in-page assistant (`webMcpTools.js`).
 
 ## Decisions
@@ -35,7 +34,7 @@ See proposal.md for why. The current state that shapes the approach:
 Each part gets optional `groupId` and `groupName`. A group exists when two or more parts share a `groupId`; the folder name is read from them. Both fields are added to `BUILD_FIELDS`, so group/ungroup/rename are ordinary `update` ops and undo, branches, timeline playback, the library and the bridge carry them without new code.
 - Renaming writes `groupName` on every member (one step).
 - Alternative considered: a top-level `groups: [{ id, name }]` in the build. Cleaner on paper, but it needs a new history op, a new field in the saved state, the library format and every MCP writer, and it can get out of step with the parts. Rejected for now; the per-part form can be lifted into a list later if nesting is added.
-- Outliner order: a folder sits where its first member is in `instances`; members are listed in their `instances` order. No reordering of `instances` is needed.
+- Outliner order: folders are listed before loose parts, in the order of their first members in `instances`; members are listed in their `instances` order. No reordering of `instances` is needed.
 
 ### 3. Pure helpers in `src/utils/partGroups.js`
 No React/DOM, so the check script and the server can import them:
@@ -91,6 +90,10 @@ No extra code beyond decision 4: the pivot path runs whenever `selectedIds.lengt
 - The viewport's wheel capture handler (`handleWheelCapture`) gets a new first branch: Shift held, at least one part selected, not hole picking, no copy preview, no rotate ring selected → `preventDefault` (no zoom) and call `onExpandSelection(+1 | -1)`. Wheel `deltaY` sign gives the direction; on macOS some mice report Shift+wheel as `deltaX`, so use whichever of `deltaY`/`deltaX` is non-zero. Notches are rate-limited (one step per ~120 ms) so a trackpad flick doesn't jump five layers.
 - `App.jsx` keeps `expandState = { seedIds, layers, depth, graph }`. On the first step it fetches `joint_graph` once and computes `layersFrom`; later steps just change `depth` and set `selectedIds` to the union of layers `0..depth`. Any selection change not made by expand clears `expandState` (compare against the ids it last set).
 - Alternatives considered: holding `E` (the user's first idea) clashes with `E` = Rotate mode; a free letter key (`Q`) works but is less discoverable than Shift, which already means "add to the selection".
+
+### 13. Box select and the selection contour
+- Box select is a mode (Select menu, `B`), like Select mode: while on, OrbitControls' rotate is off and a left-drag that doesn't start on the gizmo or a ring draws a DOM rectangle over the canvas (OrbitControls is disabled during the drag so Shift doesn't pan). On release, each visible part's mesh points (sampled to about 4000 per mesh) are projected with the pointer camera: left-to-right keeps parts wholly inside, right-to-left parts with any point inside. The ids go to `App.jsx`, which expands them to whole groups and replaces or (Shift, Select mode) adds to the selection.
+- The contour is drawn per pane after the scene (both the plain and the AO paths): selected part meshes are also on a dedicated layer, rendered flat white into a mask target with only that layer, then a full-screen shader draws a bright line with a dark rim where the mask's edge is within a few pixels. It ignores depth, so it shows through other parts, and it relies on brightness, not hue. Screenshots for MCP don't go through it.
 
 ## Risks / Trade-offs
 

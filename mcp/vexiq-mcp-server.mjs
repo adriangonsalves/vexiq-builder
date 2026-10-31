@@ -16,7 +16,9 @@ import {
   findPart,
   generateOrthographicViews,
   getCatalog,
+  jointGraph,
   mirrorSubassembly,
+  summarizeAudit,
   applyPosePatches,
   placeParts,
   readAppSettings,
@@ -25,6 +27,21 @@ import {
   writeAssemblyState
 } from './assembly-engine.mjs';
 import { MCP_OFF_MESSAGE } from '../src/utils/appSettings.js';
+import {
+  applyPatches,
+  applySetTransform,
+  axisTurn,
+  expandToGroups,
+  groupCollapse,
+  groupParts,
+  groupsOf,
+  renameGroup,
+  setPivot,
+  setWorldBoxes,
+  ungroupParts,
+  wholeGroupOf
+} from '../src/utils/partGroups.js';
+import { connectedFrom, layersFrom } from '../src/utils/jointLayers.js';
 import {
   branchesAt,
   currentLine,
@@ -242,16 +259,19 @@ const TOOLS = [
   },
   {
     name: 'remove_part',
-    description: 'Remove a part instance from the 3D assembly by its instanceId.',
+    description: 'Remove a part instance from the 3D assembly by its instanceId, or every part of a group by its groupId (one undo step). Give one of the two.',
     inputSchema: {
       type: 'object',
       properties: {
         instanceId: {
           type: 'string',
           description: 'The instanceId to remove.'
+        },
+        groupId: {
+          type: 'string',
+          description: 'Remove every part of this group (see get_assembly groups).'
         }
-      },
-      required: ['instanceId']
+      }
     }
   },
   {
@@ -629,6 +649,66 @@ const TOOLS = [
     }
   },
   {
+    name: 'select_parts',
+    description:
+      "Change the app's selection (no undo step). mode: replace (default), add, remove, all (every visible part), none or invert; instanceIds for replace/add/remove. connected: true then selects every part joined to them through seated pins, pegs and shafts (as the app's Select Connected). expandLayers: n instead adds n layers of directly joined parts (beam -> its pins -> the parts they go into). A grouped part brings its whole group unless expandGroups is false. Replies with the selected parts, the primary (last) part and their groups.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mode: { type: 'string', enum: ['replace', 'add', 'remove', 'all', 'none', 'invert'] },
+        instanceIds: { type: 'array', items: { type: 'string' } },
+        connected: { type: 'boolean' },
+        expandLayers: { type: 'integer', minimum: 0 },
+        expandGroups: { type: 'boolean', description: 'Default true.' }
+      }
+    }
+  },
+  {
+    name: 'group_parts',
+    description:
+      'Make the given parts (or the current selection) one named group, shown as a folder in the app. Needs two or more parts; parts leave their old group, and a group left with one part is dissolved. Moves nothing. One undo step; the group is selected.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        instanceIds: { type: 'array', items: { type: 'string' }, description: 'Default: the current selection.' },
+        name: { type: 'string', description: 'Default "Group N".' }
+      }
+    }
+  },
+  {
+    name: 'ungroup_parts',
+    description: 'Dissolve a group (groupId), or every group the given parts are in (instanceIds). The parts stay where they are. One undo step.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        groupId: { type: 'string' },
+        instanceIds: { type: 'array', items: { type: 'string' } }
+      }
+    }
+  },
+  {
+    name: 'update_group',
+    description:
+      "Change a group (groupId) or a set of parts (instanceIds) as one undo step: rename it, hide/show, lock/unlock, move it by a distance, move its centre (the parts' combined bounding box centre) to a point, or turn it about that centre. The parts keep their places relative to one another. Refused for a move or turn when a part is locked. Replies with the new centre and the same short check summary as place_parts.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        groupId: { type: 'string' },
+        instanceIds: { type: 'array', items: { type: 'string' } },
+        name: { type: 'string', description: 'Groups only; not empty.' },
+        visible: { type: 'boolean' },
+        locked: { type: 'boolean' },
+        moveBy: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3, description: '[x, y, z] mm' },
+        moveCentreTo: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3, description: '[x, y, z] mm' },
+        turn: {
+          type: 'object',
+          properties: { axis: { type: 'string', enum: ['X', 'Y', 'Z'] }, deg: { type: 'number' } },
+          required: ['axis', 'deg']
+        }
+      }
+    }
+  },
+  {
     name: 'get_history',
     description:
       "List the build history: the steps on the current line (number, label, source app/mcp/assistant/action, time, parts added/removed/changed), which step is current, and where other branches split off. Every change to the parts is a step; each MCP call that changes parts is one step.",
@@ -671,6 +751,30 @@ function partUsageNotes() {
   } catch {
     return undefined;
   }
+}
+
+// get_assembly's groups: id, name, part ids and the centre of their combined bounding box
+function groupList(instances, catalogById) {
+  return [...groupsOf(instances).values()].map((g) => ({
+    id: g.id,
+    name: g.name,
+    instanceIds: g.ids,
+    centre: setPivot(instances, g.ids, setWorldBoxes(instances, g.ids, (i) => catalogById.get(i.partId)?.bbox)).map((v) => Number(v.toFixed(3)))
+  }));
+}
+
+// select_parts' reply: what is selected, the primary part and the groups they belong to
+function selectionReply(instances, ids) {
+  const byId = new Map(instances.map((i) => [i.instanceId, i]));
+  const groups = groupsOf(instances);
+  const touched = [...new Set(ids.map((id) => byId.get(id)?.groupId).filter((g) => groups.has(g)))];
+  return {
+    ok: true,
+    count: ids.length,
+    primaryId: ids.at(-1) ?? null,
+    selected: ids.map((id) => ({ instanceId: id, label: byId.get(id)?.label })),
+    groups: touched.map((g) => ({ groupId: g, name: groups.get(g).name, whole: groups.get(g).ids.every((id) => ids.includes(id)) }))
+  };
 }
 
 // Tools that only read: they still answer with the assistant turned off in the app's Settings
@@ -757,10 +861,12 @@ async function executeTool(name, args = {}) {
     return {
       updatedAt: state.updatedAt,
       selectedId: state.selectedId,
+      selectedIds: state.selectedIds || (state.selectedId ? [state.selectedId] : []),
       viewport: state.viewport,
       // Only where the build is in its history; get_history lists the steps
       history: headPosition(state.history),
       instanceCount: state.instances.length,
+      groups: groupList(state.instances, catalogById),
       instances: state.instances.map((inst) => {
         const part = catalogById.get(inst.partId);
         return {
@@ -772,6 +878,173 @@ async function executeTool(name, args = {}) {
           ...(part?.hubSpecs ? { socketAngleDeg: Number(inst.socketAngleDeg) || 0 } : {})
         };
       })
+    };
+  }
+
+  if (name === 'select_parts') {
+    const state = readAssemblyState();
+    const { instances } = state;
+    const mode = args.mode || 'replace';
+    const known = new Set(instances.map((i) => i.instanceId));
+    const given = Array.isArray(args.instanceIds) ? args.instanceIds : [];
+    const unknown = given.filter((id) => !known.has(id));
+    if (unknown.length) return { isError: true, error: `Not in the build: ${unknown.join(', ')}` };
+    if (args.connected && args.expandLayers !== undefined) return { isError: true, error: 'Give connected or expandLayers, not both.' };
+    if ((mode === 'add' || mode === 'remove') && !Array.isArray(args.instanceIds)) {
+      return { isError: true, error: `mode "${mode}" needs instanceIds.` };
+    }
+    const expandGroups = args.expandGroups !== false;
+    const ids = expandGroups ? expandToGroups(given, instances) : given;
+    const current = state.selectedIds || (state.selectedId ? [state.selectedId] : []);
+    const visible = instances.filter((i) => i.visible !== false).map((i) => i.instanceId);
+    let next;
+    if (mode === 'all') next = visible;
+    else if (mode === 'none') next = [];
+    else if (mode === 'invert') next = visible.filter((id) => !current.includes(id));
+    else if (mode === 'add') next = [...current.filter((id) => !ids.includes(id)), ...ids];
+    else if (mode === 'remove') next = current.filter((id) => !ids.includes(id));
+    else next = ids;
+    if (args.connected || args.expandLayers !== undefined) {
+      const graph = jointGraph(state);
+      const options = expandGroups ? { collapse: groupCollapse(instances) } : {};
+      next = args.connected
+        ? connectedFrom(graph, next, options)
+        : layersFrom(graph, next, options).slice(0, Math.max(0, Math.floor(args.expandLayers)) + 1).flat();
+    }
+    await writeAssemblyState({ ...state, selectedIds: next, selectedId: next.at(-1) ?? null });
+    return selectionReply(instances, next);
+  }
+
+  if (name === 'group_parts') {
+    const state = readAssemblyState();
+    const ids = Array.isArray(args.instanceIds) ? args.instanceIds : state.selectedIds || (state.selectedId ? [state.selectedId] : []);
+    const known = new Set(state.instances.map((i) => i.instanceId));
+    const unknown = ids.filter((id) => !known.has(id));
+    if (unknown.length) return { isError: true, error: `Not in the build: ${unknown.join(', ')}` };
+    let made;
+    try {
+      made = groupParts(state.instances, ids, args.name);
+    } catch (err) {
+      return { isError: true, error: err.message };
+    }
+    const instances = applyPatches(state.instances, made.patches);
+    const members = instances.filter((i) => i.groupId === made.groupId).map((i) => i.instanceId);
+    await writeAssemblyState(
+      { ...state, instances, selectedIds: members, selectedId: members.at(-1) ?? null },
+      { stepLabel: `Group ${members.length} parts as ${made.name}` }
+    );
+    return { ok: true, groupId: made.groupId, name: made.name, instanceIds: members };
+  }
+
+  if (name === 'ungroup_parts') {
+    const state = readAssemblyState();
+    let ids = Array.isArray(args.instanceIds) ? args.instanceIds : [];
+    if (args.groupId !== undefined) {
+      const group = groupsOf(state.instances).get(args.groupId);
+      if (!group) return { isError: true, error: `Group "${args.groupId}" not found.` };
+      ids = [...ids, ...group.ids];
+    }
+    if (ids.length === 0) return { isError: true, error: 'Give a groupId or instanceIds.' };
+    const groups = groupsOf(state.instances);
+    const { groupIds, patches } = ungroupParts(state.instances, ids);
+    if (groupIds.length === 0) return { isError: true, error: 'None of those parts are in a group.' };
+    const names = groupIds.map((g) => groups.get(g).name);
+    await writeAssemblyState(
+      { ...state, instances: applyPatches(state.instances, patches) },
+      { stepLabel: names.length === 1 ? `Ungroup ${names[0]}` : `Ungroup ${names.length} groups` }
+    );
+    return { ok: true, ungrouped: groupIds.map((g, i) => ({ groupId: g, name: names[i], instanceIds: groups.get(g).ids })) };
+  }
+
+  if (name === 'update_group') {
+    const state = readAssemblyState();
+    const groups = groupsOf(state.instances);
+    let ids;
+    let group = null;
+    if (args.groupId !== undefined) {
+      group = groups.get(args.groupId);
+      if (!group) return { isError: true, error: `Group "${args.groupId}" not found.` };
+      ids = group.ids;
+    } else if (Array.isArray(args.instanceIds) && args.instanceIds.length > 0) {
+      const known = new Set(state.instances.map((i) => i.instanceId));
+      const unknown = args.instanceIds.filter((id) => !known.has(id));
+      if (unknown.length) return { isError: true, error: `Not in the build: ${unknown.join(', ')}` };
+      ids = [...new Set(args.instanceIds)];
+      group = wholeGroupOf(state.instances, ids, groups);
+    } else {
+      return { isError: true, error: 'Give a groupId or instanceIds.' };
+    }
+    const vec = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(Number(n)));
+    if (args.moveBy !== undefined && !vec(args.moveBy)) return { isError: true, error: 'moveBy must be [x, y, z] in mm.' };
+    if (args.moveCentreTo !== undefined && !vec(args.moveCentreTo)) return { isError: true, error: 'moveCentreTo must be [x, y, z] in mm.' };
+    if (args.turn !== undefined && (!['X', 'Y', 'Z'].includes(String(args.turn.axis).toUpperCase()) || !Number.isFinite(Number(args.turn.deg)))) {
+      return { isError: true, error: 'turn must be { axis: X | Y | Z, deg }.' };
+    }
+
+    let instances = state.instances;
+    let label = group ? group.name : `${ids.length} parts`;
+    const changes = [];
+    if (args.name !== undefined) {
+      if (!group) return { isError: true, error: 'name needs a whole group (groupId).' };
+      let renamed;
+      try {
+        renamed = renameGroup(instances, group.id, args.name);
+      } catch (err) {
+        return { isError: true, error: err.message };
+      }
+      instances = applyPatches(instances, renamed.patches);
+      changes.push(`Rename ${renamed.oldName} to ${renamed.name}`);
+      label = renamed.name;
+    }
+    const wanted = new Set(ids);
+    const setFlag = (field, value) => {
+      instances = instances.map((i) => (wanted.has(i.instanceId) ? { ...i, [field]: value } : i));
+    };
+    if (args.visible !== undefined) {
+      setFlag('visible', Boolean(args.visible));
+      changes.push(`${args.visible ? 'Show' : 'Hide'} ${label}`);
+    }
+    if (args.locked !== undefined) {
+      setFlag('locked', Boolean(args.locked));
+      changes.push(`${args.locked ? 'Lock' : 'Unlock'} ${label}`);
+    }
+
+    const moves = args.moveBy !== undefined || args.moveCentreTo !== undefined || args.turn !== undefined;
+    const boxesOf = (list) => setWorldBoxes(list, ids, (i) => catalogById.get(i.partId)?.bbox);
+    if (moves) {
+      if (instances.some((i) => wanted.has(i.instanceId) && i.locked)) return { isError: true, error: 'Part is locked' };
+      if (args.turn !== undefined) {
+        const centre = setPivot(instances, ids, boxesOf(instances));
+        instances = applyPatches(instances, applySetTransform(instances, ids, centre, { deltaQuat: axisTurn(String(args.turn.axis).toUpperCase(), Number(args.turn.deg)) }));
+        changes.push(`Turn ${label}`);
+      }
+      if (args.moveBy !== undefined || args.moveCentreTo !== undefined) {
+        const delta = args.moveBy !== undefined ? args.moveBy.map(Number) : [0, 0, 0];
+        if (args.moveCentreTo !== undefined) {
+          const centre = setPivot(instances, ids, boxesOf(instances));
+          args.moveCentreTo.forEach((v, k) => (delta[k] += Number(v) - centre[k]));
+        }
+        instances = applyPatches(instances, applySetTransform(instances, ids, [0, 0, 0], { deltaPos: delta }));
+        changes.push(`Move ${label}`);
+      }
+      // Overlaps against parts outside the set only
+      const outside = instances.filter((i) => !wanted.has(i.instanceId));
+      instances = instances.map((i) => (wanted.has(i.instanceId) ? { ...i, isIntersecting: checkCandidateCollision(i, outside).isIntersecting } : i));
+    }
+    if (changes.length === 0) return { isError: true, error: 'Nothing to change: give name, visible, locked, moveBy, moveCentreTo or turn.' };
+
+    await writeAssemblyState(
+      { ...state, instances, selectedIds: ids, selectedId: ids.at(-1) },
+      { stepLabel: changes.length === 1 ? changes[0] : `${changes.map((c) => c.split(' ')[0]).join(', ')} ${label}` }
+    );
+    const saved = readAssemblyState();
+    return {
+      ok: true,
+      ...(group ? { groupId: group.id, name: groupsOf(saved.instances).get(group.id)?.name } : {}),
+      instanceIds: ids,
+      centre: setPivot(saved.instances, ids, boxesOf(saved.instances)).map((v) => Number(v.toFixed(3))),
+      changed: changes,
+      audit: summarizeAudit(auditAssembly(saved))
     };
   }
 
@@ -1026,6 +1299,17 @@ async function executeTool(name, args = {}) {
         error: 'Provide either partQuery (to place a new part) or instanceId (to move an existing part).'
       };
     }
+  }
+
+  if (name === 'remove_part' && args.groupId !== undefined) {
+    if (args.instanceId !== undefined) return { isError: true, error: 'Give instanceId or groupId, not both.' };
+    const state = readAssemblyState();
+    const group = groupsOf(state.instances).get(args.groupId);
+    if (!group) return { isError: true, error: `Group "${args.groupId}" not found.` };
+    const doomed = new Set(group.ids);
+    const nextInstances = state.instances.filter((i) => !doomed.has(i.instanceId));
+    await writeAssemblyState({ ...state, instances: nextInstances }, { stepLabel: `Delete ${group.name}` });
+    return { ok: true, removedGroupId: group.id, removedInstanceIds: group.ids, remainingInstances: nextInstances.length };
   }
 
   if (name === 'remove_part') {

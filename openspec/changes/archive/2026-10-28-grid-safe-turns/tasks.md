@@ -1,7 +1,7 @@
 ## 1. Turning point
 
 - [x] 1.1 Add `gridPivot(features, center, { gridMm })` to `src/utils/pinHoleAlignment.js` following design decision 1; verify with new cases in `scripts/check-pin-hole-alignment.mjs`: a 1x6 Beam returns its own centre, the Robot Brain with Battery at [184.15, 69.7, 0] turned 180° about Y returns a point with x = 184.15 and z = 0, a 30°-tilted plate and a Chain Link return the box centre, a tire on an off-grid axle returns a point on its axle line
-- [ ] 1.2 Use `gridPivot` for the free-part pivot in `refreshRotateSetup` (`src/components/Viewport3D.jsx`), feeding it the selected part's world features; verify the check case "brain turned a quarter turn" by turning the brain in the app and reading its position in the Inspector ([184.15, 69.7, 0] unchanged)
+- [x] 1.2 Use `gridPivot` for the free-part pivot in `refreshRotateSetup` (`src/components/Viewport3D.jsx`), feeding it the selected part's world features; verify the check case "brain turned a quarter turn" by turning the brain in the app and reading its position in the Inspector ([184.15, 69.7, 0] unchanged)
 - [x] 1.3 Add a check that turns a free brain, beam and plate by 90° four times about each axis through `gridPivot` and confirms every hole line ends on the 6.35 mm grid offsets it started on; verify `node scripts/check-pin-hole-alignment.mjs` exits 0
 
 ## 2. Hole snap settle

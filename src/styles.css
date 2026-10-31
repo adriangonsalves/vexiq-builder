@@ -622,9 +622,98 @@ body,
   background: var(--bg-panel-elevated);
 }
 
+/* Selected rows match the 3D view's amber selection look */
 .instance-row.selected {
-  background: rgba(59, 130, 246, 0.18);
-  border-color: var(--accent);
+  background: rgba(255, 159, 28, 0.2);
+  border-color: #ff9f1c;
+  box-shadow: inset 3px 0 0 #ff9f1c;
+}
+
+/* Other parts of a multi-selection; the primary (last selected) row keeps the full look */
+.instance-row.selected.secondary {
+  background: rgba(255, 159, 28, 0.1);
+  border-color: rgba(255, 159, 28, 0.45);
+}
+
+/* Select / unselect checkbox at the start of each Outliner row */
+.row-check {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: #1a1206;
+  cursor: pointer;
+}
+
+.row-check:hover {
+  border-color: #ff9f1c;
+}
+
+.row-check.on,
+.row-check.mixed {
+  background: #ff9f1c;
+  border-color: #ff9f1c;
+}
+
+/* "Selected (N)" and "Other parts" headings in the Outliner list */
+.outliner-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.outliner-heading.selected-heading {
+  color: #ffb54d;
+  padding-top: 0;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+/* Box select rectangle: solid = parts wholly inside, dashed (dragged right to left) = parts it touches */
+.select-box {
+  position: absolute;
+  pointer-events: none;
+  border: 1.5px solid #ffd400;
+  background: rgba(255, 212, 0, 0.1);
+  z-index: 5;
+}
+
+.select-box.crossing {
+  border-style: dashed;
+  background: rgba(255, 212, 0, 0.06);
+}
+
+/* Selection count over the 3D view */
+.hud-pill-selection {
+  border-color: rgba(255, 159, 28, 0.7);
+  color: #ffd29a;
 }
 
 .instance-row-name {
@@ -648,6 +737,72 @@ body,
 .icon-btn:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  background: none;
+}
+
+/* Some parts of a group are hidden or locked */
+.icon-btn.mixed {
+  opacity: 0.55;
+}
+
+/* Locate pinned: follows every new selection */
+.icon-btn.locate-btn.active {
+  color: var(--accent);
+  background: rgba(59, 130, 246, 0.18);
+}
+
+/* Group folders in the Assembly Outliner (openspec outliner-part-groups) */
+.instance-row.folder-row {
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.folder-toggle {
+  padding: 1px;
+}
+
+.folder-count {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.instance-row.in-folder {
+  margin-left: 18px;
+}
+
+/* Inspector header: what is selected (openspec outliner-part-groups) */
+.inspector-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.inspector-name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-primary);
+}
+
+.inspector-sub {
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-muted);
 }
 
 .inspector-body {
@@ -811,7 +966,8 @@ body,
   justify-content: space-between;
 }
 
-.cad-select {
+.cad-select,
+.cad-input {
   width: 100%;
   background: var(--bg-panel-elevated);
   border: 1px solid var(--border-strong);
@@ -821,7 +977,8 @@ body,
   font-size: 11.5px;
 }
 
-.cad-select:focus {
+.cad-select:focus,
+.cad-input:focus {
   outline: 2px solid var(--accent);
   border-color: transparent;
 }
@@ -1205,6 +1362,21 @@ body,
 .popover-item:focus-visible {
   background: var(--bg-hover);
   outline: none;
+}
+
+.popover-item:disabled {
+  color: var(--text-muted);
+  opacity: 0.55;
+  cursor: default;
+  background: transparent;
+}
+
+.popover-shortcut {
+  margin-left: auto;
+  padding-left: 16px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .popover-check {

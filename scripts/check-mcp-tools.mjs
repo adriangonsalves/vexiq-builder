@@ -162,6 +162,7 @@ await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clien
 {
   const list = await rpc('tools/list');
   const names = list.result.tools.map((t) => t.name);
+  check('tools/list has the selection and group tools', ['select_parts', 'group_parts', 'ungroup_parts', 'update_group'].every((n) => names.includes(n)), names.join(', '));
   check('tools/list returns the original 15 tools', ['search_parts', 'get_part_details', 'get_assembly', 'place_part', 'update_part', 'align_part_to_hole', 'remove_part', 'clear_assembly', 'configure_viewport', 'auto_fasten_joint', 'audit_assembly', 'mate_parts', 'mesh_gear_train', 'mirror_subassembly', 'capture_viewport_views'].every((n) => names.includes(n)), names.join(', '));
   const placed = await call('place_part', { partQuery: '1x6 Beam', position: [0, 0, 0] });
   check('place_part writes to the temporary assembly file', placed.data?.ok && readState().instances.length === 1, JSON.stringify(placed.data)?.slice(0, 200));
@@ -795,6 +796,142 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   writeSettings({ advanced: false, history: 'linear', mcpEnabled: true });
   const back = await call('place_part', { partQuery: '1x6 Beam', label: 'On', position: [0, 120, 0] });
   check('assistant back on: place_part works again', back.data?.ok && readState().instances.some((i) => i.label === 'On'));
+}
+
+// ---------------------------------------------------------------------------
+// outliner-part-groups: select_parts, group_parts, ungroup_parts, update_group, remove_part groupId
+// ---------------------------------------------------------------------------
+{
+  const { jointGraph } = await import('../mcp/assembly-engine.mjs');
+  const { connectedFrom } = await import('../src/utils/jointLayers.js');
+  writeSettings({ advanced: true, history: 'branches', mcpEnabled: true });
+  // A stack: Beam, two pins pushed in from above, a second beam (Top) on their ends below; two spare beams and a loose one
+  writeState({ ...emptyState(), instances: [mk('Beam', '1x6 Beam', [0, 0, 0])] });
+  await call('place_parts', {
+    parts: [
+      { partQuery: '0x2 Connector Pin', ref: 'p1', label: 'Pin1', insert: { into: { instanceId: 'Beam', port: 'hole_1' }, fromSide: '+' } },
+      { partQuery: '0x2 Connector Pin', ref: 'p6', label: 'Pin6', insert: { into: { instanceId: 'Beam', port: 'hole_6' }, fromSide: '+' } }
+    ]
+  });
+  const st0 = readState();
+  st0.instances.push(mk('Top', '1x6 Beam', [0, 0, -6.35]), mk('SpareA', '1x6 Beam', [0, 100, 0]), mk('SpareB', '1x6 Beam', [0, 120, 0]), mk('Loose', '1x6 Beam', [0, 140, 0]));
+  writeState(st0);
+  const idOf = (label) => readState().instances.find((i) => i.label === label)?.instanceId;
+  const labelsOf = (ids) => ids.map((id) => readState().instances.find((i) => i.instanceId === id)?.label).sort().join(',');
+  const pin1 = idOf('Pin1');
+  const pin6 = idOf('Pin6');
+  const audit0 = (await call('audit_assembly')).data;
+  check('groups fixture: both pins seated in Beam and Top', ['Pin1', 'Pin6'].every((l) => jointOf(audit0, l).sort().join() === 'Beam,Top'), JSON.stringify(audit0.joints));
+
+  // select_parts
+  let res = await call('select_parts', { instanceIds: ['Beam'], expandLayers: 1 });
+  check('select_parts expandLayers 1 from a beam: the beam and its pins only', labelsOf(res.data?.selected.map((x) => x.instanceId) || []) === 'Beam,Pin1,Pin6', JSON.stringify(res.data));
+  res = await call('select_parts', { instanceIds: ['Beam'], expandLayers: 2 });
+  check('select_parts expandLayers 2 adds the part the pins go into', labelsOf(res.data.selected.map((x) => x.instanceId)) === 'Beam,Pin1,Pin6,Top');
+  res = await call('select_parts', { instanceIds: ['Top'], connected: true });
+  const appWay = connectedFrom(jointGraph(readState()), ['Top']);
+  check('select_parts connected: same parts as the app\'s Select Connected', labelsOf(res.data.selected.map((x) => x.instanceId)) === labelsOf(appWay) && appWay.length === 4, labelsOf(appWay));
+  check('select_parts writes the selection with the primary last', readState().selectedIds.length === 4 && readState().selectedId === res.data.primaryId);
+  // A beam lying against the side of the pinned stack only touches it: joined for the audit's clamp
+  // rule, but not for Shift+Ctrl+wheel (pinned only)
+  {
+    const side = { ...mk('Side', '1x6 Beam', [0, 12.7, -3.175]), instanceId: 'Side' };
+    const touching = { ...readState(), instances: [...readState().instances, side] };
+    const linked = (g, a, b) => g.edges.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+    const all = jointGraph(touching);
+    const pinned = jointGraph(touching, { pinnedOnly: true });
+    check('joint graph: a beam that only touches a pinned stack is joined to it', linked(all, 'Side', 'Beam') || linked(all, 'Side', 'Top'), JSON.stringify(all.edges.filter((e) => e.includes('Side'))));
+    check('joint graph pinnedOnly: the touching beam has no joins', !pinned.edges.some((e) => e.includes('Side')), JSON.stringify(pinned.edges.filter((e) => e.includes('Side'))));
+    check('joint graph pinnedOnly: pins still join the stack', labelsOf(connectedFrom(pinned, ['Top'])) === labelsOf(appWay), labelsOf(connectedFrom(pinned, ['Top'])));
+  }
+  const selBefore = JSON.stringify(readState().selectedIds);
+  res = await callRaw('select_parts', { instanceIds: ['Beam', 'Nope'] });
+  check('select_parts refuses unknown ids by name, selection unchanged', res.isError && /Nope/.test(res.data?.error) && JSON.stringify(readState().selectedIds) === selBefore, JSON.stringify(res.data));
+  res = await callRaw('select_parts', { instanceIds: ['Beam'], connected: true, expandLayers: 1 });
+  check('select_parts refuses connected with expandLayers', res.isError);
+  await call('select_parts', { mode: 'all' });
+  check('select_parts all: every visible part', readState().selectedIds.length === 7);
+  await call('select_parts', { instanceIds: ['Beam', 'Top'] });
+  await call('select_parts', { mode: 'invert' });
+  check('select_parts invert', labelsOf(readState().selectedIds) === 'Loose,Pin1,Pin6,SpareA,SpareB');
+  await call('select_parts', { mode: 'remove', instanceIds: ['Loose'] });
+  await call('select_parts', { mode: 'add', instanceIds: ['Beam'] });
+  check('select_parts add/remove', labelsOf(readState().selectedIds) === 'Beam,Pin1,Pin6,SpareA,SpareB' && readState().selectedId === 'Beam');
+  await call('select_parts', { mode: 'none' });
+  check('select_parts none', readState().selectedIds.length === 0 && readState().selectedId === null);
+
+  // group_parts / get_assembly groups
+  res = await callRaw('group_parts', { instanceIds: ['Beam'] });
+  check('group_parts with one part is refused', res.isError && /two or more/.test(res.data?.error));
+  await call('select_parts', { instanceIds: ['Beam', pin1, pin6, 'Top'] });
+  res = await call('group_parts', { name: 'Stack' });
+  const stackId = res.data?.groupId;
+  check('group_parts groups the selection and selects the group', res.data?.ok && res.data.instanceIds.length === 4 && readState().selectedIds.length === 4 && readState().instances.filter((i) => i.groupId === stackId).length === 4, JSON.stringify(res.data));
+  check('  one step labeled with the group', readState().history.steps.at(-1).label === 'group_parts: Group 4 parts as Stack', readState().history.steps.at(-1).label);
+  res = await call('group_parts', { instanceIds: ['SpareA', 'SpareB'] });
+  const sparesId = res.data?.groupId;
+  check('group_parts default name Group 1', res.data?.name === 'Group 1');
+  let asm = (await call('get_assembly')).data;
+  check('get_assembly lists two groups with parts and centres, loose part has no group', asm.groups.length === 2 && asm.groups.every((g) => g.instanceIds.length >= 2 && g.centre.length === 3) && !asm.instances.find((i) => i.label === 'Loose').groupId && asm.selectedIds.length === 2, JSON.stringify(asm.groups));
+  res = await call('select_parts', { instanceIds: ['Top'] });
+  check('select_parts on a grouped part selects its whole group', res.data.count === 4 && res.data.groups[0]?.name === 'Stack' && res.data.primaryId === 'Top');
+  res = await call('select_parts', { instanceIds: ['Top'], expandGroups: false });
+  check('select_parts expandGroups false picks just the part', res.data.count === 1);
+
+  // Regroup and undo
+  await call('group_parts', { instanceIds: ['SpareA', 'Loose'], name: 'Mixed' });
+  asm = (await call('get_assembly')).data;
+  check('regroup: SpareA leaves Group 1, which is dissolved with one part left', asm.groups.map((g) => g.name).sort().join() === 'Mixed,Stack' && !asm.instances.find((i) => i.label === 'SpareB').groupId);
+  await call('undo');
+  asm = (await call('get_assembly')).data;
+  check('one undo puts Group 1 back', asm.groups.map((g) => g.name).sort().join() === 'Group 1,Stack');
+
+  // update_part keeps the group (8.1)
+  await call('update_part', { instanceId: 'Top', color: '#ff0000' });
+  check('update_part on a grouped part keeps its group', readState().instances.find((i) => i.label === 'Top').groupId === stackId);
+
+  // update_group: turn keeps pins seated, move, rename, lock
+  const centre0 = (await call('get_assembly')).data.groups.find((g) => g.id === stackId).centre;
+  res = await call('update_group', { groupId: stackId, turn: { axis: 'Y', deg: 90 } });
+  const audit1 = (await call('audit_assembly')).data;
+  check('update_group turn 90° about Y: pins still seated in both beams', res.data?.ok && ['Pin1', 'Pin6'].every((l) => jointOf(audit1, l).sort().join() === 'Beam,Top') && res.data.audit.floatingFastenerCount === 0 && res.data.audit.halfSeatedFastenerCount === 0, JSON.stringify(res.data?.audit));
+  check('  centre stays put and the step is labeled', res.data.centre.every((v, k) => Math.abs(v - centre0[k]) < 0.05) && readState().history.steps.at(-1).label === 'update_group: Turn Stack', JSON.stringify([res.data.centre, centre0, readState().history.steps.at(-1).label]));
+  const zBefore = readState().instances.filter((i) => i.groupId === stackId).map((i) => i.position[2]);
+  res = await call('update_group', { groupId: stackId, moveBy: [0, 0, 25.4] });
+  const zAfter = readState().instances.filter((i) => i.groupId === stackId).map((i) => i.position[2]);
+  check('update_group moveBy moves every part 25.4 mm along Z in one step', zAfter.every((z, k) => Math.abs(z - zBefore[k] - 25.4) < 1e-6) && Math.abs(res.data.centre[2] - centre0[2] - 25.4) < 0.05);
+  res = await call('update_group', { groupId: stackId, moveCentreTo: [50, 50, 50] });
+  check('update_group moveCentreTo puts the centre there', res.data.centre.every((v) => Math.abs(v - 50) < 0.01), JSON.stringify(res.data.centre));
+  res = await call('update_group', { groupId: stackId, name: 'Claw' });
+  check('update_group renames', (await call('get_assembly')).data.groups.some((g) => g.name === 'Claw'));
+  res = await callRaw('update_group', { groupId: stackId, name: '  ' });
+  check('update_group refuses an empty name', res.isError);
+  await call('update_group', { groupId: stackId, locked: true });
+  const lockedState = fs.readFileSync(statePath, 'utf8');
+  res = await callRaw('update_group', { groupId: stackId, moveBy: [10, 0, 0] });
+  check('update_group refuses to move a locked set and changes nothing', res.isError && res.data?.error === 'Part is locked' && fs.readFileSync(statePath, 'utf8') === lockedState);
+  res = await call('update_group', { instanceIds: ['SpareB', 'Loose'], moveBy: [0, 0, 12.7] });
+  check('update_group on loose parts moves them as one, labeled by count', res.data?.ok && readState().history.steps.at(-1).label === 'update_group: Move 2 parts');
+
+  // mirror copies come out ungrouped
+  await call('update_group', { groupId: stackId, locked: false });
+  await call('mirror_subassembly', { instanceIds: ['Top'], mirrorPlane: 'Y', planeOffsetMm: 300 });
+  check('mirror_subassembly copies of a grouped part are in no group', readState().instances.filter((i) => i.groupId === stackId).length === 4);
+
+  // remove_part groupId, ungroup_parts
+  res = await callRaw('remove_part', { instanceId: 'Loose', groupId: sparesId });
+  check('remove_part refuses instanceId with groupId', res.isError);
+  res = await callRaw('remove_part', { groupId: 'group-nope' });
+  check('remove_part refuses an unknown group', res.isError);
+  const countBefore = readState().instances.length;
+  res = await call('remove_part', { groupId: sparesId });
+  check('remove_part groupId removes the whole group in one step', res.data?.ok && readState().instances.length === countBefore - 2 && readState().history.steps.at(-1).label === 'remove_part: Delete Group 1', readState().history.steps.at(-1).label);
+  await call('undo');
+  check('  one undo brings them back', readState().instances.length === countBefore);
+  res = await call('ungroup_parts', { groupId: stackId });
+  check('ungroup_parts dissolves the group and moves nothing', res.data?.ok && readState().instances.every((i) => i.groupId !== stackId) && readState().history.steps.at(-1).label === 'ungroup_parts: Ungroup Claw');
+  res = await callRaw('ungroup_parts', { instanceIds: ['Loose'] });
+  check('ungroup_parts on ungrouped parts is refused', res.isError);
 }
 
 // ---------------------------------------------------------------------------

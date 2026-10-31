@@ -10,6 +10,7 @@ import {
   collectWorldFeatures,
   findAlignedOpenings,
   findEngagedJoints,
+  parallelLines,
   findHoleSnap,
   gridPivot,
   clearSpotAlongLine,
@@ -586,6 +587,21 @@ const placeFull = (name, position = [0, 0, 0], rotation = [0, 0, 0]) => {
   const pinThrough = place('0x2 Connector Pin', [hole.origin.x, hole.origin.y, -3.175]);
   lines = joints(pinThrough, [beamA, beamLow]);
   check('Pin seated in two stacked beams: held on 1 line with 2 pairs', lines.length === 1 && lines[0].pairs.length === 2, linesDetail(lines));
+
+  // rotate-about-anchor 1.2: anchor lines parallel to a ring
+  const twoPins = joints(beamA, [pinA, pinB]);
+  const X = new THREE.Vector3(1, 0, 0);
+  const Y = new THREE.Vector3(0, 1, 0);
+  const Z = new THREE.Vector3(0, 0, 1);
+  check('Anchors: two pins along Z give two lines parallel to Z', parallelLines(twoPins, Z).length === 2, linesDetail(twoPins));
+  check('Anchors: the same axis the other way round counts', parallelLines(twoPins, Z.clone().negate()).length === 2);
+  check('Anchors: none parallel to X or Y', parallelLines(twoPins, X).length === 0 && parallelLines(twoPins, Y).length === 0);
+  const onFirst = twoPins[0].origin.clone().addScaledVector(twoPins[0].axis, 7);
+  const left = parallelLines(twoPins, Z, { exclude: onFirst });
+  check('Anchors: excluding a point on one pin line leaves the other', left.length === 1 && left[0] === twoPins[1], linesDetail(left));
+  const tilted = (deg) => new THREE.Vector3(Math.sin(THREE.MathUtils.degToRad(deg)), 0, Math.cos(THREE.MathUtils.degToRad(deg)));
+  check('Anchors: a ring 1.5° off the pin lines still counts', parallelLines(twoPins, tilted(1.5)).length === 2);
+  check('Anchors: a ring 3° off does not', parallelLines(twoPins, tilted(3)).length === 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1060,6 +1076,16 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   // Two beams: every hole agrees, so a 2.5 mm miss closes while dragging along the hole lines
   snap = findHoleSnap(worldFeaturesFor(inst('upper', '1x6 Beam', [2.5, 0, 6.1 + 4])), worldFeaturesFor(inst('lower', '1x6 Beam', [0, 0, 0])), [Z]);
   check('hole snap: a 1x6 Beam 2.5 mm off another, dragged along their hole lines, is pulled into line', snap && near(snap.offset.x, -2.5, 0.01) && near(snap.offset.z, 0), JSON.stringify(snap?.offset));
+}
+
+// ---------------------------------------------------------------------------
+// STEP files made of placed pieces: holes and pegs are found where the model shows them
+// ---------------------------------------------------------------------------
+{
+  const link = part('Traction Link');
+  const pegs = (link.ports || []).filter((p) => p.type === 'pin_peg');
+  const inBox = (o) => o.every((v, i) => v >= link.bbox.min[i] - 0.5 && v <= link.bbox.max[i] + 0.5);
+  check('Traction Link: its two split pegs are found, inside the model, one pitch apart', pegs.length === 2 && pegs.every((p) => inBox(p.origin)) && near(Math.abs(pegs[0].origin[0] - pegs[1].origin[0]), 12.7, 0.05), JSON.stringify(pegs));
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);

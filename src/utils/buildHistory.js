@@ -24,7 +24,9 @@ export const ROOT = 'root';
 export const MERGE_WINDOW_MS = 1000;
 // Fields that make up the build. isIntersecting / lastValid* are bookkeeping the viewport recomputes.
 // socketAngleDeg: a Smart Motor's drive hub angle (openspec square-shaft-fit)
-export const BUILD_FIELDS = ['position', 'rotation', 'color', 'label', 'visible', 'locked', 'socketAngleDeg'];
+// groupId / groupName: the part's group (openspec outliner-part-groups); missing = no group
+export const BUILD_FIELDS = ['position', 'rotation', 'color', 'label', 'visible', 'locked', 'socketAngleDeg', 'groupId', 'groupName'];
+const GROUP_FIELDS = new Set(['groupId', 'groupName']);
 export const SOURCES = ['app', 'mcp', 'assistant', 'action'];
 
 const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
@@ -34,6 +36,7 @@ const normalizeField = (field, value) => {
   if (field === 'visible') return value !== false;
   if (field === 'locked') return value === true;
   if (field === 'socketAngleDeg') return Number(value) || 0;
+  if (GROUP_FIELDS.has(field)) return value || null;
   return value;
 };
 
@@ -81,8 +84,8 @@ export function diffParts(before = [], after = []) {
     const fieldsAfter = {};
     for (const field of BUILD_FIELDS) {
       if (!sameField(field, prev[field], part[field])) {
-        // A missing hub angle means 0; recorded as 0 so the value survives saving (JSON drops undefined)
-        const stored = (value) => (field === 'socketAngleDeg' ? normalizeField(field, value) : value);
+        // A missing hub angle means 0 and a missing group null; recorded that way so the value survives saving (JSON drops undefined)
+        const stored = (value) => (field === 'socketAngleDeg' || GROUP_FIELDS.has(field) ? normalizeField(field, value) : value);
         fieldsBefore[field] = clone(stored(prev[field]));
         fieldsAfter[field] = clone(stored(part[field]));
       }
@@ -103,7 +106,7 @@ export function diffParts(before = [], after = []) {
 const setFields = (part, fields) => {
   const next = { ...part };
   for (const [field, value] of Object.entries(fields)) {
-    if (value === undefined) delete next[field];
+    if (value === undefined || (value === null && GROUP_FIELDS.has(field))) delete next[field];
     else next[field] = clone(value);
   }
   // A pose restored from history is the part's new known pose

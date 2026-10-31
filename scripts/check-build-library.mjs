@@ -41,5 +41,9 @@ check('the BaseBot starter has its 97 parts (cables left out, two wheel hubs add
 const basebotOverlapping = basebot.filter((inst) => checkCandidateCollision(inst, basebot).isIntersecting).map((p) => p.label);
 check('  none of its parts overlap', basebotOverlapping.length === 0, basebotOverlapping.join(', '));
 
+const clawbot = starterById('clawbot').build(catalog);
+check('the Clawbot starter has its 193 parts', clawbot.length === 193, String(clawbot.length));
+
+
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

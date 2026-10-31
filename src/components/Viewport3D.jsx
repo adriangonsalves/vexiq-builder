@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
@@ -22,6 +25,7 @@ import {
   collectWorldFeatures,
   findAlignedOpenings,
   findEngagedJoints,
+  parallelLines,
   findHoleSnap,
   findTooWideInserts,
   getLocalFeatures,
@@ -639,6 +643,72 @@ function createRotateGizmo() {
   let selectedIndex = -1;
   let dragIndex = -1;
 
+  // Straight lines in world mm (the group is never scaled): the line the chosen ring turns about,
+  // and for a held part the anchor lines it could turn about instead, plus a dashed line back to
+  // its default centre. Each is centred on the point of its line nearest the part's centre.
+  // Fat lines (a set width in screen pixels), easier to see and to click than 1 px lines
+  const lineMaterial = (color, opacity, dashed = false, linewidth = dashed ? 2 : 3) =>
+    new LineMaterial({
+      color,
+      linewidth,
+      transparent: true,
+      opacity,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+      dashed,
+      dashSize: 3,
+      gapSize: 2
+    });
+  const makeLine = (material) => {
+    const line = new Line2(new LineGeometry(), material);
+    line.renderOrder = 1006;
+    line.visible = false;
+    line.frustumCulled = false;
+    group.add(line);
+    return line;
+  };
+  const axisLine = makeLine(lineMaterial(0xffffff, 0.95));
+  // A soft glow under the turning axis while its ring is selected or dragged, so it stands out
+  const axisHalo = makeLine(lineMaterial(0xffffff, 0.3, false, 14));
+  axisHalo.renderOrder = 1005;
+  const defaultLine = makeLine(lineMaterial(0xffffff, 0.7, true));
+  const anchorLines = []; // THREE.Line pool
+  let anchorDefs = []; // [{ origin, axis }] in world space, as shown
+  let defaultDef = null;
+  let anchorHover = null; // { kind: 'anchor', index } | { kind: 'default' } | null
+  // Anchor lines are thinner and fainter than the turning axis; the one under the pointer thickens
+  const refreshAnchorLooks = () => {
+    anchorLines.forEach((line, i) => {
+      const hot = anchorHover?.kind === 'anchor' && anchorHover.index === i;
+      line.material.linewidth = hot ? 4.5 : 2.5;
+      line.material.opacity = hot ? 1 : 0.75;
+    });
+    const hot = anchorHover?.kind === 'default';
+    defaultLine.material.linewidth = hot ? 3.5 : 2;
+    defaultLine.material.opacity = hot ? 1 : 0.7;
+  };
+  let lineCenter = new THREE.Vector3();
+  let lineHalfMm = 20;
+
+  /** Puts `line` along the world line (origin, axis), centred near the part's centre. */
+  const placeLine = (line, origin, axis) => {
+    const dir = axis.clone().normalize();
+    const mid = origin.clone().addScaledVector(dir, lineCenter.clone().sub(origin).dot(dir)).sub(group.position);
+    const a = mid.clone().addScaledVector(dir, -lineHalfMm);
+    const b = mid.clone().addScaledVector(dir, lineHalfMm);
+    line.geometry.dispose();
+    line.geometry = new LineGeometry().setPositions([a.x, a.y, a.z, b.x, b.y, b.z]);
+    if (line.material.dashed) line.computeLineDistances();
+    line.visible = true;
+  };
+  /** The line's two ends in world space, for picking. */
+  const lineEnds = (origin, axis) => {
+    const dir = axis.clone().normalize();
+    const mid = origin.clone().addScaledVector(dir, lineCenter.clone().sub(origin).dot(dir));
+    return [mid.clone().addScaledVector(dir, -lineHalfMm), mid.clone().addScaledVector(dir, lineHalfMm)];
+  };
+
   const makeRing = () => {
     const root = new THREE.Group();
     const band = new THREE.Mesh(bandGeo, overlayMaterial(0xffffff, 0.28));
@@ -670,12 +740,85 @@ function createRotateGizmo() {
       ring.ticks.material.color.copy(color);
       ring.slice.material.color.copy(ring.color);
     });
+    // One turning axis: the dragged ring's, else the selected ring's, else the hovered ring's
+    const shown = [dragIndex, selectedIndex, hoverIndex].find((i) => i >= 0 && i < shownCount);
+    if (shown === undefined || !group.visible) {
+      axisLine.visible = false;
+      axisHalo.visible = false;
+    } else {
+      const axis = zAxis.clone().applyQuaternion(rings[shown].root.quaternion);
+      const chosen = shown === dragIndex || shown === selectedIndex;
+      axisLine.material.color.copy(rings[shown].color);
+      axisLine.material.linewidth = chosen ? 5 : 3;
+      placeLine(axisLine, group.position, axis);
+      if (chosen) {
+        axisHalo.material.color.copy(rings[shown].color);
+        placeLine(axisHalo, group.position, axis);
+      } else {
+        axisHalo.visible = false;
+      }
+    }
   };
 
-  /** `rings`: [{ axis (unit), color (hex), minRadius (world mm) }], all turning about `pivot`. */
-  const show = (pivot, ringDefs) => {
+  /** Anchor lines `defs` ([{ origin, axis }], world) and the dashed default-centre line (or null). */
+  const setAnchorLines = (defs, dashed) => {
+    anchorDefs = group.visible ? defs : [];
+    defaultDef = group.visible ? dashed : null;
+    while (anchorLines.length < anchorDefs.length) anchorLines.push(makeLine(lineMaterial(HOLE_HIGHLIGHT_COLOR, 0.95)));
+    anchorLines.forEach((line, i) => {
+      if (i < anchorDefs.length) placeLine(line, anchorDefs[i].origin, anchorDefs[i].axis);
+      else line.visible = false;
+    });
+    if (defaultDef) placeLine(defaultLine, defaultDef.origin, defaultDef.axis);
+    else defaultLine.visible = false;
+    anchorHover = null;
+    refreshAnchorLooks();
+  };
+
+  /** Thickens the anchor or default line under the pointer (a pickAnchor result, or null). */
+  const setAnchorHover = (picked) => {
+    if (picked?.kind === anchorHover?.kind && picked?.index === anchorHover?.index) return;
+    anchorHover = picked;
+    refreshAnchorLooks();
+  };
+
+  /**
+   * The shown anchor or default line nearest the pointer on screen, within `maxPx`:
+   * { kind: 'anchor', index } | { kind: 'default' } | null. `project` maps a world point to canvas px.
+   */
+  const pickAnchor = (pointerPx, project, maxPx = 6) => {
+    if (!group.visible) return null;
+    const distTo = (def) => {
+      const [a, b] = lineEnds(def.origin, def.axis).map(project);
+      const ab = b.clone().sub(a);
+      const t = ab.lengthSq() > 1e-9 ? THREE.MathUtils.clamp(pointerPx.clone().sub(a).dot(ab) / ab.lengthSq(), 0, 1) : 0;
+      return a.addScaledVector(ab, t).distanceTo(pointerPx);
+    };
+    let best = null;
+    let bestPx = maxPx;
+    anchorDefs.forEach((def, index) => {
+      const px = distTo(def);
+      if (px <= bestPx) {
+        bestPx = px;
+        best = { kind: 'anchor', index };
+      }
+    });
+    if (defaultDef) {
+      const px = distTo(defaultDef);
+      if (px <= bestPx) best = { kind: 'default' };
+    }
+    return best;
+  };
+
+  /**
+   * `rings`: [{ axis (unit), color (hex), minRadius (world mm) }], all turning about `pivot`.
+   * `center` (the part's centre) and `lineHalfMm` place the axis and anchor lines.
+   */
+  const show = (pivot, ringDefs, { center = pivot, halfMm = 20 } = {}) => {
     while (rings.length < ringDefs.length) rings.push(makeRing());
     group.position.copy(pivot);
+    lineCenter = center.clone();
+    lineHalfMm = halfMm;
     rings.forEach((ring, i) => {
       const def = ringDefs[i];
       ring.root.visible = Boolean(def);
@@ -695,6 +838,9 @@ function createRotateGizmo() {
     group.visible = false;
     hoverIndex = -1;
     dragIndex = -1;
+    axisLine.visible = false;
+    axisHalo.visible = false;
+    setAnchorLines([], null);
   };
 
   /** Ring under the raycaster as { index, point } (world hit point), or null. */
@@ -765,8 +911,9 @@ function createRotateGizmo() {
     for (const ring of rings) ring.slice.visible = false;
   };
 
-  const updateScale = (camera) => {
+  const updateScale = (camera, width, height) => {
     if (!group.visible) return;
+    if (width && height) for (const line of [axisLine, axisHalo, defaultLine, ...anchorLines]) line.material.resolution.set(width, height);
     const factor = gizmoScaleFactor(camera, group.position);
     for (const ring of rings.slice(0, shownCount)) {
       ring.root.scale.setScalar(Math.max((factor * 0.95) / 6, ring.minRadius / OUTER));
@@ -779,6 +926,10 @@ function createRotateGizmo() {
     pickGeo.dispose();
     tickGeo.dispose();
     pickMaterial.dispose();
+    for (const line of [axisLine, axisHalo, defaultLine, ...anchorLines]) {
+      line.geometry.dispose();
+      line.material.dispose();
+    }
     for (const ring of rings) {
       ring.band.material.dispose();
       ring.rim.material.dispose();
@@ -800,6 +951,9 @@ function createRotateGizmo() {
     frame,
     setSlice,
     clearSlices,
+    setAnchorLines,
+    setAnchorHover,
+    pickAnchor,
     updateScale,
     isShown: () => group.visible,
     dispose
@@ -1099,10 +1253,38 @@ function resolvePartBaseColor(inst, partMeta) {
  * Applies either normal VEX appearance or transparent-grey intersecting appearance
  * strictly to actual CAD part meshes (`child.userData.isPartMesh === true`).
  */
+const EMPTY_IDS = [];
+// How strongly a part is lit as selected: 2 = the primary (last) part, 1 = another selected part, 0 = not selected
+const selectLevel = (ids, id) => (ids.at(-1) === id ? 2 : ids.includes(id) ? 1 : 0);
+
+// Part meshes of selected parts are also on this layer, which the selection contour is drawn from
+const SELECT_LAYER = 5;
+
+// Selection look: an amber glow and amber edges, which stand out on blue parts and the blue grid.
+// Primary (or only) selected part / other parts of a multi-selection.
+const SELECT_COLOR = 0xff9f1c;
+// The contour around selected parts: a bright yellow line with a dark rim
+const SELECT_CONTOUR_COLOR = 0xffd400;
+const SELECT_GLOW = { 2: 0.42, 1: 0.24 };
+const SELECT_EDGE_OPACITY = { 2: 1, 1: 0.75 };
+
+// isSelected: true or 2 = the primary (or only) selected part, 1 = another part of a multi-selection
 function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) {
+  const level = isIntersecting || !isSelected ? 0 : isSelected === 1 ? 1 : 2;
   group.traverse((child) => {
+    // The part's CAD edges become a bright contour while it is selected
+    if (child.isLineSegments && child.name === '__cad_edges__' && child.material) {
+      const mat = child.material;
+      if (!child.userData.edgeLook) child.userData.edgeLook = { color: mat.color.getHex(), opacity: mat.opacity };
+      const { color, opacity } = child.userData.edgeLook;
+      mat.color.setHex(level ? SELECT_COLOR : color);
+      mat.opacity = level ? SELECT_EDGE_OPACITY[level] : opacity;
+      return;
+    }
     if (!child.isMesh || !child.userData.isPartMesh || !child.material) return;
     const mat = child.material;
+    if (isSelected) child.layers.enable(SELECT_LAYER);
+    else child.layers.disable(SELECT_LAYER);
 
     if (isIntersecting) {
       mat.color.set('#9ca3af');
@@ -1123,8 +1305,8 @@ function applyGroupAppearance(group, { baseColor, isSelected, isIntersecting }) 
       mat.opacity = 1.0;
       mat.depthWrite = true;
       if (mat.emissive) {
-        mat.emissive.setHex(isSelected ? 0x1d4ed8 : 0x000000);
-        mat.emissiveIntensity = isSelected ? 0.32 : 0;
+        mat.emissive.setHex(level ? SELECT_COLOR : 0x000000);
+        mat.emissiveIntensity = level ? SELECT_GLOW[level] : 0;
       }
     }
     mat.needsUpdate = true;
@@ -1227,8 +1409,14 @@ export default function Viewport3D({
   instances,
   catalogMap,
   selectedId,
+  selectedIds = EMPTY_IDS,
+  selectMode = false,
+  boxSelect = false,
+  onBoxSelect,
   onSelect,
+  onExpandSelection,
   onUpdateTransform,
+  onUpdateSet,
   onRegisterFlushMover,
   onRegisterScreenshot,
   transformMode,
@@ -1331,6 +1519,24 @@ export default function Viewport3D({
 
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
+  // Every selected part (openspec outliner-part-groups); the last is the primary part
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  const selectModeRef = useRef(selectMode);
+  selectModeRef.current = selectMode;
+  // Box select: a left-drag draws a rectangle instead of turning the camera
+  const boxSelectRef = useRef(boxSelect);
+  boxSelectRef.current = boxSelect;
+  const onBoxSelectRef = useRef(onBoxSelect);
+  onBoxSelectRef.current = onBoxSelect;
+  const onExpandSelectionRef = useRef(onExpandSelection);
+  onExpandSelectionRef.current = onExpandSelection;
+  const onUpdateSetRef = useRef(onUpdateSet);
+  onUpdateSetRef.current = onUpdateSet;
+  // Moving several parts as one (openspec outliner-part-groups): the Move arrows sit on this pivot at
+  // the set's centre; a drag moves every member from where it started
+  const setPivotRef = useRef(null);
+  const setDragRef = useRef(null); // { ids, ignore, starts: Map<id, Vector3>, lastCheckAt }
 
   const explodeModeRef = useRef(explodeMode);
   explodeModeRef.current = explodeMode;
@@ -1412,7 +1618,8 @@ export default function Viewport3D({
     group.updateMatrixWorld(true);
   };
 
-  const checkGroupCollision = (targetGroup, useAssembledPositions = false) => {
+  // ignoreIds: parts moving together with the target (a set), which never count as overlapping it
+  const checkGroupCollision = (targetGroup, useAssembledPositions = false, ignoreIds = null) => {
     if (!targetGroup || !targetGroup.visible) return false;
     const colGeosA = targetGroup.userData.collisionGeometries;
     const localBoxA = targetGroup.userData.localBox;
@@ -1440,6 +1647,7 @@ export default function Viewport3D({
     let featuresA; // worked out only when a shaft and a hole meet
     for (const [otherId, otherGroup] of meshMapRef.current.entries()) {
       if (otherId === targetGroup.userData.instanceId) continue;
+      if (ignoreIds?.has(otherId)) continue;
       if (!otherGroup.visible) continue;
 
       const colGeosB = otherGroup.userData.collisionGeometries;
@@ -2542,6 +2750,54 @@ export default function Viewport3D({
     selectedRingRef.current = index;
     rotateGizmoRef.current?.setSelected(index);
     if (orbitRef.current) orbitRef.current.enableZoom = index < 0;
+    refreshAnchorLines();
+  };
+
+  /**
+   * For one part held on two or more joint lines with a ring selected: shows the joint lines parallel
+   * to that ring (other than the one the rings sit on) as anchors to click, and a dashed line through
+   * the part's default centre once the rings have been moved off it.
+   */
+  const refreshAnchorLines = () => {
+    const gizmo = rotateGizmoRef.current;
+    const setup = rotateSetupRef.current;
+    if (!gizmo) return;
+    const ring = selectedRingRef.current;
+    if (!setup?.instanceId || !setup.defaultPivot || (setup.lines?.length ?? 0) < 2 || ring < 0 || !setup.rings[ring]) {
+      if (setup) setup.shownAnchors = [];
+      gizmo.setAnchorLines([], null);
+      return;
+    }
+    const axis = setup.rings[ring].axis;
+    const anchors = parallelLines(setup.lines, axis, { exclude: setup.pivot });
+    setup.shownAnchors = anchors;
+    const off = setup.defaultPivot.clone().sub(setup.pivot).projectOnPlane(axis).length() > 0.25;
+    gizmo.setAnchorLines(
+      anchors.map((l) => ({ origin: l.origin, axis: l.axis })),
+      off ? { origin: setup.defaultPivot, axis } : null
+    );
+  };
+
+  /**
+   * Moves the rings' centre onto a picked anchor line (the point on it nearest the part's centre), or
+   * back to the default centre. The part doesn't move, the ring stays selected, angles carry on.
+   */
+  const chooseRotateAnchor = (picked) => {
+    const setup = rotateSetupRef.current;
+    const group = setup?.instanceId ? meshMapRef.current.get(setup.instanceId) : null;
+    if (!group || !picked || rotateGestureRef.current) return;
+    let pivot;
+    if (picked.kind === 'default') {
+      pivot = setup.defaultPivot.clone();
+    } else {
+      const line = setup.shownAnchors?.[picked.index];
+      if (!line) return;
+      const axis = line.axis.clone().normalize();
+      pivot = line.origin.clone().addScaledVector(axis, setup.center.clone().sub(line.origin).dot(axis));
+    }
+    group.updateMatrixWorld();
+    setup.localPivot = pivot.applyMatrix4(group.matrixWorld.clone().invert());
+    refreshRotateSetup();
   };
 
   /**
@@ -2550,10 +2806,118 @@ export default function Viewport3D({
    * Explode on, or held on several axis lines -> no rings and a message. Ring angles carry over while
    * the same part keeps the same rings and start at 0° otherwise.
    */
+  /** The selected set's members as [{ id, group, inst }], or null with fewer than two parts selected. */
+  const selectedSetMembers = () => {
+    const ids = selectedIdsRef.current;
+    if (ids.length < 2) return null;
+    const out = [];
+    for (const id of ids) {
+      const group = meshMapRef.current.get(id);
+      const inst = instancesRef.current.find((i) => i.instanceId === id);
+      if (group && inst) out.push({ id, group, inst });
+    }
+    return out.length > 1 ? out : null;
+  };
+
+  /** Centre of the members' combined world box. */
+  const setCentreOf = (members) => {
+    const box = new THREE.Box3();
+    for (const { group } of members) {
+      group.updateMatrixWorld();
+      if (group.userData.localBox && !group.userData.localBox.isEmpty()) box.union(group.userData.localBox.clone().applyMatrix4(group.matrixWorld));
+      else box.expandByPoint(group.position);
+    }
+    return box.getCenter(new THREE.Vector3());
+  };
+
+  // Why a set can't be moved, or null
+  const setBlockedMessage = (members) =>
+    members.some((m) => m.inst.locked) ? 'Part is locked' : members.some((m) => m.inst.visible === false) ? 'Some parts are hidden' : null;
+
+  /** Rotate rings for a set: X, Y and Z about the set's centre (kept with the set between turns). */
+  const refreshSetRotateSetup = (members) => {
+    const gizmo = rotateGizmoRef.current;
+    const labels = angleLabelsRef.current;
+    const prev = rotateSetupRef.current;
+    const ids = members.map((m) => m.id);
+    const setKey = ids.join(',');
+    const clear = (message = '') => {
+      rotateSetupRef.current = null;
+      if (selectedRingRef.current >= 0) selectRing(-1);
+      gizmo.hide();
+      labels.hide();
+      const key = message ? `${setKey}:${message}` : '';
+      if (message && rotateMessageKeyRef.current !== key) onMateFeedbackRef.current?.(message, true);
+      rotateMessageKeyRef.current = key;
+    };
+    if (transformModeRef.current !== 'rotate') return clear();
+    const blocked = setBlockedMessage(members);
+    if (blocked) return clear(blocked);
+    if (explodeModeRef.current !== 'off') return clear("Can't rotate in Explode view");
+
+    const ref = members[0].group;
+    ref.updateMatrixWorld();
+    // The pivot stays in the first member's frame between turns, so repeated turns go about one point
+    const pivot =
+      prev?.setKey === setKey && prev.localPivot ? prev.localPivot.clone().applyMatrix4(ref.matrixWorld) : setCentreOf(members);
+    const rings = [
+      { name: 'X', axis: new THREE.Vector3(1, 0, 0) },
+      { name: 'Y', axis: new THREE.Vector3(0, 1, 0) },
+      { name: 'Z', axis: new THREE.Vector3(0, 0, 1) }
+    ];
+    const corners = [];
+    for (const { group } of members) {
+      const lb = group.userData.localBox;
+      if (!lb || lb.isEmpty()) continue;
+      for (const x of [lb.min.x, lb.max.x]) {
+        for (const y of [lb.min.y, lb.max.y]) {
+          for (const z of [lb.min.z, lb.max.z]) corners.push(new THREE.Vector3(x, y, z).applyMatrix4(group.matrixWorld));
+        }
+      }
+    }
+    const minRadiusFor = (axis) => Math.max(10, ...corners.map((c) => c.clone().sub(pivot).projectOnPlane(axis).length())) * 1.05 + 2;
+    const same = prev?.setKey === setKey && prev.pivot.distanceTo(pivot) < 0.5;
+    const angles = same ? prev.angles : rings.map(() => 0);
+    if (!same && selectedRingRef.current >= 0) selectRing(-1);
+    const localPivot = pivot.clone().applyMatrix4(ref.matrixWorld.clone().invert());
+    rotateSetupRef.current = { instanceId: null, ids, setKey, pivot, localPivot, rings, angles };
+    rotateMessageKeyRef.current = '';
+    const setCentre = setCentreOf(members);
+    const halfMm = Math.max(10, ...corners.map((c) => c.distanceTo(setCentre))) + 10;
+    gizmo.show(
+      pivot,
+      rings.map((r) => ({ axis: r.axis, color: ROTATE_RING_COLORS[r.name], minRadius: minRadiusFor(r.axis) })),
+      { center: setCentre, halfMm }
+    );
+    if (cameraRef.current) gizmo.updateScale(cameraRef.current);
+    gizmo.setSelected(selectedRingRef.current);
+    labels.show(rings.map((r) => r.name));
+    angles.forEach((deg, i) => labels.setAngle(i, deg));
+    refreshAnchorLines();
+  };
+
+  // Members of a moving set marked overlapping only by parts outside the set
+  const markSetOverlaps = (members, ignore) => {
+    const overlaps = new Map();
+    for (const { id, group, inst } of members) {
+      const isColliding = checkGroupCollision(group, false, ignore);
+      group.userData.isIntersecting = isColliding;
+      overlaps.set(id, isColliding);
+      applyGroupAppearance(group, {
+        baseColor: resolvePartBaseColor(inst, catalogMapRef.current.get(inst.partId)),
+        isSelected: selectLevel(selectedIdsRef.current, id),
+        isIntersecting: isColliding
+      });
+    }
+    return overlaps;
+  };
+
   const refreshRotateSetup = () => {
     const gizmo = rotateGizmoRef.current;
     const labels = angleLabelsRef.current;
     if (!gizmo || !labels || rotateGestureRef.current) return;
+    const members = selectedSetMembers();
+    if (members) return refreshSetRotateSetup(members);
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
@@ -2592,23 +2956,33 @@ export default function Viewport3D({
     );
     const candidates = otherFeaturesRef.current.flatMap((o) => (o.instanceId === selId ? [] : o.features));
     const { lines } = findEngagedJoints(selectedFeatures, candidates);
-    if (lines.length > 1) return clear("Can't rotate: held by pins or shafts on more than one axis");
+    // Held on more than one axis line: it can still turn freely; a turn that ends overlapping is put back
 
     const center = group.userData.localBox.getCenter(new THREE.Vector3()).applyMatrix4(group.matrixWorld);
+    const samePart = prev?.instanceId === selId;
     let pivot;
     let rings;
-    if (lines.length === 0) {
+    let defaultPivot = null;
+    if (lines.length !== 1) {
       // On the part's own hole grid, so quarter turns keep its holes lined up. Kept in the part's
       // frame between turns: turning about it leaves it in place, and it moves along with the part.
-      if (prev?.instanceId === selId && prev.localPivot) {
-        pivot = prev.localPivot.clone().applyMatrix4(group.matrixWorld);
-      } else {
-        pivot = gridPivot(selectedFeatures, center);
-      }
+      // The user can move it onto one of the joint lines that hold the part (chooseRotateAnchor).
+      defaultPivot =
+        samePart && prev.localDefaultPivot
+          ? prev.localDefaultPivot.clone().applyMatrix4(group.matrixWorld)
+          : gridPivot(selectedFeatures, center);
+      pivot = samePart && prev.localPivot ? prev.localPivot.clone().applyMatrix4(group.matrixWorld) : defaultPivot.clone();
+      // A ring whose axis runs along a joint line through the pivot turns about that line exactly
+      const ringAxis = (worldAxis) => {
+        const line = parallelLines(lines, worldAxis).find((l) => parallelLines([l], worldAxis, { exclude: pivot }).length === 0);
+        if (!line) return worldAxis;
+        const axis = line.axis.clone().normalize();
+        return axis.dot(worldAxis) < 0 ? axis.negate() : axis;
+      };
       rings = [
-        { name: 'X', axis: new THREE.Vector3(1, 0, 0) },
-        { name: 'Y', axis: new THREE.Vector3(0, 1, 0) },
-        { name: 'Z', axis: new THREE.Vector3(0, 0, 1) }
+        { name: 'X', axis: ringAxis(new THREE.Vector3(1, 0, 0)) },
+        { name: 'Y', axis: ringAxis(new THREE.Vector3(0, 1, 0)) },
+        { name: 'Z', axis: ringAxis(new THREE.Vector3(0, 0, 1)) }
       ];
     } else {
       const { origin, axis } = lines[0];
@@ -2627,31 +3001,53 @@ export default function Viewport3D({
     const minRadiusFor = (axis) =>
       Math.max(...corners.map((c) => c.clone().sub(pivot).projectOnPlane(axis).length())) * 1.1 + 2;
 
+    // X/Y/Z rings keep their angles while the part stays selected, even when the centre is moved
+    // onto an anchor; the single Joint ring starts again when it moves to another line.
     const same =
-      prev &&
-      prev.instanceId === selId &&
+      samePart &&
       prev.rings.length === rings.length &&
-      prev.rings.every((r, i) => r.axis.dot(rings[i].axis) > 0.9999) &&
-      prev.pivot.distanceTo(pivot) < 0.5;
+      prev.rings.every((r, i) => r.name === rings[i].name) &&
+      (rings[0].name !== 'Joint' || (prev.rings[0].axis.dot(rings[0].axis) > 0.9999 && prev.pivot.distanceTo(pivot) < 0.5));
     const angles = same ? prev.angles : rings.map(() => 0);
     if (!same && selectedRingRef.current >= 0) selectRing(-1);
 
-    const localPivot = lines.length === 0 ? pivot.clone().applyMatrix4(group.matrixWorld.clone().invert()) : null;
-    rotateSetupRef.current = { instanceId: selId, pivot, localPivot, rings, angles };
+    const toLocal = group.matrixWorld.clone().invert();
+    const localPivot = lines.length !== 1 ? pivot.clone().applyMatrix4(toLocal) : null;
+    const localDefaultPivot = defaultPivot ? defaultPivot.clone().applyMatrix4(toLocal) : null;
+    rotateSetupRef.current = { instanceId: selId, pivot, localPivot, defaultPivot, localDefaultPivot, lines, center, rings, angles };
     rotateMessageKeyRef.current = '';
+    const halfMm = group.userData.localBox.getSize(new THREE.Vector3()).length() / 2 + 10;
     gizmo.show(
       pivot,
-      rings.map((r) => ({ axis: r.axis, color: ROTATE_RING_COLORS[r.name], minRadius: minRadiusFor(r.axis) }))
+      rings.map((r) => ({ axis: r.axis, color: ROTATE_RING_COLORS[r.name], minRadius: minRadiusFor(r.axis) })),
+      { center, halfMm }
     );
     if (cameraRef.current) gizmo.updateScale(cameraRef.current);
     gizmo.setSelected(selectedRingRef.current);
     labels.show(rings.map((r) => r.name));
     angles.forEach((deg, i) => labels.setAngle(i, deg));
+    refreshAnchorLines();
   };
 
   /** Starts a turn of the selected part around ring `ring`, remembering the pose it started from. */
   const beginRotateGesture = (kind, ring, extra = {}) => {
     const setup = rotateSetupRef.current;
+    if (setup?.ids) {
+      // A set: every member turns from where it started
+      const starts = new Map();
+      for (const id of setup.ids) {
+        const g = meshMapRef.current.get(id);
+        if (g) starts.set(id, { pos: g.position.clone(), quat: g.quaternion.clone() });
+      }
+      // Already overlapping outside parts at the start: such a turn isn't put back for overlapping
+      const ignore = new Set(setup.ids);
+      const startOverlap = setup.ids.some((id) => {
+        const g = meshMapRef.current.get(id);
+        return g ? checkGroupCollision(g, false, ignore) : false;
+      });
+      rotateGestureRef.current = { kind, ring, ids: setup.ids, starts, startOverlap, startAngle: setup.angles[ring], ...extra };
+      return rotateGestureRef.current;
+    }
     const group = setup ? meshMapRef.current.get(setup.instanceId) : null;
     if (!group) return null;
     rotateGestureRef.current = {
@@ -2660,6 +3056,7 @@ export default function Viewport3D({
       instanceId: setup.instanceId,
       startPos: group.position.clone(),
       startQuat: group.quaternion.clone(),
+      startOverlap: checkGroupCollision(group, false),
       startAngle: setup.angles[ring],
       ...extra
     };
@@ -2673,6 +3070,26 @@ export default function Viewport3D({
   const turnSelectedTo = (ring, totalDeg) => {
     const setup = rotateSetupRef.current;
     const gesture = rotateGestureRef.current;
+    if (setup?.ids && gesture?.ids) {
+      const q = new THREE.Quaternion().setFromAxisAngle(setup.rings[ring].axis, THREE.MathUtils.degToRad(totalDeg - gesture.startAngle));
+      for (const [id, start] of gesture.starts) {
+        const g = meshMapRef.current.get(id);
+        if (!g) continue;
+        g.position.copy(start.pos).sub(setup.pivot).applyQuaternion(q).add(setup.pivot);
+        g.quaternion.copy(q).multiply(start.quat);
+        g.updateMatrixWorld();
+      }
+      setup.angles[ring] = totalDeg;
+      angleLabelsRef.current?.setAngle(ring, totalDeg);
+      // Overlaps with outside parts, at most every 150 ms while turning (and again when it's saved)
+      const now = performance.now();
+      if (!gesture.lastCheckAt || now - gesture.lastCheckAt > 150) {
+        gesture.lastCheckAt = now;
+        const members = selectedSetMembers();
+        if (members) markSetOverlaps(members, new Set(gesture.ids));
+      }
+      return;
+    }
     const group = setup ? meshMapRef.current.get(setup.instanceId) : null;
     if (!group || !gesture) return;
     const q = new THREE.Quaternion().setFromAxisAngle(
@@ -2697,6 +3114,16 @@ export default function Viewport3D({
     updateAlignedHoleHighlights();
   };
 
+  /** A finished turn that would overlap another part: the ring's angle goes back, with a message. */
+  const putBackTurn = (gesture) => {
+    const setup = rotateSetupRef.current;
+    if (setup?.angles && gesture.ring >= 0 && gesture.ring < setup.angles.length) {
+      setup.angles[gesture.ring] = gesture.startAngle;
+      angleLabelsRef.current?.setAngle(gesture.ring, gesture.startAngle);
+    }
+    onMateFeedbackRef.current?.("Can't turn there: it would overlap another part. Put back.", true);
+  };
+
   /** Saves the turned pose like a drag release; the instance sync then works out the rings again. */
   const commitRotation = () => {
     const gesture = rotateGestureRef.current;
@@ -2704,9 +3131,42 @@ export default function Viewport3D({
     if (gesture?.wheelTimer) clearTimeout(gesture.wheelTimer);
     rotateGizmoRef.current?.setDragging(-1);
     rotateGizmoRef.current?.clearSlices();
+    if (gesture?.ids) {
+      const members = selectedSetMembers();
+      const overlaps = members ? markSetOverlaps(members, new Set(gesture.ids)) : new Map();
+      if (!gesture.startOverlap && [...overlaps.values()].some(Boolean)) {
+        for (const [id, start] of gesture.starts) {
+          const g = meshMapRef.current.get(id);
+          if (!g) continue;
+          g.position.copy(start.pos);
+          g.quaternion.copy(start.quat);
+          g.updateMatrixWorld();
+        }
+        if (members) markSetOverlaps(members, new Set(gesture.ids));
+        putBackTurn(gesture);
+        return;
+      }
+      commitSetPoses(gesture.ids, 'turn');
+      return;
+    }
     const group = gesture ? meshMapRef.current.get(gesture.instanceId) : null;
     if (!group) return;
     const isColliding = checkGroupCollision(group, false);
+    if (isColliding && !gesture.startOverlap) {
+      group.position.copy(gesture.startPos);
+      group.quaternion.copy(gesture.startQuat);
+      group.updateMatrixWorld();
+      group.userData.isIntersecting = false;
+      const inst = instancesRef.current.find((i) => i.instanceId === gesture.instanceId);
+      applyGroupAppearance(group, {
+        baseColor: resolvePartBaseColor(inst, catalogMapRef.current.get(group.userData.partId)),
+        isSelected: selectLevel(selectedIdsRef.current, gesture.instanceId),
+        isIntersecting: false
+      });
+      putBackTurn(gesture);
+      updateAlignedHoleHighlights();
+      return;
+    }
     group.userData.isIntersecting = isColliding;
     onUpdateTransformRef.current(gesture.instanceId, {
       position: [
@@ -2721,6 +3181,22 @@ export default function Viewport3D({
       ],
       isIntersecting: isColliding
     });
+  };
+
+  /** Saves a set's moved or turned poses as one step (`kind`: 'move' | 'turn'), with overlaps against outside parts. */
+  const commitSetPoses = (ids, kind) => {
+    const members = ids.map((id) => ({ id, group: meshMapRef.current.get(id), inst: instancesRef.current.find((i) => i.instanceId === id) })).filter((m) => m.group && m.inst);
+    if (!members.length) return;
+    const overlaps = markSetOverlaps(members, new Set(ids));
+    const patches = members.map(({ id, group }) => ({
+      id,
+      fields: {
+        position: group.position.toArray().map((v) => Number(v.toFixed(3))),
+        rotation: [group.rotation.x, group.rotation.y, group.rotation.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2))),
+        isIntersecting: overlaps.get(id)
+      }
+    }));
+    onUpdateSetRef.current?.(ids, patches, { kind });
   };
 
   /** Typed angle on a ring label: turn so the label reads `value` (exact, not snapped), then save. */
@@ -2741,6 +3217,30 @@ export default function Viewport3D({
     const transform = transformRef.current;
     if (!transform) return;
     if (rotateGestureRef.current?.kind === 'wheel' && transformModeRef.current !== 'rotate') commitRotation();
+    const members = selectedSetMembers();
+    if (members) {
+      // A set: the Move arrows on a pivot at its centre; none while exploded, locked or hidden
+      const pivotObj = setPivotRef.current;
+      const blocked = setBlockedMessage(members);
+      const canMoveSet = transformModeRef.current === 'translate' && explodeModeRef.current === 'off' && !blocked && pivotObj;
+      if (canMoveSet) {
+        if (!transform.dragging) {
+          pivotObj.position.copy(setCentreOf(members));
+          pivotObj.quaternion.identity();
+          pivotObj.updateMatrixWorld();
+        }
+        if (transform.object !== pivotObj) transform.attach(pivotObj);
+      } else {
+        transform.detach();
+        if (blocked && transformModeRef.current === 'translate') {
+          const key = `${members.map((m) => m.id).join(',')}:${blocked}`;
+          if (rotateMessageKeyRef.current !== key) onMateFeedbackRef.current?.(blocked, true);
+          rotateMessageKeyRef.current = key;
+        }
+      }
+      refreshRotateSetup();
+      return;
+    }
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
@@ -3115,10 +3615,43 @@ export default function Viewport3D({
     transform.setSize(0.95);
     enhanceTranslatePlaneHandles(transform);
 
+    const setPivotObj = new THREE.Object3D();
+    setPivotObj.name = '__set_pivot__';
+    setPivotObj.userData.isSetPivot = true;
+    scene.add(setPivotObj);
+    setPivotRef.current = setPivotObj;
+
     transform.addEventListener('objectChange', () => {
       const obj = transform.object;
       if (!obj) return;
       dragMovedRef.current = true;
+      if (obj.userData.isSetPivot) {
+        // A set: snap the pivot in whole steps from where it started, move every member by as much.
+        // No hole snap or flush stop for sets.
+        const drag = setDragRef.current;
+        if (!drag) return;
+        const factor = snapPitchFactorRef.current;
+        const step = factor && factor > 0 ? VEX_PITCH_MM * factor : 0;
+        const start = dragStartPosRef.current;
+        if (step > 0) {
+          for (const ax of ['x', 'y', 'z']) obj.position[ax] = Number((start[ax] + Math.round((obj.position[ax] - start[ax]) / step) * step).toFixed(3));
+        }
+        const delta = obj.position.clone().sub(start);
+        for (const [id, startPos] of drag.starts) {
+          const g = meshMapRef.current.get(id);
+          if (g) {
+            g.position.copy(startPos).add(delta);
+            g.updateMatrixWorld();
+          }
+        }
+        const now = performance.now();
+        if (now - drag.lastCheckAt > 150) {
+          drag.lastCheckAt = now;
+          const members = selectedSetMembers();
+          if (members) markSetOverlaps(members, drag.ignore);
+        }
+        return;
+      }
       const instId = obj.userData.instanceId;
       const inst = instancesRef.current.find((i) => i.instanceId === instId);
       const partMeta = inst ? catalogMapRef.current.get(inst.partId) : null;
@@ -3263,7 +3796,12 @@ export default function Viewport3D({
         hideMateArrows();
         rebuildOtherFeatures();
         lineSettleCacheRef.current = { key: '', settled: null };
-        if (transform.object) {
+        if (transform.object?.userData.isSetPivot) {
+          dragStartPosRef.current.copy(transform.object.position);
+          const ids = selectedIdsRef.current.filter((id) => meshMapRef.current.has(id));
+          const starts = new Map(ids.map((id) => [id, meshMapRef.current.get(id).position.clone()]));
+          setDragRef.current = { ids, ignore: new Set(ids), starts, lastCheckAt: 0 };
+        } else if (transform.object) {
           dragStartPosRef.current.copy(transform.object.position);
           const startColliding = checkGroupCollision(transform.object, false);
           if (!startColliding) {
@@ -3273,6 +3811,10 @@ export default function Viewport3D({
             hasClearDragPosRef.current = false;
           }
         }
+      } else if (transform.object?.userData.isSetPivot) {
+        const drag = setDragRef.current;
+        setDragRef.current = null;
+        if (drag && dragMovedRef.current) commitSetPoses(drag.ids, 'move');
       } else if (transform.object) {
         const obj = transform.object;
         const instId = obj.userData.instanceId;
@@ -3311,10 +3853,83 @@ export default function Viewport3D({
     const pointerDownPos = new THREE.Vector2();
     let lastArrowClickAt = -Infinity; // the dblclick that follows an arrow click must not mate again
 
+    // Box select: the rectangle being drawn, in canvas px ({ x0, y0, x1, y1 }), or null
+    let boxDrag = null;
+    const boxEl = document.createElement('div');
+    boxEl.className = 'select-box';
+    boxEl.style.display = 'none';
+    container.appendChild(boxEl);
+    const showBox = () => {
+      const { x0, y0, x1, y1 } = boxDrag;
+      Object.assign(boxEl.style, {
+        display: 'block',
+        left: `${Math.min(x0, x1)}px`,
+        top: `${Math.min(y0, y1)}px`,
+        width: `${Math.abs(x1 - x0)}px`,
+        height: `${Math.abs(y1 - y0)}px`
+      });
+      // Dragged right to left: parts it touches (dashed); left to right: parts wholly inside (solid)
+      boxEl.classList.toggle('crossing', x1 < x0);
+    };
+
+    /**
+     * Visible parts in the box (canvas px). `crossing`: any of the part's points inside; otherwise all of
+     * them. Big meshes are sampled (about 4000 points each), which is plenty for a box drawn by hand.
+     */
+    const partsInBox = ({ x0, y0, x1, y1 }, crossing) => {
+      const cam = pointerCameraRef.current();
+      const rect = inputEl.getBoundingClientRect();
+      const [left, right, top, bottom] = [Math.min(x0, x1), Math.max(x0, x1), Math.min(y0, y1), Math.max(y0, y1)];
+      const v = new THREE.Vector3();
+      const ids = [];
+      for (const [id, group] of meshMapRef.current.entries()) {
+        if (!group.visible) continue;
+        group.updateMatrixWorld();
+        let any = false;
+        let all = true;
+        let seen = 0;
+        group.traverse((child) => {
+          if (!child.isMesh || !child.userData.isPartMesh || !child.geometry?.attributes.position) return;
+          const pos = child.geometry.attributes.position;
+          const step = Math.max(1, Math.floor(pos.count / 4000));
+          for (let i = 0; i < pos.count; i += step) {
+            v.fromBufferAttribute(pos, i).applyMatrix4(child.matrixWorld).project(cam);
+            const sx = ((v.x + 1) / 2) * rect.width;
+            const sy = ((1 - v.y) / 2) * rect.height;
+            const inside = v.z > -1 && v.z < 1 && sx >= left && sx <= right && sy >= top && sy <= bottom;
+            seen += 1;
+            if (inside) any = true;
+            else all = false;
+          }
+        });
+        if (seen > 0 && (crossing ? any : all)) ids.push(id);
+      }
+      return ids;
+    };
+
     const handlePointerDown = (e) => {
       pointerDownPos.set(e.clientX, e.clientY);
       // A new press that isn't grabbing the gizmo starts clean, so a missed drag end can't block clicks
       if (!transform.dragging) wasDraggingRef.current = false;
+      if (
+        boxSelectRef.current &&
+        e.button === 0 &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !pickModeRef.current &&
+        !transform.dragging &&
+        !transform.axis &&
+        !rotateGestureRef.current &&
+        !ringClickHandled
+      ) {
+        const rect = inputEl.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        boxDrag = { x0: x, y0: y, x1: x, y1: y };
+        // OrbitControls would pan on Shift+drag: the camera stays still while a box is drawn
+        orbit.enabled = false;
+        inputEl.setPointerCapture?.(e.pointerId);
+      }
     };
 
     const projectToCanvas = (point) => {
@@ -3327,9 +3942,18 @@ export default function Viewport3D({
     // switched off for the drag). The angle comes from the pointer on the ring's plane; when the
     // plane is seen nearly edge-on, from the pointer's travel along the ring's on-screen tangent.
     let ringClickHandled = false; // the bubbling pointerup of a ring press must not change selection
+    let anchorPress = null; // a left press on an anchor line: a click moves the rings onto it
     const handleRingPointerDown = (e) => {
+      anchorPress = null;
       if (e.button !== 0 || !rotateSetupRef.current || rotateGestureRef.current) return;
       if (pickModeRef.current?.kind === 'copy' && (e.ctrlKey || e.metaKey)) return; // part of a copy click
+      // Anchor lines win over the rings and parts behind them; a drag from one still turns the camera
+      const rect = inputEl.getBoundingClientRect();
+      const anchor = rotateGizmo.pickAnchor(new THREE.Vector2(e.clientX - rect.left, e.clientY - rect.top), projectToCanvas);
+      if (anchor) {
+        anchorPress = { ...anchor, pressX: e.clientX, pressY: e.clientY };
+        return;
+      }
       setRayFromEvent(e);
       const hit = rotateGizmo.pick(raycaster);
       if (!hit) return;
@@ -3406,6 +4030,15 @@ export default function Viewport3D({
 
     // Release: a drag saves the turn; a click without movement selects/unselects the ring instead
     const handleRingPointerUp = (e) => {
+      if (e.button === 0 && anchorPress) {
+        const press = anchorPress;
+        anchorPress = null;
+        if (Math.hypot(e.clientX - press.pressX, e.clientY - press.pressY) < 5) {
+          ringClickHandled = true; // keeps the selection and the selected ring
+          chooseRotateAnchor(press);
+        }
+        return;
+      }
       const gesture = rotateGestureRef.current;
       if (e.button !== 0 || gesture?.kind !== 'drag') return;
       inputEl.releasePointerCapture?.(e.pointerId);
@@ -3488,6 +4121,19 @@ export default function Viewport3D({
     const handlePointerUp = (e) => {
       const dx = e.clientX - pointerDownPos.x;
       const dy = e.clientY - pointerDownPos.y;
+      if (boxDrag && e.button === 0) {
+        const box = boxDrag;
+        boxDrag = null;
+        boxEl.style.display = 'none';
+        orbit.enabled = true;
+        // A short drag is just a click
+        if (Math.hypot(dx, dy) > 5) {
+          cancelPendingSelect();
+          const ids = partsInBox(box, box.x1 < box.x0);
+          onBoxSelectRef.current?.(ids, { additive: e.shiftKey || selectModeRef.current });
+          return;
+        }
+      }
       // A click with Ctrl/Cmd in the copy preview never selects or toggles Move/Rotate
       if (pickModeRef.current?.kind === 'copy' && (e.ctrlKey || e.metaKey) && (e.button === 0 || e.button === 2)) {
         handleCopyPointerUp(e, Math.hypot(dx, dy) > 5);
@@ -3496,8 +4142,8 @@ export default function Viewport3D({
       if (pickModeRef.current?.kind === 'copy') endPick(); // the modifier went up unseen
       // Right-click (not a right-drag pan) on the selected part, even behind another: Move <-> Rotate
       if (e.button === 2) {
-        const selId = selectedIdRef.current;
-        if (Math.hypot(dx, dy) <= 5 && selId && pickPartsAt(e).includes(selId)) {
+        const selIds = selectedIdsRef.current;
+        if (Math.hypot(dx, dy) <= 5 && selIds.length > 0 && pickPartsAt(e).some((id) => selIds.includes(id))) {
           onToggleRotateRequestRef.current?.();
         }
         return;
@@ -3549,6 +4195,11 @@ export default function Viewport3D({
       const front = ids[0] ?? null;
       const selId = selectedIdRef.current;
       cancelPendingSelect();
+      // Shift+click, or any click in Select mode, adds or removes the part; empty space leaves the selection
+      if (e.shiftKey || selectModeRef.current) {
+        if (front) onSelectRef.current(front, { additive: true });
+        return;
+      }
       // Wait for a possible double-click before selecting: on the selected part behind another, or on
       // a brain the selected battery fits (the double-click slides it in)
       if (selId && front !== selId && (ids.includes(selId) || batteryFitsBrain(selId, front))) {
@@ -3565,11 +4216,17 @@ export default function Viewport3D({
     let pickHoverAt = null;
     const handlePointerMove = (e) => {
       const rect = inputEl.getBoundingClientRect();
+      if (boxDrag) {
+        boxDrag.x1 = e.clientX - rect.left;
+        boxDrag.y1 = e.clientY - rect.top;
+        showBox();
+        return;
+      }
       copyPointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       // The copy preview follows Ctrl/Cmd (a missed keyup ends it here) and steps aside for a drag
       const modifier = e.ctrlKey || e.metaKey;
       if (pickModeRef.current?.kind === 'copy' && (!modifier || transform.dragging)) endPick();
-      else if (!pickModeRef.current && modifier) startCopy();
+      else if (!pickModeRef.current && modifier && !e.shiftKey) startCopy(); // Shift+Ctrl is for the wheel
       if (pickModeRef.current) {
         if (arrowOverlay.isShown()) {
           setRayFromEvent(e);
@@ -3589,6 +4246,14 @@ export default function Viewport3D({
         return;
       }
       if (rotateGizmo.isShown() && !arrowOverlay.isShown()) {
+        // An anchor line under the pointer comes first, as for a press
+        const anchor = rotateGizmo.pickAnchor(new THREE.Vector2(e.clientX - rect.left, e.clientY - rect.top), projectToCanvas);
+        rotateGizmo.setAnchorHover(anchor);
+        if (anchor) {
+          rotateGizmo.setHover(-1);
+          inputEl.style.cursor = 'pointer';
+          return;
+        }
         setRayFromEvent(e);
         const index = rotateGizmo.pick(raycaster)?.index ?? -1;
         rotateGizmo.setHover(index);
@@ -3607,6 +4272,17 @@ export default function Viewport3D({
     const GIZMO_CENTER_AXES = new Set(['XYZ', 'XYZE']);
     const handleDoubleClick = (e) => {
       if (performance.now() - lastCubeClickAt < 600) return; // clicks on the view cube
+      // Mating, hole picking and copy-insert work on one part: with several selected, say so
+      const multi = selectedIdsRef.current;
+      if (multi.length > 1 && !pickModeRef.current && !transform.dragging) {
+        if (pickPartsAt(e).some((id) => multi.includes(id))) {
+          onMateFeedbackRef.current?.(
+            e.ctrlKey || e.metaKey ? 'Copies are inserted one part at a time: select a single part.' : 'Mating works on one part: select a single part.',
+            true
+          );
+        }
+        return;
+      }
       if (e.ctrlKey || e.metaKey) return; // Ctrl/Cmd+double-click inserts a copy, never mates
       if (pickModeRef.current) return; // picking: single clicks insert
       if (transform.dragging) return;
@@ -3636,7 +4312,7 @@ export default function Viewport3D({
     // App's deselect handler. Esc in an angle field is handled by the field itself.
     const handleKeyDownCapture = (e) => {
       if (document.querySelector('dialog[open]')) return; // Settings or Audit is open: its keys
-      if ((e.key === 'Control' || e.key === 'Meta') && !e.repeat && !pickModeRef.current && copyPointerRef.current) {
+      if ((e.key === 'Control' || e.key === 'Meta') && !e.repeat && !e.shiftKey && !pickModeRef.current && copyPointerRef.current) {
         if (startCopy()) updatePickHover(copyPointerRef.current.x, copyPointerRef.current.y);
       }
       if (pickModeRef.current && e.target?.tagName !== 'INPUT') {
@@ -3671,7 +4347,25 @@ export default function Viewport3D({
     const WHEEL_NOTCH = 100; // deltaY of one mouse-wheel notch in pixel mode; trackpad deltas add up
     let wheelAccum = 0;
     let pickWheelAccum = 0;
+    // One expand/contract step per notch at most every EXPAND_STEP_MS, so a trackpad flick isn't five layers
+    const EXPAND_STEP_MS = 120;
+    let lastExpandAt = -Infinity;
     const handleWheelCapture = (e) => {
+      // Shift+wheel grows the selection one layer of joined parts (away from the user) or takes the
+      // last layer off (towards); never zooms. Some mice report Shift+wheel as deltaX. With Ctrl/Cmd
+      // too, only parts joined by a pin, shaft or peg in a hole count (a copy preview steps aside).
+      const pinnedOnly = e.ctrlKey || e.metaKey;
+      if (pinnedOnly && e.shiftKey && pickModeRef.current?.kind === 'copy') endPick();
+      if (e.shiftKey && selectedIdsRef.current.length > 0 && !pickModeRef.current && selectedRingRef.current < 0) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const delta = e.deltaY || e.deltaX;
+        const now = performance.now();
+        if (!delta || now - lastExpandAt < EXPAND_STEP_MS) return;
+        lastExpandAt = now;
+        onExpandSelectionRef.current?.(delta < 0 ? 1 : -1, { pinnedOnly });
+        return;
+      }
       // Picking with a hole highlighted: the wheel steps through fits instead of zooming
       if (pickModeRef.current?.hovered) {
         e.preventDefault();
@@ -3857,6 +4551,11 @@ export default function Viewport3D({
     inputEl.addEventListener('pointerup', handlePointerUp);
     inputEl.addEventListener('pointermove', handlePointerMove);
     inputEl.addEventListener('dblclick', handleDoubleClick);
+    // Shift+click selects parts; without this the browser also extends a text selection across the page
+    const preventShiftTextSelect = (e) => {
+      if (e.shiftKey) e.preventDefault();
+    };
+    inputEl.addEventListener('mousedown', preventShiftTextSelect);
     inputEl.addEventListener('wheel', handleWheelCapture, { capture: true, passive: false });
     container.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('keydown', handleKeyDownCapture, true);
@@ -4198,15 +4897,115 @@ export default function Viewport3D({
       renderer.autoClear = true;
     };
 
+    /**
+     * Selection contour: the selected parts' silhouettes drawn white into a mask, then a thick bright
+     * line with a dark rim traced around them on top of the pane. It shows through other parts and
+     * reads by brightness rather than hue, so it stays visible on any part color.
+     */
+    const contourSlots = new Map(); // slot -> { target, width, height }
+    const contourMaskMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    const contourMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        mask: { value: null },
+        texel: { value: new THREE.Vector2() },
+        coreR: { value: 3 },
+        rimR: { value: 5 },
+        // The shader writes straight to the screen, so the colors are given as they should look
+        coreColor: { value: new THREE.Color().setHex(SELECT_CONTOUR_COLOR, THREE.LinearSRGBColorSpace) },
+        rimColor: { value: new THREE.Color(0x000000) }
+      },
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `
+        varying vec2 vUv;
+        uniform sampler2D mask;
+        uniform vec2 texel;
+        uniform float coreR;
+        uniform float rimR;
+        uniform vec3 coreColor;
+        uniform vec3 rimColor;
+        void main() {
+          if (texture2D(mask, vUv).r > 0.5) discard;
+          float nearest = 1e6;
+          for (int i = 0; i < 16; i++) {
+            float a = float(i) * 0.39269908;
+            vec2 dir = vec2(cos(a), sin(a));
+            for (int k = 1; k <= 8; k++) {
+              float r = float(k) * rimR / 8.0;
+              if (texture2D(mask, vUv + dir * r * texel).r > 0.5) nearest = min(nearest, r);
+            }
+          }
+          if (nearest <= coreR) gl_FragColor = vec4(coreColor, 1.0);
+          else if (nearest <= rimR) gl_FragColor = vec4(rimColor, 0.85);
+          else discard;
+        }`,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    });
+    contourMaterial.toneMapped = false;
+    const contourQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), contourMaterial);
+    contourQuad.frustumCulled = false;
+    const contourScene = new THREE.Scene();
+    contourScene.add(contourQuad);
+    const contourCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const drawSelectionContour = (rect, cam, slot) => {
+      if (selectedIdsRef.current.length === 0) return;
+      const pixelRatio = renderer.getPixelRatio();
+      const width = Math.max(1, Math.round(rect.width * pixelRatio));
+      const height = Math.max(1, Math.round(rect.height * pixelRatio));
+      let entry = contourSlots.get(slot);
+      if (!entry) {
+        entry = { target: new THREE.WebGLRenderTarget(width, height), width, height };
+        contourSlots.set(slot, entry);
+      } else if (entry.width !== width || entry.height !== height) {
+        entry.target.setSize(width, height);
+        Object.assign(entry, { width, height });
+      }
+      // Mask: only the selected parts' meshes (on SELECT_LAYER), flat white on black
+      const savedTarget = renderer.getRenderTarget();
+      const savedLayers = cam.layers.mask;
+      const savedBackground = scene.background;
+      const savedClear = renderer.getClearColor(new THREE.Color());
+      const savedAlpha = renderer.getClearAlpha();
+      const savedScissor = renderer.getScissorTest();
+      cam.layers.set(SELECT_LAYER);
+      scene.overrideMaterial = contourMaskMaterial;
+      scene.background = null;
+      renderer.setRenderTarget(entry.target);
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, rect.width, rect.height);
+      renderer.setClearColor(0x000000, 1);
+      renderer.clear();
+      renderer.render(scene, cam);
+      scene.overrideMaterial = null;
+      scene.background = savedBackground;
+      cam.layers.mask = savedLayers;
+      renderer.setRenderTarget(savedTarget);
+      renderer.setClearColor(savedClear, savedAlpha);
+      renderer.setScissorTest(savedScissor);
+      // Contour over the pane
+      contourMaterial.uniforms.mask.value = entry.target.texture;
+      contourMaterial.uniforms.texel.value.set(1 / width, 1 / height);
+      contourMaterial.uniforms.coreR.value = 1.75 * pixelRatio;
+      contourMaterial.uniforms.rimR.value = 2.75 * pixelRatio;
+      setPane(rect);
+      const autoClear = renderer.autoClear;
+      renderer.autoClear = false;
+      renderer.render(contourScene, contourCamera);
+      renderer.autoClear = autoClear;
+    };
+
     /** Draws `cam`'s view into one pane, optionally without the overlays; `slot` names the pane for AO. */
     const renderView = (rect, cam, { overlays = true, slot = 'main' } = {}) => {
       if (aoRef.current) {
         renderViewAO(rect, cam, slot, overlays);
+        if (overlays) drawSelectionContour(rect, cam, slot);
         return;
       }
       setPane(rect);
       if (overlays) {
         renderer.render(scene, cam);
+        drawSelectionContour(rect, cam, slot);
         return;
       }
       const hidden = editOverlays().filter((o) => o.visible);
@@ -4307,7 +5106,7 @@ export default function Viewport3D({
       updateShadows();
       const active = cameraRef.current;
       arrowOverlay.updateScale(active);
-      rotateGizmo.updateScale(active);
+      rotateGizmo.updateScale(active, inputEl.clientWidth, inputEl.clientHeight);
       placeAngleLabels();
       const panes = panesRef.current;
       if (!panes) return;
@@ -4360,6 +5159,7 @@ export default function Viewport3D({
       inputEl.removeEventListener('pointerup', handlePointerUp);
       inputEl.removeEventListener('pointermove', handlePointerMove);
       inputEl.removeEventListener('dblclick', handleDoubleClick);
+      inputEl.removeEventListener('mousedown', preventShiftTextSelect);
       inputEl.removeEventListener('wheel', handleWheelCapture, { capture: true });
       container.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('keydown', handleKeyDownCapture, true);
@@ -4374,11 +5174,16 @@ export default function Viewport3D({
       inputEl.removeEventListener('pointermove', handleCubePointerMove, true);
       inputEl.removeEventListener('contextmenu', handleCubeContextMenu, true);
       viewCube.dispose();
+      boxEl.remove();
       for (const { composer, aoPass } of aoSlots.values()) {
         aoPass.dispose();
         composer.dispose();
       }
       depthOnlyMaterial.dispose();
+      for (const { target } of contourSlots.values()) target.dispose();
+      contourMaskMaterial.dispose();
+      contourMaterial.dispose();
+      contourQuad.geometry.dispose();
       envTexture.dispose();
       miniCleanups.forEach((cleanup) => cleanup());
       cancelPendingSelect();
@@ -4431,7 +5236,7 @@ export default function Viewport3D({
     // Only the selection changed: nothing moved, so skip the per-part overlap checks and just
     // re-light the parts that were and are selected
     const lastSync = lastSceneSyncRef.current;
-    lastSceneSyncRef.current = { instances, catalogMap, showConnectors, explodeMode, selectedId };
+    lastSceneSyncRef.current = { instances, catalogMap, showConnectors, explodeMode, selectedId, selectedIds };
     if (
       lastSync &&
       lastSync.instances === instances &&
@@ -4440,7 +5245,7 @@ export default function Viewport3D({
       lastSync.explodeMode === explodeMode
     ) {
       const byId = new Map(instances.map((i) => [i.instanceId, i]));
-      for (const id of new Set([lastSync.selectedId, selectedId])) {
+      for (const id of new Set([...lastSync.selectedIds, ...selectedIds])) {
         const inst = id ? byId.get(id) : null;
         const group = id ? meshMapRef.current.get(id) : null;
         const partMeta = inst ? catalogMap.get(inst.partId) : null;
@@ -4448,7 +5253,7 @@ export default function Viewport3D({
         const isSelected = id === selectedId;
         applyGroupAppearance(group, {
           baseColor: resolvePartBaseColor(inst, partMeta),
-          isSelected,
+          isSelected: selectLevel(selectedIds, id),
           isIntersecting: Boolean(group.userData.isIntersecting)
         });
         const existingOverlay = group.getObjectByName('__connector_overlay__');
@@ -4597,7 +5402,7 @@ export default function Viewport3D({
             const latestInst = instancesRef.current.find(
               (i) => i.instanceId === inst.instanceId
             );
-            const isSelectedNow = selectedIdRef.current === inst.instanceId;
+            const isSelectedNow = selectLevel(selectedIdsRef.current, inst.instanceId);
             const isColliding = checkGroupCollision(
               group,
               explodeModeRef.current !== 'off'
@@ -4657,7 +5462,7 @@ export default function Viewport3D({
 
       applyGroupAppearance(group, {
         baseColor: resolvePartBaseColor(inst, partMeta),
-        isSelected,
+        isSelected: selectLevel(selectedIds, inst.instanceId),
         isIntersecting: isColliding
       });
 
@@ -4678,7 +5483,7 @@ export default function Viewport3D({
     // Move gizmo or rotate rings (none while exploded, to prevent offset confusion)
     syncGizmos();
     updateAlignedHoleHighlights();
-  }, [instances, selectedId, catalogMap, showConnectors, explodeMode]);
+  }, [instances, selectedId, selectedIds, catalogMap, showConnectors, explodeMode]);
 
   // Hole picking ends when its part is no longer the one being picked for, or the mode around it
   // changes: another selection, Move/Rotate, Explode, or the part moved/hidden/locked/removed by
@@ -4726,7 +5531,7 @@ export default function Viewport3D({
       const partMeta = catalogMapRef.current.get(inst.partId);
       applyGroupAppearance(group, {
         baseColor: resolvePartBaseColor(inst, partMeta),
-        isSelected: selectedIdRef.current === id,
+        isSelected: selectLevel(selectedIdsRef.current, id),
         isIntersecting: isColliding
       });
       if (isColliding !== Boolean(inst.isIntersecting)) {
@@ -4735,6 +5540,11 @@ export default function Viewport3D({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collisionRecheck]);
+
+  // Box select takes the left drag, so the camera doesn't turn with it (right-drag pan and wheel zoom stay)
+  useEffect(() => {
+    if (orbitRef.current) orbitRef.current.enableRotate = !boxSelect;
+  }, [boxSelect]);
 
   // Camera Focus / Frame trigger (key 'F' or toolbar button)
   useEffect(() => {

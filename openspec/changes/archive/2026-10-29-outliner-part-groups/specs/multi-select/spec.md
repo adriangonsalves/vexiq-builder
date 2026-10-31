@@ -5,7 +5,7 @@ Lets the user select more than one part at a time, by clicking or by following t
 ## ADDED Requirements
 
 ### Requirement: Selection holds several parts
-The selection SHALL be a set of parts, possibly empty, with one of them, the one selected last, as the primary part. Every selected part SHALL be highlighted in the 3D view and its row highlighted in the Outliner, with the primary part shown more strongly. Selecting a part that belongs to a group from the 3D view SHALL select the whole group (see part-groups). Everything that works on one part (the position and rotation fields, color, label, hole picking, mating, copy-insert, the assistant's `selectedId`) SHALL keep working on the primary part when exactly one part is selected. Changing the selection SHALL NOT create a history step. Parts that are deleted, or that disappear on undo, SHALL drop out of the selection.
+The selection SHALL be a set of parts, possibly empty, with one of them, the one selected last, as the primary part. Every selected part SHALL be highlighted in the 3D view and its row highlighted in the Outliner, with the primary part shown more strongly. In the 3D view a selected part SHALL also get a thick contour around its outline, a thin light line with a dark rim so it shows on parts of any color, visible through parts in front of it. Selecting a part that belongs to a group from the 3D view SHALL select the whole group (see part-groups). Everything that works on one part (the position and rotation fields, color, label, hole picking, mating, copy-insert, the assistant's `selectedId`) SHALL keep working on the primary part when exactly one part is selected. Changing the selection SHALL NOT create a history step. Parts that are deleted, or that disappear on undo, SHALL drop out of the selection.
 
 #### Scenario: Two parts highlighted
 - **WHEN** a beam is selected and the user Shift+clicks a plate
@@ -31,7 +31,17 @@ In the 3D view, a click with Shift held on a part SHALL add it to the selection,
 - **THEN** only the fourth part is selected
 
 ### Requirement: Selecting in the Outliner
-In the Assembly Outliner, a plain click on a row SHALL select only that row's part or group. Ctrl+click, or Cmd+click on macOS, SHALL add or remove that row. Shift+click SHALL select every row between the primary row and the clicked row, in the order shown, adding them to the selection. Clicking a part's row inside a group folder SHALL select just that part, not the whole group.
+In the Assembly Outliner, a plain click on a row SHALL select only that row's part or group. Ctrl+click, or Cmd+click on macOS, SHALL add or remove that row. While Select mode is on, every row SHALL have a checkbox, and a plain click on a row or its checkbox SHALL add or remove its part (a folder's: its whole group, shown mixed when only some of its parts are selected) without changing the rest of the selection; with Select mode off the checkboxes SHALL NOT be shown. Shift+click SHALL select every part between the primary part and the clicked row in build order, adding them to the selection. Clicking a part's row inside a group folder SHALL select just that part, not the whole group.
+
+The selected parts SHALL be listed first, under a "Selected (N)" heading with a Clear button, group folders first, then in build order: a wholly selected group as its folder, and a selected part of a partly selected group as its own row naming the group. The other parts SHALL follow under "Other parts".
+
+#### Scenario: Checkbox adds and removes
+- **WHEN** Select mode is on, a beam is selected, and the user ticks a plate's checkbox, then unticks the beam's
+- **THEN** the plate is added while the beam stays selected, and then only the plate is selected
+
+#### Scenario: Selected parts on top
+- **WHEN** the user selects two parts far down the list
+- **THEN** both rows show at the top under "Selected (2)", highlighted
 
 #### Scenario: Ctrl/Cmd+click a row
 - **WHEN** one row is selected and the user Cmd+clicks another row
@@ -40,6 +50,24 @@ In the Assembly Outliner, a plain click on a row SHALL select only that row's pa
 #### Scenario: Range
 - **WHEN** row 3 is selected and the user Shift+clicks row 7
 - **THEN** rows 3 to 7 are selected
+
+### Requirement: Box select
+The Select menu SHALL have a Box select mode, also toggled with `B`. While it is on, a left-drag in the 3D view that does not start on the Move arrows or a rotate ring SHALL draw a rectangle instead of turning the camera, and on release SHALL select the visible parts in it: dragged left to right, the parts wholly inside the rectangle; dragged right to left, every part it touches (the two are drawn differently). A part in a group SHALL bring in its whole group. The parts SHALL replace the selection, or be added to it with Shift held or while Select mode is on. A short drag SHALL count as a click. The camera SHALL NOT move while a box is drawn; right-drag panning and wheel zoom keep working. Esc SHALL turn Box select off, and it SHALL NOT be saved with the build.
+
+#### Scenario: Box around parts
+- **WHEN** Box select is on and the user drags left to right around two beams
+- **THEN** the two beams, and nothing only partly inside the box, are selected
+
+#### Scenario: Touching box
+- **WHEN** the user drags right to left across the edge of a plate
+- **THEN** the plate is selected
+
+### Requirement: Selection count
+While at least one part is selected, the 3D view SHALL show how many parts are selected (for example "3 parts selected") with a Clear button that unselects everything. With nothing selected it SHALL not be shown.
+
+#### Scenario: Count shown
+- **WHEN** the user selects three parts
+- **THEN** the 3D view shows "3 parts selected"
 
 ### Requirement: Select menu and Select mode
 The toolbar SHALL have a Select menu with: Select mode (on/off), Select Connected, Select All, Select None, Invert Selection, Group and Ungroup. While Select mode is on, a plain click on a part in the 3D view SHALL add or remove it, as Shift+click does, and a click on empty space SHALL leave the selection as it is; the toolbar SHALL show that Select mode is on. Dragging the Move arrows or rotate rings, right-click and double-click SHALL keep their usual behavior. Select mode SHALL turn off with Esc or from the menu, and SHALL NOT be saved with the build. `Ctrl/Cmd+A` SHALL select every visible part, and Esc with Select mode off SHALL clear the selection, both only when focus is not in a text field.

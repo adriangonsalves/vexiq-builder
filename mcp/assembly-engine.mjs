@@ -26,6 +26,7 @@ import { squareFitRoll } from '../src/utils/shaftGroups.js';
 import { settlePlacement, turnAboutLine } from '../src/utils/placementFit.js';
 import { isTireOnHub } from '../src/utils/tireFit.js';
 import { seatedBatteryBay } from '../src/utils/batteryBay.js';
+import { syncSelection } from '../src/utils/partGroups.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -419,7 +420,9 @@ export const appSyncContext = new AsyncLocalStorage();
 export const appUrl = () => `http://localhost:${process.env.VEXIQ_APP_PORT || 5173}`;
 
 // "<tool>: <summary>", e.g. "place_parts: 72 parts"; clearing says only the tool
-function mcpStepLabel(toolName, ops) {
+// `stepLabel`: the tool's own wording (e.g. "Move Left Drive"), used instead of the op summary
+function mcpStepLabel(toolName, ops, stepLabel) {
+  if (stepLabel) return toolName ? `${toolName}: ${stepLabel}` : stepLabel;
   if (!toolName) return summarize(ops);
   if (toolName === 'clear_assembly') {
     return ops.every((op) => op.op === 'remove') ? 'clear_assembly' : 'clear_assembly: starter';
@@ -434,7 +437,7 @@ function mcpStepLabel(toolName, ops) {
  * app's instead of overwriting it.
  */
 export async function writeAssemblyState(nextState, options = {}) {
-  const { notifyVite = true, recordHistory = true } =
+  const { notifyVite = true, recordHistory = true, stepLabel } =
     typeof options === 'boolean' ? { notifyVite: options } : options;
   const store = appSyncContext.getStore();
   let instances = nextState.instances || [];
@@ -448,7 +451,7 @@ export async function writeAssemblyState(nextState, options = {}) {
     }
     const recorded = recordStep(saved.history, saved.instances, instances, {
       source: 'mcp',
-      label: (ops) => mcpStepLabel(store?.toolName, ops),
+      label: (ops) => mcpStepLabel(store?.toolName, ops, stepLabel),
       mergeKey: store?.callId ? `mcp:${store.callId}` : undefined,
       mergeWindowMs: Infinity,
       linear: isLinearHistory(readAppSettings())
@@ -461,13 +464,13 @@ export async function writeAssemblyState(nextState, options = {}) {
     }
   }
 
-  const state = {
+  const state = syncSelection({
     ...nextState,
     instances,
     history,
     historyRev: history?.rev ?? 0,
     updatedAt: new Date().toISOString()
-  };
+  });
   fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
 
   if (notifyVite) {
@@ -680,11 +683,15 @@ export function findMatchingPinHoles(instA, instB) {
  * (the shared fit rules in src/utils/pinHoleAlignment.js, on measured hole depths), never through
  * bounding boxes that merely overlap. `joints` lists what every fastener is seated in.
  */
-export function auditAssembly(state) {
+/**
+ * The joints between parts, shared by the audit and jointGraph: every visible part's world box and
+ * features, which fasteners are seated in which parts, and the part-to-part joins (pegs, battery bay,
+ * meshing gears, captive clamps). Parts count as joined only through seated joints.
+ */
+function findJoints(state) {
   const { catalogById } = getCatalog();
   const visible = (state.instances || []).filter((i) => i.visible !== false);
 
-  const collisions = [];
   const rawWorldBoxes = new Map();
   const expandedWorldBoxes = new Map();
   const nonFasteners = [];
@@ -694,15 +701,6 @@ export function auditAssembly(state) {
   for (const inst of visible) {
     const part = catalogById.get(inst.partId);
     if (!part) continue;
-
-    const col = checkCandidateCollision(inst, visible);
-    if (col.isIntersecting) {
-      collisions.push({
-        instanceId: inst.instanceId,
-        label: inst.label,
-        collidingWith: col.collidingWith.map((c) => c.label)
-      });
-    }
 
     const mat = buildWorldMatrix(inst.position, inst.rotation);
     const rawBox = new THREE.Box3(
@@ -766,9 +764,13 @@ export function auditAssembly(state) {
   const halfSeatedFasteners = [];
   const joints = [];
   const adjacency = new Map(nonFasteners.map((n) => [n.inst.instanceId, new Set()]));
-  const link = (idA, idB) => {
+  // Part-to-part joins with nothing between them (pegs, battery bay, meshing gears, clamps); the graph
+  // keeps these as edges, while joins through a fastener go through the fastener's own node
+  const directEdges = [];
+  const link = (idA, idB, direct = true) => {
     adjacency.get(idA)?.add(idB);
     adjacency.get(idB)?.add(idA);
+    if (direct) directEdges.push([idA, idB]);
   };
 
   for (const f of fasteners) {
@@ -783,7 +785,7 @@ export function auditAssembly(state) {
     } else {
       for (let i = 0; i < partners.length; i++) {
         fastenerCountByPartInstance.set(partners[i], (fastenerCountByPartInstance.get(partners[i]) || 0) + 1);
-        for (let j = i + 1; j < partners.length; j++) link(partners[i], partners[j]);
+        for (let j = i + 1; j < partners.length; j++) link(partners[i], partners[j], false);
       }
     }
   }
@@ -807,6 +809,150 @@ export function auditAssembly(state) {
       const required = battery.part.mountingRules?.minFastenersRequired || 1;
       fastenerCountByPartInstance.set(battery.inst.instanceId, Math.max(fastenerCountByPartInstance.get(battery.inst.instanceId) || 0, required));
       batteryBays.push({ battery: battery.inst.label, brain: brain.inst.label });
+    }
+  }
+
+  // Kinematic Gear-Meshing & Motor-to-Wheel Power Tracing
+  const placedGears = nonFasteners
+    .filter((nf) => nf.part.gearSpecs != null)
+    .map((nf) => {
+      const ports = getWorldPortsForInstance(nf.inst);
+      const bore = ports.find((p) => p.type === 'shaft_bore') || ports[0];
+      const worldCenter = new THREE.Vector3(...nf.part.bbox.center).applyMatrix4(nf.mat);
+      const worldAxis = bore
+        ? new THREE.Vector3(...bore.worldAxis).normalize()
+        : new THREE.Vector3(0, 0, 1);
+      return {
+        ...nf,
+        worldCenter,
+        worldAxis,
+        teeth: nf.part.gearSpecs.teeth,
+        pitchRadiusMm: nf.part.gearSpecs.pitchRadiusMm
+      };
+    });
+
+  // Add gear-to-gear mesh edges to both kinematic graph and structural connectivity graph
+  const meshedGearPairs = [];
+  for (let i = 0; i < placedGears.length; i++) {
+    for (let j = i + 1; j < placedGears.length; j++) {
+      const gA = placedGears[i];
+      const gB = placedGears[j];
+      if (Math.abs(gA.worldAxis.dot(gB.worldAxis)) < 0.98) continue;
+
+      const diff = new THREE.Vector3().subVectors(gB.worldCenter, gA.worldCenter);
+      const axialOffset = Math.abs(diff.dot(gA.worldAxis));
+      if (axialOffset > 6.5) continue;
+
+      const radialVec = diff.clone().addScaledVector(gA.worldAxis, -diff.dot(gA.worldAxis));
+      const radialDist = radialVec.length();
+      const expectedDist = gA.pitchRadiusMm + gB.pitchRadiusMm;
+
+      if (Math.abs(radialDist - expectedDist) <= 2.0) {
+        meshedGearPairs.push([gA, gB]);
+        link(gA.inst.instanceId, gB.inst.instanceId);
+      }
+    }
+  }
+
+  // Detect captive structural clamps (where two fastener-connected beams clamp opposing top/bottom faces of a third part)
+  for (const nfTarget of nonFasteners) {
+    const tBox = expandedWorldBoxes.get(nfTarget.inst.instanceId);
+    if (!tBox) continue;
+    const touchingNeighbors = nonFasteners.filter((other) => {
+      if (other.inst.instanceId === nfTarget.inst.instanceId) return false;
+      const oBox = expandedWorldBoxes.get(other.inst.instanceId);
+      return oBox && tBox.intersectsBox(oBox);
+    });
+    for (let i = 0; i < touchingNeighbors.length; i++) {
+      for (let j = i + 1; j < touchingNeighbors.length; j++) {
+        const a = touchingNeighbors[i].inst.instanceId;
+        const b = touchingNeighbors[j].inst.instanceId;
+        // If `a` and `b` are already fastened to each other and both flush-contact `nfTarget`, they form a captive clamp around `nfTarget`
+        if (adjacency.get(a)?.has(b)) {
+          link(a, nfTarget.inst.instanceId);
+          link(b, nfTarget.inst.instanceId);
+        }
+      }
+    }
+  }
+
+  return {
+    visible,
+    rawWorldBoxes,
+    nonFasteners,
+    fasteners,
+    featuresById,
+    labelOf,
+    seatedPairs,
+    seatedIn,
+    fastenerCountByPartInstance,
+    floatingFasteners,
+    halfSeatedFasteners,
+    joints,
+    adjacency,
+    directEdges,
+    directJoints,
+    pegJoints,
+    batteryBays,
+    placedGears,
+    meshedGearPairs
+  };
+}
+
+/** The graph from findJoints: every visible part a node, an edge from each fastener to each part it is seated in, plus the direct joins. */
+function graphFromJoints(found, { pinnedOnly = false } = {}) {
+  const edges = [];
+  for (const [fastenerId, ports] of found.seatedIn) for (const partId of ports.keys()) edges.push([fastenerId, partId]);
+  const seen = new Set();
+  // Pinned only: a pin, shaft or peg in a hole; no gear meshes, battery bays or parts that only touch
+  for (const [a, b] of pinnedOnly ? found.directJoints : found.directEdges) {
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+    if (a === b || seen.has(key)) continue;
+    seen.add(key);
+    edges.push([a, b]);
+  }
+  return { nodes: found.visible.map((i) => i.instanceId), edges };
+}
+
+/**
+ * The assembly's joint graph (openspec outliner-part-groups): `{ nodes: [instanceId], edges: [[a, b]] }`.
+ * Fasteners are nodes of their own, so walking it steps beam -> pin -> plate. The audit's connected
+ * parts come from the same graph, so Select Connected and the audit can't disagree. With
+ * `pinnedOnly`, the only edges are pins, shafts and integral pegs seated in holes (Shift+Ctrl+wheel).
+ */
+export function jointGraph(state, { pinnedOnly = false } = {}) {
+  return graphFromJoints(findJoints(state), { pinnedOnly });
+}
+
+export function auditAssembly(state) {
+  const found = findJoints(state);
+  const {
+    visible,
+    rawWorldBoxes,
+    nonFasteners,
+    fasteners,
+    featuresById,
+    seatedPairs,
+    seatedIn,
+    fastenerCountByPartInstance,
+    floatingFasteners,
+    halfSeatedFasteners,
+    joints,
+    pegJoints,
+    batteryBays,
+    placedGears,
+    meshedGearPairs
+  } = found;
+
+  const collisions = [];
+  for (const inst of visible) {
+    const col = checkCandidateCollision(inst, visible);
+    if (col.isIntersecting) {
+      collisions.push({
+        instanceId: inst.instanceId,
+        label: inst.label,
+        collidingWith: col.collidingWith.map((c) => c.label)
+      });
     }
   }
 
@@ -882,74 +1028,14 @@ export function auditAssembly(state) {
     }
   }
 
-  // Kinematic Gear-Meshing & Motor-to-Wheel Power Tracing
-  const placedGears = nonFasteners
-    .filter((nf) => nf.part.gearSpecs != null)
-    .map((nf) => {
-      const ports = getWorldPortsForInstance(nf.inst);
-      const bore = ports.find((p) => p.type === 'shaft_bore') || ports[0];
-      const worldCenter = new THREE.Vector3(...nf.part.bbox.center).applyMatrix4(nf.mat);
-      const worldAxis = bore
-        ? new THREE.Vector3(...bore.worldAxis).normalize()
-        : new THREE.Vector3(0, 0, 1);
-      return {
-        ...nf,
-        worldCenter,
-        worldAxis,
-        teeth: nf.part.gearSpecs.teeth,
-        pitchRadiusMm: nf.part.gearSpecs.pitchRadiusMm
-      };
-    });
-
-  // Add gear-to-gear mesh edges to both kinematic graph and structural connectivity graph
-  const meshedGearPairs = [];
-  for (let i = 0; i < placedGears.length; i++) {
-    for (let j = i + 1; j < placedGears.length; j++) {
-      const gA = placedGears[i];
-      const gB = placedGears[j];
-      if (Math.abs(gA.worldAxis.dot(gB.worldAxis)) < 0.98) continue;
-
-      const diff = new THREE.Vector3().subVectors(gB.worldCenter, gA.worldCenter);
-      const axialOffset = Math.abs(diff.dot(gA.worldAxis));
-      if (axialOffset > 6.5) continue;
-
-      const radialVec = diff.clone().addScaledVector(gA.worldAxis, -diff.dot(gA.worldAxis));
-      const radialDist = radialVec.length();
-      const expectedDist = gA.pitchRadiusMm + gB.pitchRadiusMm;
-
-      if (Math.abs(radialDist - expectedDist) <= 2.0) {
-        meshedGearPairs.push([gA, gB]);
-        adjacency.get(gA.inst.instanceId)?.add(gB.inst.instanceId);
-        adjacency.get(gB.inst.instanceId)?.add(gA.inst.instanceId);
-      }
-    }
+  // Connected parts: walk the joint graph through fasteners, then list the non-fasteners of each piece
+  const graph = graphFromJoints(found);
+  const neighbours = new Map(graph.nodes.map((id) => [id, []]));
+  for (const [a, b] of graph.edges) {
+    neighbours.get(a)?.push(b);
+    neighbours.get(b)?.push(a);
   }
-
-  // Detect captive structural clamps (where two fastener-connected beams clamp opposing top/bottom faces of a third part)
-  for (const nfTarget of nonFasteners) {
-    const tBox = expandedWorldBoxes.get(nfTarget.inst.instanceId);
-    if (!tBox) continue;
-    const touchingNeighbors = nonFasteners.filter((other) => {
-      if (other.inst.instanceId === nfTarget.inst.instanceId) return false;
-      const oBox = expandedWorldBoxes.get(other.inst.instanceId);
-      return oBox && tBox.intersectsBox(oBox);
-    });
-    for (let i = 0; i < touchingNeighbors.length; i++) {
-      for (let j = i + 1; j < touchingNeighbors.length; j++) {
-        const a = touchingNeighbors[i].inst.instanceId;
-        const b = touchingNeighbors[j].inst.instanceId;
-        // If `a` and `b` are already fastened to each other and both flush-contact `nfTarget`, they form a captive clamp around `nfTarget`
-        if (adjacency.get(a)?.has(b)) {
-          adjacency.get(a)?.add(nfTarget.inst.instanceId);
-          adjacency.get(b)?.add(nfTarget.inst.instanceId);
-          adjacency.get(nfTarget.inst.instanceId)?.add(a);
-          adjacency.get(nfTarget.inst.instanceId)?.add(b);
-        }
-      }
-    }
-  }
-
-  // Connected Components BFS over nonFasteners
+  const nonFastenerById = new Map(nonFasteners.map((n) => [n.inst.instanceId, n]));
   const visited = new Set();
   const components = [];
   for (const nf of nonFasteners) {
@@ -960,9 +1046,9 @@ export function auditAssembly(state) {
     visited.add(startId);
     while (queue.length > 0) {
       const curr = queue.shift();
-      const item = nonFasteners.find((x) => x.inst.instanceId === curr);
+      const item = nonFastenerById.get(curr);
       if (item) comp.push({ instanceId: curr, label: item.inst.label });
-      for (const nxt of adjacency.get(curr) || []) {
+      for (const nxt of neighbours.get(curr) || []) {
         if (!visited.has(nxt)) {
           visited.add(nxt);
           queue.push(nxt);
@@ -986,7 +1072,6 @@ export function auditAssembly(state) {
   const shaftFasteners = fasteners.filter((f) => featuresById.get(f.inst.instanceId).some((x) => x.kind === 'shaft'));
 
   // A part is on a shaft when the shaft is seated in one of its openings
-  const nonFastenerById = new Map(nonFasteners.map((n) => [n.inst.instanceId, n]));
   const shaftToCoaxialParts = new Map();
   const partToCoaxialShafts = new Map();
   for (const sf of shaftFasteners) {
@@ -2374,6 +2459,9 @@ function mirrorPlacedParts(placed, mirror) {
     const part = catalogById.get(p.inst.partId);
     const pose = mirrorPose(part, p.inst, axisIdx, offsetMm);
     const mirroredInst = { ...p.inst, instanceId: `inst-${stamp}-m${items.length.toString(36)}-${Math.random().toString(36).slice(2, 6)}`, position: pose.position, rotation: pose.rotation };
+    // New parts are added outside any group
+    delete mirroredInst.groupId;
+    delete mirroredInst.groupName;
     // Its own mirror image: every feature lands where the original's are
     const original = worldFeaturesFor(p.inst).map((f) => [f.start, f.end]);
     const image = worldFeaturesFor(mirroredInst).map((f) => [f.start, f.end]);

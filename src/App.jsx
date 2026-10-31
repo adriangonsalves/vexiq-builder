@@ -15,12 +15,8 @@ import {
   Download,
   Expand,
   Fullscreen,
-  Eye,
-  EyeOff,
   Grid,
   History as HistoryIcon,
-  Layers,
-  Lock,
   Maximize2,
   Move,
   PanelLeftClose,
@@ -34,7 +30,6 @@ import {
   Sparkles,
   Trash2,
   Undo2,
-  Unlock,
   Upload,
   X
 } from 'lucide-react';
@@ -43,6 +38,9 @@ import PartThumbnail from './components/PartThumbnail.jsx';
 import HistoryTimeline from './components/HistoryTimeline.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
+import SelectMenu from './components/SelectMenu.jsx';
+import AssemblyOutliner from './components/AssemblyOutliner.jsx';
+import SetInspector from './components/SetInspector.jsx';
 import ViewMenu from './components/ViewMenu.jsx';
 import { STARTERS, starterById } from './starters.js';
 import {
@@ -63,6 +61,22 @@ import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
 import LibraryDialog from './components/LibraryDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
 import { DEFAULT_SETTINGS, isLinearHistory, normalizeSettings } from './utils/appSettings.js';
+import {
+  applyPatches as applyGroupPatches,
+  applySetTransform,
+  axisTurn,
+  cloneSet,
+  expandToGroups,
+  groupCollapse,
+  groupParts,
+  groupsOf,
+  renameGroup,
+  setPivot,
+  setWorldBoxes,
+  ungroupParts,
+  wholeGroupOf
+} from './utils/partGroups.js';
+import { connectedFrom, layersFrom } from './utils/jointLayers.js';
 import {
   applyOps,
   createHistory,
@@ -96,6 +110,7 @@ const VEX_COLORS = [
 
 const TIMELINE_KEY = 'vexiq_history_timeline_visible';
 // This tab's id: its own saves come back over SSE and are skipped; other tabs' saves are taken
+const EMPTY_IDS = [];
 const TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const EXPLODE_MODES = ['off', 'x', 'y', 'z', 'all'];
 const PROJECTIONS = ['perspective', 'orthographic'];
@@ -129,8 +144,22 @@ export default function App() {
   // Parts and their history change together: every change to the parts is recorded as a step
   const [build, setBuild] = useState(() => ({ instances: [], history: createHistory() }));
   const { instances, history } = build;
-  const [selectedId, setSelectedId] = useState(null);
+  // Selection (openspec outliner-part-groups): ordered ids, the last one is the primary part.
+  // selectedId is the part when exactly one is selected, so single-part tools turn off for sets.
+  const [selectedIds, setSelectedIds] = useState([]);
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+  const primaryId = selectedIds.at(-1) ?? null;
+  const setSelectedId = useCallback((id) => setSelectedIds(id ? [id] : []), []);
+  // A saved or sent state's selection: selectedIds when given, else the older single selectedId
+  const adoptSelection = useCallback((state) => {
+    if (Array.isArray(state?.selectedIds)) setSelectedIds(state.selectedIds.filter(Boolean));
+    else if (state?.selectedId !== undefined) setSelectedIds(state.selectedId ? [state.selectedId] : []);
+  }, []);
   const [transformMode, setTransformMode] = useState('translate'); // 'translate' | 'rotate'
+  // Select mode: a plain click in the 3D view adds or removes parts; never saved
+  const [selectMode, setSelectMode] = useState(false);
+  // Box select: a left-drag in the 3D view draws a box that selects parts; never saved
+  const [boxSelect, setBoxSelect] = useState(false);
   const [snapPitchFactor, setSnapPitchFactor] = useState(0.5); // 1 = 12.7mm, 0.5 = 6.35mm, 0.25 = 3.175mm, 0 = Free
   const [rotationSnapDeg, setRotationSnapDeg] = useState(15); // 15, 45, 90, 0
   const [showGrid, setShowGrid] = useState(true);
@@ -374,10 +403,11 @@ export default function App() {
 
   const historyPosition = useMemo(() => headPosition(history), [history]);
 
-  // Undo, redo or an MCP change can remove the selected part
+  // Undo, redo or an MCP change can remove selected parts
   useEffect(() => {
-    if (selectedId && !instances.some((i) => i.instanceId === selectedId)) setSelectedId(null);
-  }, [instances, selectedId]);
+    const ids = new Set(instances.map((i) => i.instanceId));
+    if (selectedIds.some((id) => !ids.has(id))) setSelectedIds((prev) => prev.filter((id) => ids.has(id)));
+  }, [instances, selectedIds]);
 
   const auditDialogRef = useRef(null);
   const suppressNextServerSyncRef = useRef(false);
@@ -434,7 +464,7 @@ export default function App() {
         if (hasSavedBuild) {
           suppressNextServerSyncRef.current = true;
           adoptServerState(serverState);
-          if (serverState.selectedId !== undefined) setSelectedId(serverState.selectedId);
+          adoptSelection(serverState);
           if (serverState.viewport) {
             if (serverState.viewport.transformMode) setTransformMode(serverState.viewport.transformMode);
             if (serverState.viewport.snapPitchFactor !== undefined) {
@@ -598,9 +628,7 @@ export default function App() {
         if (nextState && Array.isArray(nextState.instances)) {
           suppressNextServerSyncRef.current = true;
           adoptServerState(nextState);
-          if (nextState.selectedId !== undefined) {
-            setSelectedId(nextState.selectedId);
-          }
+          adoptSelection(nextState);
           if (nextState.viewport) {
             const vp = nextState.viewport;
             if (vp.transformMode) setTransformMode(vp.transformMode);
@@ -651,7 +679,8 @@ export default function App() {
         ...(switching ? {} : { baseHistoryRev: base.baseRev }),
         ...(sendHistory ? { history } : {}),
         ...(currentBuild ? { build: currentBuild } : {}),
-        selectedId,
+        selectedId: primaryId,
+        selectedIds,
         viewport: {
           transformMode,
           snapPitchFactor,
@@ -701,7 +730,7 @@ export default function App() {
     catalog.length,
     instances,
     history,
-    selectedId,
+    selectedIds,
     transformMode,
     snapPitchFactor,
     rotationSnapDeg,
@@ -763,17 +792,34 @@ export default function App() {
     [selectedInstance, catalogMap]
   );
 
+  // The Inspector header: one part (label; catalog name · part number, in <group>), a group (name; N parts)
+  // or a loose set (N parts selected)
+  const selectionTitle = useMemo(() => {
+    if (selectedIds.length === 0) return null;
+    const allGroups = groupsOf(instances);
+    if (selectedInstance) {
+      const group = selectedInstance.groupId ? allGroups.get(selectedInstance.groupId) : null;
+      const catalogLine = selectedPartMeta ? `${selectedPartMeta.name} · ${selectedPartMeta.partNumber}` : '';
+      return { name: selectedInstance.label, sub: [catalogLine, group ? `in ${group.name}` : ''].filter(Boolean).join(' · ') };
+    }
+    const group = wholeGroupOf(instances, selectedIds, allGroups);
+    if (group) return { name: group.name, sub: `${group.ids.length} parts` };
+    return { name: `${selectedIds.length} parts selected`, sub: '' };
+  }, [instances, selectedIds, selectedInstance, selectedPartMeta]);
+
   // The sample starter (src/starters.js); File → Starter lists every starter
   function buildStarterAssembly(catalogList) {
     return starterById('sample').build(catalogList);
   }
 
-  const resolveIntersectingInstances = (list, keepInstanceId = null) => {
+  // keep: an id or a list of ids left where they are (the parts being selected)
+  const resolveIntersectingInstances = (list, keep = null) => {
+    const kept = new Set(Array.isArray(keep) ? keep : keep ? [keep] : []);
     // Nothing to move back: keep the same list, so a plain selection isn't treated as a build change
-    if (!list.some((inst) => inst.isIntersecting && inst.instanceId !== keepInstanceId)) return list;
+    if (!list.some((inst) => inst.isIntersecting && !kept.has(inst.instanceId))) return list;
     const out = [];
     for (const inst of list) {
-      if (inst.instanceId === keepInstanceId) {
+      if (kept.has(inst.instanceId)) {
         out.push(inst);
         continue;
       }
@@ -793,9 +839,204 @@ export default function App() {
     return out;
   };
 
-  const handleSelectInstance = (nextId) => {
-    setInstances((prev) => resolveIntersectingInstances(prev, nextId), { label: moveBackLabel });
-    setSelectedId(nextId);
+  /**
+   * Select a part. A grouped part brings its whole group unless `exact` (an Outliner row inside a folder).
+   * `additive` (Shift+click, Select mode) adds the part, or removes it when it is already selected.
+   */
+  const handleSelectInstance = (nextId, { additive = false, exact = false } = {}) => {
+    const picked = !nextId ? [] : exact ? [nextId] : expandToGroups([nextId], instances);
+    let next = picked;
+    if (additive) {
+      const all = picked.length > 0 && picked.every((id) => selectedIds.includes(id));
+      next = all
+        ? selectedIds.filter((id) => !picked.includes(id))
+        : [...selectedIds.filter((id) => !picked.includes(id)), ...picked];
+    }
+    setInstances((prev) => resolveIntersectingInstances(prev, next), { label: moveBackLabel });
+    setSelectedIds(next);
+  };
+
+  // --- Select menu (openspec outliner-part-groups) ---
+  const groups = useMemo(() => groupsOf(instances), [instances]);
+  const selectedGroupIds = useMemo(() => {
+    const byId = new Map(instances.map((i) => [i.instanceId, i]));
+    return [...new Set(selectedIds.map((id) => byId.get(id)?.groupId).filter((g) => groups.has(g)))];
+  }, [instances, selectedIds, groups]);
+
+  const changeSelection = (next) => {
+    setInstances((prev) => resolveIntersectingInstances(prev, next), { label: moveBackLabel });
+    setSelectedIds(next);
+  };
+  const handleSelectAll = () => changeSelection(instances.filter((i) => i.visible !== false).map((i) => i.instanceId));
+  const handleSelectNone = () => changeSelection([]);
+  const handleInvertSelection = () =>
+    changeSelection(instances.filter((i) => i.visible !== false && !selectedIds.includes(i.instanceId)).map((i) => i.instanceId));
+
+  // The joints between the parts as they are now (unsaved drags included), from the bridge's audit code
+  // `pinnedOnly`: only pins, shafts and pegs seated in holes join parts (no gear meshes or parts that only touch)
+  const fetchJointGraph = async (parts, { pinnedOnly = false } = {}) => {
+    const res = await fetch('/api/assembly/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'joint_graph', state: { instances: parts }, params: { pinnedOnly } })
+    });
+    const data = await res.json().catch(() => null);
+    if (!data?.ok || !data.graph) throw new Error(data?.error || `the server replied ${res.status}`);
+    return data.graph;
+  };
+
+  const partCount = (n) => `${n} part${n === 1 ? '' : 's'}`;
+
+  const handleSelectConnected = async () => {
+    if (selectedIds.length === 0) {
+      setActionFeedback({ message: 'Select a part first.', isError: true });
+      return;
+    }
+    const parts = instances;
+    const seeds = selectedIds;
+    try {
+      const graph = await fetchJointGraph(parts);
+      const next = connectedFrom(graph, seeds, { collapse: groupCollapse(parts) });
+      changeSelection(next);
+      setActionFeedback({ message: `${partCount(next.length)} selected.`, isError: false });
+    } catch (err) {
+      setActionFeedback({ message: `Couldn't find connected parts: ${err.message}`, isError: true });
+    }
+  };
+
+  /**
+   * Shift+wheel: grow the selection one layer of joined parts (+1) or take the last layer off (-1).
+   * Shift+Ctrl/Cmd+wheel (`pinnedOnly`) does the same through pins, shafts and pegs in holes only.
+   * Remembers where it started until the selection changes some other way (its last ids no longer
+   * match) or the other kind of step is used, which starts again from the current selection.
+   */
+  const expandRef = useRef(null); // { layers, depth, lastIds, pinnedOnly } or { pending: true } while the joints load
+  const handleExpandSelection = async (dir, { pinnedOnly = false } = {}) => {
+    let st = expandRef.current;
+    const current = selectedIds;
+    const same = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
+    if (!st || (!st.pending && (!same(st.lastIds, current) || st.pinnedOnly !== pinnedOnly))) {
+      if (dir < 0 || current.length === 0) return;
+      st = { pending: true, pinnedOnly };
+      expandRef.current = st;
+      try {
+        const graph = await fetchJointGraph(instances, { pinnedOnly });
+        st.layers = layersFrom(graph, current, { collapse: groupCollapse(instances) });
+        st.depth = 0;
+        st.pending = false;
+      } catch (err) {
+        expandRef.current = null;
+        setActionFeedback({ message: `Couldn't find connected parts: ${err.message}`, isError: true });
+        return;
+      }
+      if (expandRef.current !== st) return;
+    } else if (st.pending) {
+      return;
+    }
+    const depth = Math.max(0, Math.min(st.layers.length - 1, st.depth + dir));
+    if (depth === st.depth && st.lastIds) return;
+    st.depth = depth;
+    st.lastIds = st.layers.slice(0, depth + 1).flat();
+    changeSelection(st.lastIds);
+    setActionFeedback({ message: `${st.pinnedOnly ? 'Pinned layer' : 'Layer'} ${depth} · ${partCount(st.lastIds.length)}`, isError: false });
+  };
+
+  // A folder's hide or lock button: every part of the group, one step
+  const handleSetGroupFlag = (group, field, value) => {
+    const verb = field === 'visible' ? (value ? 'Show' : 'Hide') : value ? 'Lock' : 'Unlock';
+    const members = new Set(group.ids);
+    setInstances((prev) => prev.map((i) => (members.has(i.instanceId) ? { ...i, [field]: value } : i)), {
+      label: `${verb} ${group.name}`
+    });
+  };
+
+  // --- A set of parts: a group or a loose multi-selection, moved and turned as one ---
+  const isSet = selectedIds.length > 1;
+  const selectionGroup = useMemo(() => wholeGroupOf(instances, selectedIds, groups), [instances, selectedIds, groups]);
+  const setName = selectionGroup ? selectionGroup.name : partCount(selectedIds.length);
+  const setParts = useMemo(() => {
+    const wanted = new Set(selectedIds);
+    return instances.filter((i) => wanted.has(i.instanceId));
+  }, [instances, selectedIds]);
+  const setCentre = useMemo(
+    () => (isSet ? setPivot(instances, selectedIds, setWorldBoxes(instances, selectedIds, (i) => catalogMap.get(i.partId)?.bbox)) : null),
+    [isSet, instances, selectedIds, catalogMap]
+  );
+  const setMoveBlocked = () => {
+    const message = setParts.some((p) => p.locked) ? 'Part is locked' : setParts.some((p) => p.visible === false) ? 'Some parts are hidden' : null;
+    if (message) setActionFeedback({ message, isError: true });
+    return Boolean(message);
+  };
+  // One step for the whole set (also the viewport's drag of a set)
+  const handleUpdateSet = (ids, patches, meta = {}) => {
+    if (!patches.length) return;
+    setInstances((prev) => applyGroupPatches(prev, patches), meta);
+  };
+  const setKey = selectedIds.join(',');
+  const moveSetBy = (deltaPos, mergeKey) => {
+    if (setMoveBlocked()) return;
+    handleUpdateSet(selectedIds, applySetTransform(instances, selectedIds, setCentre, { deltaPos }), {
+      label: `Move ${setName}`,
+      mergeKey: `${mergeKey}:${setKey}`
+    });
+  };
+  const handleMoveSetCentreTo = (axis, value) => {
+    const delta = [0, 0, 0];
+    delta[axis] = value - setCentre[axis];
+    if (Math.abs(delta[axis]) < 1e-6) return;
+    moveSetBy(delta, `set-position-${axis}`);
+  };
+  const handleTurnSet90 = (axis) => {
+    if (setMoveBlocked()) return;
+    handleUpdateSet(selectedIds, applySetTransform(instances, selectedIds, setCentre, { deltaQuat: axisTurn('XYZ'[axis], 90) }), {
+      label: `Turn ${setName}`
+    });
+  };
+  const handleSetSetFlag = (field, value) => {
+    const verb = field === 'visible' ? (value ? 'Show' : 'Hide') : value ? 'Lock' : 'Unlock';
+    const wanted = new Set(selectedIds);
+    setInstances((prev) => prev.map((i) => (wanted.has(i.instanceId) ? { ...i, [field]: value } : i)), { label: `${verb} ${setName}` });
+  };
+  // Returns false when the name is refused (empty)
+  const handleRenameGroup = (name) => {
+    if (!selectionGroup) return false;
+    try {
+      const renamed = renameGroup(instances, selectionGroup.id, name);
+      setInstances((prev) => applyGroupPatches(prev, renamed.patches), { label: `Rename ${renamed.oldName} to ${renamed.name}` });
+      return true;
+    } catch (err) {
+      setActionFeedback({ message: err.message, isError: true });
+      return false;
+    }
+  };
+
+  // A box drawn in the 3D view: its parts (with their whole groups) replace the selection, or are added
+  // to it with Shift or in Select mode
+  const handleBoxSelect = (ids, { additive }) => {
+    const picked = expandToGroups(ids, instances);
+    const next = additive ? [...selectedIds.filter((id) => !picked.includes(id)), ...picked] : picked;
+    changeSelection(next);
+    if (picked.length === 0) setActionFeedback({ message: 'No parts in the box.', isError: false });
+  };
+
+  const handleGroupSelected = () => {
+    if (selectedIds.length < 2) {
+      setActionFeedback({ message: 'Select two or more parts to make a group.', isError: true });
+      return;
+    }
+    const { name, patches } = groupParts(instances, selectedIds);
+    setInstances((prev) => applyGroupPatches(prev, patches), { label: `Group ${selectedIds.length} parts as ${name}` });
+    setActionFeedback({ message: `Grouped ${selectedIds.length} parts as ${name}.`, isError: false });
+  };
+
+  const handleUngroupSelected = () => {
+    const { groupIds, patches } = ungroupParts(instances, selectedIds);
+    if (groupIds.length === 0) {
+      setActionFeedback({ message: 'No group is selected.', isError: true });
+      return;
+    }
+    const label = groupIds.length === 1 ? `Ungroup ${groups.get(groupIds[0]).name}` : `Ungroup ${groupIds.length} groups`;
+    setInstances((prev) => applyGroupPatches(prev, patches), { label });
   };
 
   const handleRevertSelectedIntersection = () => {
@@ -868,6 +1109,13 @@ export default function App() {
   };
 
   const handleDuplicateSelected = () => {
+    if (selectedIds.length > 1) {
+      // A set: copies one pitch along X, keeping their places relative to one another; the copies are selected
+      const copies = cloneSet(instances, selectedIds, [VEX_PITCH_MM, 0, 0]);
+      setInstances((prev) => [...resolveIntersectingInstances(prev, null), ...copies], { label: `Clone ${setName}` });
+      setSelectedIds(copies.map((c) => c.instanceId));
+      return;
+    }
     if (!selectedInstance) return;
     const copyPos = [
       Number((selectedInstance.position[0] + VEX_PITCH_MM).toFixed(3)),
@@ -925,15 +1173,17 @@ export default function App() {
   };
 
   const handleDeleteSelected = () => {
-    if (!selectedId) return;
-    setInstances((prev) => prev.filter((i) => i.instanceId !== selectedId));
-    setSelectedId(null);
+    if (selectedIds.length === 0) return;
+    const doomed = new Set(selectedIds);
+    setInstances((prev) => prev.filter((i) => !doomed.has(i.instanceId)), selectedIds.length > 1 ? { label: `Delete ${setName}` } : {});
+    setSelectedIds([]);
   };
 
   // Right-click on the selected part in the viewport: switch between Move and Rotate
   const handleToggleRotateRequest = () => {
-    if (!selectedInstance) return;
-    if (selectedInstance.locked) {
+    if (selectedIds.length === 0) return;
+    const parts = instances.filter((i) => selectedIds.includes(i.instanceId));
+    if (parts.some((p) => p.locked)) {
       setActionFeedback({ message: 'Part is locked', isError: true });
       return;
     }
@@ -988,7 +1238,8 @@ export default function App() {
     mcpEnabled: settings.mcpEnabled,
     catalog,
     instances,
-    selectedId,
+    selectedId: primaryId,
+    selectedIds,
     placePartAt: (part, pos, color) => handleAddPart(part, pos, color, { source: 'assistant' }),
     configureViewport: ({
       transformMode: tm,
@@ -1107,6 +1358,24 @@ export default function App() {
       }
       // Nothing else edits or selects while a past point is shown
       if (previewRef.current) return;
+      if (mod && key === 'a') {
+        e.preventDefault();
+        handleSelectAll();
+        return;
+      }
+      if (!mod && !e.altKey && key === 'b') {
+        setBoxSelect((on) => !on);
+        return;
+      }
+      if (!mod && !e.altKey && key === 'c') {
+        handleSelectConnected();
+        return;
+      }
+      if (!mod && !e.altKey && key === 'g') {
+        if (e.shiftKey) handleUngroupSelected();
+        else handleGroupSelected();
+        return;
+      }
       if (key === 'w') {
         setTransformMode('translate');
       } else if (key === 'e') {
@@ -1126,6 +1395,10 @@ export default function App() {
       } else if (e.key === 'Escape') {
         if (explodeMode !== 'off') {
           setExplodeMode('off');
+        } else if (boxSelect || selectMode) {
+          // Esc first leaves Box select / Select mode and keeps the selection
+          setBoxSelect(false);
+          setSelectMode(false);
         } else {
           setInstances((prev) => resolveIntersectingInstances(prev, null), { label: moveBackLabel });
           setSelectedId(null);
@@ -1320,7 +1593,8 @@ export default function App() {
         body: JSON.stringify({
           action,
           state: {
-            selectedId,
+            selectedId: primaryId,
+            selectedIds,
             viewport: {
               transformMode,
               snapPitchFactor,
@@ -1351,9 +1625,7 @@ export default function App() {
         if (data.state && Array.isArray(data.state.instances)) {
           suppressNextServerSyncRef.current = true;
           adoptServerState(data.state);
-          if (data.state.selectedId !== undefined) {
-            setSelectedId(data.state.selectedId);
-          }
+          adoptSelection(data.state);
         }
         if (data.message) {
           setActionFeedback({ message: data.message, isError: Boolean(data.isIntersecting) });
@@ -1443,6 +1715,24 @@ export default function App() {
             >
               <HistoryIcon size={14} />
             </button>
+          </div>
+
+          <div className="toolbar-group" role="group" aria-label="Selection">
+            <SelectMenu
+              selectMode={selectMode}
+              onToggleSelectMode={() => setSelectMode((on) => !on)}
+              boxSelect={boxSelect}
+              onToggleBoxSelect={() => setBoxSelect((on) => !on)}
+              hasSelection={selectedIds.length > 0}
+              canGroup={selectedIds.length >= 2}
+              canUngroup={selectedGroupIds.length > 0}
+              onConnected={handleSelectConnected}
+              onAll={handleSelectAll}
+              onNone={handleSelectNone}
+              onInvert={handleInvertSelection}
+              onGroup={handleGroupSelected}
+              onUngroup={handleUngroupSelected}
+            />
           </div>
 
           <div className="toolbar-group" role="group" aria-label="Transform Mode">
@@ -1657,8 +1947,14 @@ export default function App() {
             instances={preview ? preview.parts : instances}
             catalogMap={catalogMap}
             selectedId={preview ? null : selectedId}
+            selectedIds={preview ? EMPTY_IDS : selectedIds}
+            selectMode={selectMode}
+            boxSelect={boxSelect && !preview}
+            onBoxSelect={handleBoxSelect}
             onSelect={preview ? noop : handleSelectInstance}
+            onExpandSelection={preview ? noop : handleExpandSelection}
             onUpdateTransform={preview ? noop : handleUpdateTransform}
+            onUpdateSet={preview ? noop : (ids, patches, { kind }) => handleUpdateSet(ids, patches, { label: `${kind === 'turn' ? 'Turn' : 'Move'} ${setName}` })}
             onRegisterFlushMover={handleRegisterFlushMover}
             onRegisterScreenshot={handleRegisterScreenshot}
             transformMode={transformMode}
@@ -1701,6 +1997,17 @@ export default function App() {
                 <span style={{ color: '#93c5fd', marginLeft: 6 }}>• Loading mesh…</span>
               )}
             </div>
+
+            {selectedIds.length > 0 && !preview && (
+              <div className="hud-pill hud-pill-selection" role="status" aria-live="polite">
+                <span>
+                  <strong>{selectedIds.length === 1 ? '1 part' : `${selectedIds.length} parts`}</strong> selected
+                </span>
+                <button type="button" className="link-btn" onClick={handleSelectNone} title="Unselect everything (Esc)">
+                  Clear
+                </button>
+              </div>
+            )}
 
             {pickStatus && (
               <div className={`hud-pill hud-pill-pick ${pickStatus.tone === 'warning' ? 'hud-pill-pick-warning' : ''}`} role="status">
@@ -1801,101 +2108,41 @@ export default function App() {
         {/* Right Sidebar: Scene Assembly Outliner + Precision Inspector */}
         <aside className="panel panel-right">
           {/* Scene Outliner */}
-          <section className="outliner-section">
-            <div className="panel-header" style={{ padding: '10px 14px' }}>
-              <div className="panel-title-row">
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Layers size={14} />
-                  Assembly Outliner ({instances.length})
-                </span>
-                {instances.length > 0 && (
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    style={{ padding: '2px 7px', fontSize: 11 }}
-                    onClick={() => {
-                      setExplodeMode('off');
-                      setInstances([], { label: 'Clear assembly' });
-                      setSelectedId(null);
-                    }}
-                  >
-                    Clear All
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="instance-list scroller">
-              {instances.map((inst) => {
-                const isSelected = inst.instanceId === selectedId;
-                return (
-                  <div
-                    key={inst.instanceId}
-                    className={`instance-row ${isSelected ? 'selected' : ''}`}
-                    onClick={() => handleSelectInstance(inst.instanceId)}
-                  >
-                    <span
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 3,
-                        background: inst.isIntersecting ? '#9ca3af' : inst.color,
-                        opacity: inst.isIntersecting ? 0.5 : 1,
-                        flexShrink: 0
-                      }}
-                    />
-                    <span className="instance-row-name" title={inst.label}>
-                      {inst.label}
-                      {inst.isIntersecting && (
-                        <span style={{ color: '#fca5a5', marginLeft: 6, fontSize: 11 }}>
-                          (Intersecting)
-                        </span>
-                      )}
-                    </span>
-
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title={inst.visible === false ? 'Show Part' : 'Hide Part'}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleUpdateTransform(inst.instanceId, {
-                          visible: inst.visible === false
-                        });
-                      }}
-                    >
-                      {inst.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title={inst.locked ? 'Unlock Part' : 'Lock Part'}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleUpdateTransform(inst.instanceId, { locked: !inst.locked });
-                      }}
-                    >
-                      {inst.locked ? <Lock size={13} /> : <Unlock size={13} />}
-                    </button>
-                  </div>
-                );
-              })}
-
-              {instances.length === 0 && (
-                <div className="empty-state">
-                  Click any part in the left library to place it into the 3D workspace.
-                </div>
-              )}
-            </div>
-          </section>
+          <AssemblyOutliner
+            instances={instances}
+            groups={groups}
+            selectedIds={selectedIds}
+            primaryId={primaryId}
+            selectMode={selectMode}
+            onSelectIds={changeSelection}
+            onTogglePart={(id, patch) => handleUpdateTransform(id, patch)}
+            onSetGroupFlag={handleSetGroupFlag}
+            onClearAll={() => {
+              setExplodeMode('off');
+              setInstances([], { label: 'Clear assembly' });
+              setSelectedId(null);
+            }}
+          />
 
           {/* Part Inspector */}
           <section className="inspector-section scroller">
             <div className="panel-header" style={{ padding: '10px 14px' }}>
               <div className="panel-title-row">
-                <span>Part Inspector</span>
-                {selectedInstance && (
+                {selectionTitle ? (
+                  <div className="inspector-title">
+                    <span className="inspector-name" title={selectionTitle.name}>
+                      {selectionTitle.name}
+                    </span>
+                    {selectionTitle.sub && (
+                      <span className="inspector-sub" title={selectionTitle.sub}>
+                        {selectionTitle.sub}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span>Part Inspector</span>
+                )}
+                {selectedIds.length > 0 && (
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button
                       type="button"
@@ -1921,7 +2168,19 @@ export default function App() {
               </div>
             </div>
 
-            {selectedInstance && selectedPartMeta ? (
+            {isSet ? (
+              <SetInspector
+                group={selectionGroup}
+                parts={setParts}
+                pivot={setCentre}
+                snapPitchFactor={snapPitchFactor}
+                onRename={handleRenameGroup}
+                onMoveBy={(delta) => moveSetBy(delta, 'set-nudge')}
+                onMoveCentreTo={handleMoveSetCentreTo}
+                onTurn={handleTurnSet90}
+                onSetFlag={handleSetSetFlag}
+              />
+            ) : selectedInstance && selectedPartMeta ? (
               <div className="inspector-body">
                 {/* Position in mm + Pitch */}
                 <div className="field-group">

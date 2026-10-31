@@ -273,5 +273,19 @@ const session = () => {
   check('bridge: nothing saved yet and no history: saved as sent', !legacy.conflict && legacy.state.instances.length === 1);
 }
 
+{
+  // Groups (openspec outliner-part-groups): a group-only change is one update op that survives saving
+  const A = makePart('Beam'), B = makePart('Pin');
+  const grouped = [A, B].map((p) => ({ ...p, groupId: 'g1', groupName: 'Group 1' }));
+  const ops = diffParts([A, B], grouped);
+  check('groups: grouping two parts is two update ops', ops.length === 2 && ops.every((o) => o.op === 'update' && o.after.groupId === 'g1'));
+  const step = recordStep(createHistory([A, B]), [A, B], grouped);
+  check('groups: grouping records one step', step.step && step.history.steps.length === 1);
+  const saved = JSON.parse(JSON.stringify(step.history));
+  const back = undo(saved, grouped);
+  check('groups: undo after a save/load leaves the parts ungrouped', back.parts.every((p) => !('groupId' in p) && !('groupName' in p)));
+  check('groups: a missing group equals no group', diffParts([A], [{ ...A, groupId: null, groupName: '' }]).length === 0);
+}
+
 console.log(failures === 0 ? '\nAll history checks passed.' : `\n${failures} history check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);
