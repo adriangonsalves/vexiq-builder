@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
+import { kitColor } from './kit-colors.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '..');
@@ -284,7 +285,9 @@ async function main() {
     }
 
     const stat = fs.statSync(entry.stepPath);
-    const { category, defaultColor, isMetal } = classifyPart(entry.displayName);
+    const classified = classifyPart(entry.displayName);
+    const { category, isMetal } = classified;
+    const defaultColor = kitColor(entry.displayName) ?? classified.defaultColor; // the Competition Kit poster's colour when it shows the part
     pendingTasks.push({
       ...entry,
       category,
