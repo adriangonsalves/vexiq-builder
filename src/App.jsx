@@ -769,6 +769,8 @@ export default function App() {
   }
 
   const resolveIntersectingInstances = (list, keepInstanceId = null) => {
+    // Nothing to move back: keep the same list, so a plain selection isn't treated as a build change
+    if (!list.some((inst) => inst.isIntersecting && inst.instanceId !== keepInstanceId)) return list;
     const out = [];
     for (const inst of list) {
       if (inst.instanceId === keepInstanceId) {
