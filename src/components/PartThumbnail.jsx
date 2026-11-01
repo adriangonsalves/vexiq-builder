@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { loadPartAsset, RUBBER_COLOR, isMetalPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { loadPartAsset, RUBBER_COLOR, isMetalPart, isClearPlasticPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
 
 const thumbnailDataUrlCache = new Map(); // "partId|defaultColor" -> string (dataURL)
 const thumbKey = (part) => `${part.id}|${part.defaultColor}`;
@@ -12,7 +16,8 @@ export const cachedThumbnail = (part) => thumbnailDataUrlCache.get(thumbKey(part
 export const THUMB_PX = 72; // shown size in the list
 export const GRID_THUMB_PX = 100; // shown size in the grid
 export const ZOOM_THUMB_PX = 300; // shown size in the hover picture
-const THUMB_RENDER_PX = ZOOM_THUMB_PX * 2; // one render serves every size, sharp on high-density screens
+const THUMB_RENDER_PX = ZOOM_THUMB_PX * 3; // one render serves every size, sharp on high-density screens
+const CLEAR_PLASTIC_OPACITY = 0.2; // as in the 3D view
 
 // Thumbnails sit on a light tile, and every part gets dark outlines, which contrast with the tile and
 // with the part: dark parts (beams, plates, gears) are lifted to a mid tone so both their shading and
@@ -34,6 +39,7 @@ let sharedThumbRenderer = null;
 let sharedThumbScene = null;
 let sharedThumbCamera = null;
 let sharedMeshGroup = null;
+let sharedComposer = null; // render -> ambient occlusion -> output, the 3D view's AO settings
 
 function getThumbnailStudio() {
   if (!sharedThumbRenderer) {
@@ -47,27 +53,28 @@ function getThumbnailStudio() {
 
     sharedThumbScene = new THREE.Scene();
 
-    // Studio light with a clear key from the viewer's side, so faces turned toward and away from it
-    // read as different shades
-    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
-    sharedThumbScene.add(ambient);
+    // The 3D view's lights, weaker and with the key light low and to the side: thumbnails show faces
+    // turned up toward the lights, which at full strength wash light parts out to pure white
+    const DIM = 0.6;
+    sharedThumbScene.add(new THREE.AmbientLight(0xffffff, 0.65 * DIM));
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x64748b, 0.35);
+    const hemi = new THREE.HemisphereLight(0xe2e8f0, 0x1e293b, 0.65 * DIM);
+    hemi.position.set(0, 300, 0);
     sharedThumbScene.add(hemi);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
-    keyLight.position.set(80, 120, 100);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.1 * DIM);
+    keyLight.position.set(300, 90, 160);
     sharedThumbScene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xdbeafe, 0.4);
-    fillLight.position.set(-80, -60, -70);
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.55 * DIM);
+    fillLight.position.set(-200, -120, -160);
     sharedThumbScene.add(fillLight);
 
     const pmremGenerator = new THREE.PMREMGenerator(sharedThumbRenderer);
     pmremGenerator.compileEquirectangularShader();
     const roomEnv = new RoomEnvironment();
     sharedThumbScene.environment = pmremGenerator.fromScene(roomEnv, 0.04).texture;
-    sharedThumbScene.environmentIntensity = 0.75;
+    sharedThumbScene.environmentIntensity = 0.6;
     roomEnv.dispose();
     pmremGenerator.dispose();
 
@@ -75,6 +82,20 @@ function getThumbnailStudio() {
 
     sharedMeshGroup = new THREE.Group();
     sharedThumbScene.add(sharedMeshGroup);
+
+    sharedComposer = new EffectComposer(
+      sharedThumbRenderer,
+      new THREE.WebGLRenderTarget(THUMB_RENDER_PX, THUMB_RENDER_PX, { type: THREE.HalfFloatType, samples: 4 })
+    );
+    sharedComposer.setPixelRatio(1);
+    sharedComposer.setSize(THUMB_RENDER_PX, THUMB_RENDER_PX);
+    const aoPass = new GTAOPass(sharedThumbScene, sharedThumbCamera, THUMB_RENDER_PX, THUMB_RENDER_PX);
+    // Scene units are mm: darkening reaches a few mm out from a corner
+    aoPass.updateGtaoMaterial({ radius: 4, distanceExponent: 1, thickness: 2, scale: 1.6, samples: 16 });
+    aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+    sharedComposer.addPass(new RenderPass(sharedThumbScene, sharedThumbCamera));
+    sharedComposer.addPass(aoPass);
+    sharedComposer.addPass(new OutputPass());
   }
   return {
     renderer: sharedThumbRenderer,
@@ -109,11 +130,26 @@ function renderPartToDataUrl(part, geometries, localBox) {
   const light = luminance(original) > LIGHT_PART_LUMINANCE;
   const partColor = thumbnailColor(baseHex);
 
-  const mat = new THREE.MeshStandardMaterial({
-    color: partColor,
-    roughness: isMetal ? 0.22 : (light ? 0.6 : 0.45),
-    metalness: isMetal ? 0.85 : 0.1
-  });
+  const isClear = isClearPlasticPart(part);
+  const mat = isClear
+    ? new THREE.MeshPhysicalMaterial({
+        color: partColor,
+        roughness: 0.06,
+        metalness: 0,
+        clearcoat: 1,
+        clearcoatRoughness: 0.05,
+        reflectivity: 0.9,
+        envMapIntensity: 1.6,
+        transparent: true,
+        opacity: CLEAR_PLASTIC_OPACITY,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      })
+    : new THREE.MeshStandardMaterial({
+        color: partColor,
+        roughness: isMetal ? 0.22 : 0.38,
+        metalness: isMetal ? 0.85 : 0.12
+      });
 
   const edgeMat = new THREE.LineBasicMaterial({
     color: 0x0f172a,
@@ -131,13 +167,12 @@ function renderPartToDataUrl(part, geometries, localBox) {
     } else if (geo.userData.fixedColor) {
       if (!fixedMats.has(geo.userData.fixedColor)) {
         const fc = thumbnailColor(geo.userData.fixedColor);
-        const fcLight = luminance(new THREE.Color(geo.userData.fixedColor)) > LIGHT_PART_LUMINANCE;
         fixedMats.set(
           geo.userData.fixedColor,
           new THREE.MeshStandardMaterial({
             color: fc,
-            roughness: fcLight ? 0.6 : 0.45,
-            metalness: 0.1
+            roughness: 0.38,
+            metalness: 0.12
           })
         );
       }
@@ -163,7 +198,9 @@ function renderPartToDataUrl(part, geometries, localBox) {
 
   // Frame by how big the part looks from this angle (not its longest side), so short parts aren't
   // cut off and long racks aren't tiny: the nearest distance at which every box corner fits
-  const viewDir = new THREE.Vector3(1.0, 0.78, 1.15).normalize();
+  // Corner connectors are seen from higher up, so their holed face shows and their pins don't cover it
+  const isCorner = /corner connector/i.test(part.name || '');
+  const viewDir = (isCorner ? new THREE.Vector3(0.5, 1.5, 0.75) : new THREE.Vector3(1.0, 0.78, 1.15)).normalize();
   camera.position.copy(center).add(viewDir);
   camera.lookAt(center);
   camera.updateMatrixWorld();
@@ -186,7 +223,7 @@ function renderPartToDataUrl(part, geometries, localBox) {
   camera.lookAt(center);
   camera.updateProjectionMatrix();
 
-  renderer.render(scene, camera);
+  sharedComposer.render();
   const dataUrl = renderer.domElement.toDataURL('image/webp', 0.88);
   thumbnailDataUrlCache.set(thumbKey(part), dataUrl);
   return dataUrl;

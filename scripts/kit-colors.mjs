@@ -11,7 +11,8 @@ export const KIT_COLORS = {
   lightGrey: '#acafae', // 1xN beams
   midGrey: '#858b8b', // 2xN beams
   plate: '#3f4245', // plates, wedge beams, corner beams
-  connector: '#d6d5d1', // corner connectors, hubs, washers
+  connector: '#d6d5d1', // hubs, washers
+  white: '#f8fafc', // corner connectors and linear motion brackets
   black: '#1c1c1c', // standoffs, tires, flaps
   pin: '#3e4143', // 1x2, 2x2, 0x2 and 0x3 connector pins
   rubber: '#2a2829', // collars, spacers, 32.2 mm hub
@@ -57,7 +58,7 @@ const RULES = [
   [/^Washer$/, C.connector],
 
   // Connectors
-  [/Corner Connector|Linear Motion Bracket/, C.connector],
+  [/Corner Connector|Linear Motion Bracket/, C.white],
 
   // Wheels
   [/32\.2mm Diameter Hub/, C.rubber],
