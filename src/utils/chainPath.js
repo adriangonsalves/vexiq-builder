@@ -653,24 +653,32 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, attach
 
   // Never tighter than the path allows: round up, unless it's within the chain's play
   const target = Math.max(2, Math.ceil(exact - CHAIN_PLAY_MM / pitch));
-  // A slack chain sags on one run: one between two outer parts (ending on a sprocket, where the walk
-  // starts), the one facing the floor (world −Y), or with `slack` 'upper' the one facing up; the
-  // longest when the parts lie flat
+  // A slack chain sags on one run ending on a sprocket (where the walk starts): one between two outer
+  // parts facing the floor (world −Y); with `slack` 'upper' one facing up, touching a part the chain
+  // bends round if no outer run faces up; the longest when the parts lie flat or every run touches a
+  // part the chain bends round
   const K = nodes.length;
   const endsOnSprocket = (k) => circles[nodes[(k + 1) % K].c].kind === 'sprocket';
   const outerRun = (k) => nodes[k].s > 0 && nodes[(k + 1) % K].s > 0;
-  let candidates = nodes.map((_, k) => k).filter((k) => endsOnSprocket(k) && outerRun(k));
-  if (!candidates.length) {
-    // Every run touches an enclosed part: the longest takes the slack
-    const longest = nodes.map((_, k) => k).filter(endsOnSprocket);
-    candidates = [longest.reduce((best, k) => (path.edges[k].length > path.edges[best].length ? k : best), longest[0])];
-  }
+  const ending = nodes.map((_, k) => k).filter(endsOnSprocket);
   const down = new THREE.Vector3(0, -1, 0);
   const down2 = [down.dot(frame.u), down.dot(frame.v)];
   const standing = Math.hypot(...down2) > 0.3;
-  const upper = standing && slack === 'upper';
-  const facing = (k) => (standing ? (upper ? -1 : 1) * (path.edges[k].m[0] * down2[0] + path.edges[k].m[1] * down2[1]) : path.edges[k].length);
+  const downness = (k) => (path.edges[k].m[0] * down2[0] + path.edges[k].m[1] * down2[1]) / Math.hypot(...down2);
+  const outerRuns = ending.filter(outerRun);
+  const upRuns = standing ? ending.filter((k) => downness(k) < -0.25) : [];
+  const upperRuns = upRuns.filter(outerRun).length ? upRuns.filter(outerRun) : upRuns;
+  const upper = standing && slack === 'upper' && upperRuns.length > 0;
+  let candidates = upper ? upperRuns : outerRuns;
+  if (!candidates.length) {
+    // Every run touches a part the chain bends round: the longest takes the slack
+    candidates = [ending.reduce((best, k) => (path.edges[k].length > path.edges[best].length ? k : best), ending[0])];
+  }
+  const facing = (k) => (standing ? (upper ? -1 : 1) * downness(k) : path.edges[k].length);
   const sagRun = candidates.reduce((best, k) => (facing(k) > facing(best) ? k : best), candidates[0]);
+  // The upper run is a real choice only when it isn't the run the slack would take anyway
+  const lowerRun = outerRuns.length ? outerRuns.reduce((best, k) => (downness(k) > downness(best) ? k : best), outerRuns[0]) : null;
+  const upperOffered = upperRuns.some((k) => k !== lowerRun);
   // The facing run unless closing on another needs fewer links
   let walk = planChain(circles, nodes, path, pitch, target, sagRun, down2, upper);
   if (!walk || walk.pivots2d.length > target) {
@@ -747,7 +755,7 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, attach
     standoffCount: onLoopParts.filter((s) => s.kind === 'guide').length,
     slack: standing ? (upper ? 'upper' : 'lower') : null,
     sagMm: walk.sag.depthMm,
-    slackChoice: standing && walk.sag.depthMm >= SAG_ASK_MM,
+    slackChoice: standing && upperOffered && walk.sag.depthMm >= SAG_ASK_MM,
     linkCount: links.length,
     exactLinks: Math.round(exact * 1000) / 1000,
     gapMm,

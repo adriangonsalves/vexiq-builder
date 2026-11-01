@@ -611,6 +611,17 @@ function checkChain(name, input, res) {
   const touching = under.ok ? near24(under) : [];
   check('  under: the chain touches the 24T from below only', touching.length > 0 && touching.every((d) => d.dot(up) < 0), touching.map((d) => d.dot(up).toFixed(1)).join(' '));
   check('  under: no link sinks into its teeth', under.ok && under.links.every((l) => new THREE.Vector3(...l.position).sub(c24).projectOnPlane(ax24).length() > 24.33 - 0.3));
+  // Under, with the slack asked on the upper run: the top runs both touch the 24T, so one of them takes it
+  const underUp = buildChainPath(set, { kind: 'chain', route: { [s24.instanceId]: 'under' }, slack: 'upper', metaByPartNumber });
+  checkChain('crossing 24T, under, slack on the upper run', set, underUp);
+  const lowSag = under.ok && under.links.map((l) => new THREE.Vector3(...l.position).dot(up));
+  const upSag = underUp.ok && underUp.links.map((l) => new THREE.Vector3(...l.position).dot(up));
+  check(
+    '  under + upper run: the slack really moves to an upper run (the bottom is no longer the lowest it was)',
+    underUp.ok && underUp.slack === 'upper' && underUp.slackChoice === true && Math.min(...upSag) > Math.min(...lowSag) + 3,
+    underUp.ok ? `${Math.min(...lowSag).toFixed(1)} → ${Math.min(...upSag).toFixed(1)}` : underUp.error
+  );
+  check('  under + upper run: no link sinks into the 24T', underUp.ok && underUp.links.every((l) => new THREE.Vector3(...l.position).sub(c24).projectOnPlane(ax24).length() > 24.33 - 0.3));
   const over = buildChainPath(set, { kind: 'chain', route: { [s24.instanceId]: 'over' }, metaByPartNumber });
   checkChain('crossing 24T, over', set, over);
   const above = over.ok ? near24(over) : [];
