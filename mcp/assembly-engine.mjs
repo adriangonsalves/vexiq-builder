@@ -2174,7 +2174,7 @@ export function summarizeAudit(audit) {
  * `instanceIds` default to the selection. Returns { error } or { instances (all, new state),
  * groupId, name, newIds, result (buildChainPath), message, turned: [instanceId] }.
  */
-export function buildChain(state, { kind = 'chain', instanceIds = null, grippers = true, name = null } = {}) {
+export function buildChain(state, { kind = 'chain', instanceIds = null, grippers = true, slack = 'lower', name = null } = {}) {
   const { catalog, catalogById } = getCatalog();
   if (kind !== 'chain' && kind !== 'track') return { error: 'kind must be "chain" or "track".' };
   const ids = Array.isArray(instanceIds) && instanceIds.length ? instanceIds : state.selectedIds?.length ? state.selectedIds : state.selectedId ? [state.selectedId] : [];
@@ -2184,7 +2184,7 @@ export function buildChain(state, { kind = 'chain', instanceIds = null, grippers
   const chosen = ids.map((id) => byId.get(id)).filter((i) => i.visible !== false);
   const res = buildChainPath(
     chosen.map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogById.get(i.partId), position: i.position, rotation: i.rotation })),
-    { kind, grippers: kind === 'track' && grippers !== false, metaByPartNumber: (pn) => catalog.find((p) => p.partNumber === pn) }
+    { kind, grippers: kind === 'track' && grippers !== false, slack: slack === 'upper' ? 'upper' : 'lower', metaByPartNumber: (pn) => catalog.find((p) => p.partNumber === pn) }
   );
   if (!res.ok) return { error: res.error };
 

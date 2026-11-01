@@ -686,13 +686,14 @@ const TOOLS = [
   {
     name: 'build_chain',
     description:
-      'Wrap a chain or a tank track round two or more sprockets (8/16/24/32/40 Tooth Sprocket) whose axles are parallel and whose teeth are in one plane, as the app\'s Build menu does. A chain is Chain Links; a track is Tank Tread Attachment Links, with a Traction Link rubber gripper plugged into every link unless grippers is false. The loop goes round the outside of the sprockets; selected sprockets it doesn\'t touch are left out. Links sit on each sprocket\'s pitch circle one tooth apart and run straight between sprockets; the count is the fewest links that reach round the path (never more than 0.5 mm short, at most a link longer; a slack chain sags on one run), and the reply gives the gap (mm, < 0: the chain is longer than the path) and which sprocket to move for an exact fit. Each sprocket is turned, with its axle and the parts on it, so its teeth sit in the chain. The new parts become one group "Chain N" / "Track N" (selected), all one undo step. Spur gears are refused.',
+      'Wrap a chain or a tank track round two or more sprockets (8/16/24/32/40 Tooth Sprocket) whose axles are parallel and whose teeth are in one plane, as the app\'s Build menu does. A chain is Chain Links; a track is Tank Tread Attachment Links, with a Traction Link rubber gripper plugged into every link unless grippers is false. The loop goes round the outside of the sprockets; selected sprockets it doesn\'t touch are left out. Links sit on each sprocket\'s pitch circle one tooth apart and run straight between sprockets; the count is the fewest links that reach round the path (never more than 0.75 mm short, at most a link longer). The other runs are straight; a slack chain hangs on one run toward the floor (the lower run, or the upper run hanging down into the loop with slack "upper"; outward on the longest run when the sprockets lie flat), and the reply gives the gap (mm, < 0: the chain is longer than the path) and which sprocket to move for an exact fit. Each sprocket is turned, with its axle and the parts on it, so its teeth sit in the chain. The new parts become one group "Chain N" / "Track N" (selected), all one undo step. Spur gears are refused.',
     inputSchema: {
       type: 'object',
       properties: {
         kind: { type: 'string', enum: ['chain', 'track'], description: 'Default "chain".' },
         instanceIds: { type: 'array', items: { type: 'string' }, description: 'The sprockets. Default: the current selection (other parts in it are ignored).' },
         grippers: { type: 'boolean', description: 'Track only: plug a Traction Link into every tread link. Default true.' },
+        slack: { type: 'string', enum: ['lower', 'upper'], description: 'Which run holds a slack chain\'s spare length when the sprockets stand up. Default "lower".' },
         name: { type: 'string', description: 'Group name. Default "Chain N" / "Track N".' }
       }
     }
@@ -962,7 +963,8 @@ async function executeTool(name, args = {}) {
   if (name === 'build_chain') {
     const state = readAssemblyState();
     const kind = args.kind === undefined ? 'chain' : args.kind;
-    const built = buildChain(state, { kind, instanceIds: args.instanceIds, grippers: args.grippers !== false, name: args.name });
+    if (args.slack !== undefined && args.slack !== 'lower' && args.slack !== 'upper') return { isError: true, error: 'slack must be "lower" or "upper".' };
+    const built = buildChain(state, { kind, instanceIds: args.instanceIds, grippers: args.grippers !== false, slack: args.slack, name: args.name });
     if (built.error) return { isError: true, error: built.error };
     await writeAssemblyState(
       { ...state, instances: built.instances, selectedIds: built.newIds, selectedId: built.newIds.at(-1) },
@@ -978,6 +980,7 @@ async function executeTool(name, args = {}) {
       onLoop: r.onLoop,
       leftOut: r.leftOut,
       gapMm: r.gapMm,
+      slack: r.slack,
       moveHint: r.moveHint,
       turned: built.turned,
       message: built.message,

@@ -450,6 +450,7 @@ function vexiqMcpBridgePlugin() {
                 kind: params.kind,
                 instanceIds: Array.isArray(params.instanceIds) ? params.instanceIds : null,
                 grippers: params.grippers !== false,
+                slack: params.slack === 'upper' ? 'upper' : 'lower',
                 name: params.name || null
               });
               res.setHeader('Content-Type', 'application/json');

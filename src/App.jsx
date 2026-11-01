@@ -42,8 +42,8 @@ import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
 import ExplodePanel from './components/ExplodePanel.jsx';
 import SelectMenu from './components/SelectMenu.jsx';
-import BuildMenu, { TrackBuilderDialog } from './components/BuildMenu.jsx';
-import { checkSprocketsForChain } from './utils/chainPath.js';
+import BuildMenu, { ChainBuilderDialog } from './components/BuildMenu.jsx';
+import { buildChainPath, checkSprocketsForChain } from './utils/chainPath.js';
 import AssemblyOutliner from './components/AssemblyOutliner.jsx';
 import SetInspector from './components/SetInspector.jsx';
 import ViewMenu from './components/ViewMenu.jsx';
@@ -1635,10 +1635,12 @@ export default function App() {
 
   // --- Builds: New, Starter, the library, Open from computer (openspec build-library) -------------
   const [libraryOpen, setLibraryOpen] = useState(false);
-  // Build menu (openspec chain-track-builder): the track dialog, and its grippers choice for this page
-  const [trackDialogOpen, setTrackDialogOpen] = useState(false);
+  // Build menu (openspec chain-track-builder): the builder dialog ({ kind, slackMm } while open), and
+  // its grippers and slack choices for this page
+  const [builderDialog, setBuilderDialog] = useState(null);
   const [trackGrippers, setTrackGrippers] = useState(true);
-  const closeTrackDialog = useCallback(() => setTrackDialogOpen(false), []);
+  const [chainSlack, setChainSlack] = useState('lower');
+  const closeBuilderDialog = useCallback(() => setBuilderDialog(null), []);
   const [libraryBuilds, setLibraryBuilds] = useState([]);
   const closeLibrary = useCallback(() => setLibraryOpen(false), []);
 
@@ -1849,16 +1851,29 @@ export default function App() {
   };
 
   // Can the selection carry a chain? Drives the Build menu's items and their hover text
-  const chainCheck = useMemo(() => {
+  const chainParts = useMemo(() => {
     const byId = new Map(instances.map((i) => [i.instanceId, i]));
-    const parts = selectedIds
+    return selectedIds
       .map((id) => byId.get(id))
       .filter((i) => i && i.visible !== false)
       .map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogMap.get(i.partId), position: i.position, rotation: i.rotation }));
-    return checkSprocketsForChain(parts);
   }, [instances, selectedIds, catalogMap]);
+  const chainCheck = useMemo(() => checkSprocketsForChain(chainParts), [chainParts]);
 
-  const handleBuildChain = (kind, { grippers = false } = {}) => {
+  // Chain builder builds at once unless there is noticeable slack to place; Track builder always
+  // asks (grippers), with the slack question when there is a choice
+  const openChainBuilder = (kind) => {
+    let slackMm = null;
+    if (chainCheck.ok) {
+      const catalogParts = [...catalogMap.values()];
+      const plan = buildChainPath(chainParts, { kind, grippers: false, metaByPartNumber: (pn) => catalogParts.find((p) => p.partNumber === pn) });
+      if (plan.ok && plan.slackChoice) slackMm = -plan.gapMm;
+    }
+    if (kind === 'chain' && slackMm == null) handleBuildChain('chain');
+    else setBuilderDialog({ kind, slackMm });
+  };
+
+  const handleBuildChain = (kind, { grippers = false, slack = 'lower' } = {}) => {
     if (previewRef.current) {
       setActionFeedback({ message: "This is a preview of an earlier point. Go to a step's end to edit.", isError: true });
       return;
@@ -1867,7 +1882,7 @@ export default function App() {
       setActionFeedback({ message: chainCheck.error, isError: true });
       return;
     }
-    handleRunSmartAction('build_chain', { kind, grippers, instanceIds: selectedIds });
+    handleRunSmartAction('build_chain', { kind, grippers, slack, instanceIds: selectedIds });
   };
 
   const handleOpenAuditDialog = async () => {
@@ -1966,8 +1981,8 @@ export default function App() {
             <BuildMenu
               chainCheck={chainCheck}
               disabledReason={preview ? "This is a preview of an earlier point. Go to a step's end to edit." : isRunningAction ? 'Working…' : null}
-              onChain={() => handleBuildChain('chain')}
-              onTrack={() => setTrackDialogOpen(true)}
+              onChain={() => openChainBuilder('chain')}
+              onTrack={() => openChainBuilder('track')}
             />
           </div>
 
@@ -3101,13 +3116,18 @@ export default function App() {
           }}
         />
       )}
-      <TrackBuilderDialog
-        open={trackDialogOpen}
+      <ChainBuilderDialog
+        open={Boolean(builderDialog)}
+        kind={builderDialog?.kind}
         grippers={trackGrippers}
-        onClose={closeTrackDialog}
-        onBuild={(grippers) => {
-          setTrackGrippers(grippers);
-          handleBuildChain('track', { grippers });
+        slack={chainSlack}
+        slackMm={builderDialog?.slackMm ?? null}
+        onClose={closeBuilderDialog}
+        onBuild={({ grippers, slack }) => {
+          const { kind, slackMm } = builderDialog;
+          if (kind === 'track') setTrackGrippers(grippers);
+          if (slackMm != null) setChainSlack(slack);
+          handleBuildChain(kind, { grippers: kind === 'track' && grippers, slack: slackMm != null ? slack : 'lower' });
         }}
       />
       <LibraryDialog

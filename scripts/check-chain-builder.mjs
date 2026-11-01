@@ -71,12 +71,26 @@ function checkChain(name, input, res) {
   check(`${name}: pivots on each sprocket sit on its pitch circle`, sprockets.every((s) => pivots.some((p) => near(p.distanceTo(s.center), s.pitchRadius, 0.05))) && onCircle > 0);
   check(`${name}: neighbouring pivots on a sprocket are 6.35 mm apart`, arcStepsOk);
   // +Y of every link points out of the loop (away from the loop's centre of sprockets)
-  const centroid = sprockets.reduce((c, s) => c.add(s.center), new THREE.Vector3()).multiplyScalar(1 / sprockets.length);
+  // Inside the loop: the nearest point on a line between two sprocket centres (a run hanging into
+  // the loop still has the line below it)
+  const spine = (p) => {
+    let best = null;
+    for (const a of sprockets) {
+      for (const c of sprockets) {
+        if (a === c) continue;
+        const ac = c.center.clone().sub(a.center);
+        const t = Math.min(1, Math.max(0, p.clone().sub(a.center).dot(ac) / ac.lengthSq()));
+        const q = a.center.clone().addScaledVector(ac, t);
+        if (!best || q.distanceTo(p) < best.distanceTo(p)) best = q;
+      }
+    }
+    return best;
+  };
   const outward = res.links.every((l, i) => {
     const y = new THREE.Vector3(0, 1, 0).applyQuaternion(quat(l.rotation));
     const mid = pivots[i].clone().add(pivots[(i + 1) % pivots.length]).multiplyScalar(0.5);
     const nearest = sprockets.reduce((a, s) => (s.center.distanceTo(mid) < a.center.distanceTo(mid) ? s : a));
-    const from = mid.distanceTo(nearest.center) < nearest.pitchRadius + 1 ? nearest.center : centroid;
+    const from = mid.distanceTo(nearest.center) < nearest.pitchRadius + 1 ? nearest.center : spine(mid);
     return y.dot(mid.clone().sub(from)) > 0;
   });
   check(`${name}: every link's outer side faces out of the loop`, outward);
@@ -169,6 +183,27 @@ function checkChain(name, input, res) {
   check('  the bottom run hangs below the sprockets, lowest near the middle', Math.min(...bottom.map((p) => p.y)) < -16.27 - 3 && Math.abs(bottom.reduce((m, p) => (p.y < m.y ? p : m)).x - 51.55) < 10, bottom.map((p) => p.y.toFixed(1)).join(' '));
   const runBends = P.map((p, i) => [p, bends[i]]).filter(([p]) => between(p) && p.y < -16.5).map(([, b]) => b);
   check('  and bends a little at every link of the sag, not in one place', runBends.every((b) => b > 0.5 && b < 8), runBends.map((b) => b.toFixed(1)).join(' '));
+}
+{
+  // Slack on the upper run: it hangs down into the loop, the bottom run stays straight, and the
+  // chain leaves and meets the sprockets without sinking into their teeth
+  const pair = [sprocket(16, [0, 0, 0]), sprocket(16, [103.1, 0, 0])];
+  const res = buildChainPath(pair, { kind: 'chain', slack: 'upper', metaByPartNumber });
+  check('slack chain offers the upper/lower choice', res.ok && res.slackChoice === true && res.slack === 'upper');
+  checkChain('16T + 16T, slack on the upper run', pair, res);
+  const P = res.links.map((l) => new THREE.Vector3(...l.position));
+  const between = (p) => p.x > 1 && p.x < 102;
+  const top = P.filter((p) => between(p) && p.y > 0);
+  const bottom = P.filter((p) => between(p) && p.y < 0);
+  check('  the bottom run is straight and tight', bottom.every((p) => near(p.y, -16.27, 0.05)), bottom.map((p) => p.y.toFixed(2)).join(' '));
+  check('  the top run hangs down into the loop, lowest near the middle', Math.min(...top.map((p) => p.y)) < 16.27 - 3 && Math.abs(top.reduce((m, p) => (p.y < m.y ? p : m)).x - 51.55) < 10, top.map((p) => p.y.toFixed(1)).join(' '));
+  const deepest = Math.min(...P.map((p) => Math.min(p.distanceTo(new THREE.Vector3(0, 0, 0)), p.distanceTo(new THREE.Vector3(103.1, 0, 0))) - 16.27));
+  check('  no link sinks into a sprocket\'s teeth', deepest > -0.3, deepest.toFixed(2));
+  const flat = [sprocket(16, [0, 0, 0], [90, 0, 0]), sprocket(16, [103.1, 0, 0], [90, 0, 0])];
+  const lying = buildChainPath(flat, { kind: 'chain', slack: 'upper', metaByPartNumber });
+  check('sprockets lying flat: no upper/lower choice', lying.ok && lying.slackChoice === false && lying.slack === null);
+  const snug = buildChainPath([sprocket(16, [0, 0, 0]), sprocket(16, [101.6, 0, 0])], { kind: 'chain', metaByPartNumber });
+  check('an exact fit: no choice to make', snug.ok && snug.slackChoice === false);
 }
 {
   // A tilted triangle (a real build): runs straight, every join no sharper than its sprocket's tooth step

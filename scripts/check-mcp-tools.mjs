@@ -996,6 +996,11 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   check('  one undo removes the whole track', readState().instances.length === 3);
   res = await call('build_chain', { instanceIds: ['S16', 'S32'] });
   check('build_chain chain: a "Chain 1" group', res.data?.ok && res.data.name === 'Chain 1' && res.data.gripperCount === 0, JSON.stringify(res.data?.name));
+  await call('undo');
+  res = await call('build_chain', { instanceIds: ['S16', 'S32'], slack: 'upper' });
+  check('build_chain slack "upper": the reply says the upper run holds the slack', res.data?.ok && res.data.slack === 'upper', JSON.stringify(res.data?.slack));
+  res = await callRaw('build_chain', { instanceIds: ['S16', 'S32'], slack: 'middle' });
+  check('build_chain rejects an unknown slack run', res.isError && /slack must be "lower" or "upper"/.test(res.data?.error || ''), JSON.stringify(res.data));
 }
 
 // ---------------------------------------------------------------------------

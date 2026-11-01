@@ -43,7 +43,7 @@ Chain builder SHALL place a closed loop of `Chain Link` parts round the sprocket
 - **THEN** one chain goes round all three, with three straight runs
 
 ### Requirement: Whole number of links
-A chain SHALL be made of a whole number of links (VEX IQ links are all alike, so odd counts are fine). A chain can't stretch, so the builder SHALL use the fewest links that reach all the way round: never more than 0.75 mm shorter than the path (the play in its joints), and at most one link longer. Links SHALL stay 6.35 mm apart (eased by at most 0.2 mm per link). Every run but one SHALL be straight. A chain longer than the path SHALL hang on one run, the run facing the floor (world −Y), as a catenary sagging toward the floor; when the sprockets lie flat, or gravity would pull that run into the loop, it SHALL sag outward on the longest run instead. No link SHALL turn more than a tooth step of the smallest loop sprocket, so the chain has no kinks where a run meets a sprocket. The message SHALL say how much longer or shorter the true path is and which sprocket to move and by how much for an exact fit, and when the chain is more than half a link longer it SHALL say it will sag.
+A chain SHALL be made of a whole number of links (VEX IQ links are all alike, so odd counts are fine). A chain can't stretch, so the builder SHALL use the fewest links that reach all the way round: never more than 0.75 mm shorter than the path (the play in its joints), and at most one link longer. Links SHALL stay 6.35 mm apart (eased by at most 0.2 mm per link). Every run but one SHALL be straight. A chain longer than the path SHALL hang on one run as a catenary sagging toward the floor (world −Y): the run facing the floor, or the run facing up (hanging down into the loop) when the user picks the upper run; when the sprockets lie flat it SHALL sag outward on the longest run instead. When the chain is more than half a link longer than the path and the sprockets stand up, Chain builder and Track builder SHALL ask which run holds the slack (Lower run or Upper run, remembered while the page is open); otherwise Chain builder SHALL build without asking. A hanging run SHALL leave and meet its sprockets where it bends least, and no link SHALL sink into a sprocket's teeth. No link SHALL turn more than a tooth step of the smallest loop sprocket, so the chain has no kinks where a run meets a sprocket. The message SHALL say how much longer or shorter the true path is and which sprocket to move and by how much for an exact fit, and when the chain is more than half a link longer it SHALL say it will sag.
 
 #### Scenario: Exact fit
 - **WHEN** two 16 Tooth Sprockets are 8 pitches apart (101.6 mm) and the user picks Chain builder
@@ -52,6 +52,14 @@ A chain SHALL be made of a whole number of links (VEX IQ links are all alike, so
 #### Scenario: Never too tight
 - **WHEN** the path round two sprockets is 3 mm longer than 48 links
 - **THEN** the chain is built with 49 links, 3.35 mm longer than the path, the bottom run hangs in a smooth curve toward the floor while the top run stays straight, and the message names the sprocket to move about 1.7 mm away for an exact fit
+
+#### Scenario: Slack on the upper run
+- **WHEN** the path round two standing sprockets is 3 mm longer than 48 links and the user picks Chain builder, then **Upper run**
+- **THEN** 49 links are built, the bottom run is straight and the top run hangs down into the loop, lowest near the middle
+
+#### Scenario: Nothing to ask
+- **WHEN** the chain fits within half a link, or the sprockets lie flat
+- **THEN** Chain builder builds without asking where the slack goes
 
 #### Scenario: Within the chain's play
 - **WHEN** the path round two sprockets is 0.3 mm longer than 48 links

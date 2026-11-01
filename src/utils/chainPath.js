@@ -194,12 +194,16 @@ const exactLinks = (circles, loop, pitch, teethOf) => {
 
 /**
  * The whole chain. `parts` as for checkSprocketsForChain; `kind` 'chain' | 'track'; `grippers`
- * (track only); `metaByPartNumber(pn)` → part metadata for the link and gripper parts.
+ * (track only); `slack` 'lower' | 'upper': which run holds a slack chain's spare length when the
+ * sprockets stand up (the upper run hangs down into the loop); `metaByPartNumber(pn)` → part
+ * metadata for the link and gripper parts.
  * Returns { ok, error?, linkPart, gripperPart, links: [{ partId, position, rotation }],
  *   grippers: [...], sprocketTurns: [{ instanceId, axis, point, deg }], onLoop, leftOut,
- *   linkCount, exactLinks, gapMm, moveHint, notes }.
+ *   linkCount, exactLinks, gapMm, moveHint, notes, slack, slackChoice }. `slackChoice` is true when
+ *   the chain sags noticeably (more than half a link) and the sprockets stand up, so the upper or
+ *   lower run can hold it; `slack` is the run used ('lower', 'upper', or null when flat).
  */
-export function buildChainPath(parts, { kind = 'chain', grippers = false, metaByPartNumber }) {
+export function buildChainPath(parts, { kind = 'chain', grippers = false, slack = 'lower', metaByPartNumber }) {
   const check = checkSprocketsForChain(parts);
   if (!check.ok) return check;
   const linkPart = metaByPartNumber(kind === 'track' ? TREAD_LINK_PART_NUMBER : CHAIN_LINK_PART_NUMBER);
@@ -215,14 +219,16 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, metaBy
 
   // Never tighter than the path allows: round up, unless it's within the chain's play
   const target = Math.max(2, Math.ceil(exact - CHAIN_PLAY_MM / pitch));
-  // A slack chain sags on one run: the one facing the floor (world −Y), or the longest when the
-  // sprockets lie flat
+  // A slack chain sags on one run: the one facing the floor (world −Y), or with `slack` 'upper' the
+  // one facing up; the longest when the sprockets lie flat
   const down = new THREE.Vector3(0, -1, 0);
   const down2 = [down.dot(frame.u), down.dot(frame.v)];
-  const facing = (k) => (Math.hypot(...down2) > 0.3 ? loop[k].m[0] * down2[0] + loop[k].m[1] * down2[1] : runs[k]);
+  const standing = Math.hypot(...down2) > 0.3;
+  const upper = standing && slack === 'upper';
+  const facing = (k) => (standing ? (upper ? -1 : 1) * (loop[k].m[0] * down2[0] + loop[k].m[1] * down2[1]) : runs[k]);
   const sagRun = loop.reduce((best, _, k) => (facing(k) > facing(best) ? k : best), 0);
   // The facing run unless closing on another needs fewer links
-  let walk = planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun, down2);
+  let walk = planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun, down2, upper);
   if (!walk || walk.pivots2d.length > target) {
     for (let k = 0; k < loop.length; k++) {
       if (k === sagRun) continue;
@@ -284,6 +290,8 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, metaBy
     sprocketTurns,
     onLoop: check.sprockets.map((s) => s.instanceId),
     leftOut: check.leftOut.map((s) => s.instanceId),
+    slack: standing ? (upper ? 'upper' : 'lower') : null,
+    slackChoice: standing && -gapMm > SAG_NOTE_MM,
     linkCount: links.length,
     exactLinks: Math.round(exact * 1000) / 1000,
     gapMm,
@@ -423,7 +431,7 @@ function hangPoints(a, b, q, pitch, down) {
  * up) when the chain is longer than the path, eased straight (within the chain's play) when shorter. Returns { pivots2d, arcPivotIndex:
  * [index of a pivot on each loop sprocket], sag: { run, mm } } or null.
  */
-function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0, down2 = [0, 0]) {
+function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0, down2 = [0, 0], inward = false) {
   const K = loop.length;
   const tau = (k) => (2 * Math.PI) / teethOf(loop[k].from);
   const circleOf = (k) => circles[loop[k].from];
@@ -492,51 +500,71 @@ function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0
     const m = Math.max(0, Math.round((near(thOut(kn), t.th + arcs[kn].alpha) - t.th) / tau(kn)));
     for (let j = 0; j <= m; j++) pts.push(at(kn, t.th + j * tau(kn)));
   }
-  // The closing run onto the first sprocket: c teeth before the start, q links in the run
-  const from = pts.at(-1);
-  const t = touching(from, s0);
-  if (!t) return null;
+  // The closing run onto the first sprocket. The chain may leave the last sprocket a tooth or two
+  // sooner or later than planned (`e`), as a hanging run does, and lands c teeth before the start
+  // with q links in the run.
   const t0 = tau(s0);
-  // Land a tooth gap near where the chain meets the sprocket; the run takes the links left
-  const cands = [];
-  for (let c = 0; c <= teethOf(loop[s0].from); c++) {
-    const th = start - c * t0;
-    const end = at(s0, th);
-    const R = Math.hypot(end[0] - from[0], end[1] - from[1]);
-    // The links left for the planned count, or one more if those would be too tight
-    const q = Math.max(target - pts.length - c + 1, Math.ceil((R - stretchAllowed(R)) / pitch - 1e-9));
-    if (q < 1) continue;
-    const off = Math.abs(near(th, t.th) - t.th);
-    // Nearest the touching point, but a tooth further off rather than an extra link
-    const extra = q > target - pts.length - c + 1;
-    const score = off + (extra ? t0 * 1.01 : 0);
-    cands.push({ c, th, q, end, R, off, extra, score });
-  }
-  if (!cands.length) return null;
-  // Slack hangs toward the floor; out of the loop when gravity lies across the run's plane or faces in
+  const tl = tau(sagRun);
+  const lastOn = firstOn[sagRun];
+  const lastTh = ang(pts.at(-1)[0] - circleOf(sagRun).x, pts.at(-1)[1] - circleOf(sagRun).y);
+  const onLast = pts.length - lastOn; // pivots on the last sprocket's arc
+  // Slack hangs toward the floor; out of the loop when gravity lies across the run's plane, or faces
+  // in unless `inward` (slack on the upper run hangs down into the loop)
   const g = Math.hypot(down2[0], down2[1]);
-  const hang = (cd) => {
+  const hang = (from, cd) => {
     const dx = cd.end[0] - from[0];
     const dy = cd.end[1] - from[1];
     const out = [dy / Math.hypot(dx, dy), -dx / Math.hypot(dx, dy)]; // right of from→end: out of the loop
-    const down = g > 0.3 && (down2[0] * out[0] + down2[1] * out[1]) / g > 0.25 ? [down2[0] / g, down2[1] / g] : out;
+    const facingOut = (down2[0] * out[0] + down2[1] * out[1]) / (g || 1);
+    const down = g > 0.3 && (inward || facingOut > 0.25) ? [down2[0] / g, down2[1] / g] : out;
     return hangPoints(from, cd.end, cd.q, pitch, down);
   };
-  // Of the landings near the touching point without an extra link, the one whose run meets both
-  // sprockets most smoothly (a hanging chain leaves and lands at its own angle)
   const turn = (p0, p1, p2) => Math.abs(mod2pi(ang(p2[0] - p1[0], p2[1] - p1[1]) - ang(p1[0] - p0[0], p1[1] - p0[1]) + Math.PI) - Math.PI);
-  const nearest = cands.reduce((m, cd) => (cd.score < m.score ? cd : m));
+  // A run pivot sinking into a sprocket's pitch circle would sit in its teeth
+  const clear = (run) =>
+    run.every((p, idx) => {
+      const mid = idx ? [(p[0] + run[idx - 1][0]) / 2, (p[1] + run[idx - 1][1]) / 2] : p;
+      return circles.every((c) => Math.hypot(p[0] - c.x, p[1] - c.y) >= c.r - 0.3 && Math.hypot(mid[0] - c.x, mid[1] - c.y) >= c.r - 0.6);
+    });
+
   let best = null;
-  for (const cd of cands) {
-    if (cd.extra !== nearest.extra || cd.off > nearest.off + 3 * t0) continue;
-    const inner = hang(cd);
-    const run = [pts.at(-2), from, ...inner, cd.end, at(s0, cd.th + t0)];
-    const kink = Math.max(turn(run[0], run[1], run[2]), turn(run.at(-3), run.at(-2), run.at(-1)));
-    if (!best || kink < best.kink - 1e-6) best = { ...cd, inner, kink };
+  for (let e = -Math.min(2, onLast - 1); e <= 3; e++) {
+    const base = e < 0 ? pts.slice(0, pts.length + e) : [...pts, ...Array.from({ length: e }, (_, j) => at(sagRun, lastTh + (j + 1) * tl))];
+    const from = base.at(-1);
+    const t = touching(from, s0);
+    if (!t) continue;
+    // Land a tooth gap near where the chain meets the sprocket; the run takes the links left
+    const cands = [];
+    for (let c = 0; c <= teethOf(loop[s0].from); c++) {
+      const th = start - c * t0;
+      const end = at(s0, th);
+      const R = Math.hypot(end[0] - from[0], end[1] - from[1]);
+      // The links left for the planned count, or one more if those would be too tight
+      const q = Math.max(target - base.length - c + 1, Math.ceil((R - stretchAllowed(R)) / pitch - 1e-9));
+      if (q < 1) continue;
+      const off = Math.abs(near(th, t.th) - t.th);
+      // Nearest the touching point, but a tooth further off rather than an extra link
+      const extra = q > target - base.length - c + 1;
+      cands.push({ c, th, q, end, R, off, extra, score: off + (extra ? t0 * 1.01 : 0) });
+    }
+    if (!cands.length) continue;
+    // Of the landings near the touching point without an extra link, the one whose run meets both
+    // sprockets most smoothly (a hanging chain leaves and lands at its own angle) and stays clear of
+    // the teeth; leaving as planned (e = 0) on a tie
+    const nearest = cands.reduce((m, cd) => (cd.score < m.score ? cd : m));
+    for (const cd of cands) {
+      if (cd.extra !== nearest.extra || cd.off > nearest.off + 3 * t0) continue;
+      const inner = hang(from, cd);
+      const run = [base.at(-2), from, ...inner, cd.end, at(s0, cd.th + t0)];
+      const kink = Math.max(turn(run[0], run[1], run[2]), turn(run.at(-3), run.at(-2), run.at(-1)));
+      const score = (clear([from, ...inner, cd.end]) ? 0 : 10) + (cd.extra ? 5 : 0) + kink + (e === 0 ? 0 : 1e-3);
+      if (!best || score < best.score - 1e-6) best = { ...cd, base, inner, kink, score };
+    }
   }
-  pts.push(...best.inner);
-  for (let j = 0; j < best.c; j++) pts.push(at(s0, best.th + j * t0));
-  return { pivots2d: pts, arcPivotIndex: firstOn, sag: { run: sagRun, mm: round3(best.q * pitch - best.R) } };
+  if (!best) return null;
+  const out = [...best.base, ...best.inner];
+  for (let j = 0; j < best.c; j++) out.push(at(s0, best.th + j * t0));
+  return { pivots2d: out, arcPivotIndex: firstOn, sag: { run: sagRun, mm: round3(best.q * pitch - best.R) } };
 }
 
 /**

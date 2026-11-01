@@ -55,23 +55,28 @@ export default function BuildMenu({ chainCheck, disabledReason = null, onChain, 
 }
 
 /**
- * Track builder's question: add rubber grippers (Traction Links) or not. `grippers` is remembered by
- * the caller while the page is open. Build calls onBuild(grippers); Cancel, Esc or a click outside
- * builds nothing.
+ * Chain and Track builder's questions. Track builder always asks whether to add rubber grippers
+ * (Traction Links); either builder asks which run holds the slack when the chain is noticeably longer
+ * than the path (`slackMm`, null when there is no choice to make). `grippers` and `slack` are
+ * remembered by the caller while the page is open. Build calls onBuild({ grippers, slack }); Cancel,
+ * Esc or a click outside builds nothing.
  */
-export function TrackBuilderDialog({ open, grippers, onClose, onBuild }) {
+export function ChainBuilderDialog({ open, kind = 'chain', grippers, slack = 'lower', slackMm = null, onClose, onBuild }) {
   const ref = useRef(null);
   const [checked, setChecked] = useState(grippers);
+  const [run, setRun] = useState(slack);
+  const track = kind === 'track';
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) {
       setChecked(grippers);
+      setRun(slack);
       dialog.showModal();
     }
     if (!open && dialog.open) dialog.close();
-  }, [open, grippers]);
+  }, [open, grippers, slack]);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -82,24 +87,47 @@ export function TrackBuilderDialog({ open, grippers, onClose, onBuild }) {
   }, [onClose]);
 
   return (
-    <dialog ref={ref} closedby="any" className="settings-dialog" aria-labelledby="trackBuilderTitle">
+    <dialog ref={ref} closedby="any" className="settings-dialog" aria-labelledby="chainBuilderTitle">
       <div className="settings-header">
-        <strong id="trackBuilderTitle">Track builder</strong>
+        <strong id="chainBuilderTitle">{track ? 'Track builder' : 'Chain builder'}</strong>
         <button type="button" className="icon-btn" onClick={() => ref.current?.close()} aria-label="Close" title="Cancel (Esc)">
           <X size={16} />
         </button>
       </div>
       <div className="settings-body">
         <p className="settings-note" style={{ marginTop: 10 }}>
-          Wraps a loop of Tank Tread Attachment Links round the selected sprockets.
+          {track ? 'Wraps a loop of Tank Tread Attachment Links round the selected sprockets.' : 'Wraps a loop of Chain Links round the selected sprockets.'}
         </p>
-        <label className="settings-row">
-          <span className="settings-row-text">
-            <span className="settings-row-label">Add rubber grippers</span>
-            <span className="settings-row-hint">A Traction Link in every tread link, facing out</span>
-          </span>
-          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} autoFocus />
-        </label>
+        {track && (
+          <label className="settings-row">
+            <span className="settings-row-text">
+              <span className="settings-row-label">Add rubber grippers</span>
+              <span className="settings-row-hint">A Traction Link in every tread link, facing out</span>
+            </span>
+            <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} autoFocus />
+          </label>
+        )}
+        {slackMm != null && (
+          <fieldset className="settings-row" style={{ border: 0, padding: 0, margin: 0, display: 'block' }}>
+            <span className="settings-row-text">
+              <span className="settings-row-label">Slack on</span>
+              <span className="settings-row-hint">
+                The {track ? 'track' : 'chain'} is {slackMm.toFixed(1)} mm longer than the path, so one run hangs loose.
+              </span>
+            </span>
+            <span style={{ display: 'flex', gap: 16, marginTop: 6 }}>
+              {[
+                ['lower', 'Lower run'],
+                ['upper', 'Upper run']
+              ].map(([value, label], idx) => (
+                <label key={value} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                  <input type="radio" name="chainSlack" value={value} checked={run === value} onChange={() => setRun(value)} autoFocus={!track && idx === 0} />
+                  {label}
+                </label>
+              ))}
+            </span>
+          </fieldset>
+        )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
           <button type="button" className="btn btn-outline" onClick={() => ref.current?.close()}>
             Cancel
@@ -108,7 +136,7 @@ export function TrackBuilderDialog({ open, grippers, onClose, onBuild }) {
             type="button"
             className="btn active"
             onClick={() => {
-              onBuild(checked);
+              onBuild({ grippers: checked, slack: run });
               ref.current?.close();
             }}
           >
