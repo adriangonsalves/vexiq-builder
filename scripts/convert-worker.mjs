@@ -82,13 +82,18 @@ function getMeshColorKey(m) {
  * recolourable main body (primitive 0 with no material). Every other colour body keeps its colour:
  * near-black bodies get a "rubber" material and other colours get a "step:#rrggbb" material.
  */
-function buildGlbFromOcctResult(result) {
+function buildGlbFromOcctResult(result, bodyRoles) {
   const allMeshes = (result.meshes || []).filter(
     (m) => m.attributes?.position?.array?.length > 0 && m.index?.array?.length > 0
   );
 
   if (allMeshes.length === 0) {
     throw new Error('No valid geometry produced from STEP file');
+  }
+
+  // Bodies named in bodyRoles.rubber are fixed black whatever colour the STEP file gives them
+  for (const m of allMeshes) {
+    if (bodyRoles?.rubber?.some((prefix) => String(m.name || '').startsWith(prefix))) m.color = [0, 0, 0];
   }
 
   // Group meshes by 8-bit RGB colour, with rubber as a special group
@@ -159,6 +164,12 @@ function buildGlbFromOcctResult(result) {
         groups[0].maxBodyFaces = noneGroup.maxBodyFaces;
       }
     }
+  }
+
+  // The body named in bodyRoles.main becomes the recolourable first group
+  if (bodyRoles?.main) {
+    const at = groups.findIndex((g) => g.meshes.some((m) => String(m.name || '').startsWith(bodyRoles.main)));
+    if (at > 0) groups.unshift(...groups.splice(at, 1));
   }
 
   const validMeshes = groups.flatMap((g) => g.meshes);
@@ -396,7 +407,7 @@ function buildGlbFromOcctResult(result) {
 }
 
 parentPort.on('message', async (task) => {
-  const { id, stepPath, outGlbPath, fileSize, excludeBodies = [] } = task;
+  const { id, stepPath, outGlbPath, fileSize, excludeBodies = [], bodyRoles } = task;
   try {
     const occt = await getOcct();
     const fileBuffer = fs.readFileSync(stepPath);
@@ -418,7 +429,7 @@ parentPort.on('message', async (task) => {
     // Bodies that are catalog parts of their own (e.g. the battery inside the brain's file)
     result.meshes = (result.meshes || []).filter((m) => !excludeBodies.some((prefix) => String(m.name || '').startsWith(prefix)));
 
-    const { glb, bbox, vertexCount, triangleCount, glbBytes, hasRubber } = buildGlbFromOcctResult(result);
+    const { glb, bbox, vertexCount, triangleCount, glbBytes, hasRubber } = buildGlbFromOcctResult(result, bodyRoles);
     fs.writeFileSync(outGlbPath, glb);
 
     const stepText = fileBuffer.toString('latin1');

@@ -215018,11 +215018,11 @@
     "name": "Long Intake Flap",
     "partNumber": "228-2500-242",
     "category": "Specialty & Panels",
-    "defaultColor": "#1c1c1c",
+    "defaultColor": "#374151",
     "file": "Long Intake Flap (228-2500-242).step",
     "modelUrl": "/models/long-intake-flap-228-2500-242-397.glb",
     "stepSizeBytes": 265488,
-    "glbSizeBytes": 99536,
+    "glbSizeBytes": 99832,
     "bbox": {
       "min": [
         -0.47,
@@ -215047,6 +215047,8 @@
     },
     "vertexCount": 3090,
     "triangleCount": 4084,
+    "hasRubber": true,
+    "stepColors": true,
     "connectorCount": 0,
     "cylinders": [],
     "pitchSize": [
@@ -215056,6 +215058,14 @@
     ],
     "originType": "offset",
     "gearSpecs": null,
+    "chainSpecs": {
+      "role": "attachment",
+      "seatInLink": [
+        -8.942,
+        -2.51,
+        -13.087
+      ]
+    },
     "fastenerSpecs": null,
     "mountingRules": {
       "massClass": "light",
@@ -215067,15 +215077,7 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": [],
-    "chainSpecs": {
-      "role": "attachment",
-      "seatInLink": [
-        -8.942,
-        -2.51,
-        -13.087
-      ]
-    }
+    "ports": []
   },
   {
     "id": "medium-dial-knob-228-2500-477-398",
@@ -215191,11 +215193,11 @@
     "name": "Medium Intake Flap",
     "partNumber": "228-2500-241",
     "category": "Specialty & Panels",
-    "defaultColor": "#1c1c1c",
+    "defaultColor": "#374151",
     "file": "Medium Intake Flap (228-2500-241).step",
     "modelUrl": "/models/medium-intake-flap-228-2500-241-399.glb",
     "stepSizeBytes": 260250,
-    "glbSizeBytes": 96344,
+    "glbSizeBytes": 96640,
     "bbox": {
       "min": [
         -8.26,
@@ -215220,6 +215222,8 @@
     },
     "vertexCount": 3000,
     "triangleCount": 3912,
+    "hasRubber": true,
+    "stepColors": true,
     "connectorCount": 6,
     "cylinders": [
       {
@@ -215308,6 +215312,14 @@
     ],
     "originType": "offset",
     "gearSpecs": null,
+    "chainSpecs": {
+      "role": "attachment",
+      "seatInLink": [
+        -1.154,
+        9.849,
+        -18.9
+      ]
+    },
     "fastenerSpecs": null,
     "mountingRules": {
       "massClass": "light",
@@ -215358,15 +215370,7 @@
         ],
         "verified": true
       }
-    ],
-    "chainSpecs": {
-      "role": "attachment",
-      "seatInLink": [
-        -1.154,
-        9.849,
-        -18.9
-      ]
-    }
+    ]
   },
   {
     "id": "medium-rocket-engine-nozzle-228-2500-1911-400",
@@ -221977,11 +221981,11 @@
     "name": "Short Intake Flap",
     "partNumber": "228-2500-240",
     "category": "Specialty & Panels",
-    "defaultColor": "#1c1c1c",
+    "defaultColor": "#374151",
     "file": "Short Intake Flap (228-2500-240).step",
     "modelUrl": "/models/short-intake-flap-228-2500-240-420.glb",
     "stepSizeBytes": 260220,
-    "glbSizeBytes": 91928,
+    "glbSizeBytes": 92224,
     "bbox": {
       "min": [
         -7.95,
@@ -222006,6 +222010,8 @@
     },
     "vertexCount": 2882,
     "triangleCount": 3648,
+    "hasRubber": true,
+    "stepColors": true,
     "connectorCount": 6,
     "cylinders": [
       {
@@ -222094,6 +222100,14 @@
     ],
     "originType": "offset",
     "gearSpecs": null,
+    "chainSpecs": {
+      "role": "attachment",
+      "seatInLink": [
+        -1.453,
+        7.413,
+        -18.9
+      ]
+    },
     "fastenerSpecs": null,
     "mountingRules": {
       "massClass": "light",
@@ -222144,15 +222158,7 @@
         ],
         "verified": true
       }
-    ],
-    "chainSpecs": {
-      "role": "attachment",
-      "seatInLink": [
-        -1.453,
-        7.413,
-        -18.9
-      ]
-    }
+    ]
   },
   {
     "id": "short-low-profile-pawl-228-2500-1411-421",
@@ -236556,7 +236562,7 @@
     "name": "Tank Tread, Attachment Link",
     "partNumber": "228-2500-231",
     "category": "Wheels & Treads",
-    "defaultColor": "#1c1c1c",
+    "defaultColor": "#374151",
     "file": "Tank Tread, Attachment Link (228-2500-231).step",
     "modelUrl": "/models/tank-tread-attachment-link-228-2500-231-446.glb",
     "stepSizeBytes": 303003,

@@ -13,10 +13,11 @@ export const KIT_COLORS = {
   plate: '#3f4245', // plates, wedge beams, corner beams
   connector: '#d6d5d1', // hubs, washers
   white: '#f8fafc', // corner connectors and linear motion brackets
-  black: '#1c1c1c', // standoffs, tires, flaps
+  black: '#1c1c1c', // standoffs, tires
   pin: '#3e4143', // 1x2, 2x2, 0x2 and 0x3 connector pins
   rubber: '#2a2829', // collars, spacers, 32.2 mm hub
-  cappedPlastic: '#5a5857'
+  cappedPlastic: '#5a5857',
+  chainGrey: '#374151' // chain links, tank treads and the flaps' flap body
 };
 
 const C = KIT_COLORS;
@@ -63,14 +64,16 @@ const RULES = [
   // Wheels
   [/32\.2mm Diameter Hub/, C.rubber],
   [/Wheel Hub|48\.5mm Diameter Hub|Omni-Directional Wheel/, C.connector],
-  [/^Tire |Balloon Tire|Tank Tread/, C.black],
+  [/^Tire |Balloon Tire/, C.black],
+  [/Tank Tread/, C.chainGrey],
   [/Flywheel/, C.plate],
 
   // Specialty
   [/Sheet Pin/, '#f8fafc'],
   [/^2x Wide Spool$|Silicone Rubber Band|Ball Pin Bushing/, C.orange],
   [/^1x Wide Spool$|Rubber Band Anchor/, C.blue],
-  [/Intake Flap|Traction Link|Cable Anchor|Shock Absorber|Pitch Rope/, C.black],
+  [/Intake Flap/, C.chainGrey],
+  [/Traction Link|Cable Anchor|Shock Absorber|Pitch Rope/, C.black],
   [/^2x8 Smooth Panel$/, '#c8c9c8'],
   [/Plastic (Sheet|PET Sheet)/, '#8fd0ee'] // a slight blue tint: drawn as see-through glossy plastic
 ];

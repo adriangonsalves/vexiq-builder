@@ -14,6 +14,11 @@ const OUT_CATALOG_PATH = path.join(ROOT_DIR, 'public', 'catalog.json');
 // Bodies left out of a part's model because they are catalog parts of their own (part number ->
 // body name prefixes): the Robot Brain's file includes its battery
 const SEPARATE_BODIES = { '228-2540': ['228-2604'] };
+// Parts whose STEP bodies share one colour but are different materials (part number -> body name
+// prefixes): `rubber` bodies stay fixed black, the `main` body is the recolourable one
+const BODY_ROLES = Object.fromEntries(
+  ['240', '241', '242'].map((n) => [`228-2500-${n}`, { rubber: ['228-2500-238'], main: `228-2500-${n}-OVERMOLD` }])
+);
 // Extra catalog entries made from the same file with every body kept (part number -> variants)
 const WHOLE_FILE_VARIANTS = {
   '228-2540': [{ key: 'with-battery', name: 'VEX IQ Robot Brain with Battery', partNumber: '228-2540 + 228-2604' }]
@@ -276,7 +281,7 @@ async function main() {
   for (const entry of allSourceEntries) {
     const cached = existingByFile.get(cacheKey(entry.filename, entry.variant));
     const outGlbPath = path.join(OUT_MODELS_DIR, `${(cached || entry).id}.glb`);
-    const isMultiColorPart = MULTI_COLOR_PART_NUMBERS.has(entry.partNumber);
+    const isMultiColorPart = MULTI_COLOR_PART_NUMBERS.has(entry.partNumber) || entry.partNumber in BODY_ROLES;
     if (cached && fs.existsSync(outGlbPath)) {
       if (!isMultiColorPart || cached.stepColors) {
         catalog.push(cached);
@@ -290,11 +295,12 @@ async function main() {
     const defaultColor = kitColor(entry.displayName) ?? classified.defaultColor; // the Competition Kit poster's colour when it shows the part
     pendingTasks.push({
       ...entry,
+      id: (cached || entry).id, // a part that is converted again keeps its id
       category,
       defaultColor,
       isMetal,
       isMultiColorPart,
-      outGlbPath: path.join(OUT_MODELS_DIR, `${entry.id}.glb`),
+      outGlbPath,
       fileSize: stat.size
     });
   }
@@ -332,7 +338,8 @@ async function main() {
             stepPath: task.stepPath,
             outGlbPath: task.outGlbPath,
             fileSize: task.fileSize,
-            excludeBodies: task.excludeBodies || SEPARATE_BODIES[task.partNumber] || []
+            excludeBodies: task.excludeBodies || SEPARATE_BODIES[task.partNumber] || [],
+            bodyRoles: BODY_ROLES[task.partNumber]
           });
         };
 
