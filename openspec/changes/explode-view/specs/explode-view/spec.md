@@ -5,11 +5,11 @@ Lets the user spread the robot apart with a slider, so each part slides out alon
 ## ADDED Requirements
 
 ### Requirement: Opening and closing the Explode panel
-The toolbar's Explode button and the `X` key SHALL open the Explode panel when it is closed and close it when it is open. The panel SHALL show a direction choice (X, Y, Z, All) and a slider from 0% (assembled) to 100% (fully apart). The panel SHALL open with the direction last used in this build's saved view, or All when there is none. Closing the panel (its Close button, the toolbar button, `X`, or `Esc`) SHALL put every part back at its assembled spot. The Off / X / Y / Z / All drop-down SHALL be gone, and `X` SHALL NOT cycle through the directions.
+The toolbar's Explode button and the `X` key SHALL open the Explode panel when it is closed and close it when it is open. Explode SHALL always take the robot apart every way the parts come apart (there is no direction choice). While the take-apart is being worked out, the panel SHALL show a ring that fills up with a percentage and no slider; once it is worked out, a slider from 0% (assembled) to 100% (fully apart). Closing the panel (its Close button, the toolbar button, `X`, or `Esc`) SHALL put every part back at its assembled spot. The Off / X / Y / Z / All drop-down SHALL be gone, and `X` SHALL NOT cycle through the directions.
 
 #### Scenario: Open from the toolbar
 - **WHEN** the Explode panel is closed and the user clicks the toolbar's Explode button
-- **THEN** the panel opens with All chosen and the slider starts playing from 0%
+- **THEN** the panel opens, shows the ring until the take-apart is worked out, then shows the slider playing from 0%
 
 #### Scenario: Close with Esc
 - **WHEN** the panel is open at 60% and nothing else is using `Esc` (no mate arrows shown)
@@ -20,7 +20,7 @@ The toolbar's Explode button and the `X` key SHALL open the Explode panel when i
 - **THEN** the panel closes; pressing `X` again opens it
 
 ### Requirement: Play on open
-When the panel opens, the slider SHALL move from 0% to 100% over about 2.5 seconds, moving the parts with it. Grabbing the slider during the play SHALL stop the play at that point and hand the slider to the user. Changing the direction during the play SHALL restart the play from 0%.
+When the panel opens, once the take-apart is worked out, the slider SHALL move from 0% to 100% over about 2.5 seconds, moving the parts with it. Grabbing the slider during the play SHALL stop the play at that point and hand the slider to the user. A save from another open tab SHALL NOT stop the play or change this tab's slider.
 
 #### Scenario: Full play
 - **WHEN** the user opens the panel and does nothing
@@ -31,7 +31,7 @@ When the panel opens, the slider SHALL move from 0% to 100% over about 2.5 secon
 - **THEN** the play stops and the slider follows the pointer from there
 
 ### Requirement: The slider sets how far apart the parts are
-Every part's shown position SHALL depend only on the build, the direction choice and the slider value, so the same slider value always shows the same picture, and dragging back shows the same motion in reverse. At 0% every part SHALL be at its assembled spot. Moving the slider SHALL NOT change any part's saved position or rotation, and SHALL NOT add a history step. Parts SHALL keep their rotation while exploded; only their position changes.
+Every part's shown position SHALL depend only on the build and the slider value, so the same slider value always shows the same picture, and dragging back shows the same motion in reverse. At 0% every part SHALL be at its assembled spot. Moving the slider SHALL NOT change any part's saved position or rotation, and SHALL NOT add a history step. Parts SHALL keep their rotation while exploded; only their position changes.
 
 #### Scenario: Back and forth
 - **WHEN** the user drags the slider from 30% to 80% and back to 30%
@@ -67,23 +67,8 @@ As the slider goes up, a piece SHALL NOT start moving apart from the piece it is
 At every slider value, no two shown parts SHALL overlap that don't already overlap when assembled (for example a tire on its hub). This SHALL hold during the play and while the user drags, not only at 100%.
 
 #### Scenario: Scrub the Clawbot
-- **WHEN** the saved Clawbot build is exploded with All and the slider is checked at every 1% from 0% to 100%
+- **WHEN** the saved Clawbot build is exploded and the slider is checked at every 1% from 0% to 100%
 - **THEN** no two parts overlap at any of those values except pairs that overlap when assembled
-
-#### Scenario: Single direction
-- **WHEN** the same build is exploded with X and checked the same way
-- **THEN** no two parts overlap at any of those values except pairs that overlap when assembled
-
-### Requirement: Direction choice
-With X, Y or Z chosen, pieces SHALL only slide along that axis (either way). A piece that can't slide along that axis SHALL stay on the piece it is held on and move only with it. With All chosen, every direction allowed by "Parts slide out the way they come apart" SHALL be used. Changing the direction SHALL move the parts to the new direction's positions at the current slider value (or restart the play while it is playing).
-
-#### Scenario: Only Y
-- **WHEN** the user chooses Y with the slider at 100%
-- **THEN** every part that has moved has moved only along Y
-
-#### Scenario: Part that can't slide along the axis
-- **WHEN** Y is chosen and a beam is held on a plate by pins along X
-- **THEN** the beam does not move apart from the plate and moves only when the plate moves
 
 ### Requirement: What moves as one piece
 These SHALL move as one piece and never apart from each other: the parts of a group; a pin or standoff and the part it sits deeper in (on a tie, the larger part); a tire and its hub. Shafts SHALL move as pieces of their own. The battery SHALL slide out of the brain's bay along the bay's axis. Hidden parts SHALL NOT be shown or moved and SHALL NOT block other parts.
@@ -101,7 +86,7 @@ These SHALL move as one piece and never apart from each other: the parts of a gr
 - **THEN** the battery has slid out of the bay along the bay's axis
 
 ### Requirement: Explode view while the slider is above 0%
-While the panel is open, editing that Explode blocks today SHALL stay blocked: moving, turning, hole picking and the copy preview, with the same messages. Dashed lines SHALL join each moved part to its assembled spot and follow the slider. Selecting parts, hiding parts, the camera and the 4-View side views SHALL keep working and SHALL show the exploded positions. Hiding or showing a part, or any change to the build (undo, redo, an MCP edit), SHALL work out the explode again and keep the current direction and slider value.
+While the panel is open, editing that Explode blocks today SHALL stay blocked: moving, turning, hole picking and the copy preview, with the same messages. No lines SHALL be drawn from moved parts back to their assembled spots: the slider's motion shows where each part came from. Selecting parts, hiding parts, the camera and the 4-View side views SHALL keep working and SHALL show the exploded positions. Hiding or showing a part, or any change to the build (undo, redo, an MCP edit), SHALL work out the explode again and keep the current direction and slider value.
 
 #### Scenario: Move is blocked
 - **WHEN** the panel is open and the user tries to drag a part
@@ -112,7 +97,7 @@ While the panel is open, editing that Explode blocks today SHALL stay blocked: m
 - **THEN** the explode is worked out again with the new part and shown at 70%
 
 ### Requirement: Assistant control and saved view
-The MCP `configure_viewport` tool SHALL accept `explodeMode` (`off`, `x`, `y`, `z`, `all`; `off` closes the panel, any other value opens it with that direction) and `explodeAmount` (0 to 1, the slider value). Setting either from MCP SHALL NOT play the slider: it SHALL go straight to the given value (1 when only `explodeMode` is given). The direction and slider value SHALL be saved with the rest of the view state and come back when the build is opened.
+The MCP `configure_viewport` tool SHALL accept `explodeMode` (`off` closes the panel, `all` opens it) and `explodeAmount` (0 to 1, the slider value). Setting either from MCP SHALL NOT play the slider: it SHALL go straight to the given value (1 when only `explodeMode` is given). Whether the panel is open and the slider value SHALL be saved with the rest of the view state and come back when the build is opened.
 
 #### Scenario: Screenshot half exploded
 - **WHEN** an assistant calls `configure_viewport` with `explodeMode: 'all'` and `explodeAmount: 0.5`, then `capture_screenshot`

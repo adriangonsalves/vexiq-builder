@@ -1848,3 +1848,99 @@ body,
   color: #fca5a5;
 }
 
+
+/* Explode panel (openspec explode-view): direction choice and the how-far-apart slider */
+.explode-panel {
+  position: absolute;
+  top: 52px;
+  left: 12px;
+  z-index: 15;
+  width: 260px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-panel-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.explode-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.explode-panel-title {
+  font-weight: 600;
+  color: #38bdf8;
+}
+
+.explode-close {
+  display: flex;
+  margin-left: auto;
+  padding: 4px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.explode-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.explode-slider {
+  flex: 1;
+  accent-color: #38bdf8;
+}
+
+.explode-percent {
+  width: 38px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.explode-busy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #93c5fd;
+}
+
+.explode-ring {
+  flex: none;
+}
+
+.explode-ring.spinning {
+  animation: explode-ring-spin 0.9s linear infinite;
+}
+
+.explode-ring-track,
+.explode-ring-fill {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.explode-ring-track {
+  stroke: rgba(147, 197, 253, 0.25);
+}
+
+.explode-ring-fill {
+  stroke: #93c5fd;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s ease-out;
+}
+
+@keyframes explode-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

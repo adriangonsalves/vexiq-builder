@@ -146,7 +146,7 @@ export function registerVexIqWebMcpTools(contextRef) {
     {
       name: 'configure_viewport',
       description:
-        'Updates the active 3D gizmo mode, grid visibility, hole axis overlay, camera framing, or view options (projection, layout, stereo, a camera turn along an axis).',
+        'Updates the active 3D gizmo mode, grid visibility, hole axis overlay, camera framing, the Explode panel and slider, or view options (projection, layout, stereo, a camera turn along an axis).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -164,6 +164,17 @@ export function registerVexIqWebMcpTools(contextRef) {
             type: 'boolean',
             description: 'Visibility of extracted hole axis vectors.'
           },
+          explodeMode: {
+            type: 'string',
+            enum: ['off', 'all'],
+            description: "Explode panel: 'off' closes it; 'all' opens it (parts slide out every way they come apart)."
+          },
+          explodeAmount: {
+            type: 'number',
+            minimum: 0,
+            maximum: 1,
+            description: 'Explode slider from 0 (built) to 1 (fully apart), set straight away (1 when only explodeMode is given).'
+          },
           focusCamera: {
             type: 'boolean',
             description: 'Whether to center the camera on the scene.'
@@ -179,7 +190,7 @@ export function registerVexIqWebMcpTools(contextRef) {
           reflectionIntensity: { type: 'number', minimum: 0, maximum: 2, description: 'Brightness/intensity of reflections (0 to 2, default 0.75).' }
         }
       },
-      execute({ transformMode = 'translate', showGrid, showConnectors, focusCamera, projection, viewLayout, stereoCrossEyed, stereoDepth, viewAlong, shadows, ambientOcclusion, environmentReflections, reflectionIntensity } = {}) {
+      execute({ transformMode = 'translate', showGrid, showConnectors, explodeMode, explodeAmount, focusCamera, projection, viewLayout, stereoCrossEyed, stereoDepth, viewAlong, shadows, ambientOcclusion, environmentReflections, reflectionIntensity } = {}) {
         const ctx = contextRef.current;
         if (!ctx) return { error: 'Application context is not ready.' };
         if (transformMode && !TRANSFORM_MODES.includes(transformMode)) {
@@ -199,7 +210,11 @@ export function registerVexIqWebMcpTools(contextRef) {
         if (reflectionIntensity !== undefined && !(Number(reflectionIntensity) >= 0 && Number(reflectionIntensity) <= 2)) {
           return { error: 'reflectionIntensity must be a number from 0 to 2.' };
         }
-        ctx.configureViewport({ transformMode, showGrid, showConnectors, focusCamera, projection, viewLayout, stereoCrossEyed, stereoDepth, viewAlong, shadows, ambientOcclusion, environmentReflections, reflectionIntensity });
+        if (explodeMode !== undefined && !['off', 'all'].includes(explodeMode)) return { error: "explodeMode must be 'off' or 'all'." };
+        if (explodeAmount !== undefined && !(typeof explodeAmount === 'number' && explodeAmount >= 0 && explodeAmount <= 1)) {
+          return { error: 'explodeAmount must be a number from 0 to 1.' };
+        }
+        ctx.configureViewport({ transformMode, showGrid, showConnectors, explodeMode, explodeAmount, focusCamera, projection, viewLayout, stereoCrossEyed, stereoDepth, viewAlong, shadows, ambientOcclusion, environmentReflections, reflectionIntensity });
         return { ok: true };
       },
       annotations: { readOnlyHint: false }

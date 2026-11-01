@@ -323,8 +323,15 @@ const TOOLS = [
         },
         explodeMode: {
           type: 'string',
-          enum: ['off', 'x', 'y', 'z', 'all'],
-          description: 'Explode assembly view along X, Y, Z, All axes, or off.'
+          enum: ['off', 'all'],
+          description:
+            "Explode panel: 'off' closes it (parts back together); 'all' opens it. Parts slide out every way they come apart, in a real order with no parts passing through each other."
+        },
+        explodeAmount: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+          description: 'Explode slider value from 0 (built) to 1 (fully apart). Goes straight there (no play). Defaults to 1 when only explodeMode is given.'
         },
         focusCamera: {
           type: 'boolean',
@@ -1384,6 +1391,9 @@ async function executeTool(name, args = {}) {
     if (args.reflectionIntensity !== undefined && !(Number(args.reflectionIntensity) >= 0 && Number(args.reflectionIntensity) <= 2)) {
       return { isError: true, error: `reflectionIntensity must be a number from 0 to 2 (got ${JSON.stringify(args.reflectionIntensity)}).` };
     }
+    if (args.explodeAmount !== undefined && !(typeof args.explodeAmount === 'number' && args.explodeAmount >= 0 && args.explodeAmount <= 1)) {
+      return { isError: true, error: `explodeAmount must be a number from 0 to 1 (got ${JSON.stringify(args.explodeAmount)}).` };
+    }
     if (args.stereoCrossEyed !== undefined && typeof args.stereoCrossEyed !== 'boolean') {
       return { isError: true, error: `stereoCrossEyed must be true or false (got ${JSON.stringify(args.stereoCrossEyed)}).` };
     }
@@ -1399,7 +1409,17 @@ async function executeTool(name, args = {}) {
       showGrid: args.showGrid !== undefined ? Boolean(args.showGrid) : prevVp.showGrid ?? true,
       showConnectors:
         args.showConnectors !== undefined ? Boolean(args.showConnectors) : prevVp.showConnectors ?? true,
-      explodeMode: args.explodeMode ?? prevVp.explodeMode ?? 'off',
+      explodeMode:
+        args.explodeMode !== undefined
+          ? args.explodeMode === 'off' ? 'off' : 'all'
+          : args.explodeAmount !== undefined ? 'all' : prevVp.explodeMode === 'off' || !prevVp.explodeMode ? 'off' : 'all',
+      // The slider goes straight to the value (1 when only explodeMode is given)
+      explodeAmount:
+        args.explodeAmount !== undefined
+          ? Math.min(1, Math.max(0, Number(args.explodeAmount)))
+          : args.explodeMode !== undefined
+            ? 1
+            : prevVp.explodeAmount ?? 1,
       focusTrigger: args.focusCamera ? (prevVp.focusTrigger || 0) + 1 : prevVp.focusTrigger || 0,
       projection: args.projection ?? prevVp.projection ?? 'perspective',
       viewLayout: args.viewLayout ?? prevVp.viewLayout ?? 'single',

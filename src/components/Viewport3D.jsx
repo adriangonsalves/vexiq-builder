@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { explodedOffsets } from '../utils/explodePlan.js';
 import { MeshBVH } from 'three-mesh-bvh';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
@@ -1162,78 +1163,16 @@ function createAngleLabels(parent, onSubmit) {
 }
 
 /**
- * Computes exploded display positions for all visible instances along 'x', 'y', 'z', or 'all'
- * without mutating their underlying assembled positions.
+ * Shown position of every part (openspec explode-view): assembled, plus the explode plan's offset at
+ * slider value `amount` while Explode is open with a plan for its direction. Map<instanceId, [x, y, z]>.
  */
-function computeExplodedPositions(instances, explodeMode = 'off', explodeFactor = 1.15) {
+function explodedPositionsFor(instances, explodeMode, plan, amount) {
   const result = new Map();
-  const visible = instances.filter((i) => i.visible !== false);
-  if (explodeMode === 'off' || visible.length <= 1) {
-    for (const inst of instances) {
-      result.set(inst.instanceId, [...inst.position]);
-    }
-    return result;
-  }
-
-  // Compute assembly centroid
-  let cx = 0,
-    cy = 0,
-    cz = 0;
-  for (const inst of visible) {
-    cx += inst.position[0];
-    cy += inst.position[1];
-    cz += inst.position[2];
-  }
-  cx /= visible.length;
-  cy /= visible.length;
-  cz /= visible.length;
-
-  const explodeAxisOffset = (val, centerVal, idx, total, isSingleAxis) => {
-    const delta = val - centerVal;
-    if (Math.abs(delta) >= 2.0) {
-      // Scale distance from centroid + add minimum separation step per layer sign
-      return delta * explodeFactor + Math.sign(delta) * 26 * explodeFactor;
-    }
-    // If parts lie on the exact same plane (e.g. all drivetrain parts at y=25.4mm when exploding Y),
-    // fan them out symmetrically so single-axis explode still separates co-planar parts clearly.
-    if (isSingleAxis) {
-      const centeredIdx = idx - (total - 1) / 2;
-      return centeredIdx * 18 * explodeFactor;
-    }
-    return 0;
-  };
-
-  visible.forEach((inst, idx) => {
-    const [px, py, pz] = inst.position;
-    let ox = 0,
-      oy = 0,
-      oz = 0;
-
-    if (explodeMode === 'x' || explodeMode === 'all') {
-      ox = explodeAxisOffset(px, cx, idx, visible.length, explodeMode === 'x');
-    }
-    if (explodeMode === 'y' || explodeMode === 'all') {
-      oy = explodeAxisOffset(py, cy, idx, visible.length, explodeMode === 'y');
-      // Keep Y explosion above the floor grid
-      if (py + oy < 6) oy = Math.max(oy, 6 - py + idx * 8);
-    }
-    if (explodeMode === 'z' || explodeMode === 'all') {
-      oz = explodeAxisOffset(pz, cz, idx, visible.length, explodeMode === 'z');
-    }
-
-    result.set(inst.instanceId, [
-      Number((px + ox).toFixed(3)),
-      Number((py + oy).toFixed(3)),
-      Number((pz + oz).toFixed(3))
-    ]);
-  });
-
+  const offsets = explodeMode !== 'off' && plan?.mode === explodeMode ? explodedOffsets(plan, amount) : null;
   for (const inst of instances) {
-    if (!result.has(inst.instanceId)) {
-      result.set(inst.instanceId, [...inst.position]);
-    }
+    const o = offsets?.get(inst.instanceId);
+    result.set(inst.instanceId, o ? inst.position.map((v, i) => v + o[i]) : [...inst.position]);
   }
-
   return result;
 }
 
@@ -1430,6 +1369,8 @@ export default function Viewport3D({
   showGrid,
   showConnectors,
   explodeMode = 'off',
+  explodeAmount = 1,
+  explodePlan = null,
   focusTrigger,
   onLoadingChange,
   onMateFeedback,
@@ -1481,7 +1422,6 @@ export default function Viewport3D({
   const transformRef = useRef(null);
   const gridRef = useRef(null);
   const partGroupRef = useRef(null);
-  const explodeLinesGroupRef = useRef(null);
   const meshMapRef = useRef(new Map()); // instanceId -> THREE.Group
   const wasDraggingRef = useRef(false);
   const dragMovedRef = useRef(false); // the last gizmo drag actually moved/rotated the part
@@ -1545,6 +1485,10 @@ export default function Viewport3D({
 
   const explodeModeRef = useRef(explodeMode);
   explodeModeRef.current = explodeMode;
+  const explodeAmountRef = useRef(explodeAmount);
+  explodeAmountRef.current = explodeAmount;
+  const explodePlanRef = useRef(explodePlan);
+  explodePlanRef.current = explodePlan;
 
   const transformModeRef = useRef(transformMode);
   transformModeRef.current = transformMode;
@@ -3580,10 +3524,6 @@ export default function Viewport3D({
     scene.add(partsRoot);
     partGroupRef.current = partsRoot;
 
-    const explodeLinesGroup = new THREE.Group();
-    scene.add(explodeLinesGroup);
-    explodeLinesGroupRef.current = explodeLinesGroup;
-
     // Aligned-hole highlights live on the scene root (not partsRoot) so click selection ignores them
     const holeOverlay = createHoleHighlightOverlay();
     scene.add(holeOverlay.group);
@@ -4887,7 +4827,7 @@ export default function Viewport3D({
       renderer.render(scene, cam);
       scene.overrideMaterial = null;
       shadowGround.visible = floorShown;
-      const content = [partsRoot, gridGroup, axesHelper, explodeLinesGroup, shadowGround];
+      const content = [partsRoot, gridGroup, axesHelper, shadowGround];
       const contentShown = content.map((o) => o.visible);
       content.forEach((o) => {
         o.visible = false;
@@ -5234,20 +5174,20 @@ export default function Viewport3D({
   // Sync placed instances & explode offsets with Three.js scene objects
   useEffect(() => {
     const partsRoot = partGroupRef.current;
-    const explodeLinesGroup = explodeLinesGroupRef.current;
     const transform = transformRef.current;
-    if (!partsRoot || !transform || !explodeLinesGroup) return;
+    if (!partsRoot || !transform) return;
 
     // Only the selection changed: nothing moved, so skip the per-part overlap checks and just
     // re-light the parts that were and are selected
     const lastSync = lastSceneSyncRef.current;
-    lastSceneSyncRef.current = { instances, catalogMap, showConnectors, explodeMode, selectedId, selectedIds };
+    lastSceneSyncRef.current = { instances, catalogMap, showConnectors, explodeMode, explodePlan, selectedId, selectedIds };
     if (
       lastSync &&
       lastSync.instances === instances &&
       lastSync.catalogMap === catalogMap &&
       lastSync.showConnectors === showConnectors &&
-      lastSync.explodeMode === explodeMode
+      lastSync.explodeMode === explodeMode &&
+      lastSync.explodePlan === explodePlan
     ) {
       const byId = new Map(instances.map((i) => [i.instanceId, i]));
       for (const id of new Set([...lastSync.selectedIds, ...selectedIds])) {
@@ -5288,45 +5228,8 @@ export default function Viewport3D({
       }
     }
 
-    // Compute visual exploded positions
-    const explodedPosMap = computeExplodedPositions(instances, explodeMode, 1.15);
-
-    // Clear and rebuild explode trace lines when explodeMode !== 'off'
-    while (explodeLinesGroup.children.length > 0) {
-      const line = explodeLinesGroup.children[0];
-      explodeLinesGroup.remove(line);
-      if (line.geometry) line.geometry.dispose();
-      if (line.material) line.material.dispose();
-    }
-
-    if (explodeMode !== 'off') {
-      const traceMat = new THREE.LineDashedMaterial({
-        color: 0x38bdf8,
-        dashSize: 5,
-        gapSize: 3,
-        transparent: true,
-        opacity: 0.65
-      });
-
-      for (const inst of instances) {
-        if (inst.visible === false) continue;
-        const expPos = explodedPosMap.get(inst.instanceId) || inst.position;
-        const dist = Math.hypot(
-          expPos[0] - inst.position[0],
-          expPos[1] - inst.position[1],
-          expPos[2] - inst.position[2]
-        );
-        if (dist > 1) {
-          const geo = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(...inst.position),
-            new THREE.Vector3(...expPos)
-          ]);
-          const line = new THREE.Line(geo, traceMat);
-          line.computeLineDistances();
-          explodeLinesGroup.add(line);
-        }
-      }
-    }
+    // Shown positions: assembled, or spread by the explode plan at the slider value
+    const explodedPosMap = explodedPositionsFor(instances, explodeMode, explodePlan, explodeAmountRef.current);
 
     // First pass: create/update groups and set transforms
     instances.forEach((inst) => {
@@ -5504,7 +5407,19 @@ export default function Viewport3D({
     // Move gizmo or rotate rings (none while exploded, to prevent offset confusion)
     syncGizmos();
     updateAlignedHoleHighlights();
-  }, [instances, selectedId, selectedIds, catalogMap, showConnectors, explodeMode]);
+  }, [instances, selectedId, selectedIds, catalogMap, showConnectors, explodeMode, explodePlan]);
+
+  // Moving the Explode slider (or its play) only moves the parts
+  useEffect(() => {
+    if (explodeMode === 'off' || !explodePlan) return;
+    const posMap = explodedPositionsFor(instancesRef.current, explodeMode, explodePlan, explodeAmount);
+    for (const inst of instancesRef.current) {
+      const group = meshMapRef.current.get(inst.instanceId);
+      const pos = posMap.get(inst.instanceId);
+      if (group && pos) group.position.set(pos[0], pos[1], pos[2]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [explodeAmount]);
 
   // Hole picking ends when its part is no longer the one being picked for, or the mode around it
   // changes: another selection, Move/Rotate, Explode, or the part moved/hidden/locked/removed by

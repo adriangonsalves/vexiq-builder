@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { Worker } from 'node:worker_threads';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
@@ -20,6 +21,56 @@ import { syncSelection } from './src/utils/partGroups.js';
 import { MCP_OFF_MESSAGE, isLinearHistory, normalizeSettings } from './src/utils/appSettings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Explode plans already worked out (openspec explode-view), by build and direction choice
+const explodePlans = new Map();
+const EXPLODE_PLANS_KEPT = 8;
+let explodeWorker = null;
+let explodeJobId = 0;
+const explodeJobs = new Map(); // job id -> { resolve, reject, mode }
+let onExplodeProgress = null; // (mode, fraction) -> tell the browser tabs how far a plan has got
+const pendingPlans = new Map(); // key -> Promise<plan>, so the same plan is worked out once
+/** The plan for a build and direction, from the explode worker (started on first use, kept running). */
+function explodePlanFromWorker(state, mode) {
+  const key = explodeKey(state.instances, mode);
+  if (explodePlans.has(key)) return Promise.resolve(explodePlans.get(key));
+  if (pendingPlans.has(key)) return pendingPlans.get(key);
+  if (!explodeWorker) {
+    explodeWorker = new Worker(new URL('./mcp/explode-worker.mjs', import.meta.url), { env: process.env });
+    explodeWorker.on('message', ({ id, plan, error, progress }) => {
+      const job = explodeJobs.get(id);
+      if (progress !== undefined) {
+        if (job) onExplodeProgress?.(job.mode, progress);
+        return;
+      }
+      explodeJobs.delete(id);
+      if (job) (error ? job.reject(new Error(error)) : job.resolve(plan));
+    });
+    explodeWorker.on('error', (err) => {
+      for (const job of explodeJobs.values()) job.reject(err);
+      explodeJobs.clear();
+      explodeWorker = null;
+    });
+  }
+  const id = ++explodeJobId;
+  const promise = new Promise((resolve, reject) => explodeJobs.set(id, { resolve, reject, mode }))
+    .then((plan) => {
+      explodePlans.set(key, plan);
+      if (explodePlans.size > EXPLODE_PLANS_KEPT) explodePlans.delete(explodePlans.keys().next().value);
+      if (plan.unplaced.length) console.warn(`[explode] ${plan.unplaced.length} overlap(s) left in the ${mode} plan`, plan.unplaced);
+      return plan;
+    })
+    .finally(() => pendingPlans.delete(key));
+  pendingPlans.set(key, promise);
+  explodeWorker.postMessage({ id, state: { instances: state.instances }, mode });
+  return promise;
+}
+const explodeKey = (instances, mode) =>
+  `${mode}|${JSON.stringify(
+    (instances || [])
+      .filter((i) => i.visible !== false)
+      .map((i) => [i.instanceId, i.partId, i.position, i.rotation, i.groupId || null, i.socketAngleDeg || 0])
+  )}`;
 // VEXIQ_STATE_PATH (as for the MCP engine) lets a test server use its own build file
 const STATE_FILE = process.env.VEXIQ_STATE_PATH || path.join(__dirname, 'public', 'assembly-state.json');
 // App settings shared with the MCP server (openspec app-settings); VEXIQ_SETTINGS_PATH as for the engine
@@ -54,6 +105,12 @@ function vexiqMcpBridgePlugin() {
     }
   }
 
+  // How far the explode plan being worked out has got, for the Explode panel's ring
+  onExplodeProgress = (mode, fraction) => {
+    const msg = `data: ${JSON.stringify({ type: 'explode-progress', mode, fraction })}\n\n`;
+    for (const client of sseClients) client.write(msg);
+  };
+
   // Settings changed in one tab reach the others as a `settings` event
   function broadcastSettings(settings, clientId = undefined) {
     const msg = `data: ${JSON.stringify({ type: 'settings', clientId, settings })}\n\n`;
@@ -73,6 +130,27 @@ function vexiqMcpBridgePlugin() {
   return {
     name: 'vexiq-mcp-bridge',
     configureServer(server) {
+      // When the server restarts (vite.config.js changed) or stops: stop the explode worker, and end
+      // the open event streams so the tabs reconnect to the new server instead of hanging on this one
+      server.httpServer?.once('close', () => {
+        explodeWorker?.terminate();
+        explodeWorker = null;
+        for (const job of explodeJobs.values()) job.reject(new Error('the server restarted'));
+        explodeJobs.clear();
+        pendingPlans.clear();
+        for (const client of sseClients) client.end();
+        sseClients.clear();
+      });
+      // Load the explode worker's meshes and work out the saved build's plan in the background, so
+      // opening Explode the first time doesn't wait for it
+      setTimeout(() => {
+        try {
+          const saved = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+          if (saved?.instances?.length) explodePlanFromWorker(saved, 'all').catch(() => {});
+        } catch {
+          // no saved build yet
+        }
+      }, 1500);
       server.middlewares.use('/api/assembly/events', (req, res) => {
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
@@ -401,6 +479,24 @@ function vexiqMcpBridgePlugin() {
             if (action === 'joint_graph') {
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({ ok: true, graph: jointGraph(state, { pinnedOnly: Boolean(params.pinnedOnly) }) }));
+              return;
+            }
+
+            // How the build comes apart for the Explode slider, worked out with the engine's
+            // collision meshes (openspec explode-view)
+            if (action === 'explode_plan') {
+              const mode = ['x', 'y', 'z', 'all'].includes(params.mode) ? params.mode : 'all';
+              explodePlanFromWorker(state, mode).then(
+                (plan) => {
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ ok: true, plan }));
+                },
+                (err) => {
+                  res.statusCode = 500;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ ok: false, error: err.message }));
+                }
+              );
               return;
             }
 

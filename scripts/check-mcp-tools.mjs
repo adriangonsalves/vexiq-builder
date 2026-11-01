@@ -518,6 +518,27 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
 }
 
 // ---------------------------------------------------------------------------
+// Explode panel (openspec explode-view): open or closed, and the slider value
+// ---------------------------------------------------------------------------
+{
+  writeState({ ...emptyState(), instances: [mk('Beam', '1x6 Beam', [0, 0, 0])] });
+  let res = await call('configure_viewport', { explodeMode: 'all', explodeAmount: 0.5 });
+  let vp = readState().viewport;
+  check('configure_viewport opens Explode at the given slider value', !res.isError && vp.explodeMode === 'all' && vp.explodeAmount === 0.5, JSON.stringify(vp));
+  await call('configure_viewport', { explodeMode: 'off' });
+  await call('configure_viewport', { explodeMode: 'all' });
+  vp = readState().viewport;
+  check('explodeMode alone sets the slider to 1', vp.explodeMode === 'all' && vp.explodeAmount === 1, JSON.stringify(vp));
+  await call('configure_viewport', { showGrid: true });
+  vp = readState().viewport;
+  check('other viewport calls keep Explode open at its slider value', vp.explodeMode === 'all' && vp.explodeAmount === 1, JSON.stringify(vp));
+  await call('configure_viewport', { explodeMode: 'off' });
+  check("explodeMode 'off' closes the panel", readState().viewport.explodeMode === 'off');
+  res = await call('configure_viewport', { explodeAmount: 2 });
+  check('an explodeAmount outside 0..1 is refused', res.isError && /explodeAmount must be a number from 0 to 1/.test(res.data?.error || ''), JSON.stringify(res.data));
+}
+
+// ---------------------------------------------------------------------------
 // 5.1 appSync on every change
 // ---------------------------------------------------------------------------
 {

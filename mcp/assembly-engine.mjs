@@ -27,6 +27,7 @@ import { settlePlacement, turnAboutLine } from '../src/utils/placementFit.js';
 import { isTireOnHub } from '../src/utils/tireFit.js';
 import { seatedBatteryBay } from '../src/utils/batteryBay.js';
 import { syncSelection } from '../src/utils/partGroups.js';
+import { buildExplodePlan } from '../src/utils/explodePlan.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -724,7 +725,7 @@ function findJoints(state) {
   const labelOf = (id) => visible.find((i) => i.instanceId === id)?.label || id;
 
   // Seated joints between every pair of parts whose boxes touch
-  const seatedPairs = []; // { insertOwner, openingOwner, insert, opening }
+  const seatedPairs = []; // { insertOwner, openingOwner, insert, opening, overlapMm }
   for (let i = 0; i < visible.length; i++) {
     const a = visible[i];
     const boxA = rawWorldBoxes.get(a.instanceId);
@@ -738,7 +739,8 @@ function findJoints(state) {
           insertOwner: pair.insert.instanceId,
           openingOwner: pair.opening.instanceId,
           insert: pair.insert,
-          opening: pair.opening
+          opening: pair.opening,
+          overlapMm: pair.overlapMm
         });
       }
     }
@@ -808,7 +810,7 @@ function findJoints(state) {
       link(battery.inst.instanceId, brain.inst.instanceId);
       const required = battery.part.mountingRules?.minFastenersRequired || 1;
       fastenerCountByPartInstance.set(battery.inst.instanceId, Math.max(fastenerCountByPartInstance.get(battery.inst.instanceId) || 0, required));
-      batteryBays.push({ battery: battery.inst.label, brain: brain.inst.label });
+      batteryBays.push({ battery: battery.inst.label, brain: brain.inst.label, batteryId: battery.inst.instanceId, brainId: brain.inst.instanceId });
     }
   }
 
@@ -922,6 +924,106 @@ function graphFromJoints(found, { pinnedOnly = false } = {}) {
  */
 export function jointGraph(state, { pinnedOnly = false } = {}) {
   return graphFromJoints(findJoints(state), { pinnedOnly });
+}
+
+const SHAFT_TYPES = new Set(['straight_shaft', 'capped_shaft', 'motor_shaft']);
+const PIN_TYPES = new Set(['connector_pin', 'standoff']);
+
+/**
+ * Which way a seated shaft can't slide out of its opening (openspec explode-view): moving the insert
+ * along +axis sweeps every section below the opening's top through it, and along -axis every section
+ * above its bottom. A section too wide for the opening (a motor shaft's stop ring) blocks that way.
+ */
+function tooWideBlocks(insert, opening) {
+  if (!insert.profile || !Number.isFinite(opening.passRadius)) return null;
+  const v = new THREE.Vector3().subVectors(opening.origin, insert.origin);
+  const along = v.dot(insert.axis);
+  const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
+  const ta = new THREE.Vector3().subVectors(opening.start, insert.origin).dot(insert.axis);
+  const tb = new THREE.Vector3().subVectors(opening.end, insert.origin).dot(insert.axis);
+  const [oMin, oMax] = ta <= tb ? [ta, tb] : [tb, ta];
+  const wide = (s) => s.r + lateral > opening.passRadius + 0.05;
+  const plus = insert.profile.some((s) => s.t < oMax - 0.1 && wide(s));
+  const minus = insert.profile.some((s) => s.t > oMin + 0.1 && wide(s));
+  return plus || minus ? { plus, minus } : null;
+}
+
+/** Collision meshes of a placed part in its own frame: [{ geo, local }] (a turned motor hub has a local matrix). */
+export function collisionPiecesFor(instance) {
+  const part = getCatalog().catalogById.get(instance.partId);
+  if (!part) return [];
+  return posedPieces(getPartCollisionBvh(part), instance).map((p) => ({ geo: p.geo, local: p.local || null }));
+}
+
+/**
+ * What the explode plan (src/utils/explodePlan.js) needs from the build: every visible part with its
+ * kind and world box, the seated pairs with their axes, how deep each pin sits in each part, the
+ * direct joins, battery bays and the ways a shaft's stop ring can't go. Plain data, except `parts[].matrix`.
+ */
+export function explodeInputs(state) {
+  const { catalogById } = getCatalog();
+  const found = findJoints(state);
+  const parts = [];
+  for (const inst of found.visible) {
+    const part = catalogById.get(inst.partId);
+    const box = found.rawWorldBoxes.get(inst.instanceId);
+    if (!part || !box) continue;
+    const type = part.fastenerSpecs?.fastenerType;
+    const isFastener = found.fasteners.some((f) => f.inst.instanceId === inst.instanceId);
+    const kind = COLLAR_NAME_PATTERN.test(part.name || '')
+      ? 'part'
+      : SHAFT_TYPES.has(type)
+        ? 'shaft'
+        : PIN_TYPES.has(type) || isFastener
+          ? 'pin'
+          : 'part';
+    parts.push({
+      id: inst.instanceId,
+      partId: inst.partId,
+      name: part.name,
+      label: inst.label || part.name,
+      partNumber: part.partNumber,
+      kind,
+      groupId: inst.groupId || null,
+      position: inst.position,
+      rotation: inst.rotation,
+      matrix: buildWorldMatrix(inst.position, inst.rotation),
+      box: { min: box.min.toArray(), max: box.max.toArray() }
+    });
+  }
+  const pairs = found.seatedPairs.map((p) => ({
+    insertOwner: p.insertOwner,
+    openingOwner: p.openingOwner,
+    axis: p.insert.axis.toArray(),
+    depthMm: Math.max(0, p.overlapMm ?? 0),
+    blocks: tooWideBlocks(p.insert, p.opening)
+  }));
+  // Battery bays, meshing gears and clamps join parts without an axis
+  const direct = found.directEdges.map(([a, b]) => [a, b]);
+  const bays = found.batteryBays.map((b) => ({ battery: b.batteryId, brain: b.brainId }));
+  const tires = [];
+  for (const a of found.nonFasteners) {
+    for (const b of found.nonFasteners) {
+      if (a !== b && isTireOnHub(a.part, a.mat, b.part, b.mat) && /tire/i.test(a.part.name)) tires.push([a.inst.instanceId, b.inst.instanceId]);
+    }
+  }
+  return { parts, pairs, direct, bays, tires };
+}
+
+/** The explode plan for a build and direction choice ('x' | 'y' | 'z' | 'all'), from the collision meshes. */
+export function explodePlanFor(state, mode = 'all', options = {}) {
+  const input = explodeInputs(state);
+  const byId = new Map((state.instances || []).map((i) => [i.instanceId, i]));
+  for (const p of input.parts) p.meshes = collisionPiecesFor(byId.get(p.id));
+  // The shrunk meshes miss a shaft section inside a hole too narrow for it (as the audit does)
+  const features = new Map();
+  const featuresAt = (id, o) => {
+    if (!features.has(id)) features.set(id, worldFeaturesFor(byId.get(id)));
+    const shift = new THREE.Vector3(...o);
+    return features.get(id).map((f) => ({ ...f, origin: f.origin.clone().add(shift), start: f.start.clone().add(shift), end: f.end.clone().add(shift) }));
+  };
+  input.tooWide = (a, b, oa, ob) => findTooWideInserts(featuresAt(a, oa), featuresAt(b, ob)).length > 0;
+  return buildExplodePlan(input, mode, options);
 }
 
 export function auditAssembly(state) {

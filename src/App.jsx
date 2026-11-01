@@ -40,6 +40,7 @@ import { loadRecent, recordUse, saveRecent } from './utils/recentParts.js';
 import HistoryTimeline from './components/HistoryTimeline.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
+import ExplodePanel from './components/ExplodePanel.jsx';
 import SelectMenu from './components/SelectMenu.jsx';
 import AssemblyOutliner from './components/AssemblyOutliner.jsx';
 import SetInspector from './components/SetInspector.jsx';
@@ -115,6 +116,13 @@ const TIMELINE_KEY = 'vexiq_history_timeline_visible';
 const EMPTY_IDS = [];
 const TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const EXPLODE_MODES = ['off', 'x', 'y', 'z', 'all'];
+/** Explode always takes the robot apart every way: an older saved X, Y or Z direction opens as All. */
+const explodeOn = (mode) => (mode === 'off' ? 'off' : 'all');
+const EXPLODE_PLAY_MS = 2500; // the slider's play from 0% to 100% when Explode is opened by hand
+const clamp01 = (n) => Math.min(1, Math.max(0, Number(n) || 0));
+// What an explode plan depends on: the visible parts and where they are (openspec explode-view)
+const explodeSignature = (parts) =>
+  JSON.stringify(parts.filter((i) => i.visible !== false).map((i) => [i.instanceId, i.partId, i.position, i.rotation, i.groupId || null, i.socketAngleDeg || 0]));
 const PROJECTIONS = ['perspective', 'orthographic'];
 const VIEW_LAYOUTS = ['single', 'four', 'stereo'];
 const VIEW_DIRECTIONS = ['+x', '-x', '+y', '-y', '+z', '-z'];
@@ -172,7 +180,22 @@ export default function App() {
   const [rotationSnapDeg, setRotationSnapDeg] = useState(15); // 15, 45, 90, 0
   const [showGrid, setShowGrid] = useState(true);
   const [showConnectors, setShowConnectors] = useState(true);
-  const [explodeMode, setExplodeMode] = useState('off'); // 'off' | 'x' | 'y' | 'z' | 'all'
+  // Explode panel (openspec explode-view): the direction while open ('off' = closed), the slider
+  // value (0 built .. 1 fully apart), whether the slider is playing, and the plan for the build
+  const [explodeMode, setExplodeMode] = useState('off'); // 'off' | 'all'
+  const [explodeAmount, setExplodeAmount] = useState(1);
+  const [explodePlaying, setExplodePlaying] = useState(false);
+  const [explodePlan, setExplodePlan] = useState(null); // { key, plan } for the build and direction
+  const [explodeProgress, setExplodeProgress] = useState(null); // 0..1 while the server works out a plan
+  const explodeModeRef = useRef(explodeMode);
+  explodeModeRef.current = explodeMode;
+  // The slider value saved with the view: follows the slider once it has been still for a moment, so
+  // the play and drags don't save the build every frame
+  const [savedExplodeAmount, setSavedExplodeAmount] = useState(1);
+  useEffect(() => {
+    const timer = setTimeout(() => setSavedExplodeAmount(explodeAmount), 400);
+    return () => clearTimeout(timer);
+  }, [explodeAmount]);
   const [focusTrigger, setFocusTrigger] = useState(0);
   // View options (openspec: view-options); saved with the viewport settings, never history steps
   const [projection, setProjection] = useState('perspective');
@@ -454,6 +477,7 @@ export default function App() {
 
   // The viewport's screenshot renderer, used to answer the MCP server's capture_screenshot requests
   const screenshotRef = useRef(null);
+  const waitForExplodeRef = useRef(async () => {}); // resolves once an open Explode panel shows its plan
   const handleRegisterScreenshot = useCallback((fn) => {
     screenshotRef.current = fn;
   }, []);
@@ -511,8 +535,10 @@ export default function App() {
             if (serverState.viewport.showConnectors !== undefined) {
               setShowConnectors(serverState.viewport.showConnectors);
             }
-            if (serverState.viewport.explodeMode) {
-              setExplodeMode(serverState.viewport.explodeMode);
+            if (EXPLODE_MODES.includes(serverState.viewport.explodeMode)) {
+              // A saved open panel comes back at its slider value (1 when it has none), without playing
+              setExplodeMode(explodeOn(serverState.viewport.explodeMode));
+              setExplodeAmount(serverState.viewport.explodeAmount === undefined ? 1 : clamp01(serverState.viewport.explodeAmount));
             }
             applyViewOptions(serverState.viewport);
           }
@@ -634,14 +660,19 @@ export default function App() {
     const es = new EventSource('/api/assembly/events');
     es.onopen = () => setMcpConnected(true);
     es.onerror = () => setMcpConnected(false);
-    es.onmessage = (event) => {
+    es.onmessage = async (event) => {
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === 'settings') {
           if (msg.clientId !== TAB_ID) keepSettings(msg.settings);
           return;
         }
+        if (msg.type === 'explode-progress') {
+          if (msg.mode === explodeModeRef.current) setExplodeProgress(msg.fraction);
+          return;
+        }
         if (msg.type === 'screenshot-request') {
+          await waitForExplodeRef.current();
           let reply;
           try {
             const png = screenshotRef.current?.(msg);
@@ -670,7 +701,14 @@ export default function App() {
             if (vp.rotationSnapDeg !== undefined) setRotationSnapDeg(vp.rotationSnapDeg);
             if (vp.showGrid !== undefined) setShowGrid(vp.showGrid);
             if (vp.showConnectors !== undefined) setShowConnectors(vp.showConnectors);
-            if (vp.explodeMode !== undefined) setExplodeMode(vp.explodeMode);
+            // Only the assistant sets the explode from outside: another tab's save leaves this tab's
+            // explode (and its play) alone
+            if (msg.source !== 'browser' && EXPLODE_MODES.includes(vp.explodeMode)) {
+              // Straight to the given value (1 when none is given), no play
+              setExplodePlaying(false);
+              setExplodeMode(explodeOn(vp.explodeMode));
+              if (vp.explodeMode !== 'off') setExplodeAmount(vp.explodeAmount === undefined ? 1 : clamp01(vp.explodeAmount));
+            }
             if (vp.focusTrigger !== undefined) setFocusTrigger(vp.focusTrigger);
             applyViewOptions(vp, { turnCamera: true });
           }
@@ -722,6 +760,7 @@ export default function App() {
           showGrid,
           showConnectors,
           explodeMode,
+          explodeAmount: savedExplodeAmount,
           focusTrigger,
           projection,
           viewLayout,
@@ -771,6 +810,7 @@ export default function App() {
     showGrid,
     showConnectors,
     explodeMode,
+    savedExplodeAmount,
     focusTrigger,
     projection,
     viewLayout,
@@ -925,6 +965,19 @@ export default function App() {
     if (!data?.ok || !data.graph) throw new Error(data?.error || `the server replied ${res.status}`);
     return data.graph;
   };
+
+  // --- Explode (openspec explode-view) -----------------------------------------------------------
+  /** Opens the panel by hand: the slider plays from 0% once the take-apart is worked out. */
+  const openExplode = () => {
+    setExplodeAmount(0);
+    setExplodePlaying(true);
+    setExplodeMode('all');
+  };
+  const closeExplode = () => {
+    setExplodePlaying(false);
+    setExplodeMode('off');
+  };
+  const toggleExplode = () => (explodeMode === 'off' ? openExplode() : closeExplode());
 
   const partCount = (n) => `${n} part${n === 1 ? '' : 's'}`;
 
@@ -1329,6 +1382,7 @@ export default function App() {
       showGrid: sg,
       showConnectors: sc,
       explodeMode: em,
+      explodeAmount: ea,
       focusCamera,
       projection: pj,
       viewLayout: vl,
@@ -1343,7 +1397,13 @@ export default function App() {
       if (tm) setTransformMode(tm);
       if (sg !== undefined) setShowGrid(Boolean(sg));
       if (sc !== undefined) setShowConnectors(Boolean(sc));
-      if (em && EXPLODE_MODES.includes(em)) setExplodeMode(em);
+      if ((em && EXPLODE_MODES.includes(em)) || ea !== undefined) {
+        // From the assistant: straight to the given value (1 when only a direction is given), no play
+        setExplodePlaying(false);
+        if (em) setExplodeMode(explodeOn(em));
+        if (em !== 'off') setExplodeAmount(ea === undefined ? 1 : clamp01(ea));
+        if (!em && explodeMode === 'off') setExplodeMode('all');
+      }
       if (focusCamera) setFocusTrigger((c) => c + 1);
       if (PROJECTIONS.includes(pj)) setProjection(pj);
       if (VIEW_LAYOUTS.includes(vl)) setViewLayout(vl);
@@ -1396,6 +1456,69 @@ export default function App() {
     document.addEventListener('fullscreenchange', onFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
+
+  // The explode plan for the build as it is now, from the bridge, which works
+  // it out with the engine's collision meshes; worked out again after any change to the build
+  const explodeKey = useMemo(
+    () => (explodeMode === 'off' ? null : `${explodeMode}|${explodeSignature(instances)}`),
+    [explodeMode, instances]
+  );
+  const explodeReady = Boolean(explodeKey && explodePlan?.key === explodeKey);
+  useEffect(() => {
+    if (!explodeKey || explodePlan?.key === explodeKey) return undefined;
+    let cancelled = false;
+    const mode = explodeMode;
+    const parts = instances;
+    setExplodeProgress(null);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/assembly/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'explode_plan', state: { instances: parts }, params: { mode } })
+        });
+        const data = await res.json().catch(() => null);
+        if (!data?.ok || !data.plan) throw new Error(data?.error || `the server replied ${res.status}`);
+        if (!cancelled) setExplodePlan({ key: explodeKey, plan: data.plan });
+      } catch (err) {
+        if (!cancelled) setActionFeedback({ message: `Couldn't work out the explode: ${err.message}`, isError: true });
+      }
+    }, 120);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [explodeKey]);
+
+  // The play: 0% to 100% over EXPLODE_PLAY_MS, from wherever the slider is, once the plan is ready
+  const explodeAmountRef = useRef(explodeAmount);
+  explodeAmountRef.current = explodeAmount;
+  useEffect(() => {
+    if (!explodePlaying || !explodeReady) return undefined;
+    const from = performance.now() - explodeAmountRef.current * EXPLODE_PLAY_MS;
+    let frame = 0;
+    const tick = (now) => {
+      const amount = Math.min(1, (now - from) / EXPLODE_PLAY_MS);
+      setExplodeAmount(amount);
+      if (amount < 1) frame = requestAnimationFrame(tick);
+      else setExplodePlaying(false);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [explodePlaying, explodeReady, explodeMode]);
+  useEffect(() => {
+    if (explodeMode === 'off') setExplodePlaying(false);
+  }, [explodeMode]);
+
+  // A screenshot waits until an open Explode panel's plan is worked out and shown
+  const explodeShownRef = useRef(true);
+  explodeShownRef.current = explodeMode === 'off' || explodeReady;
+  waitForExplodeRef.current = async () => {
+    const until = Date.now() + 30000;
+    while (!explodeShownRef.current && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  };
 
   // Global keyboard shortcuts for 3D Modeler
   useEffect(() => {
@@ -1464,10 +1587,7 @@ export default function App() {
       } else if (key === 'e') {
         setTransformMode('rotate');
       } else if (key === 'x') {
-        setExplodeMode((prev) => {
-          const nextIdx = (EXPLODE_MODES.indexOf(prev) + 1) % EXPLODE_MODES.length;
-          return EXPLODE_MODES[nextIdx];
-        });
+        toggleExplode();
       } else if (key === 'f') {
         setFocusTrigger((c) => c + 1);
       } else if (key === 'd' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
@@ -1477,7 +1597,7 @@ export default function App() {
         handleDeleteSelected();
       } else if (e.key === 'Escape') {
         if (explodeMode !== 'off') {
-          setExplodeMode('off');
+          closeExplode();
         } else if (boxSelect || selectMode) {
           // Esc first leaves Box select / Select mode and keeps the selection
           setBoxSelect(false);
@@ -1685,6 +1805,7 @@ export default function App() {
               showGrid,
               showConnectors,
               explodeMode,
+              explodeAmount: savedExplodeAmount,
               focusTrigger,
               projection,
               viewLayout,
@@ -1852,20 +1973,16 @@ export default function App() {
                 { label: 'Free', value: 0 }
               ]}
             />
-            <ToolbarMenu
-              label="Explode"
-              icon={Expand}
-              title="Spread the parts apart along X, Y, Z or all axes (Shortcut: X)"
-              value={explodeMode}
-              onChange={setExplodeMode}
-              options={[
-                { label: 'Off', value: 'off' },
-                { label: 'X', value: 'x' },
-                { label: 'Y', value: 'y' },
-                { label: 'Z', value: 'z' },
-                { label: 'All', value: 'all' }
-              ]}
-            />
+            <button
+              type="button"
+              className={`btn ${explodeMode !== 'off' ? 'active' : ''}`}
+              onClick={toggleExplode}
+              aria-pressed={explodeMode !== 'off'}
+              title="Take the robot apart with a slider (Shortcut: X)"
+            >
+              <Expand size={14} />
+              Explode
+            </button>
           </div>
 
           <div className="toolbar-group" role="group" aria-label="View">
@@ -2124,6 +2241,8 @@ export default function App() {
             reflectionIntensity={reflectionIntensity}
             showConnectors={showConnectors}
             explodeMode={explodeMode}
+            explodeAmount={explodeAmount}
+            explodePlan={explodePlan && explodePlan.plan.mode === explodeMode ? explodePlan.plan : null}
             focusTrigger={focusTrigger}
             onLoadingChange={setIsLoadingMesh}
             onMateFeedback={(message, isError) => setActionFeedback({ message, isError })}
@@ -2133,6 +2252,17 @@ export default function App() {
             onInsertCopy={preview ? noop : handleInsertCopy}
           />
 
+          {explodeMode !== 'off' && (
+            <ExplodePanel
+              amount={explodeAmount}
+              ready={explodeReady}
+              progress={explodeProgress}
+              onAmount={setExplodeAmount}
+              onGrab={() => setExplodePlaying(false)}
+              onClose={closeExplode}
+            />
+          )}
+
           <div className="viewport-hud-top">
             <div className="hud-pill">
               <Box size={14} style={{ color: '#60a5fa' }} />
@@ -2141,7 +2271,7 @@ export default function App() {
               </span>
               {explodeMode !== 'off' && (
                 <span style={{ color: '#38bdf8', fontWeight: 600 }}>
-                  • Explode: {explodeMode.toUpperCase()}
+                  • Explode: {Math.round(explodeAmount * 100)}%
                 </span>
               )}
               {isLoadingMesh && (
@@ -2232,7 +2362,7 @@ export default function App() {
                   <kbd className="kbd">E</kbd> Rotate
                 </span>
                 <span>
-                  <kbd className="kbd">X</kbd> Cycle Explode
+                  <kbd className="kbd">X</kbd> Explode
                 </span>
                 <span>
                   <kbd className="kbd">D</kbd> Duplicate
@@ -2249,7 +2379,7 @@ export default function App() {
                   <kbd className="kbd">3</kbd> Front / Top / Side
                 </span>
                 <span>
-                  <kbd className="kbd">Esc</kbd> Un-Explode / Cancel
+                  <kbd className="kbd">Esc</kbd> Close Explode / Cancel
                 </span>
               </div>
             </div>

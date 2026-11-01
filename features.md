@@ -130,9 +130,13 @@
   - A **tire on its hub** isn't an overlap: tires are moulded smaller than the hub they stretch over, so a tire whose axis lines up with a hub's and whose width covers the hub's middle is left out of the check (`src/utils/tireFit.js`, shared by the app and the MCP engine).
   - Intersecting parts render in **transparent grey** (`opacity: 0.42`) with a top HUD warning and a one-click **Revert Pose / Cancel Placement** button.
   - Selecting another part automatically reverts any unplaced intersecting part to its `lastValidPosition` / `lastValidRotation`.
-- **Multi-Axis Exploded View (`Off`, `X`, `Y`, `Z`, `All`):**
-  - Non-destructively separates all visible parts radially or along a single axis (`X`, `Y`, or `Z`) with dashed cyan trace lines back to their true assembled coordinates.
-  - Co-planar parts fan out symmetrically in single-axis explode mode so internal pins, shafts, and gears are clearly visible.
+- **Explode (openspec explode-view):** the toolbar's **Explode** button or `X` opens a small panel. It always takes the robot apart every way the parts come apart (there is no X / Y / Z choice). While that's being worked out, the panel shows a ring filling up with a percentage; then a slider from 0% (built) to 100% (fully apart) appears and plays from 0% to 100% over about 2.5 s. Pressing the slider stops the play there; a save from another open tab doesn't. Closing the panel (its ×, the toolbar button, `X` or `Esc`) puts every part back.
+  - **Parts come apart in a real order, with nothing passing through anything.** The bridge works out how the robot comes apart (`src/utils/explodePlan.js`, run in a worker by the dev server): each piece slides out in a straight line along a pin or shaft axis it sits on when that way is clear, otherwise along a main axis, carrying the parts held on it. A shaft's stop ring or cap never goes through a hole it can't pass. The brain (or the largest part) stays put. Pieces held on the brain move first; the parts held on them spread from them after, so a piece never leaves its holder before the holder moves. A lump of parts that only comes apart once it is away from the rest (a side frame) is taken apart again on its own.
+  - **No overlaps at any slider value:** every start time is checked against the motion of everything else at each 1% of the slider, with the same shrunk meshes and stop-ring test the audit uses. A piece that can't come off cleanly any way stays on the part it is held on. Pairs that overlap as built (a tire on its hub) don't count.
+  - **What moves as one:** a group; a pin or standoff and the part it sits deeper in (the larger part on a tie); a tire and its hub. Shafts move on their own; the battery slides out of the brain's bay. Hidden parts are left out.
+  - **Direction choice:** `X`, `Y` or `Z` slides pieces only along that axis; pieces that can't go that way stay on their holder. `All` uses every way out.
+  - The same slider value always shows the same picture. Moving the slider never changes saved positions or adds a history step; parts keep their rotation. No lines are drawn back to the parts' built spots (the motion shows where they came from). Selecting, hiding, the camera, `F` and the 4-View side views use the shown positions; Move, Rotate, hole picking and the copy preview stay blocked while the panel is open. Any change to the build (hide, undo, an MCP edit) works the explode out again at the same slider value; "Working out explode…" shows while that takes more than a moment, with the ring and percentage in place of the slider.
+  - The direction, slider value and last direction are saved with the view; a build saved with the panel open comes back at its slider value without playing.
 - **View options (the view cube's menu: right-click the cube; in Stereo, the toolbar's `View` button):**
   - **Perspective / orthographic:** `P` or the menu's Perspective / Orthographic. The view keeps its target, direction and size at the target when switching, and every tool (drag snapping, mating, hole picking, the copy preview, Rotate mode, Explode, Frame) works the same in both. Orthographic zoom never clips the parts in front.
   - **Axis views:** `1`, `2`, `3` turn the camera (in about 300 ms, keeping the target and distance or zoom) to look from +X (front), +Y (top, +X at the top of the picture) and +Z (side). `Shift+1/2/3` looks from the opposite side.
@@ -152,13 +156,13 @@
   - `E`: Rotate Tool (`rotate`)
   - Right-click the selected part: switch between Move and Rotate
   - `Esc` (with a ring selected): unselect the ring
-  - `X`: Cycle Explode View (`off` → `x` → `y` → `z` → `all`)
+  - `X`: Open or close the Explode panel
   - `D` / `Cmd+D`: Duplicate selected part
   - `F`: Focus camera on selected part (or full assembly); also reframes the 4-View small views
   - `P`: Perspective / orthographic
   - `1` / `2` / `3`: Look from +X (front) / +Y (top) / +Z (side); with `Shift`, from the opposite side
   - `Del` / `Backspace`: Delete selected part
-  - `Esc`: Hide mate arrows if shown; otherwise exit Explode mode / revert intersecting part & deselect
+  - `Esc`: Hide mate arrows if shown; otherwise close the Explode panel / revert intersecting part & deselect
   - Double-click selected part: Mate with lined-up holes / pins (shows direction arrows when there is more than one way); with nothing lined up, pick any hole to insert into (a gear, hub or pulley: an axle end or hole to go onto)
   - `C`: Select Connected · `G`: Group · `Shift+G`: Ungroup · `Ctrl/Cmd+A`: Select all visible parts · `Shift`+wheel: grow or shrink the selection by joints (`Shift+Ctrl/Cmd`+wheel: pins and shafts only)
 
@@ -196,7 +200,7 @@
 
 ## 2b. Simple Mode, Settings & the Compact Toolbar
 
-- **Simple by default, for young builders:** the toolbar holds Undo / Redo / History, Move / Rotate, the **Snap** and **Explode** drop-downs (each shows its current choice; `X` still cycles Explode), Focus, Wide, the **File** menu, Audit & Blueprint and a **Settings** gear, with the open build's name beside the title. View options are in the view cube's menu (see above).
+- **Simple by default, for young builders:** the toolbar holds Undo / Redo / History, Move / Rotate, the **Snap** drop-down (it shows its current choice), the **Explode** button (`X`), Focus, Wide, the **File** menu, Audit & Blueprint and a **Settings** gear, with the open build's name beside the title. View options are in the view cube's menu (see above).
 - **Settings panel (gear button; Esc, the close button or a click outside closes it):**
   - **Display:** Shadows, Ambient occlusion, Environment reflections & Reflection brightness slider.
   - **History:** Linear (the default) or Keep branches; the choice shows with advanced options on.
@@ -286,6 +290,7 @@ Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP 
   - **App status:** every tool that changes the assembly reports `appSync`: `live` (the open app got it), `no-browser` (the app is running but nobody has it open) or `saved-to-file-only` (the app isn't running), with a hint.
   - **`capture_screenshot`:** returns a PNG of the 3D view rendered by the open app, either from the user's camera or a framed view: `iso` (front-right, above), `iso-front-left`, `iso-back-right`, `iso-back-left`, `front`, `back`, `left`, `right` (= `side`), `top`, `bottom`, or any `direction: [x, y, z]` (+X is the front, +Z the right side). Every open tab is asked and the most complete picture wins; the reply carries a `warning` when even that tab is still loading parts or shows a different build than the saved one (reload it). Gizmos, hole rings and the selection tint are left out, and the user's camera isn't moved. `current` is the main view's own camera (orthographic when set) as one picture, without the 4-View small views, the stereo pair or the view cube; the standard views are always perspective.
   - **`configure_viewport` view options:** `projection` (`perspective` | `orthographic`), `viewLayout` (`single` | `four` | `stereo`), `stereoCrossEyed`, `stereoDepth` (0.25–3), `shadows` and `ambientOcclusion` (true/false) and a one-shot `viewAlong` (`+x` … `-z`) that turns the open app's camera like the `1/2/3` keys. Unknown or out-of-range values are refused with the allowed values. The browser WebMCP `configure_viewport` takes the same options.
+  - **`configure_viewport` Explode:** `explodeMode` (`off` closes the panel; `all` opens it) and `explodeAmount` (0–1, the slider value; 1 when only `explodeMode` is given). The slider goes straight to the value, with no play, and `capture_screenshot` waits until the explode is worked out and shown.
 - **Browser W3C WebMCP (`navigator.modelContext` in [`src/utils/webMcpTools.js`](file:///Users/adriangonsalves/projects/vexiq_builder/src/utils/webMcpTools.js)):**
   - Registers in-page tools for browser-hosted AI assistants.
 - **Builds save themselves (File menu and library):**

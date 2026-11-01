@@ -9,7 +9,7 @@ Explode today pushes every part straight out from the robot's centre to a fixed 
 - **Direction choice limits the slides.** X, Y or Z only allows slides along that axis; parts that can't slide that way stay with the part they're held on. All allows every direction.
 - **Pins stay in their part.** A pin rides with the part it sits deeper in; the other part slides off it along the pin's axis. Standoffs are treated like pins. Shafts still move on their own.
 - **Groups move as one**, a tire stays on its hub, and the battery slides out of its bay.
-- Everything Explode blocks today (Move, Rotate, hole picking, the copy preview) stays blocked while the slider is above 0%, and the dashed lines back to each part's assembled spot stay.
+- Everything Explode blocks today (Move, Rotate, hole picking, the copy preview) stays blocked while the slider is above 0%. The old dashed lines back to each part's assembled spot are dropped: the animation shows where parts came from.
 - **MCP:** `configure_viewport` keeps `explodeMode` (now the direction, with `off` closing the panel) and adds `explodeAmount` (0 to 1), so screenshots can show a partly exploded robot. The direction and amount are saved with the rest of the view.
 - **Not in this change:** pins coming out on their own; a choice of motion style (one at a time, all together); exporting the animation.
 
@@ -23,7 +23,7 @@ Explode today pushes every part straight out from the robot's centre to a fixed 
 
 ## Impact
 
-- `src/components/Viewport3D.jsx`: `computeExplodedPositions` is replaced by positions from the take-apart plan at the slider value; the scene sync and the trace lines follow the slider without rebuilding the plan.
+- `src/components/Viewport3D.jsx`: `computeExplodedPositions` is replaced by positions from the take-apart plan at the slider value; the parts follow the slider without rebuilding the plan.
 - New pure module `src/utils/explodePlan.js` (shared shape with the MCP engine): grouping pieces, the take-apart order, slide directions and distances, the slider timeline, and the overlap check over slider values. Uses `three-mesh-bvh` (already a dependency) for slide tests.
 - Uses existing joint data: seated pairs and `seatedIn` from `mcp/assembly-engine.mjs` (pin and shaft axes, which part a pin sits deeper in), `partGroups.js` groups, `tireFit.js`, `batteryBay.js`, and the too-wide-insert checks in `pinHoleAlignment.js` (a motor shaft's stop ring can't pass a hole).
 - `src/App.jsx`: the Explode panel, the `X` and `Esc` keys, the play on open, and the saved viewport state (`explodeMode`, `explodeAmount`).
