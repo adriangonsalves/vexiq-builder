@@ -99,7 +99,9 @@ export function isLinkOnStandoff(linkPart, linkMatrix, standoffPart, standoffMat
     radials.push(d.addScaledVector(axle, -along));
   }
   const guideRadius = standoffGuideRadius(standoffPart, linkPart);
-  if (radials.every((r) => Math.abs(r.length() - guideRadius) < PIVOT_TOL_MM)) return true;
+  // Wrapped round the post: both pivots where a link's middle just touches it
+  const wrapRadius = Math.hypot(guideRadius, linkPart.chainSpecs.pitchMm / 2);
+  if (radials.every((r) => Math.abs(r.length() - guideRadius) < PIVOT_TOL_MM || Math.abs(r.length() - wrapRadius) < PIVOT_TOL_MM)) return true;
   const [r0, r1] = radials;
   const ab = r1.clone().sub(r0);
   const t = Math.max(0, Math.min(1, -r0.dot(ab) / (ab.lengthSq() || 1)));
@@ -179,7 +181,8 @@ export function unsupportedBends(links, sprockets) {
         const d = pivot.clone().sub(origin);
         const along = d.dot(axle);
         const guideRadius = standoffGuideRadius(s.part, l.part);
-        return Math.abs(Math.sqrt(Math.max(0, d.lengthSq() - along * along)) - guideRadius) < PIVOT_TOL_MM;
+        const radial = Math.sqrt(Math.max(0, d.lengthSq() - along * along));
+        return Math.abs(radial - guideRadius) < PIVOT_TOL_MM || Math.abs(radial - Math.hypot(guideRadius, l.part.chainSpecs.pitchMm / 2)) < PIVOT_TOL_MM;
       }
       return false;
     });

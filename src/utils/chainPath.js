@@ -914,8 +914,11 @@ function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 
   const circleOf = (k) => circles[nodes[k].c];
   const sOf = (k) => nodes[k].s;
   const isGuide = (k) => circleOf(k).kind === 'guide';
-  const tau = (k) => (isGuide(k) ? guideStep(circleOf(k).r, pitch) : (2 * Math.PI) / circleOf(k).teeth);
-  const at = (k, th, r = circleOf(k).r) => {
+  // On a standoff each link's straight side rests on the post (the guide circle, its body plus a link
+  // half-height), so its pivots sit further out, on a circle the link's middle just touches
+  const pivotR = (k) => (isGuide(k) ? Math.hypot(circleOf(k).r, pitch / 2) : circleOf(k).r);
+  const tau = (k) => (isGuide(k) ? 2 * Math.atan2(pitch / 2, circleOf(k).r) : (2 * Math.PI) / circleOf(k).teeth);
+  const at = (k, th, r = pivotR(k)) => {
     const c = circleOf(k);
     return [c.x + r * Math.cos(th), c.y + r * Math.sin(th)];
   };
@@ -974,14 +977,103 @@ function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 
   };
 
   // The point on circle k at distance L from `from`, on the same side as the touching angle `thT`
-  const landAt = (from, k, L, thT) => {
+  const landAt = (from, k, L, thT, r = pivotR(k)) => {
     const c = circleOf(k);
     const d = Math.hypot(from[0] - c.x, from[1] - c.y);
-    const cos = (d * d + c.r * c.r - L * L) / (2 * d * c.r);
+    const cos = (d * d + r * r - L * L) / (2 * d * r);
     if (cos > 1 || cos < -1) return null;
     const toFrom = ang(from[0] - c.x, from[1] - c.y);
     const side = Math.sign(mod2pi(thT - toFrom + Math.PI) - Math.PI) || 1;
     return near(toFrom + side * Math.acos(cos), thT);
+  };
+
+  // A run landing on standoff k from `from` (t: where it touches the guide circle): n whole links to a
+  // first pivot on the standoff, then pivots one link apart round it until the chain can leave for the
+  // next part without cutting into the post. Of the link counts that keep the run off the post too,
+  // the one that bends least (bendCost). Returns { n, on: [pivots] } or null.
+  const onGuide = (from, kn, t) => {
+    const c = circleOf(kn);
+    const sN = sOf(kn);
+    const step = tau(kn);
+    const k2 = (kn + 1) % K;
+    const off = (a, b) => segDist([c.x, c.y], a, b) >= c.r - 0.05;
+    // Where the run's last link would rest on the post with its middle at the touching point
+    const ideal = t.th + sN * (step / 2);
+    const D = Math.hypot(at(kn, ideal)[0] - from[0], at(kn, ideal)[1] - from[1]);
+    const n0 = Math.max(1, Math.round(D / pitch));
+    // Whole links landing near there, or the run eased (as runs onto sprockets are) to land right there
+    const tries = [n0 - 1, n0, n0 + 1, n0 + 2].filter((n) => n >= 1).map((n) => ({ n, th: landAt(from, kn, n * pitch, ideal) }));
+    const nEased = Math.floor(D / pitch + 1e-9);
+    if (nEased >= 1 && D - nEased * pitch <= stretchAllowed(D)) tries.push({ n: nEased, th: ideal });
+    let best = null;
+    for (const { n, th } of tries) {
+      if (th == null) continue;
+      const on = [at(kn, th)];
+      if (!off(from, on[0])) continue;
+      let leave = null;
+      for (let j = 0; j < 8; j++) {
+        const last = on.at(-1);
+        const t2 = touching(last, k2);
+        if (!t2) break;
+        const dep = at(k2, t2.th);
+        if (off(last, dep)) {
+          leave = dep;
+          break;
+        }
+        on.push(at(kn, ang(last[0] - c.x, last[1] - c.y) + sN * step));
+      }
+      if (!leave) continue;
+      const seq = [from, ...on, leave];
+      let cost = 0;
+      for (let i = 1; i + 1 < seq.length; i++) cost = Math.max(cost, bendCost(seq[i - 1], seq[i], seq[i + 1], step));
+      // Resting on the post rather than hovering beside it. A shallow wrap has one pivot on the post,
+      // which needn't sit on the wrap circle: swing it about `from` (keeping the run's whole links)
+      // toward the post until the chain just touches it
+      const gapOf = (seq2) => {
+        let g = Infinity;
+        for (let i = 0; i + 1 < seq2.length; i++) g = Math.min(g, segDist([c.x, c.y], seq2[i], seq2[i + 1]) - c.r);
+        return g;
+      };
+      let gap = gapOf(seq);
+      if (on.length === 1 && gap > 0.02) {
+        const swing = (psi) => {
+          const v = [on[0][0] - from[0], on[0][1] - from[1]];
+          const [cs, sn] = [Math.cos(psi), Math.sin(psi)];
+          const p1 = [from[0] + v[0] * cs - v[1] * sn, from[1] + v[0] * sn + v[1] * cs];
+          const t2 = touching(p1, k2);
+          return t2 ? [from, p1, at(k2, t2.th)] : null;
+        };
+        // Toward the post is the way that brings the pivot nearer its axis
+        const dir = Math.hypot(...[0, 1].map((i) => swing(0.01)[1][i] - [c.x, c.y][i])) < Math.hypot(on[0][0] - c.x, on[0][1] - c.y) ? 1 : -1;
+        let lo = 0;
+        let hi = 0;
+        for (let k = 1; k <= 40; k++) {
+          const sq = swing((dir * k) / 200);
+          if (!sq || gapOf(sq) < 0) {
+            hi = (dir * k) / 200;
+            break;
+          }
+          lo = (dir * k) / 200;
+        }
+        if (hi) {
+          for (let i = 0; i < 40; i++) {
+            const mid = (lo + hi) / 2;
+            const sq = swing(mid);
+            if (sq && gapOf(sq) >= 0) lo = mid;
+            else hi = mid;
+          }
+          const sq = swing(lo);
+          on[0] = sq[1];
+          seq.splice(0, seq.length, ...sq);
+          gap = gapOf(seq);
+          cost = 0;
+          for (let i = 1; i + 1 < seq.length; i++) cost = Math.max(cost, bendCost(seq[i - 1], seq[i], seq[i + 1], step));
+        }
+      }
+      cost += 0.05 * Math.max(0, gap);
+      if (!best || cost < best.cost - 1e-9) best = { n, on, cost };
+    }
+    return best;
   };
 
   const s0 = (sagRun + 1) % K; // always a sprocket
@@ -999,6 +1091,15 @@ function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 
     const from = pts.at(-1);
     const t = touching(from, kn);
     if (!t) return null;
+    if (isGuide(kn)) {
+      const placed = onGuide(from, kn, t);
+      if (placed) {
+        for (let j = 1; j < placed.n; j++) pts.push([from[0] + ((placed.on[0][0] - from[0]) * j) / placed.n, from[1] + ((placed.on[0][1] - from[1]) * j) / placed.n]);
+        firstOn[kn] = pts.length;
+        pts.push(...placed.on);
+        continue;
+      }
+    }
     let on = onPart(kn, t.th);
     let end = on[0];
     const R = Math.hypot(end[0] - from[0], end[1] - from[1]);

@@ -89,7 +89,7 @@ function checkChain(name, input, res) {
   const guides = input.filter((p) => res.onLoop.includes(p.instanceId) && p.meta.fastenerSpecs?.fastenerType === 'standoff').map((p) => worldGuide(p.meta, p.position, p.rotation, p.instanceId));
   const offAxis = (p, g) => p.clone().sub(g.center).projectOnPlane(g.axis).length();
   const allowed = (p) => {
-    const g = guides.find((gd) => offAxis(p, gd) < gd.pitchRadius + 0.5);
+    const g = guides.find((gd) => offAxis(p, gd) < Math.hypot(gd.pitchRadius, 3.175) + 0.5);
     return g ? 180 : step;
   };
   const turns = pivots.map((b, i) => THREE.MathUtils.radToDeg(b.clone().sub(pivots[(i - 1 + pivots.length) % pivots.length]).angleTo(pivots[(i + 1) % pivots.length].clone().sub(b))));
@@ -802,6 +802,23 @@ function checkChain(name, input, res) {
   for (const slack of ['lower', 'upper']) {
     const res = buildChainPath(set, { kind: 'chain', route: { [s24.instanceId]: 'over', [st.instanceId]: 'under' }, slack, metaByPartNumber });
     checkChain(`40T, standoff under, 24T over, slack ${slack}`, set, res);
+  }
+  // Built by the engine: the real shapes of the links touch neither the standoff (the last link round
+  // it used to cut into the post) nor a sprocket, and the audit agrees
+  const toInst = (p) => ({ instanceId: p.instanceId, partId: p.meta.id, label: p.label, position: p.position, rotation: p.rotation, visible: true });
+  const built = buildChain({ instances: set.map(toInst) }, { kind: 'chain', instanceIds: set.map((p) => p.instanceId), route: { [s24.instanceId]: 'over', [st.instanceId]: 'under' } });
+  if (built.error) check('40T, standoff under, 24T over: built by the engine', false, built.error);
+  else {
+    const links = built.instances.filter((i) => built.newIds.includes(i.instanceId));
+    // The sprockets as built: each is turned so its teeth sit between the chain's pivots
+    const solids = built.instances.filter((i) => set.some((p) => p.instanceId === i.instanceId));
+    const meshHit = (x, y) => {
+      const rel = buildWorldMatrix(x.position, x.rotation).invert().multiply(buildWorldMatrix(y.position, y.rotation));
+      return collisionPiecesFor(x).some((pa) => collisionPiecesFor(y).some((pb) => pa.geo.boundsTree.intersectsGeometry(pb.geo, rel)));
+    };
+    const hits = links.flatMap((l) => solids.filter((p) => meshHit(l, p)).map((p) => `${l.label} / ${p.label}`));
+    const audit = auditAssembly({ instances: built.instances });
+    check('  built by the engine: no link touches the standoff or a sprocket, and the audit is clean', hits.length === 0 && audit.collisions.length === 0, hits.slice(0, 3).join(', '));
   }
 }
 
