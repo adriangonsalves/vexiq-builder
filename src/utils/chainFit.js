@@ -23,7 +23,8 @@ const _c = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 
 export const isLink = (part) => part?.chainSpecs?.role === 'chain_link' || part?.chainSpecs?.role === 'tread_link';
-export const isGripper = (part) => part?.chainSpecs?.role === 'gripper';
+// A Traction Link or an Intake Flap: plugged into a tread link's two holes
+export const isGripper = (part) => part?.chainSpecs?.role === 'gripper' || part?.chainSpecs?.role === 'attachment';
 export const isChainPart = (part) => isLink(part) || isGripper(part);
 const isSprocket = (part) => part?.gearSpecs?.gearType === 'sprocket' && part.gearSpecs.measured === true;
 const isStandoff = (part) => part?.fastenerSpecs?.fastenerType === 'standoff' && (part.fastenerSpecs.bodyLengthMm ?? 0) > 0;

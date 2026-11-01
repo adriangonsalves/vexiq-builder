@@ -1007,6 +1007,18 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   check('build_chain slack "upper": the reply says the upper run holds the slack', res.data?.ok && res.data.slack === 'upper', JSON.stringify(res.data?.slack));
   res = await callRaw('build_chain', { instanceIds: ['S16', 'S32'], slack: 'middle' });
   check('build_chain rejects an unknown slack run', res.isError && /slack must be "lower" or "upper"/.test(res.data?.error || ''), JSON.stringify(res.data));
+  await call('undo');
+  res = await call('build_chain', { kind: 'track', instanceIds: ['S16', 'S32'], attachment: 'long-flap', attachmentEvery: 4 });
+  check(
+    'build_chain track with Long Intake Flaps every 4th link: the reply counts them and the message names them',
+    res.data?.ok && res.data.attachment === 'long-flap' && res.data.attachmentEvery === 4 && res.data.attachmentCount === Math.ceil(res.data.linkCount / 4) && res.data.gripperCount === 0 && /Long Intake Flaps \(every 4th link\)/.test(res.data.message),
+    JSON.stringify({ ...res.data, audit: undefined })
+  );
+  await call('undo');
+  res = await callRaw('build_chain', { kind: 'track', instanceIds: ['S16', 'S32'], attachment: 'paddle' });
+  check('build_chain rejects an unknown attachment', res.isError && /attachment must be/.test(res.data?.error || ''), JSON.stringify(res.data));
+  res = await callRaw('build_chain', { kind: 'track', instanceIds: ['S16', 'S32'], attachment: 'traction', attachmentEvery: 0 });
+  check('build_chain rejects a spacing outside 1-20', res.isError && /from 1 to 20/.test(res.data?.error || ''), JSON.stringify(res.data));
 
   // chain-over-under: enclosed parts, route, needsRoute, standoffs, wrapped & leftOut shape
   writeState({

@@ -36,6 +36,14 @@ const EPS = 1e-6;
 export const CHAIN_LINK_PART_NUMBER = '228-2500-230';
 export const TREAD_LINK_PART_NUMBER = '228-2500-231';
 export const GRIPPER_PART_NUMBER = '228-2500-239';
+// What a track's tread links can carry (openspec chain-over-under, track attachments)
+export const TRACK_ATTACHMENTS = {
+  traction: { partNumber: GRIPPER_PART_NUMBER, one: 'gripper', many: 'grippers' },
+  'short-flap': { partNumber: '228-2500-240', one: 'Short Intake Flap', many: 'Short Intake Flaps' },
+  'medium-flap': { partNumber: '228-2500-241', one: 'Medium Intake Flap', many: 'Medium Intake Flaps' },
+  'long-flap': { partNumber: '228-2500-242', one: 'Long Intake Flap', many: 'Long Intake Flaps' }
+};
+export const ATTACHMENT_EVERY_MAX = 20;
 
 const toVec = (v) => (v?.isVector3 ? v.clone() : new THREE.Vector3(...v));
 const toQuat = (r) => {
@@ -310,39 +318,30 @@ export function checkSprocketsForChain(parts, { kind = 'chain', route = null, li
   if (!loop) return { ok: false, error: 'No chain fits round these sprockets.' };
   const frame = { u, v, t0 };
 
-  // Enclosed parts: the selected ones inside the outer loop. Its top and return runs are the first
-  // straight runs a ray from its centre meets going up and down
+  // Enclosed parts: the selected ones inside the outer loop, with the runs above and below them
   const onLoop = new Set(loop.map((e) => e.from));
-  const outerNodes = loop.map((e) => ({ c: e.from, s: 1 }));
-  const path = loopPath(circles, outerNodes);
   const up = aboveIn(frame);
-  const runRef = (k) => ({ index: k, fromId: all[loop[k].from].instanceId, toId: all[loop[k].to].instanceId });
   const enclosed = [];
   for (let i = 0; i < all.length; i++) {
     if (onLoop.has(i)) continue;
-    const p = [circles[i].x, circles[i].y];
-    const runs = [];
-    for (const d of [up, [-up[0], -up[1]]]) {
-      let best = { t: Infinity, run: null, arc: null };
-      path.edges.forEach((e, k) => {
-        const t = rayHit(p, d, e.ta, e.tb);
-        if (t < best.t) best = { t, run: k, arc: null };
-      });
-      path.arcs.forEach((a, k) => {
-        const pts = arcPoints(circles[a.circle], a.thIn, a.alpha, a.s, 0.5);
-        for (let j = 0; j + 1 < pts.length; j++) {
-          const t = rayHit(p, d, pts[j], pts[j + 1]);
-          if (t < best.t - 1e-6) best = { t, run: null, arc: k };
-        }
-      });
-      if (best.arc != null) {
-        const next = all[loop[best.arc].from];
-        return { ok: false, error: `${all[i].label} sits right next to ${next.label}; move it so the chain passes it on a straight run.` };
-      }
-      if (best.run == null) return { ok: false, error: 'No chain fits round these sprockets.' };
-      runs.push(runRef(best.run));
+    const found = runsAround(circles, all, loop, i, up);
+    if (!found.ok) return found;
+    enclosed.push({ instanceId: all[i].instanceId, label: all[i].label, kind: all[i].kind === 'guide' ? 'standoff' : 'sprocket', index: i, topRun: found.topRun, returnRun: found.returnRun });
+  }
+  // Crossing sprockets (chain only): on the outer loop, but a straight run of the loop without them
+  // would pass through them, so the chain could go either side
+  const crossing = [];
+  if (kind !== 'track') {
+    for (const e of loop) {
+      const i = e.from;
+      if (all[i].kind !== 'sprocket') continue;
+      const rest = outerLoopOf(circles, [...onLoop].filter((c) => c !== i));
+      if (!rest || rest.filter((r) => all[r.from].kind === 'sprocket').length < 2) continue;
+      const run = runThrough(circles, rest, i, linkHalfMm);
+      if (!run) continue;
+      const sticksOut = run.m[0] * up[0] + run.m[1] * up[1] > 0 ? 'above' : 'below';
+      crossing.push({ instanceId: all[i].instanceId, label: all[i].label, kind: 'sprocket', index: i, sticksOut, outside: sticksOut === 'above' ? 'over' : 'under' });
     }
-    enclosed.push({ instanceId: all[i].instanceId, label: all[i].label, kind: all[i].kind === 'guide' ? 'standoff' : 'sprocket', index: i, topRun: runs[0], returnRun: runs[1] });
   }
   const base = {
     ok: true,
@@ -352,53 +351,132 @@ export function checkSprocketsForChain(parts, { kind = 'chain', route = null, li
     circles,
     all,
     loop,
+    up,
     sprockets: loop.map((e) => all[e.from]).filter((s) => s.kind === 'sprocket'),
     enclosed,
+    crossing,
     leftOut: kind === 'track' ? enclosed.map((e) => ({ instanceId: e.instanceId, label: e.label, reason: 'outside-only' })) : []
   };
-  if (route && kind !== 'track' && enclosed.length && enclosed.every((e) => route[e.instanceId] === 'over' || route[e.instanceId] === 'under')) {
+  const asked = [...enclosed, ...crossing];
+  if (route && kind !== 'track' && asked.length && asked.every((e) => route[e.instanceId] === 'over' || route[e.instanceId] === 'under')) {
     const routed = routeLoop(base, { kind, route });
-    if (!routed.ok) return { ...routed, enclosed };
-    const valid = validateLoop(base, routed.nodes, linkHalfMm);
-    if (!valid.ok) return { ...valid, enclosed };
+    if (!routed.ok) return { ...routed, enclosed, crossing };
+    const valid = validateLoop(base, routed.nodes, linkHalfMm, routed.baseLoop);
+    if (!valid.ok) return { ...valid, enclosed, crossing };
   }
   return base;
 }
 
+/** The outer loop round the circles `ids` (indices into `circles`), its edges in those indices. */
+function outerLoopOf(circles, ids) {
+  if (ids.length < 2) return null;
+  const sub = outerLoop(ids.map((c) => circles[c]));
+  return sub && sub.map((e) => ({ ...e, from: ids[e.from], to: ids[e.to] }));
+}
+
+/** The straight run of `loop` passing nearest through circle `i` (tip radius plus a link half-height), or null. */
+function runThrough(circles, loop, i, linkHalfMm) {
+  const path = loopPath(circles, loop.map((e) => ({ c: e.from, s: 1 })));
+  if (!path.ok) return null;
+  const c = circles[i];
+  let best = null;
+  path.edges.forEach((ed, k) => {
+    const d = segDist([c.x, c.y], ed.ta, ed.tb);
+    if (d < c.outer + linkHalfMm && (!best || d < best.d)) best = { index: k, d, m: ed.m };
+  });
+  return best;
+}
+
 /**
- * The loop's nodes once the route is applied: the outer loop, with each enclosed part (chain only)
- * put into its top run (under) or return run (over), side −1, ordered along the run. Returns { ok,
- * nodes, sides: Map(index → 'outer' | 'over' | 'under') } or a refusal with `needsRoute`.
+ * The top and return runs of `loop` round part `i`: the first straight runs a ray from its centre
+ * meets going up and down. Refused when a ray meets an arc first (the part sits beside a sprocket).
+ */
+function runsAround(circles, all, loop, i, up) {
+  const path = loopPath(circles, loop.map((e) => ({ c: e.from, s: 1 })));
+  const runRef = (k) => ({ index: k, fromId: all[loop[k].from].instanceId, toId: all[loop[k].to].instanceId });
+  const p = [circles[i].x, circles[i].y];
+  const runs = [];
+  for (const d of [up, [-up[0], -up[1]]]) {
+    let best = { t: Infinity, run: null, arc: null };
+    path.edges.forEach((e, k) => {
+      const t = rayHit(p, d, e.ta, e.tb);
+      if (t < best.t) best = { t, run: k, arc: null };
+    });
+    path.arcs.forEach((a, k) => {
+      const pts = arcPoints(circles[a.circle], a.thIn, a.alpha, a.s, 0.5);
+      for (let j = 0; j + 1 < pts.length; j++) {
+        const t = rayHit(p, d, pts[j], pts[j + 1]);
+        if (t < best.t - 1e-6) best = { t, run: null, arc: k };
+      }
+    });
+    if (best.arc != null) {
+      const next = all[loop[best.arc].from];
+      return { ok: false, error: `${all[i].label} sits right next to ${next.label}; move it so the chain passes it on a straight run.` };
+    }
+    if (best.run == null) return { ok: false, error: 'No chain fits round these sprockets.' };
+    runs.push(runRef(best.run));
+  }
+  return { ok: true, topRun: runs[0], returnRun: runs[1] };
+}
+
+/**
+ * The loop's nodes once the route is applied (chain only). Crossing sprockets sent the other side
+ * leave the outer loop, which is rebuilt from the parts left; each goes into the rebuilt run that
+ * passes through it. Enclosed parts go into their top run (under) or return run (over) of that loop.
+ * Inserted parts have side −1, ordered along their run. Returns { ok, nodes, baseLoop, sides:
+ * Map(index → 'outer' | 'over' | 'under') } or a refusal with `needsRoute`.
  */
 function routeLoop(check, { kind, route }) {
-  const { loop, enclosed, circles } = check;
+  const { loop, enclosed, crossing = [], circles, all, up } = check;
   const sides = new Map(loop.map((e) => [e.from, 'outer']));
-  const inserts = loop.map(() => []);
-  if (kind !== 'track' && enclosed.length) {
-    const missing = enclosed.filter((e) => route?.[e.instanceId] !== 'over' && route?.[e.instanceId] !== 'under');
-    if (missing.length) {
-      return {
-        ok: false,
-        error: `Choose whether the chain goes over or under ${missing.map((e) => e.label).join(', ')}.`,
-        needsRoute: missing.map((e) => ({ instanceId: e.instanceId, label: e.label }))
-      };
-    }
-    for (const e of enclosed) {
-      const side = route[e.instanceId];
-      const run = side === 'under' ? e.topRun : e.returnRun;
-      const a = circles[loop[run.index].from];
-      const b = circles[loop[run.index].to];
-      const c = circles[e.index];
-      inserts[run.index].push({ c: e.index, along: (c.x - a.x) * (b.x - a.x) + (c.y - a.y) * (b.y - a.y) });
-      sides.set(e.index, side);
+  if (kind === 'track') return { ok: true, nodes: loop.map((e) => ({ c: e.from, s: 1 })), baseLoop: loop, sides };
+  const asked = [...enclosed, ...crossing];
+  const missing = asked.filter((e) => route?.[e.instanceId] !== 'over' && route?.[e.instanceId] !== 'under');
+  if (missing.length) {
+    return {
+      ok: false,
+      error: `Choose whether the chain goes over or under ${missing.map((e) => e.label).join(', ')}.`,
+      needsRoute: missing.map((e) => ({ instanceId: e.instanceId, label: e.label }))
+    };
+  }
+  for (const x of crossing) sides.set(x.index, route[x.instanceId]);
+  // Crossing sprockets passed on the other side leave the outer loop
+  const inner = crossing.filter((x) => route[x.instanceId] !== x.outside);
+  let baseLoop = loop;
+  if (inner.length) {
+    const innerIdx = new Set(inner.map((x) => x.index));
+    baseLoop = outerLoopOf(circles, loop.map((e) => e.from).filter((c) => !innerIdx.has(c)));
+    if (!baseLoop || baseLoop.filter((e) => all[e.from].kind === 'sprocket').length < 2) {
+      return { ok: false, error: `The chain wouldn't reach ${inner[0].label} with this route.` };
     }
   }
+  const inserts = baseLoop.map(() => []);
+  const along = (k, ci) => {
+    const a = circles[baseLoop[k].from];
+    const b = circles[baseLoop[k].to];
+    const c = circles[ci];
+    return (c.x - a.x) * (b.x - a.x) + (c.y - a.y) * (b.y - a.y);
+  };
+  for (const x of inner) {
+    const run = runThrough(circles, baseLoop, x.index, 0);
+    if (!run) return { ok: false, error: `The chain wouldn't reach ${x.label} with this route.` };
+    inserts[run.index].push({ c: x.index, along: along(run.index, x.index) });
+  }
+  for (const e of enclosed) {
+    const side = route[e.instanceId];
+    // The runs above and below it, on the loop the chain now takes
+    const runs = baseLoop === loop ? e : runsAround(circles, all, baseLoop, e.index, up);
+    if (!runs.topRun) return runs;
+    const run = side === 'under' ? runs.topRun : runs.returnRun;
+    inserts[run.index].push({ c: e.index, along: along(run.index, e.index) });
+    sides.set(e.index, side);
+  }
   const nodes = [];
-  loop.forEach((e, k) => {
+  baseLoop.forEach((e, k) => {
     nodes.push({ c: e.from, s: 1 });
     for (const ins of inserts[k].sort((p, q) => p.along - q.along)) nodes.push({ c: ins.c, s: -1 });
   });
-  return { ok: true, nodes, sides };
+  return { ok: true, nodes, baseLoop, sides };
 }
 
 /**
@@ -440,7 +518,7 @@ function segmentsCross(a, b, c, d) {
  * enclosed one wouldn't be reached, the loop would cross itself, the chain would pass through a
  * selected part, or two runs would touch. Returns { ok, path } or { ok: false, error }.
  */
-function validateLoop(check, nodes, linkHalfMm) {
+function validateLoop(check, nodes, linkHalfMm, baseLoop = check.loop) {
   const { circles, all } = check;
   const label = (ci) => all[ci].label;
   const path = loopPath(circles, nodes);
@@ -449,7 +527,7 @@ function validateLoop(check, nodes, linkHalfMm) {
     return { ok: false, error: `${label(a)} and ${label(b)} are too close for the chain to pass between them.` };
   }
   const K = nodes.length;
-  const outerPath = loopPath(circles, check.loop.map((e) => ({ c: e.from, s: 1 })));
+  const outerPath = loopPath(circles, baseLoop.map((e) => ({ c: e.from, s: 1 })));
   const outerAlpha = new Map(outerPath.ok ? outerPath.arcs.map((a) => [a.circle, a.alpha]) : []);
   // One full turn: an outer part wrapped the wrong way adds a turn, an enclosed one takes one away
   const turning = path.arcs.reduce((sum, a) => sum + a.s * a.alpha, 0);
@@ -530,25 +608,35 @@ function exactLinks(circles, path, pitch) {
 
 /**
  * The whole chain. `parts` as for checkSprocketsForChain; `kind` 'chain' | 'track'; `route` (chain
- * only) { instanceId: 'over' | 'under' } for each enclosed part; `grippers` (track only); `slack`
+ * only) { instanceId: 'over' | 'under' } for each enclosed part; `attachment` (track only:
+ * 'none' or a TRACK_ATTACHMENTS key; default from `grippers`, the older form: true = 'traction')
+ * on every `attachmentEvery`th tread link (1–20); `slack`
  * 'lower' | 'upper': which run holds a slack chain's spare length when the parts stand up (the upper
  * run hangs down into the loop); `metaByPartNumber(pn)` → part metadata for the link and gripper parts.
  * Returns { ok, error?, needsRoute?, linkPart, gripperPart, links: [{ partId, position, rotation }],
  *   grippers: [...], sprocketTurns: [{ instanceId, axis, point, deg }], onLoop, wrapped: [{ instanceId,
- *   side: 'outer' | 'over' | 'under' }], leftOut: [{ instanceId, reason }], sprocketCount,
+ *   side: 'outer' | 'over' | 'under', outside (wrapped from inside the loop, as an outer part) }], leftOut: [{ instanceId, reason }], sprocketCount,
  *   standoffCount, linkCount, exactLinks, gapMm, moveHint, notes, slack, sagMm, slackChoice }.
  *   `sagMm` is how far the hanging run drops below its straight line; `slackChoice` is true when that
  *   is SAG_ASK_MM or more and the parts stand up, so the upper or lower run can hold it; `slack` is
  *   the run used ('lower', 'upper', or null when flat).
  */
-export function buildChainPath(parts, { kind = 'chain', grippers = false, route = null, slack = 'lower', metaByPartNumber }) {
+export function buildChainPath(parts, { kind = 'chain', grippers = false, attachment = null, attachmentEvery = 1, route = null, slack = 'lower', metaByPartNumber }) {
   const linkPart = metaByPartNumber(kind === 'track' ? TREAD_LINK_PART_NUMBER : CHAIN_LINK_PART_NUMBER);
   const linkHalfMm = linkPart?.bbox ? Math.abs(linkPart.bbox.min[1]) : LINK_HALF_HEIGHT_MM;
   const check = checkSprocketsForChain(parts, { kind, linkHalfMm });
   if (!check.ok) return check;
-  const gripperPart = kind === 'track' && grippers ? metaByPartNumber(GRIPPER_PART_NUMBER) : null;
+  const attach = kind !== 'track' ? 'none' : attachment ?? (grippers ? 'traction' : 'none');
+  if (attach !== 'none' && !TRACK_ATTACHMENTS[attach]) {
+    return { ok: false, error: `attachment must be "none", ${Object.keys(TRACK_ATTACHMENTS).map((k) => `"${k}"`).join(', ')}.` };
+  }
+  const every = Number(attachmentEvery);
+  if (!Number.isInteger(every) || every < 1 || every > ATTACHMENT_EVERY_MAX) {
+    return { ok: false, error: `attachmentEvery must be a whole number from 1 to ${ATTACHMENT_EVERY_MAX}.` };
+  }
+  const gripperPart = attach !== 'none' ? metaByPartNumber(TRACK_ATTACHMENTS[attach].partNumber) : null;
   if (!linkPart?.chainSpecs) return { ok: false, error: `The ${kind === 'track' ? 'tread' : 'chain'} link part is missing from the library.` };
-  if (kind === 'track' && grippers && !gripperPart?.chainSpecs) return { ok: false, error: 'The Traction Link part is missing from the library.' };
+  if (attach !== 'none' && !gripperPart?.chainSpecs?.seatInLink) return { ok: false, error: `The ${TRACK_ATTACHMENTS[attach].one} part is missing from the library.` };
 
   const routed = routeLoop(check, { kind, route });
   if (!routed.ok) return routed;
@@ -557,7 +645,7 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, route 
   if (nodes.filter((nd) => circles[nd.c].kind === 'sprocket').length < 2) {
     return { ok: false, error: `A ${kind} needs two or more sprockets on its outside.` };
   }
-  const valid = validateLoop(check, nodes, linkHalfMm);
+  const valid = validateLoop(check, nodes, linkHalfMm, routed.baseLoop);
   if (!valid.ok) return valid;
   const { path } = valid;
   const pitch = linkPart.chainSpecs.pitchMm;
@@ -612,7 +700,7 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, route 
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
     const rotation = quaternionToEulerDeg(q);
     links.push({ partId: linkPart.id, position: p.toArray().map(round3), rotation });
-    if (seat) {
+    if (seat && i % every === 0) {
       const gp = seat.clone().applyQuaternion(q).add(p);
       gripperPoses.push({ partId: gripperPart.id, position: gp.toArray().map(round3), rotation });
     }
@@ -636,6 +724,11 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, route 
   const moveHint = Math.abs(gapMm) >= 0.05 ? suggestMove(check, nodes, pitch, gapMm) : null;
   const notes = [];
   if (-gapMm > SAG_NOTE_MM) notes.push('It will sag a little; move a sprocket for a snug fit.');
+  // Attachments on links 0, N, 2N, …: the gap from the last one round to the first may be shorter
+  if (gripperPoses.length && links.length % every !== 0) {
+    const lastGap = links.length - Math.floor((links.length - 1) / every) * every;
+    notes.push(`The last gap between ${TRACK_ATTACHMENTS[attach].many} is ${plural(lastGap, 'link', 'links')}, not ${every}.`);
+  }
   const onLoopParts = nodes.map((nd) => all[nd.c]);
   return {
     ok: true,
@@ -644,9 +737,11 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, route 
     gripperPart,
     links,
     grippers: gripperPoses,
+    attachment: attach,
+    attachmentEvery: attach === 'none' ? null : every,
     sprocketTurns,
     onLoop: onLoopParts.map((s) => s.instanceId),
-    wrapped: nodes.map((nd) => ({ instanceId: all[nd.c].instanceId, side: sides.get(nd.c) })),
+    wrapped: nodes.map((nd) => ({ instanceId: all[nd.c].instanceId, side: sides.get(nd.c), outside: nd.s > 0 })),
     leftOut: check.leftOut.map((l) => ({ instanceId: l.instanceId, reason: l.reason })),
     sprocketCount: onLoopParts.filter((s) => s.kind === 'sprocket').length,
     standoffCount: onLoopParts.filter((s) => s.kind === 'guide').length,
@@ -785,8 +880,9 @@ function hangPoints(a, b, q, pitch, down, side = 1) {
  * The walk starts where the chain leaves the sprocket after run `sagRun` and goes link by link: each
  * run lands where the chain meets the next part (its touching point from the last pivot), with the
  * whole number of links that fits it best. A run onto a sprocket is straight and tight: eased a hair
- * longer to reach the touching point, or landing a little before it (wrapping a little more) when
- * the links fall short; a run onto a standoff with links to spare bows a little. Round a sprocket
+ * longer to reach the touching point, or landing a little past it (wrapping a little less, turning
+ * in by less than a tooth) when the links overreach; a run onto a standoff with links to spare bows
+ * a little. Round a sprocket
  * the links step one tooth (a 6.35 mm chord), in the node's direction; round a standoff they lie
  * flat on its body (pivots on the circle where a link's middle touches the guide circle, or one
  * pivot at the corner for a shallow wrap). The last run, `sagRun`, closes the loop: it lands on the
@@ -849,6 +945,14 @@ function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 
     return Array.from({ length: m + 1 }, (_, j) => at(k, startTh + s * j * step));
   };
 
+  // How much the chain bends at p1: a turn back out of the loop (against the way the loop goes round)
+  // counts three times over, since a chain hanging or under tension doesn't bend that way at a
+  // sprocket; turning in by more than a tooth step (`step`) is a kink and worse than either
+  const bendCost = (p0, p1, p2, step) => {
+    const t = mod2pi(ang(p2[0] - p1[0], p2[1] - p1[1]) - ang(p1[0] - p0[0], p1[1] - p0[1]) + Math.PI) - Math.PI;
+    return t >= 0 ? t + (t > step + 0.005 ? 5 : 0) : -3 * t;
+  };
+
   // The point on circle k at distance L from `from`, on the same side as the touching angle `thT`
   const landAt = (from, k, L, thT) => {
     const c = circleOf(k);
@@ -883,14 +987,24 @@ function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 
       pts.push(...sagPoints(from, end, q, pitch, bowSide(k))); // a run with links to spare bows a little
     } else {
       // A run onto a sprocket is straight: q links eased to the touching point, or exactly q links
-      // landing a little before it, so the chain wraps the sprocket a little more
-      let q = Math.floor(R / pitch + 1e-9);
-      if (q < 1) {
-        q = 1;
-      } else if (R - q * pitch > stretchAllowed(R)) {
-        const th = landAt(from, kn, q * pitch, t.th);
-        if (th == null) return null;
-        on = onPart(kn, th);
+      // landing a little past it (wrapping the sprocket a little less, turning in as a chain under
+      // tension does) or a link fewer landing a little before it, whichever bends least there
+      let q = Math.max(1, Math.ceil((R - stretchAllowed(R)) / pitch - 1e-9));
+      if (q * pitch > R + 1e-9) {
+        const options = [q, q - 1]
+          .filter((n) => n >= 1)
+          .map((n) => {
+            const th = landAt(from, kn, n * pitch, t.th);
+            if (th == null) return null;
+            const pts2 = onPart(kn, th);
+            const next = pts2[1] || at(kn, th + sOf(kn) * tau(kn));
+            return { n, on: pts2, cost: bendCost(from, pts2[0], next, tau(kn)) };
+          })
+          .filter(Boolean);
+        if (!options.length) return null;
+        const best = options.reduce((a, b) => (b.cost < a.cost - 1e-9 ? b : a));
+        q = best.n;
+        on = best.on;
         end = on[0];
       }
       for (let j = 1; j < q; j++) pts.push([from[0] + ((end[0] - from[0]) * j) / q, from[1] + ((end[1] - from[1]) * j) / q]);
@@ -920,7 +1034,9 @@ function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 
     const down = g > 0.3 && (inward || facingOut > 0.25) ? [down2[0] / g, down2[1] / g] : out;
     return hangPoints(from, cd.end, cd.q, pitch, down, bow);
   };
-  const turn = (p0, p1, p2) => Math.abs(mod2pi(ang(p2[0] - p1[0], p2[1] - p1[1]) - ang(p1[0] - p0[0], p1[1] - p0[1]) + Math.PI) - Math.PI);
+  // How much a join of the closing run bends (bendCost), against the smaller tooth of the parts it joins
+  const toothStep = Math.min(tau(s0), tau(sagRun));
+  const turn = (p0, p1, p2) => bendCost(p0, p1, p2, toothStep);
   // A run pivot sinking into a part's circle would sit in its teeth or body
   const clear = (run) =>
     run.every((p, idx) => {
@@ -1008,6 +1124,7 @@ function suggestMove(check, nodes, pitch, gapMm) {
 }
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const ordinal = (n) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
 
 /**
  * Message for a built chain, e.g. "Chain builder: 52 Chain Links round 3 sprockets and 1 standoff
@@ -1021,7 +1138,10 @@ export function chainMessage(result, labelOf = (id) => result.labelOf?.[id] || i
   const standoffs = result.standoffCount ? ` and ${plural(result.standoffCount, 'standoff', 'standoffs')}` : '';
   const routed = (result.wrapped || []).filter((w) => w.side === 'over' || w.side === 'under');
   const how = routed.length ? ` (${routed.map((w) => `${w.side} ${labelOf(w.instanceId)}`).join(', ')})` : '';
-  const parts = [`${what}: ${result.linkCount} ${linkName}${result.grippers.length ? ` and ${result.grippers.length} grippers` : ''} round ${sprocketCount} sprockets${standoffs}${how}`];
+  const att = TRACK_ATTACHMENTS[result.attachment] || TRACK_ATTACHMENTS.traction;
+  const every = result.attachmentEvery > 1 ? ` (every ${ordinal(result.attachmentEvery)} link)` : '';
+  const carried = result.grippers.length ? ` and ${plural(result.grippers.length, att.one, att.many)}${every}` : '';
+  const parts = [`${what}: ${result.linkCount} ${linkName}${carried} round ${sprocketCount} sprockets${standoffs}${how}`];
   if (Math.abs(result.gapMm) < 0.05) parts.push('Exact fit');
   else {
     const mm = Math.abs(result.gapMm).toFixed(1);

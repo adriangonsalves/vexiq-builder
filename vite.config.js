@@ -451,6 +451,8 @@ function vexiqMcpBridgePlugin() {
                 instanceIds: Array.isArray(params.instanceIds) ? params.instanceIds : null,
                 route: params.route && typeof params.route === 'object' ? params.route : null,
                 grippers: params.grippers !== false,
+                attachment: params.attachment ?? null,
+                attachmentEvery: params.attachmentEvery ?? 1,
                 slack: params.slack === 'upper' ? 'upper' : 'lower',
                 name: params.name || null
               });

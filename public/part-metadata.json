@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-30T14:03:10.077Z",
+  "generatedAt": "2026-11-01T04:11:38.379Z",
   "partCount": 480,
   "totalVerifiedPorts": 4198,
   "parts": {
@@ -101426,6 +101426,14 @@
       ],
       "originType": "offset",
       "gearSpecs": null,
+      "chainSpecs": {
+        "role": "attachment",
+        "seatInLink": [
+          -8.942,
+          -2.51,
+          -13.087
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -101476,6 +101484,14 @@
       ],
       "originType": "offset",
       "gearSpecs": null,
+      "chainSpecs": {
+        "role": "attachment",
+        "seatInLink": [
+          -1.154,
+          9.849,
+          -18.9
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -103917,6 +103933,14 @@
       ],
       "originType": "offset",
       "gearSpecs": null,
+      "chainSpecs": {
+        "role": "attachment",
+        "seatInLink": [
+          -1.453,
+          7.413,
+          -18.9
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",

@@ -426,12 +426,18 @@ function measureHoleWallSpan(raycast, perpOrigin, axis, anchorT, bbox) {
  * pivot is its origin and the next pivot is 6.35 mm along its −Z, the pivot axis is X and +Y is the
  * outer side of the loop. A tread link takes a Traction Link's two pegs in holes on its +Y face; the
  * gripper's model isn't centred, so `seatInLink` is its position in the tread link's frame (no turn).
+ * The Intake Flaps (openspec chain-over-under, track attachments) plug into the same two holes with
+ * the same pegs; their seats put each flap's peg tips where the Traction Link's sit (read off the
+ * models: tips at the model's lowest y, 12.7 mm apart), flap pointing out of the loop.
  */
 const CHAIN_LINK = { pitchMm: 6.35, pivots: [[0, 0, 0], [0, 0, -6.35]], pivotAxis: [1, 0, 0], outward: [0, 1, 0] };
 const CHAIN_SPECS = {
   '228-2500-230': { role: 'chain_link', ...CHAIN_LINK },
   '228-2500-231': { role: 'tread_link', ...CHAIN_LINK, gripperHoles: [[-6.35, 8.636, 0], [6.35, 8.636, 0]] },
-  '228-2500-239': { role: 'gripper', seatInLink: [-6.73, 4.086, -18.2] }
+  '228-2500-239': { role: 'gripper', seatInLink: [-6.73, 4.086, -18.2] },
+  '228-2500-240': { role: 'attachment', seatInLink: [-1.453, 7.413, -18.9] },
+  '228-2500-241': { role: 'attachment', seatInLink: [-1.154, 9.849, -18.9] },
+  '228-2500-242': { role: 'attachment', seatInLink: [-8.942, -2.51, -13.087] }
 };
 
 /**

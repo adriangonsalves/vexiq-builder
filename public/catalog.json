@@ -215067,7 +215067,15 @@
       "shaftBores": 0,
       "pinPegs": 0
     },
-    "ports": []
+    "ports": [],
+    "chainSpecs": {
+      "role": "attachment",
+      "seatInLink": [
+        -8.942,
+        -2.51,
+        -13.087
+      ]
+    }
   },
   {
     "id": "medium-dial-knob-228-2500-477-398",
@@ -215350,7 +215358,15 @@
         ],
         "verified": true
       }
-    ]
+    ],
+    "chainSpecs": {
+      "role": "attachment",
+      "seatInLink": [
+        -1.154,
+        9.849,
+        -18.9
+      ]
+    }
   },
   {
     "id": "medium-rocket-engine-nozzle-228-2500-1911-400",
@@ -222128,7 +222144,15 @@
         ],
         "verified": true
       }
-    ]
+    ],
+    "chainSpecs": {
+      "role": "attachment",
+      "seatInLink": [
+        -1.453,
+        7.413,
+        -18.9
+      ]
+    }
   },
   {
     "id": "short-low-profile-pawl-228-2500-1411-421",

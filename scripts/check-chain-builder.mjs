@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { angleAbout } from '../src/utils/axisFrame.js';
 import { CHAIN_PLAY_MM, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName, worldGuide, worldSprocket } from '../src/utils/chainPath.js';
 import { areChainNeighbours, isChainFit, isGripperOnLink, isLinkOnSprocket, isLinkOnStandoff, unsupportedBends } from '../src/utils/chainFit.js';
-import { auditAssembly, buildChain, explodeInputs } from '../mcp/assembly-engine.mjs';
+import { auditAssembly, buildChain, buildWorldMatrix, collisionPiecesFor, explodeInputs } from '../mcp/assembly-engine.mjs';
 import { buildPieces } from '../src/utils/explodePlan.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -37,6 +37,12 @@ const standoff = (pitchName, position, rotation = [0, 0, 0]) => {
 };
 const gear = (teeth, position) => ({ instanceId: `g${teeth}${position[0]}`, label: `${teeth} Tooth Gear`, meta: byName(`${teeth} Tooth Gear`), position, rotation: [0, 0, 0] });
 const quat = (r) => new THREE.Quaternion().setFromEuler(new THREE.Euler(...r.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ'));
+// The route that keeps every crossing sprocket on the outside (the chain as built before crossing
+// sprockets were asked about), plus `route`
+const outsideRoute = (set, route = {}) => {
+  const chk = checkSprocketsForChain(set);
+  return { ...Object.fromEntries((chk.crossing || []).map((x) => [x.instanceId, x.outside])), ...route };
+};
 const local = (pose, v) => new THREE.Vector3(...v).applyQuaternion(quat(pose.rotation)).add(new THREE.Vector3(...pose.position));
 
 /** Every check a built chain should pass, for the parts it was built from. */
@@ -46,7 +52,7 @@ function checkChain(name, input, res) {
   const sprockets = input
     .filter((p) => res.onLoop.includes(p.instanceId) && p.meta.gearSpecs?.gearType === 'sprocket')
     .map((p) => worldSprocket(p.meta, p.position, p.rotation, p.instanceId));
-  const sideOf = new Map((res.wrapped || []).map((w) => [w.instanceId, w.side]));
+  const outsideOf = new Map((res.wrapped || []).map((w) => [w.instanceId, w.outside !== false]));
   const normal = sprockets[0].axis;
   const pivots = res.links.map((l) => local(l, [0, 0, 0]));
   const ends = res.links.map((l) => local(l, [0, 0, -6.35]));
@@ -91,7 +97,7 @@ function checkChain(name, input, res) {
     const mid = pivots[i].clone().add(pivots[(i + 1) % pivots.length]).multiplyScalar(0.5);
     const nearest = sprockets.reduce((a, s) => (s.center.distanceTo(mid) < a.center.distanceTo(mid) ? s : a));
     if (mid.distanceTo(nearest.center) >= nearest.pitchRadius + 1) return true;
-    const enclosed = sideOf.get(nearest.instanceId) === 'over' || sideOf.get(nearest.instanceId) === 'under';
+    const enclosed = outsideOf.get(nearest.instanceId) === false;
     return enclosed ? y.dot(mid.clone().sub(nearest.center)) < 0 : y.dot(mid.clone().sub(nearest.center)) > 0;
   });
   check(`${name}: every link's outer side faces out of the loop`, outward);
@@ -232,13 +238,13 @@ function checkChain(name, input, res) {
   check('an exact fit: no choice to make', snug.ok && snug.slackChoice === false && snug.sagMm === 0, String(snug.sagMm));
   // Less than half a link of slack on a long run still droops plainly: ask (a real build, 0.74 mm slack)
   const long = [sprocket(16, [30.42, 0.005, 176.405], [0, 30, 4.17]), sprocket(40, [151.557, 13.051, 106.83], [0, 30, -1.44]), sprocket(24, [63.414, 31.755, 157.72], [0, 30, -16.44])];
-  const loose = buildChainPath(long, { kind: 'chain', metaByPartNumber });
+  const loose = buildChainPath(long, { kind: 'chain', route: { [long[2].instanceId]: 'over' }, metaByPartNumber });
   check('0.74 mm of slack on a long run droops several mm: the choice is offered', loose.ok && loose.gapMm > -1 && loose.sagMm > 5 && loose.slackChoice === true, `${loose.gapMm} ${loose.sagMm}`);
 }
 {
   // A tilted triangle (a real build): runs straight, every join no sharper than its sprocket's tooth step
   const tri = [sprocket(16, [30.42, 0.005, 176.405], [0, 30, 4.26]), sprocket(40, [123.92, 6.355, 122.786], [0, 30, 1.56]), sprocket(24, [63.414, 31.755, 157.72], [0, 30, -7.44])];
-  const res = buildChainPath(tri, { kind: 'chain', metaByPartNumber });
+  const res = buildChainPath(tri, { kind: 'chain', route: { [tri[2].instanceId]: 'over' }, metaByPartNumber });
   check('tilted triangle 0.55 mm longer than 65 links: 65 links (within the 0.75 mm play)', res.ok && res.linkCount === 65 && near(res.gapMm, 0.55, 0.05), `${res.linkCount} ${res.gapMm}`);
   checkChain('tilted triangle', tri, res);
   const P = res.links.map((l) => new THREE.Vector3(...l.position));
@@ -376,7 +382,7 @@ function checkChain(name, input, res) {
   const oMid = sprocket(8, [60, 20, 0]);
   const oRight = sprocket(24, [120, 0, 0]);
   const lowGuide = sprocket(8, [52, -10, 0]);
-  const r2 = buildChainPath([oLeft, oMid, oRight, lowGuide], { kind: 'chain', route: { [lowGuide.instanceId]: 'under' }, metaByPartNumber });
+  const r2 = buildChainPath([oLeft, oMid, oRight, lowGuide], { kind: 'chain', route: outsideRoute([oLeft, oMid, oRight, lowGuide], { [lowGuide.instanceId]: 'under' }), metaByPartNumber });
   check(
     'refusal 2 (outer part loses chain): names the outer sprocket',
     !r2.ok && r2.error.includes(oMid.label) && /would no longer touch the chain/.test(r2.error),
@@ -422,7 +428,7 @@ function checkChain(name, input, res) {
   const pIdler = standoff('1x', [85, -15, 6]);
   const r5 = buildChainPath([pL, pMid, pR, pIdler], {
     kind: 'chain',
-    route: { [pIdler.instanceId]: 'under' },
+    route: outsideRoute([pL, pMid, pR, pIdler], { [pIdler.instanceId]: 'under' }),
     metaByPartNumber
   });
   check(
@@ -492,7 +498,7 @@ function checkChain(name, input, res) {
         set.push(cand);
       }
     }
-    const res = buildChainPath(set, { kind: 'chain', metaByPartNumber });
+    const res = buildChainPath(set, { kind: 'chain', route: outsideRoute(set), metaByPartNumber });
     if (!res.ok) {
       failed.push(`${set.map((x) => `${x.meta.gearSpecs.teeth}@${x.position.slice(0, 2).map((v) => v.toFixed(0))}`).join(' ')}: ${res.error}`);
       continue;
@@ -580,6 +586,167 @@ function checkChain(name, input, res) {
       'message names sprockets, standoffs and routes',
       /round 3 sprockets and 1 standoff \(over 1x Standoff #\d+, under 8T #\d+\)/.test(msg),
       msg
+    );
+  }
+}
+
+// --- Crossing sprockets (openspec chain-over-under, design 2b) ---------------------------------
+{
+  // A real build: the 24T sits between the 16T and the 40T along the chain and higher, its centre
+  // 3.7 mm past the straight run joining them, so that run would pass through it
+  const s16 = sprocket(16, [30.42, 0.005, 176.405], [0, 30, -1.91]);
+  const s40 = sprocket(40, [156.994, 17.08, 103.691], [0, 30, -0.91]);
+  const s24 = sprocket(24, [75.903, 36.048, 150.509], [0, 30, -18.17]);
+  const set = [s16, s40, s24];
+  const chk = checkSprocketsForChain(set);
+  check('crossing: the 24T is asked about, sticking out above', chk.ok && chk.crossing.length === 1 && chk.crossing[0].instanceId === s24.instanceId && chk.crossing[0].sticksOut === 'above' && chk.enclosed.length === 0, JSON.stringify(chk.crossing));
+  const asked = buildChainPath(set, { kind: 'chain', metaByPartNumber });
+  check('  without a route nothing is built and the 24T needs an answer', !asked.ok && asked.needsRoute?.length === 1 && asked.needsRoute[0].instanceId === s24.instanceId, JSON.stringify(asked.needsRoute));
+  const c24 = new THREE.Vector3(...s24.position);
+  const ax24 = new THREE.Vector3(0, 0, 1).applyQuaternion(quat(s24.rotation));
+  const up = new THREE.Vector3(0, 1, 0).projectOnPlane(ax24).normalize();
+  const near24 = (r) => r.links.map((l) => new THREE.Vector3(...l.position).sub(c24)).filter((d) => d.clone().projectOnPlane(ax24).length() < 24.33 + 0.5);
+  const under = buildChainPath(set, { kind: 'chain', route: { [s24.instanceId]: 'under' }, metaByPartNumber });
+  checkChain('crossing 24T, under', set, under);
+  const touching = under.ok ? near24(under) : [];
+  check('  under: the chain touches the 24T from below only', touching.length > 0 && touching.every((d) => d.dot(up) < 0), touching.map((d) => d.dot(up).toFixed(1)).join(' '));
+  check('  under: no link sinks into its teeth', under.ok && under.links.every((l) => new THREE.Vector3(...l.position).sub(c24).projectOnPlane(ax24).length() > 24.33 - 0.3));
+  const over = buildChainPath(set, { kind: 'chain', route: { [s24.instanceId]: 'over' }, metaByPartNumber });
+  checkChain('crossing 24T, over', set, over);
+  const above = over.ok ? near24(over) : [];
+  check('  over: the chain wraps the 24T from above', above.length > 0 && above.every((d) => d.dot(up) > 0), above.map((d) => d.dot(up).toFixed(1)).join(' '));
+  const outer = buildChainPath(set, { kind: 'track', grippers: false, metaByPartNumber });
+  check('  over: the same pivots as the outer loop (a track round the same parts)', over.ok && outer.ok && over.links.length === outer.links.length && over.links.every((l, i) => new THREE.Vector3(...l.position).distanceTo(new THREE.Vector3(...outer.links[i].position)) < 1e-6));
+  check('  tracks never ask about it', checkSprocketsForChain(set, { kind: 'track' }).crossing.length === 0 && outer.ok);
+}
+{
+  const tri = [sprocket(16, [0, 0, 0]), sprocket(24, [90, 0, 0]), sprocket(32, [40, 75, 0])];
+  const chk = checkSprocketsForChain(tri);
+  check('crossing: a wide triangle asks about nothing', chk.ok && chk.crossing.length === 0 && chk.enclosed.length === 0);
+  const poking = [sprocket(24, [0, 0, 0]), sprocket(24, [100, 0, 0]), standoff('1x', [50, 32, 6])];
+  const chk2 = checkSprocketsForChain(poking);
+  check('crossing: a standoff poking out past a run is not asked about', chk2.ok && chk2.crossing.length === 0 && chk2.enclosed.length === 0 && buildChainPath(poking, { kind: 'chain', metaByPartNumber }).ok);
+  // Two crossing sprockets both passed underneath: the run under the first no longer reaches the second
+  const pair = [sprocket(24, [0, 0, 0]), sprocket(24, [200, 0, 0]), sprocket(16, [60, 30, 0]), sprocket(16, [120, 40, 0])];
+  const [, , c1, c2] = pair;
+  const chk3 = checkSprocketsForChain(pair);
+  check('crossing: two raised sprockets are both asked about', chk3.ok && chk3.crossing.length === 2);
+  const both = buildChainPath(pair, { kind: 'chain', route: { [c1.instanceId]: 'under', [c2.instanceId]: 'under' }, metaByPartNumber });
+  check("  both under is refused: the chain wouldn't reach the higher one", !both.ok && both.error === `The chain wouldn't reach ${c2.label} with this route.`, both.error);
+  const one = buildChainPath(pair, { kind: 'chain', route: { [c1.instanceId]: 'under', [c2.instanceId]: 'over' }, metaByPartNumber });
+  checkChain('two raised sprockets, under the lower and over the higher', pair, one);
+}
+
+// --- Track attachments (openspec chain-over-under, design 8b) ---------------------------------
+{
+  // The lowest points of a part's model, in two clusters 12.7 mm apart: its two pegs' tips
+  const pegTips = (meta) => {
+    const buf = fs.readFileSync(path.join(ROOT, 'public', meta.modelUrl.replace(/^\//, '')));
+    const jsonLen = buf.readUInt32LE(12);
+    const gltf = JSON.parse(buf.slice(20, 20 + jsonLen).toString());
+    const bin = 20 + jsonLen + 8;
+    const pts = [];
+    for (const m of gltf.meshes) {
+      for (const pr of m.primitives) {
+        const acc = gltf.accessors[pr.attributes.POSITION];
+        const bv = gltf.bufferViews[acc.bufferView];
+        const off = bin + (bv.byteOffset || 0) + (acc.byteOffset || 0);
+        const stride = bv.byteStride || 12;
+        for (let i = 0; i < acc.count; i++) pts.push([0, 1, 2].map((k) => buf.readFloatLE(off + i * stride + k * 4)));
+      }
+    }
+    const minY = Math.min(...pts.map((q) => q[1]));
+    const low = pts.filter((q) => q[1] < minY + 0.3);
+    const mid = (Math.min(...low.map((q) => q[0])) + Math.max(...low.map((q) => q[0]))) / 2;
+    return [low.filter((q) => q[0] < mid), low.filter((q) => q[0] >= mid)].map((c) => {
+      const box = [0, 2].map((k) => (Math.min(...c.map((q) => q[k])) + Math.max(...c.map((q) => q[k]))) / 2);
+      return new THREE.Vector3(box[0], minY, box[1]);
+    });
+  };
+  const tread = byName('Tank Tread, Attachment Link');
+  const traction = byName('Traction Link');
+  const seated = (meta) => pegTips(meta).map((t) => t.add(new THREE.Vector3(...meta.chainSpecs.seatInLink)));
+  const ref = seated(traction);
+  for (const name of ['Short Intake Flap', 'Medium Intake Flap', 'Long Intake Flap']) {
+    const flap = byName(name);
+    const tips = flap.chainSpecs ? seated(flap) : [];
+    const holes = tread.chainSpecs.gripperHoles.map((h) => new THREE.Vector3(...h));
+    const inHoles = tips.length === 2 && tips.every((t) => holes.some((h) => Math.hypot(t.x - h.x, t.z - h.z) < 0.1));
+    const sameDepth = tips.length === 2 && tips.every((t) => Math.abs(t.y - ref[0].y) < 0.1);
+    check(`${name}: its two pegs sit in the tread link's holes, as deep as the Traction Link's`, inHoles && sameDepth, tips.map((t) => t.toArray().map((v) => v.toFixed(2)).join(',')).join(' | '));
+    const centre = new THREE.Vector3(...flap.bbox.center).add(new THREE.Vector3(...flap.chainSpecs.seatInLink));
+    check(`  ${name} points out of the loop (+Y of the link)`, centre.y > tips[0]?.y + 5, centre.y.toFixed(1));
+  }
+
+  // Every size on every link round two 8T and two 24T sprockets: the real shapes of each attachment
+  // meet no other attachment, no link but its own and no sprocket; the track never bends back out
+  // of the loop (pads facing out would be squeezed together there); the audit holds them all
+  const inst = (p) => ({ instanceId: p.instanceId, partId: p.meta.id, label: p.label, position: p.position, rotation: p.rotation, visible: true });
+  const meshHit = (a, b) => {
+    const rel = buildWorldMatrix(a.position, a.rotation).invert().multiply(buildWorldMatrix(b.position, b.rotation));
+    return collisionPiecesFor(a).some((pa) => collisionPiecesFor(b).some((pb) => pa.geo.boundsTree.intersectsGeometry(pb.geo, rel)));
+  };
+  for (const [name, layout] of [
+    ['two 8T', [sprocket(8, [0, 0, 0]), sprocket(8, [76.2, 0, 0])]],
+    ['two 24T', [sprocket(24, [0, 0, 0]), sprocket(24, [120, 0, 0])]]
+  ]) {
+    for (const attachment of ['traction', 'short-flap', 'medium-flap', 'long-flap']) {
+      const built = buildChain({ instances: layout.map(inst) }, { kind: 'track', instanceIds: layout.map((p) => p.instanceId), attachment });
+      if (built.error) {
+        check(`track with ${attachment} round ${name}: built`, false, built.error);
+        continue;
+      }
+      const mine = new Set(built.newIds);
+      const links = built.instances.filter((i) => mine.has(i.instanceId)).slice(0, built.result.links.length);
+      const atts = built.instances.filter((i) => mine.has(i.instanceId)).slice(built.result.links.length);
+      let hits = 0;
+      atts.forEach((x, i) => {
+        atts.forEach((y, j) => (hits += j > i && meshHit(x, y) ? 1 : 0));
+        links.forEach((l, j) => (hits += j !== i && meshHit(x, l) ? 1 : 0));
+        layout.forEach((sp) => (hits += meshHit(x, inst(sp)) ? 1 : 0));
+      });
+      const P = built.result.links.map((l) => new THREE.Vector3(...l.position));
+      const back = Math.max(0, ...P.map((p, i) => {
+        const d1 = p.clone().sub(P[(i - 1 + P.length) % P.length]);
+        const d2 = P[(i + 1) % P.length].clone().sub(p);
+        return d1.clone().cross(d2).z < 0 ? THREE.MathUtils.radToDeg(d1.angleTo(d2)) : 0;
+      }));
+      const audit = auditAssembly({ instances: built.instances });
+      const loose = (audit.unsecuredParts || []).filter((u) => mine.has(u.instanceId));
+      check(
+        `track with ${attachment} on every link round ${name}: ${atts.length} attachments, no overlaps, no backward bend, all held`,
+        atts.length === links.length && hits === 0 && back < 0.5 && loose.length === 0 && audit.collisions.filter((c) => mine.has(c.instanceId)).length === 0,
+        JSON.stringify({ hits, back: back.toFixed(1), loose: loose.length })
+      );
+    }
+  }
+  // Long every 4 on a 49-link track: 13 flaps and the shorter last gap
+  const pair = [sprocket(16, [0, 0, 0]), sprocket(16, [103.1, 0, 0])];
+  const every4 = buildChainPath(pair, { kind: 'track', attachment: 'long-flap', attachmentEvery: 4, metaByPartNumber });
+  check(
+    'Long Intake Flap every 4th of 49 links: 13 flaps, the message names them and the short last gap',
+    every4.ok && every4.linkCount === 49 && every4.grippers.length === 13 && /49 tread links and 13 Long Intake Flaps \(every 4th link\)/.test(chainMessage(every4)) && /last gap between Long Intake Flaps is 1 link, not 4/.test(chainMessage(every4)),
+    every4.ok ? chainMessage(every4) : every4.error
+  );
+  const none = buildChainPath(pair, { kind: 'track', attachment: 'none', metaByPartNumber });
+  check('attachment none: tread links only', none.ok && none.grippers.length === 0 && /49 tread links round/.test(chainMessage(none)));
+  check('grippers: true still means a Traction Link on every link', buildChainPath(pair, { kind: 'track', grippers: true, metaByPartNumber }).grippers?.length === 49);
+  check('a spacing of 21 is refused', /from 1 to 20/.test(buildChainPath(pair, { kind: 'track', attachment: 'traction', attachmentEvery: 21, metaByPartNumber }).error || ''));
+
+  // Medium flaps every 2: one explode piece with the track
+  const mid = buildChain({ instances: pair.map(inst) }, { kind: 'track', instanceIds: pair.map((p) => p.instanceId), attachment: 'medium-flap', attachmentEvery: 2 });
+  if (mid.error) check('track with Medium flaps every 2: built', false, mid.error);
+  else {
+    const ungrouped = mid.instances.map((i) => ({ ...i, groupId: undefined, groupName: undefined }));
+    const input = explodeInputs({ instances: ungrouped });
+    const { pieceOf } = buildPieces({ ...input, parts: input.parts.map((p) => ({ ...p, worldBox: null })) });
+    const pieces = new Set(mid.newIds.map((id) => pieceOf.get(id)));
+    const audit = auditAssembly({ instances: mid.instances });
+    const mine = new Set(mid.newIds);
+    check(
+      'track with Medium flaps every 2: audits clean and explodes as one piece (ungrouped)',
+      pieces.size === 1 && audit.collisions.filter((c) => mine.has(c.instanceId)).length === 0 && (audit.unsecuredParts || []).filter((u) => mine.has(u.instanceId)).length === 0,
+      JSON.stringify({ pieces: pieces.size })
     );
   }
 }

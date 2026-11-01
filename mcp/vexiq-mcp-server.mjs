@@ -686,7 +686,7 @@ const TOOLS = [
   {
     name: 'build_chain',
     description:
-      'Wrap a chain or a tank track round two or more sprockets (8/16/24/32/40 Tooth Sprocket), and optional standoffs as smooth round guides, whose axles are parallel and whose teeth/bodies lie in one plane, as the app\'s Build menu does. A chain is Chain Links; a track is Tank Tread Attachment Links, with a Traction Link rubber gripper plugged into every link unless grippers is false. Tracks only go round the outside (enclosed parts are reported in leftOut as [{ instanceId, reason: "outside-only" }]); a chain can also bend over or under enclosed sprockets and standoffs via route ({ instanceId: "over" | "under" }, where "under" bends the top run down under the part and "over" bends the return run up over it; missing choices return needsRoute). Links sit on each sprocket\'s pitch circle one tooth apart, rest on standoffs\' round bodies, and run straight between parts; the count is the fewest links that reach round the path (never more than 0.75 mm short, at most a link longer). The other runs are straight; a slack chain hangs toward the floor on one run between two outer parts (the lower run, or the upper run hanging down into the loop with slack "upper"; outward on the longest run when the sprockets lie flat), and the reply gives wrapped ([{ instanceId, side }]), leftOut ([{ instanceId, reason }]), the gap (mm, < 0: the chain is longer than the path) and which sprocket to move for an exact fit. Each sprocket is turned, with its axle and the parts on it, so its teeth sit in the chain. The new parts become one group "Chain N" / "Track N" (selected), all one undo step. Spur gears are refused.',
+      'Wrap a chain or a tank track round two or more sprockets (8/16/24/32/40 Tooth Sprocket), and optional standoffs as smooth round guides, whose axles are parallel and whose teeth/bodies lie in one plane, as the app\'s Build menu does. A chain is Chain Links; a track is Tank Tread Attachment Links, with an attachment plugged into every attachmentEvery-th tread link (1-20, default 1): attachment "traction" (a Traction Link rubber gripper, the default), "short-flap", "medium-flap", "long-flap" (Intake Flaps) or "none"; the older grippers: false means "none". Tracks only go round the outside (enclosed parts are reported in leftOut as [{ instanceId, reason: "outside-only" }]); a chain can also bend over or under enclosed sprockets and standoffs via route ({ instanceId: "over" | "under" }, where "under" bends the top run down under the part and "over" bends the return run up over it). A sprocket on the outside of the loop that the straight run between its neighbours would pass through (a crossing sprocket) needs a route answer too: "over" puts the chain above it, "under" below it, one of which is the outside wrap. Missing choices return needsRoute; standoffs are only asked about when inside the loop. Links sit on each sprocket\'s pitch circle one tooth apart, rest on standoffs\' round bodies, and run straight between parts; the count is the fewest links that reach round the path (never more than 0.75 mm short, at most a link longer). The other runs are straight; a slack chain hangs toward the floor on one run between two outer parts (the lower run, or the upper run hanging down into the loop with slack "upper"; outward on the longest run when the sprockets lie flat), and the reply gives wrapped ([{ instanceId, side }]), leftOut ([{ instanceId, reason }]), the gap (mm, < 0: the chain is longer than the path) and which sprocket to move for an exact fit. Each sprocket is turned, with its axle and the parts on it, so its teeth sit in the chain. The new parts become one group "Chain N" / "Track N" (selected), all one undo step. Spur gears are refused.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -695,9 +695,11 @@ const TOOLS = [
         route: {
           type: 'object',
           additionalProperties: { type: 'string', enum: ['over', 'under'] },
-          description: 'Chain only: map each enclosed part instanceId to "over" (return run bends up over it) or "under" (top run bends down under it).'
+          description: 'Chain only: map each enclosed part and crossing sprocket instanceId to "over" (the chain passes above it) or "under" (the chain passes below it).'
         },
-        grippers: { type: 'boolean', description: 'Track only: plug a Traction Link into every tread link. Default true.' },
+        grippers: { type: 'boolean', description: 'Track only, older form of attachment: true = "traction", false = "none". Default true.' },
+        attachment: { type: 'string', enum: ['none', 'traction', 'short-flap', 'medium-flap', 'long-flap'], description: 'Track only: what to plug into the tread links. Default "traction" (or from grippers).' },
+        attachmentEvery: { type: 'number', description: 'Track only: put the attachment on every Nth tread link, 1 to 20. Default 1 (every link).' },
         slack: { type: 'string', enum: ['lower', 'upper'], description: 'Which run holds a slack chain\'s spare length when the sprockets stand up. Default "lower".' },
         name: { type: 'string', description: 'Group name. Default "Chain N" / "Track N".' }
       }
@@ -969,7 +971,7 @@ async function executeTool(name, args = {}) {
     const state = readAssemblyState();
     const kind = args.kind === undefined ? 'chain' : args.kind;
     if (args.slack !== undefined && args.slack !== 'lower' && args.slack !== 'upper') return { isError: true, error: 'slack must be "lower" or "upper".' };
-    const built = buildChain(state, { kind, instanceIds: args.instanceIds, route: args.route, grippers: args.grippers !== false, slack: args.slack, name: args.name });
+    const built = buildChain(state, { kind, instanceIds: args.instanceIds, route: args.route, grippers: args.grippers !== false, attachment: args.attachment, attachmentEvery: args.attachmentEvery ?? 1, slack: args.slack, name: args.name });
     if (built.error) return { isError: true, error: built.error, ...(built.needsRoute ? { needsRoute: built.needsRoute } : {}) };
     await writeAssemblyState(
       { ...state, instances: built.instances, selectedIds: built.newIds, selectedId: built.newIds.at(-1) },
@@ -981,7 +983,10 @@ async function executeTool(name, args = {}) {
       groupId: built.groupId,
       name: built.name,
       linkCount: r.linkCount,
-      gripperCount: r.grippers.length,
+      gripperCount: r.attachment === 'traction' ? r.grippers.length : 0,
+      attachment: r.attachment,
+      attachmentEvery: r.attachmentEvery,
+      attachmentCount: r.grippers.length,
       onLoop: r.onLoop,
       wrapped: r.wrapped,
       leftOut: r.leftOut,

@@ -1642,7 +1642,8 @@ export default function App() {
   // Build menu (openspec chain-track-builder, chain-over-under): the route dialog for enclosed parts,
   // the builder dialog ({ kind, slackMm, route } while open), and their choices for this page
   const [builderDialog, setBuilderDialog] = useState(null);
-  const [trackGrippers, setTrackGrippers] = useState(true);
+  const [trackAttachment, setTrackAttachment] = useState('traction');
+  const [trackEvery, setTrackEvery] = useState(1);
   const [chainSlack, setChainSlack] = useState('lower');
   const closeBuilderDialog = useCallback(() => setBuilderDialog(null), []);
   const [chainRouteDialogOpen, setChainRouteDialogOpen] = useState(false);
@@ -1878,12 +1879,18 @@ export default function App() {
     return checkSprocketsForChain(chainParts, { route: remembered });
   }, [chainParts, chainRoute]);
 
-  // Chain builder first asks over or under for each enclosed part; then either builder asks where
-  // noticeable slack goes (Track builder always asks, for its grippers). Chain builder builds at once
+  // The parts Chain builder asks over or under about: enclosed parts and crossing sprockets
+  const chainAsked = useMemo(
+    () => (chainCheck.ok ? [...(chainCheck.enclosed || []), ...(chainCheck.crossing || [])] : EMPTY_IDS),
+    [chainCheck]
+  );
+
+  // Chain builder first asks over or under for each enclosed part or crossing sprocket; then either builder asks where
+  // noticeable slack goes (Track builder always asks, for its attachment). Chain builder builds at once
   // when there is nothing to ask.
   const openChainBuilder = (kind, route = null) => {
-    if (kind === 'chain' && chainCheck.ok && chainCheck.enclosed?.length > 0 && !route) {
-      setAttentionIds([chainCheck.enclosed[0].instanceId]);
+    if (kind === 'chain' && chainCheck.ok && chainAsked.length > 0 && !route) {
+      setAttentionIds([chainAsked[0].instanceId]);
       setChainRouteDialogOpen(true);
       return;
     }
@@ -1897,7 +1904,7 @@ export default function App() {
     else setBuilderDialog({ kind, slackMm, route });
   };
 
-  const handleBuildChain = (kind, { grippers = false, slack = 'lower', route = null } = {}) => {
+  const handleBuildChain = (kind, { attachment = 'none', attachmentEvery = 1, slack = 'lower', route = null } = {}) => {
     if (previewRef.current) {
       setActionFeedback({ message: "This is a preview of an earlier point. Go to a step's end to edit.", isError: true });
       return;
@@ -1906,7 +1913,7 @@ export default function App() {
       setActionFeedback({ message: chainCheck.error, isError: true });
       return;
     }
-    handleRunSmartAction('build_chain', { kind, grippers, slack, ...(route ? { route } : {}), instanceIds: selectedIds });
+    handleRunSmartAction('build_chain', { kind, attachment, attachmentEvery, slack, ...(route ? { route } : {}), instanceIds: selectedIds });
   };
 
   const handleOpenAuditDialog = async () => {
@@ -3144,20 +3151,29 @@ export default function App() {
       <ChainBuilderDialog
         open={Boolean(builderDialog)}
         kind={builderDialog?.kind}
-        grippers={trackGrippers}
+        attachment={trackAttachment}
+        every={trackEvery}
         slack={chainSlack}
         slackMm={builderDialog?.slackMm ?? null}
         onClose={closeBuilderDialog}
-        onBuild={({ grippers, slack }) => {
+        onBuild={({ attachment, every, slack }) => {
           const { kind, slackMm, route } = builderDialog;
-          if (kind === 'track') setTrackGrippers(grippers);
+          if (kind === 'track') {
+            setTrackAttachment(attachment);
+            setTrackEvery(every);
+          }
           if (slackMm != null) setChainSlack(slack);
-          handleBuildChain(kind, { grippers: kind === 'track' && grippers, slack: slackMm != null ? slack : 'lower', route });
+          handleBuildChain(kind, {
+            attachment: kind === 'track' ? attachment : 'none',
+            attachmentEvery: every,
+            slack: slackMm != null ? slack : 'lower',
+            route
+          });
         }}
       />
       <ChainRouteDialog
         open={chainRouteDialogOpen}
-        enclosed={chainCheck.enclosed || EMPTY_IDS}
+        enclosed={chainAsked}
         initialRoute={chainRoute}
         onHighlight={handleHighlightAttention}
         onClose={closeChainRouteDialog}

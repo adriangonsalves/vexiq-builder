@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, Hammer, Link2, X } from 'lucide-react';
 import PopoverMenu, { MenuItem } from './PopoverMenu.jsx';
+import { ATTACHMENT_EVERY_MAX } from '../utils/chainPath.js';
 
 /**
  * The toolbar's Build menu (openspec chain-track-builder): Chain builder and Track builder, for two
@@ -54,16 +55,28 @@ export default function BuildMenu({ chainCheck, disabledReason = null, onChain, 
   );
 }
 
+// Track builder's attachment choices (openspec chain-over-under, track attachments)
+const TRACK_ATTACHMENT_CHOICES = [
+  ['traction', 'Traction Link'],
+  ['short-flap', 'Short Intake Flap'],
+  ['medium-flap', 'Medium Intake Flap'],
+  ['long-flap', 'Long Intake Flap'],
+  ['none', 'None']
+];
+const ordinalOf = (n) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
+
 /**
- * Chain and Track builder's questions. Track builder always asks whether to add rubber grippers
- * (Traction Links); either builder asks which run holds the slack when the chain is noticeably longer
- * than the path (`slackMm`, null when there is no choice to make). `grippers` and `slack` are
- * remembered by the caller while the page is open. Build calls onBuild({ grippers, slack }); Cancel,
- * Esc or a click outside builds nothing.
+ * Chain and Track builder's questions. Track builder always asks which attachment goes in the tread
+ * links (a Traction Link, an Intake Flap or none) and on every how many links (1 to 20); either
+ * builder asks which run holds the slack when the chain is noticeably longer than the path
+ * (`slackMm`, null when there is no choice to make). `attachment`, `every` and `slack` are
+ * remembered by the caller while the page is open. Build calls onBuild({ attachment, every, slack });
+ * Cancel, Esc or a click outside builds nothing.
  */
-export function ChainBuilderDialog({ open, kind = 'chain', grippers, slack = 'lower', slackMm = null, onClose, onBuild }) {
+export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'traction', every = 1, slack = 'lower', slackMm = null, onClose, onBuild }) {
   const ref = useRef(null);
-  const [checked, setChecked] = useState(grippers);
+  const [att, setAtt] = useState(attachment);
+  const [spacing, setSpacing] = useState(every);
   const [run, setRun] = useState(slack);
   const track = kind === 'track';
 
@@ -71,12 +84,13 @@ export function ChainBuilderDialog({ open, kind = 'chain', grippers, slack = 'lo
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) {
-      setChecked(grippers);
+      setAtt(attachment);
+      setSpacing(every);
       setRun(slack);
       dialog.showModal();
     }
     if (!open && dialog.open) dialog.close();
-  }, [open, grippers, slack]);
+  }, [open, attachment, every, slack]);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -99,13 +113,34 @@ export function ChainBuilderDialog({ open, kind = 'chain', grippers, slack = 'lo
           {track ? 'Wraps a loop of Tank Tread Attachment Links round the selected sprockets.' : 'Wraps a loop of Chain Links round the selected sprockets.'}
         </p>
         {track && (
-          <label className="settings-row">
+          <fieldset className="settings-row" style={{ border: 0, padding: 0, margin: 0, display: 'block' }}>
             <span className="settings-row-text">
-              <span className="settings-row-label">Add rubber grippers</span>
-              <span className="settings-row-hint">A Traction Link in every tread link, facing out</span>
+              <span className="settings-row-label">Attachment</span>
+              <span className="settings-row-hint">Plugged into the tread links, facing out</span>
             </span>
-            <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} autoFocus />
-          </label>
+            <span style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 6 }}>
+              {TRACK_ATTACHMENT_CHOICES.map(([value, label], idx) => (
+                <label key={value} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                  <input type="radio" name="trackAttachment" value={value} checked={att === value} onChange={() => setAtt(value)} autoFocus={att === value || (idx === 0 && !TRACK_ATTACHMENT_CHOICES.some(([v]) => v === att))} />
+                  {label}
+                </label>
+              ))}
+            </span>
+          </fieldset>
+        )}
+        {track && att !== 'none' && (
+          <div className="settings-slider-row">
+            <label className="settings-slider-label">
+              <span className="settings-row-text">
+                <span className="settings-row-label">Every</span>
+                <span className="settings-row-hint">{spacing === 1 ? 'On every tread link' : `On every ${ordinalOf(spacing)} tread link`}</span>
+              </span>
+              <div className="settings-slider-wrap">
+                <input type="range" min="1" max={ATTACHMENT_EVERY_MAX} step="1" value={spacing} onChange={(e) => setSpacing(Number(e.target.value))} />
+                <span className="settings-slider-val">{spacing}</span>
+              </div>
+            </label>
+          </div>
         )}
         {slackMm != null && (
           <fieldset className="settings-row" style={{ border: 0, padding: 0, margin: 0, display: 'block' }}>
@@ -136,7 +171,7 @@ export function ChainBuilderDialog({ open, kind = 'chain', grippers, slack = 'lo
             type="button"
             className="btn active"
             onClick={() => {
-              onBuild({ grippers: checked, slack: run });
+              onBuild({ attachment: att, every: spacing, slack: run });
               ref.current?.close();
             }}
           >
@@ -149,8 +184,9 @@ export function ChainBuilderDialog({ open, kind = 'chain', grippers, slack = 'lo
 }
 
 /**
- * Chain builder's over/under dialog (openspec chain-over-under): one row per enclosed sprocket or
- * standoff with two toggle buttons, Under / inner and Over / outer, and no default. `initialRoute`
+ * Chain builder's over/under dialog (openspec chain-over-under): one row per part in the chain's
+ * way (an enclosed sprocket or standoff, or a crossing sprocket, whose `outside` names the answer
+ * that wraps round its outside) with two toggle buttons, Under and Over, a hint, and no default. `initialRoute`
  * (Map or plain object) holds any choices remembered for the page. Hovering or focusing a row calls
  * `onHighlight(instanceId)` so the 3D view highlights that part; the first row is highlighted on
  * open. Build is enabled only when every row has a choice.
@@ -212,7 +248,7 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
       </div>
       <div className="settings-body">
         <p className="settings-note" style={{ marginTop: 10 }}>
-          Choose whether the chain passes under or over each part inside the loop.
+          Choose whether the chain passes under or over each part in its way.
         </p>
         {enclosed.map((item, idx) => {
           const choice = choices[item.instanceId];
@@ -225,6 +261,9 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
             >
               <span className="settings-row-text">
                 <span className="settings-row-label">{item.label}</span>
+                <span className="settings-row-hint">
+                  {item.outside ? `${item.outside === 'over' ? 'Over' : 'Under'} wraps round its outside` : 'Inside the loop'}
+                </span>
               </span>
               <div role="group" aria-label={`Route for ${item.label}`} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                 <button
@@ -234,7 +273,7 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
                   autoFocus={idx === 0}
                   onClick={() => pick(item.instanceId, 'under')}
                 >
-                  Under / inner
+                  Under
                 </button>
                 <button
                   type="button"
@@ -242,7 +281,7 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
                   aria-pressed={choice === 'over'}
                   onClick={() => pick(item.instanceId, 'over')}
                 >
-                  Over / outer
+                  Over
                 </button>
               </div>
             </div>
