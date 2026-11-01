@@ -1873,11 +1873,9 @@ export default function App() {
       .filter((i) => i && i.visible !== false)
       .map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogMap.get(i.partId), position: i.position, rotation: i.rotation }));
   }, [instances, selectedIds, catalogMap]);
-  const chainCheck = useMemo(() => {
-    const remembered = {};
-    for (const [id, side] of chainRoute.entries()) remembered[id] = side;
-    return checkSprocketsForChain(chainParts, { route: remembered });
-  }, [chainParts, chainRoute]);
+  // The parts alone decide whether the Build menu is available; a route that can't work is caught in
+  // the route dialog, so the same parts can always be asked again with other answers
+  const chainCheck = useMemo(() => checkSprocketsForChain(chainParts), [chainParts]);
 
   // The parts Chain builder asks over or under about: enclosed parts and crossing sprockets
   const chainAsked = useMemo(
@@ -3183,6 +3181,9 @@ export default function App() {
             for (const [id, side] of Object.entries(chosenRoute)) next.set(id, side);
             return next;
           });
+          // A route that can't work keeps the dialog open with the reason
+          const routed = checkSprocketsForChain(chainParts, { route: chosenRoute });
+          if (!routed.ok) return routed.error;
           setAttentionIds(EMPTY_IDS);
           setChainRouteDialogOpen(false);
           openChainBuilder('chain', chosenRoute);

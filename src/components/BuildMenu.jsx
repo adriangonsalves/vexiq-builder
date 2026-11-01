@@ -55,6 +55,42 @@ export default function BuildMenu({ chainCheck, disabledReason = null, onChain, 
   );
 }
 
+/**
+ * Lets a modal <dialog> be dragged by the element these props go on (its header). The offset is kept
+ * while the page is open, so the dialog opens where it was left; it stays at least partly on screen.
+ */
+function useDialogDrag(ref) {
+  const offset = useRef({ x: 0, y: 0 });
+  const place = () => {
+    if (ref.current) ref.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px)`;
+  };
+  useEffect(place);
+  const onPointerDown = (e) => {
+    if (e.button !== 0 || e.target.closest('button')) return;
+    const start = { x: e.clientX, y: e.clientY, ox: offset.current.x, oy: offset.current.y };
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const limX = window.innerWidth / 2;
+      const limY = window.innerHeight / 2;
+      offset.current = {
+        x: Math.max(-limX, Math.min(limX, start.ox + ev.clientX - start.x)),
+        y: Math.max(-limY, Math.min(limY, start.oy + ev.clientY - start.y))
+      };
+      place();
+    };
+    const up = () => {
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  };
+  return { onPointerDown, style: { cursor: 'move', touchAction: 'none', userSelect: 'none' } };
+}
+
 // Track builder's attachment choices (openspec chain-over-under, track attachments)
 const TRACK_ATTACHMENT_CHOICES = [
   ['traction', 'Traction Link'],
@@ -184,7 +220,8 @@ export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'tractio
 }
 
 /**
- * Chain builder's over/under dialog (openspec chain-over-under): one row per part in the chain's
+ * Chain builder's over/under dialog (openspec chain-over-under), draggable by its header over a light
+ * backdrop so the highlighted part stays in view: one row per part in the chain's
  * way (an enclosed sprocket or standoff, or a crossing sprocket, whose `outside` names the answer
  * that wraps round its outside) with two toggle buttons, Under and Over, a hint, and no default. `initialRoute`
  * (Map or plain object) holds any choices remembered for the page. Hovering or focusing a row calls
@@ -194,6 +231,8 @@ export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'tractio
 export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onHighlight, onClose, onBuild }) {
   const ref = useRef(null);
   const [choices, setChoices] = useState({});
+  const [error, setError] = useState(null);
+  const drag = useDialogDrag(ref);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -206,6 +245,7 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
         if (val === 'over' || val === 'under') next[item.instanceId] = val;
       }
       setChoices(next);
+      setError(null);
       onHighlight?.(enclosed[0]?.instanceId ?? null);
       dialog.showModal();
     }
@@ -235,12 +275,13 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
 
   const pick = (instanceId, side) => {
     setChoices((prev) => ({ ...prev, [instanceId]: side }));
+    setError(null);
     onHighlight?.(instanceId);
   };
 
   return (
-    <dialog ref={ref} closedby="any" className="settings-dialog" aria-labelledby="chainRouteTitle">
-      <div className="settings-header">
+    <dialog ref={ref} closedby="any" className="settings-dialog chain-route-dialog" aria-labelledby="chainRouteTitle">
+      <div className="settings-header" {...drag} title="Drag to move">
         <strong id="chainRouteTitle">Chain builder</strong>
         <button type="button" className="icon-btn" onClick={() => ref.current?.close()} aria-label="Close" title="Cancel (Esc)">
           <X size={16} />
@@ -287,6 +328,11 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
             </div>
           );
         })}
+        {error && (
+          <p className="settings-note chain-route-error" role="alert">
+            {error} Change an answer and build again.
+          </p>
+        )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
           <button type="button" className="btn btn-outline" onClick={() => ref.current?.close()}>
             Cancel
@@ -297,7 +343,12 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
             disabled={!allChosen}
             onClick={() => {
               if (!allChosen) return;
-              onBuild?.(choices);
+              // onBuild returns a reason when the route can't work: stay open to change an answer
+              const refused = onBuild?.(choices);
+              if (typeof refused === 'string') {
+                setError(refused);
+                return;
+              }
               ref.current?.close();
             }}
           >

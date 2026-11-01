@@ -1589,6 +1589,17 @@ body,
   backdrop-filter: blur(2px);
 }
 
+/* The over/under dialog: a light, unblurred backdrop so the part it asks about stays in view */
+.chain-route-dialog::backdrop {
+  background-color: rgba(2, 6, 23, 0.15);
+  backdrop-filter: none;
+}
+
+.chain-route-error {
+  color: var(--danger, #f87171);
+  margin-top: 8px;
+}
+
 .settings-header {
   display: flex;
   align-items: center;
