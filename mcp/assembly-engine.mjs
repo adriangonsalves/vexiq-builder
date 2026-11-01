@@ -821,6 +821,7 @@ function findJoints(state) {
   // they sit on, grippers the tread links they plug into. A chain held by a sprocket with no bend
   // away from one counts as mounted; one left bending in mid-air (a sprocket moved) does not.
   const chainBends = [];
+  const chainJoins = []; // [a, b]: links that are neighbours, or a gripper and its link
   const chainParts = nonFasteners.filter((n) => isChainPart(n.part));
   if (chainParts.length) {
     const sprockets = nonFasteners.filter((n) => n.part.gearSpecs?.gearType === 'sprocket');
@@ -840,6 +841,7 @@ function findJoints(state) {
         ) {
           link(a.inst.instanceId, b.inst.instanceId);
           join(a.inst.instanceId, b.inst.instanceId);
+          chainJoins.push([a.inst.instanceId, b.inst.instanceId]);
         }
       }
       for (const s of sprockets) {
@@ -949,6 +951,7 @@ function findJoints(state) {
     pegJoints,
     batteryBays,
     chainBends,
+    chainJoins,
     placedGears,
     meshedGearPairs
   };
@@ -1060,7 +1063,9 @@ export function explodeInputs(state) {
       if (a !== b && isTireOnHub(a.part, a.mat, b.part, b.mat) && /tire/i.test(a.part.name)) tires.push([a.inst.instanceId, b.inst.instanceId]);
     }
   }
-  return { parts, pairs, direct, bays, tires };
+  // A chain or track comes off in one piece
+  const chains = found.chainJoins;
+  return { parts, pairs, direct, bays, tires, chains };
 }
 
 /** The explode plan for a build and direction choice ('x' | 'y' | 'z' | 'all'), from the collision meshes. */

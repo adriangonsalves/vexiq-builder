@@ -10,6 +10,8 @@ import * as THREE from 'three';
 import { angleAbout } from '../src/utils/axisFrame.js';
 import { buildChainPath, chainMessage, checkSprocketsForChain, nextChainName, worldSprocket } from '../src/utils/chainPath.js';
 import { areChainNeighbours, isChainFit, isGripperOnLink, isLinkOnSprocket, unsupportedBends } from '../src/utils/chainFit.js';
+import { buildChain, explodeInputs } from '../mcp/assembly-engine.mjs';
+import { buildPieces } from '../src/utils/explodePlan.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.json'), 'utf8'));
@@ -268,6 +270,26 @@ function checkChain(name, input, res) {
 {
   const inst = [{ groupName: 'Chain 1' }, { groupName: 'Chain 3' }, { groupName: 'Track 1' }, { groupName: 'Group 2' }];
   check('next chain name skips used numbers', nextChainName(inst, 'chain') === 'Chain 2' && nextChainName(inst, 'track') === 'Track 2');
+}
+
+// --- Explode keeps a chain or track in one piece ----------------------------------------------
+{
+  const inst = (instanceId, name, position) => ({ instanceId, partId: byName(name).id, label: instanceId, position, rotation: [0, 0, 0], visible: true });
+  const state = { instances: [inst('S16', '16 Tooth Sprocket', [0, 0, 0]), inst('S32', '32 Tooth Sprocket', [101.6, 0, 0])], selectedIds: [] };
+  const built = buildChain(state, { kind: 'track', instanceIds: ['S16', 'S32'] });
+  check('explode: a track is built for the check', !built.error, built.error);
+  if (!built.error) {
+    // Ungrouped, so only the chain joins can hold it together
+    const instances = built.instances.map((i) => ({ ...i, groupId: undefined, groupName: undefined }));
+    const input = explodeInputs({ ...state, instances });
+    const { pieceOf } = buildPieces({ ...input, parts: input.parts.map((p) => ({ ...p, worldBox: null })) });
+    const trackPieces = new Set(built.newIds.map((id) => pieceOf.get(id)));
+    check(
+      'explode: an ungrouped track\'s links and grippers stay one piece, apart from its sprockets',
+      trackPieces.size === 1 && !trackPieces.has(pieceOf.get('S16')) && !trackPieces.has(pieceOf.get('S32')),
+      `${trackPieces.size} pieces`
+    );
+  }
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);

@@ -4,8 +4,8 @@ import * as THREE from 'three';
  * The explode plan (openspec explode-view): how the robot comes apart, worked out once per build and
  * direction choice, so the slider only has to add up offsets.
  *
- * 1. Pieces: parts that never move apart (groups, a tire and its hub, a pin and the part it sits
- *    deeper in). The base piece holds the brain, or else is the biggest.
+ * 1. Pieces: parts that never move apart (groups, a tire and its hub, a chain or track's links
+ *    and grippers, a pin and the part it sits deeper in). The base piece holds the brain, or else is the biggest.
  * 2. Pass A, outside in: take pieces off one at a time, each along a direction it can slide out
  *    (its pin or shaft axis first, then the main axes) carrying what was already taken off it.
  *    Pieces that get stuck merge into a lump, which is taken apart again on its own.
@@ -260,6 +260,8 @@ export function buildPieces(input) {
   }
   // A tire stays on its hub
   for (const [tire, hub] of input.tires || []) if (byId.has(tire) && byId.has(hub)) uf.union(hub, tire);
+  // A chain or track stays in one piece: its links and grippers come off together
+  for (const [a, b] of input.chains || []) if (byId.has(a) && byId.has(b)) uf.union(a, b);
   // A pin or standoff rides with the part it sits deeper in (the larger part on a tie)
   const depth = new Map(); // pinId -> Map(partnerId -> mm)
   const addDepth = (pin, partner, mm) => {
@@ -1628,6 +1630,7 @@ function explodeLumps(plan, ctx, input, mode, log) {
         direct: (input.direct || []).filter(([a, b]) => set.has(a) && set.has(b)),
         bays: (input.bays || []).filter((b) => set.has(b.battery) && set.has(b.brain)),
         tires: (input.tires || []).filter(([a, b]) => set.has(a) && set.has(b)),
+        chains: (input.chains || []).filter(([a, b]) => set.has(a) && set.has(b)),
         tooWide: input.tooWide,
         center: ctx.center.toArray(),
         planeParts: input.planeParts,
@@ -1789,7 +1792,7 @@ const MIRROR_TOL_MM = 0.8;
  * Builds the plan for a build and a direction choice ('x' | 'y' | 'z' | 'all').
  * `input`: { parts: [{ id, name, kind: 'pin'|'shaft'|'part', groupId, matrix, box: { min, max },
  * meshes: [{ geo, local }] }], pairs: [{ insertOwner, openingOwner, axis, depthMm, blocks }],
- * direct: [[a, b]], bays: [{ battery, brain }], tires: [[tire, hub]] }.
+ * direct: [[a, b]], bays: [{ battery, brain }], tires: [[tire, hub]], chains: [[link, link or gripper]] }.
  * Returns { mode, base, pieces: [{ id, members, parent, depth, dir, travel, start, end }], order,
  * unplaced: [{ a, b, t }], stats }. `options.progress(f)` hears how far along it is (0..1).
  */
@@ -1885,6 +1888,7 @@ function mirroredPlan(input, mode, options, mirror, center) {
       direct: (input.direct || []).filter(([a, b]) => both(a, b)),
       bays: (input.bays || []).filter((b) => both(b.battery, b.brain)),
       tires: (input.tires || []).filter(([a, b]) => both(a, b)),
+      chains: (input.chains || []).filter(([a, b]) => both(a, b)),
       center: center.toArray(),
       planeParts: [...mirror.plane],
       mirrorAxis: k,
@@ -1986,6 +1990,7 @@ function mirroredPlan(input, mode, options, mirror, center) {
         direct: (input.direct || []).filter(([a, b]) => set.has(a) && set.has(b)),
         bays: (input.bays || []).filter((b) => set.has(b.battery) && set.has(b.brain)),
         tires: (input.tires || []).filter(([a, b]) => set.has(a) && set.has(b)),
+        chains: (input.chains || []).filter(([a, b]) => set.has(a) && set.has(b)),
         center: center.toArray(),
         middleAxis: k,
         middleAt: mirror.at
