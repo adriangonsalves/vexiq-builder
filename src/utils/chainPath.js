@@ -23,6 +23,7 @@ export const PLANE_TOLERANCE_MM = 1.0;
 export const SEATED_PIVOT_TOLERANCE_MM = 0.5;
 export const CHAIN_PLAY_MM = 0.75; // a chain this much short of the path still goes on (play in its joints)
 export const SAG_NOTE_MM = 3.175; // more slack than half a link: the chain sags a little
+export const SAG_ASK_MM = 1; // a run hanging this far below its straight line is slack worth placing
 const EASE_PER_LINK_MM = 0.2; // a run's links may be drawn this much apart past 6.35 mm (inside the chain's play)
 const EPS = 1e-6;
 
@@ -199,9 +200,10 @@ const exactLinks = (circles, loop, pitch, teethOf) => {
  * metadata for the link and gripper parts.
  * Returns { ok, error?, linkPart, gripperPart, links: [{ partId, position, rotation }],
  *   grippers: [...], sprocketTurns: [{ instanceId, axis, point, deg }], onLoop, leftOut,
- *   linkCount, exactLinks, gapMm, moveHint, notes, slack, slackChoice }. `slackChoice` is true when
- *   the chain sags noticeably (more than half a link) and the sprockets stand up, so the upper or
- *   lower run can hold it; `slack` is the run used ('lower', 'upper', or null when flat).
+ *   linkCount, exactLinks, gapMm, moveHint, notes, slack, sagMm, slackChoice }. `sagMm` is how far
+ *   the hanging run drops below its straight line; `slackChoice` is true when that is SAG_ASK_MM or
+ *   more and the sprockets stand up, so the upper or lower run can hold it; `slack` is the run used
+ *   ('lower', 'upper', or null when flat).
  */
 export function buildChainPath(parts, { kind = 'chain', grippers = false, slack = 'lower', metaByPartNumber }) {
   const check = checkSprocketsForChain(parts);
@@ -291,7 +293,8 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, slack 
     onLoop: check.sprockets.map((s) => s.instanceId),
     leftOut: check.leftOut.map((s) => s.instanceId),
     slack: standing ? (upper ? 'upper' : 'lower') : null,
-    slackChoice: standing && -gapMm > SAG_NOTE_MM,
+    sagMm: walk.sag.depthMm,
+    slackChoice: standing && walk.sag.depthMm >= SAG_ASK_MM,
     linkCount: links.length,
     exactLinks: Math.round(exact * 1000) / 1000,
     gapMm,
@@ -564,7 +567,11 @@ function planChain(circles, loop, arcs, runs, pitch, teethOf, target, sagRun = 0
   if (!best) return null;
   const out = [...best.base, ...best.inner];
   for (let j = 0; j < best.c; j++) out.push(at(s0, best.th + j * t0));
-  return { pivots2d: out, arcPivotIndex: firstOn, sag: { run: sagRun, mm: round3(best.q * pitch - best.R) } };
+  // How far the hanging run drops below its straight line
+  const [a, b] = [best.base.at(-1), best.end];
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const depth = Math.max(0, ...best.inner.map((p) => Math.abs((b[0] - a[0]) * (a[1] - p[1]) - (a[0] - p[0]) * (b[1] - a[1])) / len));
+  return { pivots2d: out, arcPivotIndex: firstOn, sag: { run: sagRun, mm: round3(best.q * pitch - best.R), depthMm: round3(depth) } };
 }
 
 /**

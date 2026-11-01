@@ -203,7 +203,11 @@ function checkChain(name, input, res) {
   const lying = buildChainPath(flat, { kind: 'chain', slack: 'upper', metaByPartNumber });
   check('sprockets lying flat: no upper/lower choice', lying.ok && lying.slackChoice === false && lying.slack === null);
   const snug = buildChainPath([sprocket(16, [0, 0, 0]), sprocket(16, [101.6, 0, 0])], { kind: 'chain', metaByPartNumber });
-  check('an exact fit: no choice to make', snug.ok && snug.slackChoice === false);
+  check('an exact fit: no choice to make', snug.ok && snug.slackChoice === false && snug.sagMm === 0, String(snug.sagMm));
+  // Less than half a link of slack on a long run still droops plainly: ask (a real build, 0.74 mm slack)
+  const long = [sprocket(16, [30.42, 0.005, 176.405], [0, 30, 4.17]), sprocket(40, [151.557, 13.051, 106.83], [0, 30, -1.44]), sprocket(24, [63.414, 31.755, 157.72], [0, 30, -16.44])];
+  const loose = buildChainPath(long, { kind: 'chain', metaByPartNumber });
+  check('0.74 mm of slack on a long run droops several mm: the choice is offered', loose.ok && loose.gapMm > -1 && loose.sagMm > 5 && loose.slackChoice === true, `${loose.gapMm} ${loose.sagMm}`);
 }
 {
   // A tilted triangle (a real build): runs straight, every join no sharper than its sprocket's tooth step

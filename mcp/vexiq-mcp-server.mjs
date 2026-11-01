@@ -981,6 +981,7 @@ async function executeTool(name, args = {}) {
       leftOut: r.leftOut,
       gapMm: r.gapMm,
       slack: r.slack,
+      sagMm: r.sagMm,
       moveHint: r.moveHint,
       turned: built.turned,
       message: built.message,
