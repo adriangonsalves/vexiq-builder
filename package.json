@@ -8,6 +8,7 @@
     "index-metadata": "node scripts/index-part-metadata.mjs",
     "dev": "vite",
     "build": "vite build",
+    "build:static": "vite build --mode static",
     "preview": "vite preview",
     "mcp": "node mcp/vexiq-mcp-server.mjs",
     "openspec": "openspec"

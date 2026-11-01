@@ -16,7 +16,8 @@ function SwitchRow({ label, hint, checked, onChange }) {
 
 /**
  * The Settings panel (openspec app-settings): Display (shadows, AO), History, Assistant (MCP) and
- * Advanced options. History's choice and the Assistant section only show with advanced options on.
+ * Advanced options. History's choice and the Assistant section only show with advanced options on,
+ * and the Assistant section only where there is an assistant (`hasAssistant`; not the static site).
  * Every change applies at once; closing (button, Esc, a click outside) changes nothing.
  */
 export default function SettingsPanel({
@@ -24,6 +25,7 @@ export default function SettingsPanel({
   onClose,
   settings,
   onChange,
+  hasAssistant = true,
   shadows,
   setShadows,
   ambientOcclusion,
@@ -131,7 +133,7 @@ export default function SettingsPanel({
           )}
         </section>
 
-        {settings.advanced && (
+        {settings.advanced && hasAssistant && (
           <section className="settings-section">
             <h3>Assistant (MCP)</h3>
             <SwitchRow

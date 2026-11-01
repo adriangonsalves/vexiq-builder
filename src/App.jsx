@@ -65,6 +65,8 @@ import {
 import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
 import LibraryDialog from './components/LibraryDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
+import backend from './backend/index.js';
+import { assetUrl } from './utils/assetUrl.js';
 import { DEFAULT_SETTINGS, isLinearHistory, normalizeSettings } from './utils/appSettings.js';
 import {
   applyPatches as applyGroupPatches,
@@ -269,7 +271,7 @@ export default function App() {
   const [gearTrainPreset, setGearTrainPreset] = useState('3x36T');
   const [gearTrainIncludeShafts, setGearTrainIncludeShafts] = useState(true);
   const [actionFeedback, setActionFeedback] = useState(null);
-  // App settings (openspec app-settings): shared through /api/settings, a local copy as fallback
+  // App settings (openspec app-settings): shared through the dev bridge, a local copy as fallback (the only copy on the static site)
   const [settings, setSettings] = useState(() => {
     try {
       return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'));
@@ -277,6 +279,8 @@ export default function App() {
       return { ...DEFAULT_SETTINGS };
     }
   });
+  // The MCP status shows with advanced options on, and only where there is an assistant (not the static site)
+  const showMcpStatus = settings.advanced && backend.hasAssistant;
   // The build being worked on (openspec build-library): { id, name }, shared through the saved state
   const [currentBuild, setCurrentBuild] = useState(null);
   const currentBuildRef = useRef(null);
@@ -303,11 +307,7 @@ export default function App() {
   const updateSettings = useCallback(
     (patch) => {
       const next = keepSettings({ ...settingsRef.current, ...patch });
-      fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Client-Id': TAB_ID },
-        body: JSON.stringify(next)
-      }).catch(() => {});
+      backend.saveSettings(next, { clientId: TAB_ID });
     },
     [keepSettings]
   );
@@ -317,10 +317,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [actionFeedback]);
   useEffect(() => {
-    fetch('/api/settings')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((loaded) => loaded && keepSettings(loaded))
-      .catch(() => {});
+    backend.loadSettings().then((loaded) => loaded && keepSettings(loaded));
   }, [keepSettings]);
   const [isRunningAction, setIsRunningAction] = useState(false);
   const [auditModalData, setAuditModalData] = useState(null);
@@ -511,14 +508,9 @@ export default function App() {
     return undefined;
   }, []);
 
-  // Load 478-part catalog + initial assembly state from MCP bridge (/api/assembly)
+  // Load 478-part catalog + initial assembly state (the dev bridge's saved state, or on the static site the build that was open)
   useEffect(() => {
-    Promise.all([
-      fetch(`/catalog.json?t=${Date.now()}`).then((r) => r.json()),
-      fetch('/api/assembly')
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null)
-    ])
+    Promise.all([fetch(assetUrl(`catalog.json?t=${Date.now()}`)).then((r) => r.json()), backend.loadState()])
       .then(([catalogData, serverState]) => {
         setCatalog(catalogData);
         // A saved build with parts, or one emptied on purpose (its history has steps), is kept as is
@@ -662,14 +654,10 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', flush);
   }, [saveCurrentBuildNow]);
 
-  // Subscribe to real-time SSE updates pushed by the MCP Server
+  // Subscribe to real-time SSE updates pushed by the MCP Server (none on the static site)
   useEffect(() => {
-    const es = new EventSource('/api/assembly/events');
-    es.onopen = () => setMcpConnected(true);
-    es.onerror = () => setMcpConnected(false);
-    es.onmessage = async (event) => {
+    const onMessage = async (msg) => {
       try {
-        const msg = JSON.parse(event.data);
         if (msg.type === 'settings') {
           if (msg.clientId !== TAB_ID) keepSettings(msg.settings);
           return;
@@ -688,11 +676,7 @@ export default function App() {
           } catch (err) {
             reply = { requestId: msg.requestId, error: err?.message || String(err) };
           }
-          fetch('/api/assembly/screenshot-result', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(reply)
-          }).catch(() => {});
+          backend.sendScreenshot(reply);
           return;
         }
         if (msg.source === 'browser' && (!msg.clientId || msg.clientId === TAB_ID)) return;
@@ -721,13 +705,13 @@ export default function App() {
           }
         }
       } catch {
-        // ignore malformed SSE
+        // ignore a message that can't be applied
       }
     };
-    return () => es.close();
+    return backend.subscribe({ onOpen: () => setMcpConnected(true), onError: () => setMcpConnected(false), onMessage });
   }, []);
 
-  // Sync browser changes back to localStorage and the MCP bridge (/api/assembly)
+  // Sync browser changes back to the MCP bridge (/api/assembly); nothing to sync on the static site
   useEffect(() => {
     if (catalog.length === 0) return;
     if (suppressNextServerSyncRef.current) {
@@ -746,46 +730,42 @@ export default function App() {
       syncRef.current = { baseRev: history.rev, baseInstances: instances, postedHistory: history };
     }
     const postedInstances = instances;
-    fetch('/api/assembly', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-mcp-source': 'browser',
-        'x-client-id': TAB_ID
-      },
-      body: JSON.stringify({
-        version: '1.0',
-        ...(switching ? {} : { baseHistoryRev: base.baseRev }),
-        ...(sendHistory ? { history } : {}),
-        ...(currentBuild ? { build: currentBuild } : {}),
-        selectedId: primaryId,
-        selectedIds,
-        viewport: {
-          transformMode,
-          snapPitchFactor,
-          rotationSnapDeg,
-          showGrid,
-          showConnectors,
-          explodeMode,
-          explodeAmount: savedExplodeAmount,
-          focusTrigger,
-          projection,
-          viewLayout,
-          stereoCrossEyed,
-          stereoDepth,
-          viewAlongTrigger,
-          shadows,
-          ambientOcclusion,
-          environmentReflections,
-          reflectionIntensity
+    backend
+      .saveState(
+        {
+          version: '1.0',
+          ...(switching ? {} : { baseHistoryRev: base.baseRev }),
+          ...(sendHistory ? { history } : {}),
+          ...(currentBuild ? { build: currentBuild } : {}),
+          selectedId: primaryId,
+          selectedIds,
+          viewport: {
+            transformMode,
+            snapPitchFactor,
+            rotationSnapDeg,
+            showGrid,
+            showConnectors,
+            explodeMode,
+            explodeAmount: savedExplodeAmount,
+            focusTrigger,
+            projection,
+            viewLayout,
+            stereoCrossEyed,
+            stereoDepth,
+            viewAlongTrigger,
+            shadows,
+            ambientOcclusion,
+            environmentReflections,
+            reflectionIntensity
+          },
+          instances
         },
-        instances
-      })
-    })
-      .then(async (res) => {
-        if (res.status !== 409) return;
+        { clientId: TAB_ID }
+      )
+      .then((reply) => {
+        if (!reply?.conflict) return;
         // Another writer saved first: take the saved build, then put this tab's change on top of it
-        const { state } = await res.json();
+        const { state } = reply;
         if (!state || !isHistory(state.history)) return;
         adoptServerState(state);
         if (!sendHistory) return;
@@ -802,9 +782,6 @@ export default function App() {
         if (ops.length > 0) {
           setInstances((prev) => applyOps(prev, ops), { label: newSteps.at(-1).label, source: newSteps.at(-1).source });
         }
-      })
-      .catch(() => {
-        // ignore offline
       });
   }, [
     catalog.length,
@@ -963,13 +940,8 @@ export default function App() {
   // The joints between the parts as they are now (unsaved drags included), from the bridge's audit code
   // `pinnedOnly`: only pins, shafts and pegs seated in holes join parts (no gear meshes or parts that only touch)
   const fetchJointGraph = async (parts, { pinnedOnly = false } = {}) => {
-    const res = await fetch('/api/assembly/action', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'joint_graph', state: { instances: parts }, params: { pinnedOnly } })
-    });
-    const data = await res.json().catch(() => null);
-    if (!data?.ok || !data.graph) throw new Error(data?.error || `the server replied ${res.status}`);
+    const data = await backend.runAction('joint_graph', { instances: parts }, { pinnedOnly });
+    if (!data.ok || !data.graph) throw new Error(data.error || 'no joints came back');
     return data.graph;
   };
 
@@ -1476,14 +1448,8 @@ export default function App() {
     setExplodeProgress(null);
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch('/api/assembly/action', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'explode_plan', state: { instances: parts }, params: { mode } })
-        });
-        const data = await res.json().catch(() => null);
-        if (!data?.ok || !data.plan) throw new Error(data?.error || `the server replied ${res.status}`);
-        if (!cancelled) setExplodePlan({ key: explodeKey, plan: data.plan });
+        const plan = await backend.explodePlan(parts, mode, (fraction) => !cancelled && setExplodeProgress(fraction));
+        if (!cancelled) setExplodePlan({ key: explodeKey, plan });
       } catch (err) {
         if (!cancelled) setActionFeedback({ message: `Couldn't work out the explode: ${err.message}`, isError: true });
       }
@@ -1811,39 +1777,35 @@ export default function App() {
     setIsRunningAction(true);
     setActionFeedback(null);
     try {
-      const res = await fetch('/api/assembly/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action,
-          state: {
-            selectedId: primaryId,
-            selectedIds,
-            viewport: {
-              transformMode,
-              snapPitchFactor,
-              rotationSnapDeg,
-              showGrid,
-              showConnectors,
-              explodeMode,
-              explodeAmount: savedExplodeAmount,
-              focusTrigger,
-              projection,
-              viewLayout,
-              stereoCrossEyed,
-              stereoDepth,
-              viewAlongTrigger,
-              shadows,
-              ambientOcclusion,
-              environmentReflections,
-              reflectionIntensity
-            },
-            instances
+      const data = await backend.runAction(
+        action,
+        {
+          selectedId: primaryId,
+          selectedIds,
+          viewport: {
+            transformMode,
+            snapPitchFactor,
+            rotationSnapDeg,
+            showGrid,
+            showConnectors,
+            explodeMode,
+            explodeAmount: savedExplodeAmount,
+            focusTrigger,
+            projection,
+            viewLayout,
+            stereoCrossEyed,
+            stereoDepth,
+            viewAlongTrigger,
+            shadows,
+            ambientOcclusion,
+            environmentReflections,
+            reflectionIntensity
           },
-          params
-        })
-      });
-      const data = await res.json();
+          instances
+        },
+        params,
+        { history, linear: isLinearHistory(settingsRef.current) }
+      );
       if (!data.ok) {
         setActionFeedback({ message: data.error || 'Action failed.', isError: true });
       } else {
@@ -1918,12 +1880,17 @@ export default function App() {
     handleRunSmartAction('build_chain', { kind, attachment, attachmentEvery, slack, ...(route ? { route } : {}), instanceIds: selectedIds });
   };
 
+  // The blueprint picture of the last audit, from the audit's reply (no file on the static site)
+  const blueprintUrlRef = useRef(null);
   const handleOpenAuditDialog = async () => {
     const data = await handleRunSmartAction('audit_and_blueprint', {});
     if (data && data.ok) {
+      if (blueprintUrlRef.current) URL.revokeObjectURL(blueprintUrlRef.current);
+      blueprintUrlRef.current = URL.createObjectURL(new Blob([data.ortho.svg], { type: 'image/svg+xml' }));
       setAuditModalData({
         audit: data.audit,
         ortho: data.ortho,
+        blueprintUrl: blueprintUrlRef.current,
         timestamp: Date.now()
       });
       auditDialogRef.current?.showModal();
@@ -1944,16 +1911,16 @@ export default function App() {
               alignItems: 'center',
               gap: 4,
               fontSize: 11,
-              color: settings.advanced && settings.mcpEnabled && mcpConnected ? '#4ade80' : 'var(--text-muted)',
+              color: showMcpStatus && settings.mcpEnabled && mcpConnected ? '#4ade80' : 'var(--text-muted)',
               fontWeight: 500
             }}
-            title={settings.advanced ? 'Parts in this build · live MCP server bridge status' : 'Parts in this build'}
+            title={showMcpStatus ? 'Parts in this build · live MCP server bridge status' : 'Parts in this build'}
           >
-            {settings.advanced && <Radio size={12} />}
+            {showMcpStatus && <Radio size={12} />}
             {(() => {
               // The open build's part count (the library's 478 parts show in its own panel)
               const count = `${instances.length} part${instances.length === 1 ? '' : 's'}`;
-              if (!settings.advanced) return count;
+              if (!showMcpStatus) return count;
               if (!settings.mcpEnabled) return `MCP Off • ${count}`;
               return mcpConnected ? `MCP Live • ${count}` : count;
             })()}
@@ -3211,6 +3178,7 @@ export default function App() {
         onClose={closeSettings}
         settings={settings}
         onChange={updateSettings}
+        hasAssistant={backend.hasAssistant}
         shadows={shadows}
         setShadows={setShadows}
         ambientOcclusion={ambientOcclusion}
@@ -3253,7 +3221,7 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => window.open('/assembly-blueprint.svg', '_blank', 'noopener,noreferrer')}
+                onClick={() => window.open(auditModalData.blueprintUrl, '_blank', 'noopener,noreferrer')}
               >
                 Open Full SVG
               </button>
@@ -3388,7 +3356,7 @@ export default function App() {
               {/* Embedded 3-View Orthographic Blueprint SVG */}
               <div className="blueprint-preview-wrap">
                 <img
-                  src={`/assembly-blueprint.svg?t=${auditModalData.timestamp}`}
+                  src={auditModalData.blueprintUrl}
                   alt="3-View Orthographic Engineering Blueprint (Top XZ, Side XY, Front ZY)"
                 />
               </div>

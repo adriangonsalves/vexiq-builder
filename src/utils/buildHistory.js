@@ -276,6 +276,9 @@ const partName = (op, partsAfter) => {
   return op.name || partsAfter?.find((p) => p.instanceId === op.id)?.label || op.id;
 };
 
+/** A smart action's step label: the action's own wording, or "<action>: <summary of the change>". */
+export const actionStepLabel = (action, stepLabel, summary) => stepLabel || `${action}: ${summary}`;
+
 /**
  * A short description of what the ops did.
  * style 'mcp' (after "<tool>: "): "72 parts", "Left Motor Pin 3", "move Robot Brain".

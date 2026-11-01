@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshBVH } from 'three-mesh-bvh';
 import { hubFrame, splitHubTriangles, subGeometry } from './motorHub.js';
+import { assetUrl } from './assetUrl.js';
 
 const loader = new GLTFLoader();
 export const RUBBER_MATERIAL_NAME = 'rubber';
@@ -98,7 +99,7 @@ export function loadPartAsset(part) {
 
   const promise = new Promise((resolve, reject) => {
     loader.load(
-      part.modelUrl,
+      assetUrl(part.modelUrl),
       (gltf) => {
         const geometries = [];
         const collisionGeometries = [];

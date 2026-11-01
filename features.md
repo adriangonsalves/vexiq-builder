@@ -344,6 +344,16 @@ Shared history code: [`src/utils/buildHistory.js`](file:///Users/adriangonsalves
 
 ---
 
+## 5b. Static Site (no server)
+
+- **Build it:** `npm run build:static` writes plain files to `dist-static/` for any static host (GitHub Pages, Netlify, Cloudflare Pages, S3). For a sub-folder, set the base path: `VEXIQ_BASE=/vexiq/ npm run build:static`. The site is about 92 MB, mostly `models/`. It holds only `catalog.json`, `part-metadata.json` and `models/` from `public/`, never the saved build, settings or blueprint.
+- **What works:** everything you build with. The part library, placing and moving parts, every smart action (auto-fasten, mate, gear trains, chain and track builder with its over/under and slack questions, mirror, Select Connected, audit and blueprint), Explode, undo/redo and the timeline, and the build library.
+- **How:** the assembly engine's core (`src/engine/core.js`, the same code the MCP server uses) runs in two Web Workers (`src/engine/worker.js`), one for actions and one for explode plans, so the page stays responsive. A worker downloads only the part models an action needs, and keeps them for the visit. `src/backend/` picks the dev bridge or the static version when the app is built, so the static site makes no `/api` requests.
+- **Saving:** builds stay in the visitor's browser (the build library). A reload opens the most recently saved build, with its history. Settings stay in this browser's local storage.
+- **Hidden:** the MCP status in the title and the Assistant (MCP) section in Settings. There's no assistant, live sync between tabs or screenshot relay on the static site.
+
+---
+
 ## 6. OpenSpec Spec-Driven Development (SDD) Framework
 
 - **AI-Native Spec-Driven Development (`openspec/`):**

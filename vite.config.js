@@ -4,20 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import {
-  auditAssembly,
-  buildChain,
-  buildMeshedGearTrain,
-  checkCandidateCollision,
-  computeMateTransform,
-  findMatchingPinHoles,
-  findPart,
-  generateOrthographicViews,
-  getCatalog,
-  jointGraph,
-  mirrorSubassembly
-} from './mcp/assembly-engine.mjs';
-import { applyOps, diffParts, loadHistory, mergeBrowserSave, recordStep, summarize } from './src/utils/buildHistory.js';
+import { explodeKey, writeBlueprint } from './mcp/assembly-engine.mjs';
+import { runAction } from './src/engine/actions.js';
+import { actionStepLabel, applyOps, diffParts, loadHistory, mergeBrowserSave, recordStep, summarize } from './src/utils/buildHistory.js';
 import { syncSelection } from './src/utils/partGroups.js';
 import { MCP_OFF_MESSAGE, isLinearHistory, normalizeSettings } from './src/utils/appSettings.js';
 
@@ -66,12 +55,6 @@ function explodePlanFromWorker(state, mode) {
   explodeWorker.postMessage({ id, state: { instances: state.instances }, mode });
   return promise;
 }
-const explodeKey = (instances, mode) =>
-  `${mode}|${JSON.stringify(
-    (instances || [])
-      .filter((i) => i.visible !== false)
-      .map((i) => [i.instanceId, i.partId, i.position, i.rotation, i.groupId || null, i.socketAngleDeg || 0])
-  )}`;
 // VEXIQ_STATE_PATH (as for the MCP engine) lets a test server use its own build file
 const STATE_FILE = process.env.VEXIQ_STATE_PATH || path.join(__dirname, 'public', 'assembly-state.json');
 // App settings shared with the MCP server (openspec app-settings); VEXIQ_SETTINGS_PATH as for the engine
@@ -214,8 +197,6 @@ function vexiqMcpBridgePlugin() {
                   ? JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'))
                   : { instances: [] };
 
-            const { catalogById } = getCatalog();
-
             // A smart action's change is one history step (source 'action'), applied on top of the
             // saved build. Fills in nextState's parts and history so the reply carries them too.
             const baseInstances = state.instances;
@@ -227,296 +208,11 @@ function vexiqMcpBridgePlugin() {
                 diffParts(baseInstances, saved.instances).length > 0 ? applyOps(saved.instances, ops) : nextState.instances;
               const { history } = recordStep(saved.history, saved.instances, instances, {
                 source: 'action',
-                label: (stepOps) => stepLabel || `${action}: ${summarize(stepOps)}`,
+                label: (stepOps) => actionStepLabel(action, stepLabel, summarize(stepOps)),
                 linear: isLinearHistory(readSettingsFile())
               });
               return Object.assign(nextState, { instances, history, historyRev: history.rev });
             };
-
-            if (action === 'auto_fasten') {
-              const instA = state.instances.find((i) => i.instanceId === params.instanceIdA);
-              if (!instA) {
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ ok: false, error: 'Selected part not found.' }));
-                return;
-              }
-
-              // Support fastening against one specific part or ALL compatible touching parts
-              const targetCandidates = params.instanceIdB && params.instanceIdB !== 'ALL'
-                ? state.instances.filter((i) => i.instanceId === params.instanceIdB)
-                : state.instances.filter((i) => {
-                    if (i.instanceId === instA.instanceId || i.visible === false) return false;
-                    const p = catalogById.get(i.partId);
-                    return p && p.category !== 'Pins & Standoffs';
-                  });
-
-              const maxPins = Math.max(1, Number(params.maxPins) || 12);
-              const placedPins = [];
-              const nextInstances = [...state.instances];
-
-              for (const instB of targetCandidates) {
-                if (placedPins.length >= maxPins) break;
-                const matches = findMatchingPinHoles(instA, instB);
-
-                for (const m of matches) {
-                  if (placedPins.length >= maxPins) break;
-                  const pinPart =
-                    findPart(params.pinPartNumber || m.recommendedPinPartNumber) ||
-                    findPart('228-2500-060');
-                  if (!pinPart) continue;
-
-                  const baseRot = m.worldRotation;
-                  const flippedRot = [baseRot[0], (baseRot[1] + 180) % 360, baseRot[2]];
-                  let chosenCandidate = null;
-
-                  for (const rotCandidate of [baseRot, flippedRot]) {
-                    const candidate = {
-                      instanceId: `inst-pin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                      partId: pinPart.id,
-                      label: `Auto ${pinPart.name} (${instA.label} ↔ ${instB.label})`,
-                      position: m.worldPosition,
-                      rotation: rotCandidate,
-                      lastValidPosition: m.worldPosition,
-                      lastValidRotation: rotCandidate,
-                      isIntersecting: false,
-                      color: params.color || '#0284c7',
-                      visible: true,
-                      locked: false
-                    };
-                    const col = checkCandidateCollision(candidate, nextInstances);
-                    if (!col.isIntersecting) {
-                      chosenCandidate = candidate;
-                      break;
-                    }
-                  }
-
-                  if (chosenCandidate) {
-                    nextInstances.push(chosenCandidate);
-                    placedPins.push(chosenCandidate);
-                  }
-                }
-              }
-
-              const nextState = {
-                ...state,
-                selectedId:
-                  placedPins.length > 0
-                    ? placedPins[placedPins.length - 1].instanceId
-                    : state.selectedId,
-                instances: nextInstances,
-                updatedAt: new Date().toISOString()
-              };
-
-              if (placedPins.length > 0) {
-                broadcastState(recordAction(nextState), 'mcp-server');
-              }
-
-              res.setHeader('Content-Type', 'application/json');
-              res.end(
-                JSON.stringify({
-                  ok: true,
-                  pinsPlacedCount: placedPins.length,
-                  placedPins,
-                  state: nextState,
-                  message:
-                    placedPins.length > 0
-                      ? `Inserted ${placedPins.length} collision-verified connector pin(s).`
-                      : 'No unoccupied coaxial pin hole pairs found (or holes are already pinned).'
-                })
-              );
-              return;
-            }
-
-            if (action === 'mate_parts') {
-              const targetInst = state.instances.find(
-                (i) => i.instanceId === params.targetInstanceId
-              );
-              const existingInst = state.instances.find(
-                (i) => i.instanceId === params.sourceInstanceId
-              );
-              if (!targetInst || !existingInst) {
-                res.setHeader('Content-Type', 'application/json');
-                res.end(
-                  JSON.stringify({ ok: false, error: 'Source or target part instance not found.' })
-                );
-                return;
-              }
-
-              const sourcePart = catalogById.get(existingInst.partId);
-              const mate = computeMateTransform(
-                sourcePart,
-                params.sourcePortId,
-                targetInst,
-                params.targetPortId,
-                {
-                  flipAxis: Boolean(params.flipAxis),
-                  rollDeg: Number(params.rollDeg) || 0,
-                  axialOffsetMm: Number(params.axialOffsetMm) || 0
-                }
-              );
-
-              if (mate.error) {
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ ok: false, error: mate.error }));
-                return;
-              }
-
-              const updated = {
-                ...existingInst,
-                position: mate.position,
-                rotation: mate.rotation
-              };
-              const col = checkCandidateCollision(updated, state.instances);
-              updated.isIntersecting = col.isIntersecting;
-              if (!col.isIntersecting) {
-                updated.lastValidPosition = [...mate.position];
-                updated.lastValidRotation = [...mate.rotation];
-              }
-
-              const nextInstances = state.instances.map((i) =>
-                i.instanceId === updated.instanceId ? updated : i
-              );
-              const nextState = {
-                ...state,
-                selectedId: updated.instanceId,
-                instances: nextInstances,
-                updatedAt: new Date().toISOString()
-              };
-              broadcastState(recordAction(nextState), 'mcp-server');
-
-              res.setHeader('Content-Type', 'application/json');
-              res.end(
-                JSON.stringify({
-                  ok: true,
-                  isIntersecting: col.isIntersecting,
-                  collidingWith: col.collidingWith,
-                  instance: updated,
-                  state: nextState,
-                  message: col.isIntersecting
-                    ? `Mated ${updated.label} to ${targetInst.label} (warning: intersects ${col.collidingWith.map((c) => c.label).join(', ')}; try flipping axis or adjusting offset).`
-                    : `Mated ${updated.label} (${mate.sourcePort.portId}) → ${targetInst.label} (${mate.targetPort.portId}) cleanly.`
-                })
-              );
-              return;
-            }
-
-            if (action === 'mesh_gear_train') {
-              const gearRes = buildMeshedGearTrain(state, {
-                supportBeamId: params.supportBeamId,
-                outerSupportBeamId: params.outerSupportBeamId || null,
-                startPortId: params.startPortId,
-                gears: params.gears || ['228-2500-214', '228-2500-214', '228-2500-214'],
-                shaftPartQuery: params.shaftPartQuery || null,
-                axialOffsetMm:
-                  params.axialOffsetMm !== undefined && params.axialOffsetMm !== ''
-                    ? Number(params.axialOffsetMm)
-                    : null,
-                reverseDirection: Boolean(params.reverseDirection)
-              });
-
-              if (gearRes.error) {
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ ok: false, error: gearRes.error }));
-                return;
-              }
-
-              const nextState = {
-                ...state,
-                selectedId:
-                  gearRes.placedGears.length > 0
-                    ? gearRes.placedGears[gearRes.placedGears.length - 1].instance.instanceId
-                    : state.selectedId,
-                instances: gearRes.workingInstances,
-                updatedAt: new Date().toISOString()
-              };
-              broadcastState(recordAction(nextState), 'mcp-server');
-
-              res.setHeader('Content-Type', 'application/json');
-              res.end(
-                JSON.stringify({
-                  ok: true,
-                  gearsPlacedCount: gearRes.placedGears.length,
-                  shaftsPlacedCount: gearRes.placedShafts.length,
-                  state: nextState,
-                  message: `Placed ${gearRes.placedGears.length} meshed gears and ${gearRes.placedShafts.length} shafts.`
-                })
-              );
-              return;
-            }
-
-            if (action === 'build_chain') {
-              // Chain or track builder (openspec chain-track-builder): one step labeled with what was built
-              const built = buildChain(state, {
-                kind: params.kind,
-                instanceIds: Array.isArray(params.instanceIds) ? params.instanceIds : null,
-                route: params.route && typeof params.route === 'object' ? params.route : null,
-                grippers: params.grippers !== false,
-                attachment: params.attachment ?? null,
-                attachmentEvery: params.attachmentEvery ?? 1,
-                slack: params.slack === 'upper' ? 'upper' : 'lower',
-                name: params.name || null
-              });
-              res.setHeader('Content-Type', 'application/json');
-              if (built.error) {
-                res.end(
-                  JSON.stringify({
-                    ok: false,
-                    error: built.error,
-                    ...(built.needsRoute ? { needsRoute: built.needsRoute } : {})
-                  })
-                );
-                return;
-              }
-              const nextState = {
-                ...state,
-                instances: built.instances,
-                selectedIds: built.newIds,
-                selectedId: built.newIds.at(-1),
-                updatedAt: new Date().toISOString()
-              };
-              broadcastState(recordAction(nextState, built.message.split('. ')[0]), 'mcp-server');
-              res.end(JSON.stringify({ ok: true, state: nextState, groupId: built.groupId, name: built.name, message: built.message }));
-              return;
-            }
-
-            if (action === 'mirror_subassembly') {
-              const mirRes = mirrorSubassembly(state, {
-                instanceIds: Array.isArray(params.instanceIds) ? params.instanceIds : [],
-                mirrorPlane: params.mirrorPlane || 'Z',
-                planeOffsetMm: Number(params.planeOffsetMm) || 0
-              });
-
-              const nextState = {
-                ...state,
-                selectedId:
-                  mirRes.mirroredInstances.length > 0
-                    ? mirRes.mirroredInstances[mirRes.mirroredInstances.length - 1].instanceId
-                    : state.selectedId,
-                instances: mirRes.workingInstances,
-                updatedAt: new Date().toISOString()
-              };
-              if (mirRes.mirroredCount > 0) {
-                broadcastState(recordAction(nextState), 'mcp-server');
-              }
-
-              res.setHeader('Content-Type', 'application/json');
-              res.end(
-                JSON.stringify({
-                  ok: true,
-                  mirroredCount: mirRes.mirroredCount,
-                  state: nextState,
-                  message: `Mirrored ${mirRes.mirroredCount} part(s) across ${params.mirrorPlane || 'Z'} = ${Number(params.planeOffsetMm) || 0}mm.`
-                })
-              );
-              return;
-            }
-
-            // The joints between parts, for Select Connected and expanding the selection (openspec outliner-part-groups)
-            if (action === 'joint_graph') {
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ ok: true, graph: jointGraph(state, { pinnedOnly: Boolean(params.pinnedOnly) }) }));
-              return;
-            }
 
             // How the build comes apart for the Explode slider, worked out with the engine's
             // collision meshes (openspec explode-view)
@@ -536,22 +232,14 @@ function vexiqMcpBridgePlugin() {
               return;
             }
 
-            if (action === 'audit_and_blueprint') {
-              const audit = auditAssembly(state);
-              const ortho = generateOrthographicViews(state);
-              res.setHeader('Content-Type', 'application/json');
-              res.end(
-                JSON.stringify({
-                  ok: true,
-                  audit,
-                  ortho
-                })
-              );
-              return;
-            }
-
-            res.statusCode = 400;
-            res.end(JSON.stringify({ ok: false, error: `Unknown action: ${action}` }));
+            // Every other action is the engine's (src/engine/actions.js); a change is recorded here
+            const { record, stepLabel, unknownAction, ...reply } = runAction(action, state, params);
+            if (record) broadcastState(recordAction(reply.state, stepLabel), 'mcp-server');
+            // The blueprint picture goes to public/ too, for MCP clients and the blueprint link
+            if (reply.ortho) reply.ortho = writeBlueprint(reply.ortho, { keepSvg: true });
+            if (unknownAction) res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(reply));
           } catch (err) {
             res.statusCode = 500;
             res.end(JSON.stringify({ ok: false, error: err.message }));
@@ -706,10 +394,42 @@ function vexiqMcpBridgePlugin() {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), vexiqMcpBridgePlugin()],
-  server: {
-    port: 5173,
-    host: true
-  }
-});
+// The static site (openspec static-lite-site) takes only these from public/: no saved build,
+// settings or blueprint
+const STATIC_PUBLIC_FILES = ['catalog.json', 'part-metadata.json', 'models'];
+
+/** Copies STATIC_PUBLIC_FILES into the static build (in place of all of public/). */
+function copyStaticPublicFilesPlugin() {
+  let outDir;
+  return {
+    name: 'vexiq-static-public-files',
+    apply: 'build',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    writeBundle() {
+      for (const file of STATIC_PUBLIC_FILES) {
+        fs.cpSync(path.join(__dirname, 'public', file), path.join(outDir, file), { recursive: true });
+      }
+    }
+  };
+}
+
+export default defineConfig(({ mode }) =>
+  mode === 'static'
+    ? {
+        // `npm run build:static`: plain files for any static host, at the base path VEXIQ_BASE
+        plugins: [react(), copyStaticPublicFilesPlugin()],
+        base: process.env.VEXIQ_BASE || '/',
+        define: { 'import.meta.env.VITE_STATIC': JSON.stringify('true') },
+        worker: { format: 'es' },
+        build: { outDir: 'dist-static', emptyOutDir: true, copyPublicDir: false }
+      }
+    : {
+        plugins: [react(), vexiqMcpBridgePlugin()],
+        server: {
+          port: 5173,
+          host: true
+        }
+      }
+);

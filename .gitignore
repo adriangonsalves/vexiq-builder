@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 dist/
+dist-static/
 
 # Raw CAD Source Assets (500MB+ STEP files; GLB meshes in public/models/ are tracked)
 VEX-IQ-All-Parts/
