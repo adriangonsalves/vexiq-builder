@@ -664,30 +664,43 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, attach
   const standing = Math.hypot(...down2) > 0.3;
   const downness = (k) => (path.edges[k].m[0] * down2[0] + path.edges[k].m[1] * down2[1]) / Math.hypot(...down2);
   const outerRuns = ending.filter(outerRun);
-  // Lower: the outer run facing the floor most (the longest when the parts lie flat)
+  // Lower: a run facing the floor that hangs the slack without folding into a kink, an outer one if
+  // any (it may touch a part the chain bends round, as when the return run goes over one), the one
+  // facing the floor most; the longest outer run when the parts lie flat
   const lowness = (k) => (standing ? downness(k) : path.edges[k].length);
-  const lowerRun = outerRuns.length ? outerRuns.reduce((best, k) => (lowness(k) > lowness(best) ? k : best), outerRuns[0]) : null;
+  const lowerTried = standing
+    ? ending
+        .filter((k) => downness(k) > 0.25)
+        .map((k) => ({ k, walk: planChain(circles, nodes, path, pitch, target, k, down2) }))
+        .filter((c) => c.walk && c.walk.sag.clean)
+    : [];
+  const lowerPick = lowerTried.filter((c) => outerRun(c.k)).length ? lowerTried.filter((c) => outerRun(c.k)) : lowerTried;
+  const lowerRun = lowerPick.length
+    ? lowerPick.reduce((b, c) => (lowness(c.k) > lowness(b.k) ? c : b)).k
+    : outerRuns.length
+      ? outerRuns.reduce((best, k) => (lowness(k) > lowness(best) ? k : best), outerRuns[0])
+      : null;
   // Upper: runs facing up that hang the slack into the loop without folding into a kink; of those, the
   // one whose closing joins bend least (bendCost), then the most the top of the loop (how much it faces
   // up times how long it is). None: there's no upper run to offer, and the slack goes on the lower run.
   const upperTried = standing
     ? ending
         .filter((k) => downness(k) < -0.25)
-        .map((k) => ({ k, top: -downness(k) * path.edges[k].length, walk: planChain(circles, nodes, path, pitch, target, k, down2, true) }))
+        .map((k) => ({ k, top: -downness(k) * path.edges[k].length, walk: planChain(circles, nodes, path, pitch, target, k, down2) }))
         .filter((c) => c.walk && c.walk.sag.clean)
     : [];
   const upperOffered = upperTried.some((c) => c.k !== lowerRun);
   const upper = standing && slack === 'upper' && upperTried.length > 0;
-  let candidates = upper ? upperTried.map((c) => c.k) : outerRuns;
+  let candidates = upper ? upperTried.map((c) => c.k) : lowerRun != null ? [lowerRun, ...outerRuns.filter((k) => k !== lowerRun)] : outerRuns;
   if (!candidates.length) {
     // Every run touches a part the chain bends round: the longest takes the slack
     candidates = [ending.reduce((best, k) => (path.edges[k].length > path.edges[best].length ? k : best), ending[0])];
   }
   const sagRun = upper
     ? upperTried.reduce((b, c) => (c.walk.sag.kink < b.walk.sag.kink - 1e-6 || (Math.abs(c.walk.sag.kink - b.walk.sag.kink) <= 1e-6 && c.top > b.top) ? c : b)).k
-    : candidates.reduce((best, k) => (lowness(k) > lowness(best) ? k : best), candidates[0]);
+    : lowerRun ?? candidates.reduce((best, k) => (lowness(k) > lowness(best) ? k : best), candidates[0]);
   // The facing run unless closing on another needs fewer links
-  let walk = planChain(circles, nodes, path, pitch, target, sagRun, down2, upper);
+  let walk = planChain(circles, nodes, path, pitch, target, sagRun, down2);
   if (!walk || walk.pivots2d.length > target) {
     for (const k of candidates) {
       if (k === sagRun) continue;
@@ -903,12 +916,12 @@ function hangPoints(a, b, q, pitch, down, side = 1) {
  * pivot at the corner for a shallow wrap). The last run, `sagRun`, closes the loop: it lands on the
  * first sprocket a whole number of teeth before the start, as near its touching point as the link
  * count allows, and holds what's left over: hanging on a catenary toward the floor (`down2`, gravity
- * in the loop frame; out of the loop when the parts lie flat or the run faces up, unless `inward`)
+ * in the loop frame, so into the loop on a run facing up; out of the loop when the parts lie flat)
  * when the chain is longer than the path, eased straight (within the chain's play) when shorter.
  * Returns { pivots2d, arcPivotIndex: [index of a pivot on each loop part], sag: { run, mm, depthMm } }
  * or null.
  */
-function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 0], inward = false) {
+function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 0]) {
   const { arcs } = path;
   const K = nodes.length;
   const circleOf = (k) => circles[nodes[k].c];
@@ -1150,16 +1163,15 @@ function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 
   const lastOn = firstOn[sagRun];
   const lastTh = ang(pts.at(-1)[0] - circleOf(sagRun).x, pts.at(-1)[1] - circleOf(sagRun).y);
   const onLast = pts.length - lastOn; // pivots on the last part's arc
-  // Slack hangs toward the floor; out of the loop (the run's bow side) when gravity lies across the
-  // run's plane, or faces the other way unless `inward` (slack on the upper run hangs into the loop)
+  // Slack hangs toward the floor; out of the loop (the run's bow side) when the parts lie flat
   const g = Math.hypot(down2[0], down2[1]);
   const bow = bowSide(sagRun);
   const hang = (from, cd) => {
     const dx = cd.end[0] - from[0];
     const dy = cd.end[1] - from[1];
     const out = [(bow * dy) / Math.hypot(dx, dy), (-bow * dx) / Math.hypot(dx, dy)];
-    const facingOut = (down2[0] * out[0] + down2[1] * out[1]) / (g || 1);
-    const down = g > 0.3 && (inward || facingOut > 0.25) ? [down2[0] / g, down2[1] / g] : out;
+    // Standing up, slack always hangs with gravity (into the loop on a run facing up)
+    const down = g > 0.3 ? [down2[0] / g, down2[1] / g] : out;
     return hangPoints(from, cd.end, cd.q, pitch, down, bow);
   };
   // How much a join of the closing run bends (bendCost), against the smaller tooth of the parts it joins
@@ -1173,8 +1185,9 @@ function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 
     });
 
   let best = null;
+  // (round a standoff it can drape a link or two further over the post, but never leave it sooner)
   const eMin = isGuide(sagRun) ? 0 : -Math.min(2, onLast - 1);
-  const eMax = isGuide(sagRun) ? 0 : 3;
+  const eMax = 3;
   for (let e = eMin; e <= eMax; e++) {
     const base = e < 0 ? pts.slice(0, pts.length + e) : [...pts, ...Array.from({ length: e }, (_, j) => at(sagRun, lastTh + sl * (j + 1) * tl))];
     const from = base.at(-1);
@@ -1200,7 +1213,8 @@ function planChain(circles, nodes, path, pitch, target, sagRun = 0, down2 = [0, 
     // teeth; leaving as planned (e = 0) on a tie
     const nearest = cands.reduce((m, cd) => (cd.score < m.score ? cd : m));
     for (const cd of cands) {
-      if (cd.extra !== nearest.extra || cd.off > nearest.off + 3 * t0) continue;
+      // Within about 60° of the touching point (a few teeth on a small sprocket, more on a big one)
+      if (cd.extra !== nearest.extra || cd.off > nearest.off + Math.max(3 * t0, Math.PI / 3)) continue;
       const inner = hang(from, cd);
       const run = [base.at(-2), from, ...inner, cd.end, at(s0, cd.th + s * t0)];
       const kink = Math.max(turn(run[0], run[1], run[2]), turn(run.at(-3), run.at(-2), run.at(-1)));

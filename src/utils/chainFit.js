@@ -186,14 +186,29 @@ export function unsupportedBends(links, sprockets) {
       }
       return false;
     });
+  const nextOf = (a) => {
+    const far = pivotsOf.get(a.id)[1];
+    return links.find((l) => l !== a && pivotsOf.get(l.id)[0].distanceTo(far) < PIVOT_TOL_MM) || null;
+  };
+  const bendAt = (a, b) => THREE.MathUtils.radToDeg(Math.acos(Math.min(1, dirOf(a).dot(dirOf(b)))));
+  const prevOf = new Map();
+  for (const a of links) {
+    const b = nextOf(a);
+    if (b) prevOf.set(b.id, a);
+  }
   for (const a of links) {
     const far = pivotsOf.get(a.id)[1];
-    const b = links.find((l) => l !== a && pivotsOf.get(l.id)[0].distanceTo(far) < PIVOT_TOL_MM);
+    const b = nextOf(a);
     if (!b) continue;
-    // A chain bends one tooth's angle per link round a sprocket; a slack run's gentle sag doesn't
-    // match one (nor a kink sharper than the smallest sprocket's)
-    const bendDeg = THREE.MathUtils.radToDeg(Math.acos(Math.min(1, dirOf(a).dot(dirOf(b)))));
-    const wraps = SPROCKET_TEETH.some((n) => Math.abs(bendDeg - 360 / n) < 0.3) || bendDeg > 360 / 8 + 0.3;
+    // A chain bends one tooth's angle per link round a sprocket, the same at the bends next to it; a
+    // slack run's sag changes from bend to bend, so it only matches a tooth now and then (and a kink
+    // sharper than the smallest sprocket's counts on its own)
+    const bendDeg = bendAt(a, b);
+    const tooth = SPROCKET_TEETH.find((n) => Math.abs(bendDeg - 360 / n) < 0.3);
+    const before = prevOf.get(a.id);
+    const after = nextOf(b);
+    const sameNext = (x, y) => x && y && Math.abs(bendAt(x, y) - bendDeg) < 0.05;
+    const wraps = (tooth && (sameNext(before, a) || sameNext(b, after))) || bendDeg > 360 / 8 + 0.3;
     if (!wraps) continue;
     if (onSprocket(a, far) || onSprocket(b, far)) continue;
     out.add(a.id);

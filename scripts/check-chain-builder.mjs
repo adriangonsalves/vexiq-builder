@@ -82,6 +82,37 @@ function checkChain(name, input, res) {
     });
     check(`${name}: no link sits in a sprocket's teeth or a standoff's body`, worst.mm >= 0, `link ${worst.link} is ${(-worst.mm).toFixed(2)} mm too deep in ${worst.label}`);
   }
+  // Slack hangs with gravity: standing up, no run between two parts bows upward above the straight
+  // line joining its ends (world +Y)
+  if (Math.abs(normal.y) < 0.95) {
+    const radii = input.map((p) =>
+      p.meta.gearSpecs?.gearType === 'sprocket'
+        ? { w: worldSprocket(p.meta, p.position, p.rotation, p.instanceId), r: p.meta.gearSpecs.pitchRadiusMm }
+        : p.meta.fastenerSpecs?.fastenerType === 'standoff'
+          ? (() => {
+              const w = worldGuide(p.meta, p.position, p.rotation, p.instanceId);
+              return { w, r: Math.hypot(w.pitchRadius, 3.175) };
+            })()
+          : null
+    ).filter(Boolean);
+    const onPart = (pv) => radii.some(({ w, r }) => Math.abs(pv.clone().sub(w.center).projectOnPlane(w.axis).length() - r) < 1);
+    let worstUp = 0;
+    const N = pivots.length;
+    for (let i = 0; i < N; i++) {
+      if (!onPart(pivots[i]) || onPart(pivots[(i + 1) % N])) continue;
+      // A run leaves a part at i: follow it to the next pivot on a part
+      let j = i + 1;
+      while (j < i + N && !onPart(pivots[j % N])) j++;
+      const a0 = pivots[i];
+      const a1 = pivots[j % N];
+      for (let k = i + 1; k < j; k++) {
+        const p = pivots[k % N];
+        const t = p.clone().sub(a0).dot(a1.clone().sub(a0)) / a1.clone().sub(a0).lengthSq();
+        worstUp = Math.max(worstUp, p.y - a0.clone().lerp(a1, t).y);
+      }
+    }
+    check(`${name}: no run bows upward against gravity`, worstUp < 0.05, `${worstUp.toFixed(2)} mm above its straight line`);
+  }
   // No kinks: no link turns more than a tooth step of the smallest sprocket on the loop. Where the
   // chain rests on a standoff it bends as far as the round post lets it (no teeth to spread the bend);
   // the body check above keeps it out of the post
@@ -802,6 +833,12 @@ function checkChain(name, input, res) {
   for (const slack of ['lower', 'upper']) {
     const res = buildChainPath(set, { kind: 'chain', route: { [s24.instanceId]: 'over', [st.instanceId]: 'under' }, slack, metaByPartNumber });
     checkChain(`40T, standoff under, 24T over, slack ${slack}`, set, res);
+  }
+  // Over the standoff too: the bottom run is split by it, and Lower run must still hang below
+  for (const slack of ['lower', 'upper']) {
+    const res = buildChainPath(set, { kind: 'chain', route: { [s24.instanceId]: 'over', [st.instanceId]: 'over' }, slack, metaByPartNumber });
+    checkChain(`40T, standoff over, 24T over, slack ${slack}`, set, res);
+    check(`  standoff over, slack ${slack}: the slack is where it was asked`, res.ok && res.slack === slack, res.ok ? res.slack : res.error);
   }
   // Built by the engine: the real shapes of the links touch neither the standoff (the last link round
   // it used to cut into the post) nor a sprocket, and the audit agrees
