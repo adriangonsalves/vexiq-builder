@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { angleAbout } from '../src/utils/axisFrame.js';
-import { CHAIN_PLAY_MM, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName, worldGuide, worldSprocket } from '../src/utils/chainPath.js';
+import { CHAIN_PLAY_MM, UPPER_BLOCKED, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName, worldGuide, worldSprocket } from '../src/utils/chainPath.js';
 import { areChainNeighbours, isChainFit, isGripperOnLink, isLinkOnSprocket, isLinkOnStandoff, unsupportedBends } from '../src/utils/chainFit.js';
 import { auditAssembly, buildChain, buildWorldMatrix, collisionPiecesFor, explodeInputs } from '../mcp/assembly-engine.mjs';
 import { buildPieces } from '../src/utils/explodePlan.js';
@@ -857,6 +857,23 @@ function checkChain(name, input, res) {
     const audit = auditAssembly({ instances: built.instances });
     check('  built by the engine: no link touches the standoff or a sprocket, and the audit is clean', hits.length === 0 && audit.collisions.length === 0, hits.slice(0, 3).join(', '));
   }
+}
+
+{
+  // Too much slack for the upper run to hang without a sharp bend: the builder still asks (Upper run
+  // shown unavailable), and asking for it anyway hangs the slack below and says why
+  const s16 = sprocket(16, [30.42, 0.005, 176.405], [0, 30, -3.2]);
+  const s40 = sprocket(40, [189.982, 16.242, 84.646], [0, 30, -0.89]);
+  const s24 = sprocket(24, [75.903, 36.048, 150.509], [0, 30, -21.23]);
+  const st = standoff('3x', [126.441, 0.005, 139.663], [0, 30, 90]);
+  const route = { [s24.instanceId]: 'over', [st.instanceId]: 'under' };
+  const asked = buildChainPath([s16, s40, s24, st], { kind: 'chain', route, metaByPartNumber });
+  check('slack the upper run cannot hold: still asked, with Upper run unavailable', asked.ok && asked.slackChoice && asked.upperBlocked, asked.ok ? `${asked.slackChoice} ${asked.upperBlocked}` : asked.error);
+  const forced = buildChainPath([s16, s40, s24, st], { kind: 'chain', route, slack: 'upper', metaByPartNumber });
+  check('  Upper run asked anyway: hangs below and says why', forced.ok && forced.slack === 'lower' && forced.notes.includes(UPPER_BLOCKED), forced.ok ? forced.notes.join(' ') : forced.error);
+  const pair = [sprocket(16, [30.42, 0.005, 176.405], [0, 30, 8.09]), sprocket(24, [75.903, 36.048, 150.509], [0, 30, -24.45])];
+  const pairRes = buildChainPath(pair, { kind: 'chain', metaByPartNumber });
+  check('  16T and 24T sagging 14 mm: asked', pairRes.ok && pairRes.slackChoice, pairRes.ok ? String(pairRes.slackChoice) : pairRes.error);
 }
 
 // --- Names & Engine (buildChain + auditAssembly) ----------------------------------------------

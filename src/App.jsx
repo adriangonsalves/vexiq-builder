@@ -1893,13 +1893,17 @@ export default function App() {
       return;
     }
     let slackMm = null;
+    let upperBlocked = false;
     if (chainCheck.ok) {
       const catalogParts = [...catalogMap.values()];
       const plan = buildChainPath(chainParts, { kind, route, grippers: false, metaByPartNumber: (pn) => catalogParts.find((p) => p.partNumber === pn) });
-      if (plan.ok && plan.slackChoice) slackMm = -plan.gapMm;
+      if (plan.ok && plan.slackChoice) {
+        slackMm = -plan.gapMm;
+        upperBlocked = plan.upperBlocked;
+      }
     }
     if (kind === 'chain' && slackMm == null) handleBuildChain('chain', { route });
-    else setBuilderDialog({ kind, slackMm, route });
+    else setBuilderDialog({ kind, slackMm, upperBlocked, route });
   };
 
   const handleBuildChain = (kind, { attachment = 'none', attachmentEvery = 1, slack = 'lower', route = null } = {}) => {
@@ -3153,6 +3157,7 @@ export default function App() {
         every={trackEvery}
         slack={chainSlack}
         slackMm={builderDialog?.slackMm ?? null}
+        upperBlocked={Boolean(builderDialog?.upperBlocked)}
         onClose={closeBuilderDialog}
         onBuild={({ attachment, every, slack }) => {
           const { kind, slackMm, route } = builderDialog;
@@ -3160,7 +3165,7 @@ export default function App() {
             setTrackAttachment(attachment);
             setTrackEvery(every);
           }
-          if (slackMm != null) setChainSlack(slack);
+          if (slackMm != null && !builderDialog.upperBlocked) setChainSlack(slack);
           handleBuildChain(kind, {
             attachment: kind === 'track' ? attachment : 'none',
             attachmentEvery: every,

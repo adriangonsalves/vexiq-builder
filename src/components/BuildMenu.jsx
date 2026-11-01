@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, Hammer, Link2, X } from 'lucide-react';
 import PopoverMenu, { MenuItem } from './PopoverMenu.jsx';
-import { ATTACHMENT_EVERY_MAX } from '../utils/chainPath.js';
+import { ATTACHMENT_EVERY_MAX, UPPER_BLOCKED } from '../utils/chainPath.js';
 
 /**
  * The toolbar's Build menu (openspec chain-track-builder): Chain builder and Track builder, for two
@@ -105,11 +105,12 @@ const ordinalOf = (n) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['th', '
  * Chain and Track builder's questions. Track builder always asks which attachment goes in the tread
  * links (a Traction Link, an Intake Flap or none) and on every how many links (1 to 20); either
  * builder asks which run holds the slack when the chain is noticeably longer than the path
- * (`slackMm`, null when there is no choice to make). `attachment`, `every` and `slack` are
+ * (`slackMm`, null when there is no choice to make; with `upperBlocked` Upper run is shown unavailable,
+ * with the reason). `attachment`, `every` and `slack` are
  * remembered by the caller while the page is open. Build calls onBuild({ attachment, every, slack });
  * Cancel, Esc or a click outside builds nothing.
  */
-export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'traction', every = 1, slack = 'lower', slackMm = null, onClose, onBuild }) {
+export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'traction', every = 1, slack = 'lower', slackMm = null, upperBlocked = false, onClose, onBuild }) {
   const ref = useRef(null);
   const [att, setAtt] = useState(attachment);
   const [spacing, setSpacing] = useState(every);
@@ -122,11 +123,11 @@ export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'tractio
     if (open && !dialog.open) {
       setAtt(attachment);
       setSpacing(every);
-      setRun(slack);
+      setRun(upperBlocked ? 'lower' : slack);
       dialog.showModal();
     }
     if (!open && dialog.open) dialog.close();
-  }, [open, attachment, every, slack]);
+  }, [open, attachment, every, slack, upperBlocked]);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -191,12 +192,13 @@ export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'tractio
                 ['lower', 'Lower run'],
                 ['upper', 'Upper run']
               ].map(([value, label], idx) => (
-                <label key={value} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                  <input type="radio" name="chainSlack" value={value} checked={run === value} onChange={() => setRun(value)} autoFocus={!track && idx === 0} />
+                <label key={value} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', opacity: value === 'upper' && upperBlocked ? 0.5 : 1 }}>
+                  <input type="radio" name="chainSlack" value={value} checked={run === value} disabled={value === 'upper' && upperBlocked} onChange={() => setRun(value)} autoFocus={!track && idx === 0} />
                   {label}
                 </label>
               ))}
             </span>
+            {upperBlocked && <span className="settings-row-hint" style={{ display: 'block', marginTop: 6 }}>{UPPER_BLOCKED}</span>}
           </fieldset>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>

@@ -27,6 +27,8 @@ export const PLANE_TOLERANCE_MM = 1.0;
 export const SEATED_PIVOT_TOLERANCE_MM = 0.5;
 export const CHAIN_PLAY_MM = 0.75; // a chain this much short of the path still goes on (play in its joints)
 export const SAG_NOTE_MM = 3.175; // more slack than half a link: the chain sags a little
+// Why Upper run can't be had, for the builder dialog and the build's notes
+export const UPPER_BLOCKED = "The upper run can't hold this much slack without a sharp bend, so it hangs on the lower run; move a sprocket to take some up.";
 export const SAG_ASK_MM = 1; // a run hanging this far below its straight line is slack worth placing
 export const LINK_HALF_HEIGHT_MM = 2.2; // a link's plates reach this far either side of its pivots
 const EASE_PER_LINK_MM = 0.2; // a run's links may be drawn this much apart past 6.35 mm (inside the chain's play)
@@ -616,10 +618,11 @@ function exactLinks(circles, path, pitch) {
  * Returns { ok, error?, needsRoute?, linkPart, gripperPart, links: [{ partId, position, rotation }],
  *   grippers: [...], sprocketTurns: [{ instanceId, axis, point, deg }], onLoop, wrapped: [{ instanceId,
  *   side: 'outer' | 'over' | 'under', outside (wrapped from inside the loop, as an outer part) }], leftOut: [{ instanceId, reason }], sprocketCount,
- *   standoffCount, linkCount, exactLinks, gapMm, moveHint, notes, slack, sagMm, slackChoice }.
+ *   standoffCount, linkCount, exactLinks, gapMm, moveHint, notes, slack, sagMm, slackChoice, upperBlocked }.
  *   `sagMm` is how far the hanging run drops below its straight line; `slackChoice` is true when that
- *   is SAG_ASK_MM or more and the parts stand up, so the upper or lower run can hold it; `slack` is
- *   the run used ('lower', 'upper', or null when flat).
+ *   is SAG_ASK_MM or more, the parts stand up and a run faces up; `upperBlocked` when no upper run
+ *   can hang the slack without a sharp bend (UPPER_BLOCKED says why); `slack` is the run used
+ *   ('lower', 'upper', or null when flat).
  */
 export function buildChainPath(parts, { kind = 'chain', grippers = false, attachment = null, attachmentEvery = 1, route = null, slack = 'lower', metaByPartNumber }) {
   const linkPart = metaByPartNumber(kind === 'track' ? TREAD_LINK_PART_NUMBER : CHAIN_LINK_PART_NUMBER);
@@ -690,6 +693,8 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, attach
         .filter((c) => c.walk && c.walk.sag.clean)
     : [];
   const upperOffered = upperTried.some((c) => c.k !== lowerRun);
+  // A run facing up that can't hang the slack without a sharp bend: still asked, with Upper run unavailable
+  const upperFacing = standing && ending.some((k) => k !== lowerRun && downness(k) < -0.25);
   const upper = standing && slack === 'upper' && upperTried.length > 0;
   let candidates = upper ? upperTried.map((c) => c.k) : lowerRun != null ? [lowerRun, ...outerRuns.filter((k) => k !== lowerRun)] : outerRuns;
   if (!candidates.length) {
@@ -752,6 +757,7 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, attach
   const moveHint = Math.abs(gapMm) >= 0.05 ? suggestMove(check, nodes, pitch, gapMm) : null;
   const notes = [];
   if (-gapMm > SAG_NOTE_MM) notes.push('It will sag a little; move a sprocket for a snug fit.');
+  if (slack === 'upper' && standing && !upper) notes.push(UPPER_BLOCKED);
   // Attachments on links 0, N, 2N, …: the gap from the last one round to the first may be shorter
   if (gripperPoses.length && links.length % every !== 0) {
     const lastGap = links.length - Math.floor((links.length - 1) / every) * every;
@@ -775,7 +781,8 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, attach
     standoffCount: onLoopParts.filter((s) => s.kind === 'guide').length,
     slack: standing ? (upper ? 'upper' : 'lower') : null,
     sagMm: walk.sag.depthMm,
-    slackChoice: standing && upperOffered && walk.sag.depthMm >= SAG_ASK_MM,
+    slackChoice: standing && (upperOffered || upperFacing) && walk.sag.depthMm >= SAG_ASK_MM,
+    upperBlocked: !upperOffered,
     linkCount: links.length,
     exactLinks: Math.round(exact * 1000) / 1000,
     gapMm,
