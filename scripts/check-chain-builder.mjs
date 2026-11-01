@@ -56,18 +56,45 @@ function checkChain(name, input, res) {
   const normal = sprockets[0].axis;
   const pivots = res.links.map((l) => local(l, [0, 0, 0]));
   const ends = res.links.map((l) => local(l, [0, 0, -6.35]));
-  // No kinks: no link turns more than a tooth step of the smallest sprocket on the loop, or one
-  // link's turn round a standoff it rests on (a round post has no teeth to spread the bend)
+  // Clear of every selected part: no pivot inside a sprocket's pitch circle, where its teeth are, or a
+  // standoff's round body, and no link's middle deeper than a tooth's chord takes it
+  {
+    const solids = input
+      .map((p) =>
+        p.meta.gearSpecs?.gearType === 'sprocket'
+          ? { label: p.label, w: worldSprocket(p.meta, p.position, p.rotation, p.instanceId), r: (w) => w.pitchRadius, sag: (w) => w.pitchRadius * (1 - Math.cos(Math.PI / w.teeth)) }
+          : p.meta.fastenerSpecs?.fastenerType === 'standoff'
+            ? { label: p.label, w: worldGuide(p.meta, p.position, p.rotation, p.instanceId), r: (w) => w.bodyRadius, sag: () => 0 }
+            : null
+      )
+      .filter(Boolean);
+    let worst = { mm: Infinity };
+    pivots.forEach((pv, i) => {
+      const mid = pv.clone().add(pivots[(i + 1) % pivots.length]).multiplyScalar(0.5);
+      for (const sd of solids) {
+        const r = sd.r(sd.w);
+        // A link's middle sits inside the circle by the curve of one tooth's chord where it wraps
+        for (const [pt, slack] of [[pv, 0.3], [mid, sd.sag(sd.w) + 0.1]]) {
+          const mm = pt.clone().sub(sd.w.center).projectOnPlane(sd.w.axis).length() - (r - slack);
+          if (mm < worst.mm) worst = { mm, label: sd.label, link: i };
+        }
+      }
+    });
+    check(`${name}: no link sits in a sprocket's teeth or a standoff's body`, worst.mm >= 0, `link ${worst.link} is ${(-worst.mm).toFixed(2)} mm too deep in ${worst.label}`);
+  }
+  // No kinks: no link turns more than a tooth step of the smallest sprocket on the loop. Where the
+  // chain rests on a standoff it bends as far as the round post lets it (no teeth to spread the bend);
+  // the body check above keeps it out of the post
   const step = 360 / Math.min(...sprockets.map((sp) => sp.teeth));
   const guides = input.filter((p) => res.onLoop.includes(p.instanceId) && p.meta.fastenerSpecs?.fastenerType === 'standoff').map((p) => worldGuide(p.meta, p.position, p.rotation, p.instanceId));
   const offAxis = (p, g) => p.clone().sub(g.center).projectOnPlane(g.axis).length();
   const allowed = (p) => {
     const g = guides.find((gd) => offAxis(p, gd) < gd.pitchRadius + 0.5);
-    return g ? THREE.MathUtils.radToDeg(2 * Math.asin(Math.min(1, 6.35 / (2 * g.pitchRadius)))) : step;
+    return g ? 180 : step;
   };
   const turns = pivots.map((b, i) => THREE.MathUtils.radToDeg(b.clone().sub(pivots[(i - 1 + pivots.length) % pivots.length]).angleTo(pivots[(i + 1) % pivots.length].clone().sub(b))));
   const worstKink = Math.max(...turns.map((t, i) => t - allowed(pivots[i])));
-  check(`${name}: no kink sharper than a tooth step (${step.toFixed(1)}°, or a link's turn on a standoff)`, worstKink <= 0.5, `${worstKink.toFixed(1)}° too sharp`);
+  check(`${name}: no kink sharper than a tooth step (${step.toFixed(1)}°; any turn resting on a standoff)`, worstKink <= 0.5, `${worstKink.toFixed(1)}° too sharp`);
   check(`${name}: the fewest whole links that reach round the path`, res.linkCount === res.links.length && res.linkCount === Math.ceil(res.exactLinks - CHAIN_PLAY_MM / 6.35 - 1e-9), `${res.linkCount} vs ${res.exactLinks}`);
   // The loop closes: each link's far pivot is near the next link's roller (eased runs differ a little)
   const worstJoin = Math.max(...ends.map((e, i) => e.distanceTo(pivots[(i + 1) % pivots.length])));
@@ -759,6 +786,22 @@ function checkChain(name, input, res) {
       pieces.size === 1 && audit.collisions.filter((c) => mine.has(c.instanceId)).length === 0 && (audit.unsecuredParts || []).filter((u) => mine.has(u.instanceId)).length === 0,
       JSON.stringify({ pieces: pieces.size })
     );
+  }
+}
+
+{
+  // A real build: the 40T, then a 3x standoff inside the loop (under), then the 24T (over). The run
+  // from the 40T to the standoff used to bow into the 40T's teeth
+  const s16 = sprocket(16, [30.42, 0.005, 176.405], [0, 30, 3]);
+  const s40 = sprocket(40, [189.982, 16.242, 84.646], [0, 30, -0.89]);
+  const s24 = sprocket(24, [75.903, 36.048, 150.509], [0, 30, -15.14]);
+  const st = standoff('3x', [126.441, 0.005, 139.663], [0, 30, 90]);
+  const set = [s16, s40, s24, st];
+  const chk = checkSprocketsForChain(set);
+  check('40T, standoff under, 24T over: the standoff is inside the loop and the 24T crossing', chk.ok && chk.enclosed.length === 1 && chk.crossing.length === 1, chk.error);
+  for (const slack of ['lower', 'upper']) {
+    const res = buildChainPath(set, { kind: 'chain', route: { [s24.instanceId]: 'over', [st.instanceId]: 'under' }, slack, metaByPartNumber });
+    checkChain(`40T, standoff under, 24T over, slack ${slack}`, set, res);
   }
 }
 
