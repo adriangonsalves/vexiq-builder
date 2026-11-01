@@ -33,7 +33,7 @@
   - remove `computeExplodedPositions`.
 
   Verify in the app (port 5173) that opening Explode on the Clawbot spreads it and that hiding a part rebuilds the plan without the hidden part.
-- [ ] 4.2 Make a slider change update only group positions (no full scene sync); no trace lines are drawn. Verify dragging the slider stays smooth on the Clawbot (no frame over about 30 ms in the Performance panel). *(Open: Not measurable in headless Chrome (software drawing, about 500 ms a frame even when idle); needs a look in a real browser.)*
+- [x] 4.2 Make a slider change update only group positions (no full scene sync); no trace lines are drawn. Verify dragging the slider stays smooth on the Clawbot (no frame over about 30 ms in the Performance panel). *(Confirmed smooth by the user in a real browser.)*
 - [x] 4.3 Show a "Working out explode…" note while a plan build takes over about 300 ms. Verify that slowing the build in dev shows the note, and that it's gone when the plan is ready.
 - [x] 4.4 Keep every existing Explode block (move, rotate, hole pick, copy preview, collision marks at assembled positions) keyed on `explodeMode !== 'off'`, and make the 4-View side views and Frame (`F`) use the exploded positions. Verify that dragging a part while exploded does nothing, that a right-click shows "Can't rotate in Explode view", and that `F` frames the spread robot.
 
@@ -56,4 +56,4 @@
 ## 7. Docs and final checks
 
 - [x] 7.1 Update `features.md`: rewrite the Multi-Axis Exploded View section for the panel, slider, take-apart order and no-overlap rule, and change the `X` and `Esc` shortcut lines. Verify the section matches the spec's requirements.
-- [ ] 7.2 Run every `node scripts/check-*.mjs` and confirm each exits 0. Then, in the app, scrub the Clawbot slider from 0 to 100% and back in All and in each axis. From at least two views, confirm that no parts pass through each other, that wheel stacks spread along their shafts, and that the battery slides out of its bay. *(Open: Checks pass. Seen in headless Chrome at 100% in All and 60% in Y; scrubbing in a real browser still to do.)*
+- [x] 7.2 Run every `node scripts/check-*.mjs` and confirm each exits 0. Then, in the app, scrub the Clawbot slider from 0 to 100% and back in All and in each axis. From at least two views, confirm that no parts pass through each other, that wheel stacks spread along their shafts, and that the battery slides out of its bay. *(Checks pass; scrubbing confirmed in a real browser by the user. X / Y / Z were later removed: Explode is always All.)*
