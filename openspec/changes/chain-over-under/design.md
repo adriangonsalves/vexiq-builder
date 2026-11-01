@@ -37,6 +37,15 @@ Each part on the loop gets a side `s`: `+1` wrapped counter-clockwise from insid
 
 `checkSprocketsForChain` returns these as `enclosed: [{ instanceId, label, topRun, returnRun }]` so the app knows whether to ask before building. With `kind: 'track'`, enclosed parts go to `leftOut` with reason `outside-only`.
 
+### 2b. Crossing sprockets
+A sprocket can be on the outer loop and still be "in the chain's way": a straight run between its neighbours would pass through it, so today the chain has to wrap over it. Those sprockets are asked about too; standoffs on the outer loop never are (a thin post isn't worth the question), and tracks never ask.
+1. For each sprocket on the outer loop, build the outer loop of the other parts (enclosed ones excluded). If that loop still has two sprockets and one of its straight runs passes within the sprocket's tip radius plus a link half-height of its centre, the sprocket is **crossing** that run.
+2. It **sticks out above** when the run's outward direction points along "above" (Decision 2.3), else **below**.
+3. The answers keep their meaning: **Over** puts the chain above the part, **Under** below it. For a sprocket sticking out above, Over is the outside wrap (today's chain) and Under passes the run beneath it; sticking out below, Under is the outside wrap and Over passes above it.
+4. Routing: sprockets answered "the other side" leave the outer loop; the outer loop is rebuilt from the parts left, each of those sprockets goes into the rebuilt run that passes through it (side −1, ordered along the run), and enclosed parts find their top and return runs on the rebuilt loop. A sprocket that no rebuilt run passes through any more (two crossing sprockets both sent the other side, say) is refused: "The chain wouldn't reach X with this route".
+
+`checkSprocketsForChain` returns `crossing: [{ instanceId, label, run, sticksOut: 'above' | 'below' }]`; `needsRoute` lists crossing sprockets as well as enclosed parts.
+
 ### 3. Validation after the route is applied
 With the parts inserted, recompute every signed touching line and arc, then refuse (first failure wins, message names the parts) when:
 - a touching line doesn't exist (`ra + rb ≥ L` for opposite sides): "too close for the chain to pass between X and Y";
@@ -54,7 +63,7 @@ A part is a standoff guide when `fastenerSpecs.fastenerType === 'standoff'`. Rad
 The closing (sagging) run is chosen as today, but only among runs between two outer parts (`s = +1` at both ends). When there are none (every run touches an enclosed part), the longest run takes it. The spec's "sag on a run that doesn't bend round an enclosed part" holds whenever such a run exists.
 
 ### 6. Route dialog and highlight in the app
-`BuildMenu.jsx` gains `ChainRouteDialog` (same `<dialog>` shell as `TrackBuilderDialog`): one row per enclosed part with two toggle buttons, Under / inner and Over / outer, no default; Build enabled when all rows have a choice. `App.jsx` keeps `chainRoute` (a `Map` instanceId → 'over' | 'under') for the page, opens the dialog from `onChain` when `chainCheck.enclosed.length > 0`, and passes `route` to the `build_chain` action. While the dialog is open, `App` sets `attentionIds` (the focused or hovered row's part, the first row on open) and `Viewport3D` draws those parts with a distinct highlight (a pulsing tint in the hole-highlight colour, separate from the selection tint so the selection isn't changed); cleared on close.
+`BuildMenu.jsx` gains `ChainRouteDialog` (same `<dialog>` shell as `TrackBuilderDialog`): one row per enclosed part or crossing sprocket with two toggle buttons, **Under** and **Over**, no default; each row has a hint saying which one keeps the chain round the part's outside ("Over wraps round the outside", or "inside the loop" for an enclosed part); Build enabled when all rows have a choice. `App.jsx` keeps `chainRoute` (a `Map` instanceId → 'over' | 'under') for the page, opens the dialog from `onChain` when `chainCheck.enclosed` or `chainCheck.crossing` is not empty, and passes `route` to the `build_chain` action. While the dialog is open, `App` sets `attentionIds` (the focused or hovered row's part, the first row on open) and `Viewport3D` draws those parts with a distinct highlight (a pulsing tint in the hole-highlight colour, separate from the selection tint so the selection isn't changed); cleared on close.
 *Alternative:* select the asked-about part. Rejected: it would change the selection the chain is built from.
 
 ### 7. Engine, action and MCP
@@ -63,8 +72,15 @@ The closing (sagging) run is chosen as today, but only among runs between two ou
 ### 8. Fit and audit
 `chainFit.js` adds `isLinkOnStandoff(link, standoff)`: pivot axis parallel to the standoff's, the link inside the body span, and the link's pivot-to-pivot segment between 0.5 mm inside and 0.5 mm outside the guide circle (with the `leaving` allowance as for sprockets). `isChainFit` and `unsupportedBends` treat a standoff like a sprocket for "held at this bend". `isLinkOnSprocket` already measures distance to the pitch circle without regard to side, so links wrapping an enclosed sprocket from outside pass unchanged. The audit's "seated on a sprocket" (for unsecured) stays sprocket-only.
 
+### 8b. Track attachments
+Track builder's dialog replaces the "Add rubber grippers" checkbox with an **Attachment** choice (None, Traction Link, Short Intake Flap, Medium Intake Flap, Long Intake Flap) and, unless None, an **Every** slider from 1 to 20 tread links (1 = every link). Defaults: Traction Link, every 1 (today's track). Both are remembered while the page is open.
+- Placement: the attachment goes on tread links 0, N, 2N, … round the loop; when the link count isn't a multiple of N the last gap is shorter, and the message says so.
+- Seating: each flap plugs into the tread link's two holes like the Traction Link. `index-part-metadata.mjs` measures each flap's seat in the tread link from its model and stores it as `chainSpecs: { role: 'attachment', seatInLink }` (the Traction Link keeps `role: 'gripper'`); the flap points out of the loop.
+- Fit and audit: `isGripperOnLink` takes any attachment, so a flap is held by its tread link, isn't a collision with it, and joins the track's explode piece. Neighbouring long flaps on a sprocket fan apart, so they don't meet; a check builds every size at every 1 round two 8 Tooth Sprockets to confirm.
+- MCP: `build_chain` takes `attachment` (`"none" | "traction" | "short-flap" | "medium-flap" | "long-flap"`) and `attachmentEvery` (1–20); the old `grippers` still works (`false` = none, `true` = traction every 1). The reply gives `attachmentCount` alongside `gripperCount`.
+
 ### 9. Messages
-`chainMessage` names standoffs and routes: "Chain builder: 52 Chain Links round 3 sprockets and 1 standoff (under 8 Tooth Sprocket #3). Exact fit." Track left-outs: "Left out, tracks only go round the outside: 8 Tooth Sprocket #3." Refusals are the strings from Decision 3, used as `error` everywhere.
+`chainMessage` names standoffs and routes: "Chain builder: 52 Chain Links round 3 sprockets and 1 standoff (under 8 Tooth Sprocket #3). Exact fit." Track left-outs: "Left out, tracks only go round the outside: 8 Tooth Sprocket #3." Tracks name their attachments: "Track builder: 60 tread links and 15 Long Intake Flaps (every 4th link) round 2 sprockets." Refusals are the strings from Decision 3, used as `error` everywhere.
 
 ## Risks / Trade-offs
 

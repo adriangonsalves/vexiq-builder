@@ -20,7 +20,7 @@ The toolbar SHALL have a **Build** menu, next to the Select menu, with the items
 - **THEN** both items are greyed out and their hover text says chain and track fit sprockets, not gears
 
 ### Requirement: Which sprockets can carry a chain
-Selected sprockets and standoff guides SHALL carry one chain only when their axles are parallel (within 2°) and the chain's plane passes through them: sprockets' tooth rings within 1 mm of the same plane along the axle, and each standoff's body reaching across that plane. No two of them SHALL overlap (centres closer than the sum of their outer radii). The chain SHALL go round the outside of the set, touching each part on its outer boundary. A selected part inside that outer loop, between two of its runs, is **enclosed**: for a chain it SHALL be wrapped as the user chooses (see "Over or under an enclosed part"); for a track it SHALL be left out and named in the message with the reason that tracks only go round the outside. Parts that aren't selected SHALL never join the chain. Fewer than two sprockets on the loop SHALL be refused with a message.
+Selected sprockets and standoff guides SHALL carry one chain only when their axles are parallel (within 2°) and the chain's plane passes through them: sprockets' tooth rings within 1 mm of the same plane along the axle, and each standoff's body reaching across that plane. No two of them SHALL overlap (centres closer than the sum of their outer radii). The chain SHALL go round the outside of the set, touching each part on its outer boundary. A selected part inside that outer loop, between two of its runs, is **enclosed**: for a chain it SHALL be wrapped as the user chooses (see "Over or under an enclosed part"); for a track it SHALL be left out and named in the message with the reason that tracks only go round the outside. A selected sprocket on the outer loop is **crossing** when a straight run between its neighbours (the outer loop without it) would pass through it; for a chain it SHALL also be wrapped as the user chooses, and for a track it SHALL stay on the outside without asking. A standoff on the outer loop SHALL never be asked about; standoffs are asked about only when enclosed. Parts that aren't selected SHALL never join the chain. Fewer than two sprockets on the loop SHALL be refused with a message.
 
 #### Scenario: Sprocket out of plane
 - **WHEN** two sprockets are selected whose axles are parallel but one sits 6 mm further along its axle
@@ -33,6 +33,18 @@ Selected sprockets and standoff guides SHALL carry one chain only when their axl
 #### Scenario: Sprocket inside the loop
 - **WHEN** the same three sprockets are selected and the user picks Track builder
 - **THEN** the track wraps the two outer sprockets and the message names the middle one as left out because tracks only go round the outside
+
+#### Scenario: Crossing sprocket with a chain
+- **WHEN** a 16 Tooth, a 40 Tooth and a 24 Tooth Sprocket are selected, the 24 Tooth between the other two along the chain and higher, its centre 3.7 mm past the straight run joining the 16 Tooth and the 40 Tooth, and the user picks Chain builder
+- **THEN** the app asks whether the chain goes over or under the 24 Tooth before building
+
+#### Scenario: Corner sprocket clear of the run
+- **WHEN** three sprockets set out in a wide triangle are selected, so no straight run between two of them would touch the third, and the user picks Chain builder
+- **THEN** the chain is built round all three without asking
+
+#### Scenario: Standoff on the outer loop
+- **WHEN** two sprockets and a standoff sticking out past the run between them are selected and the user picks Chain builder
+- **THEN** the chain wraps the outside of the standoff without asking
 
 #### Scenario: Standoff out of reach
 - **WHEN** two sprockets and a 0.5x Pitch Standoff are selected and the standoff ends 3 mm short of the chain's plane
@@ -54,15 +66,19 @@ Chain builder SHALL place a closed loop of `Chain Link` parts round the parts on
 - **THEN** the chain's top run passes over the standoff, resting on its body, and the standoff is not turned
 
 ### Requirement: Wrap a track with rubber grippers
-Track builder SHALL first ask, in a small dialog, whether to add rubber grippers (a checkbox, remembered for the next time while the page is open), then build the outer loop as Chain builder does, with `Tank Tread, Attachment Link` parts in place of Chain Links (they share the Chain Link's pivots). A track SHALL only go round the outside of sprockets and standoffs: it SHALL NOT ask about or bend round enclosed parts, and each enclosed part SHALL be left out and named in the message as left out because tracks only go round the outside. With grippers on, a `Traction Link` SHALL be plugged into the two holes of every tread link, its pad on the outer side of the loop, so the grippers face away from the sprockets all round. With grippers off, the track SHALL be tread links only. Canceling the dialog SHALL build nothing.
+Track builder SHALL first ask, in a small dialog, which **attachment** to plug into the tread links (None, Traction Link, Short Intake Flap, Medium Intake Flap or Long Intake Flap; default Traction Link) and, unless None, **every** how many tread links, with a slider from 1 to 20 (default 1, every link); both SHALL be remembered for the next time while the page is open. It SHALL then build the outer loop as Chain builder does, with `Tank Tread, Attachment Link` parts in place of Chain Links (they share the Chain Link's pivots). A track SHALL only go round the outside of sprockets and standoffs: it SHALL NOT ask about or bend round enclosed parts, and each enclosed part SHALL be left out and named in the message as left out because tracks only go round the outside. The chosen attachment SHALL be plugged into the two holes of every Nth tread link round the loop (links 0, N, 2N, …), facing the outer side of the loop, so the pads or flaps point away from the sprockets all round; when the link count isn't a multiple of N, the last gap SHALL be shorter and the message SHALL say so. With None, the track SHALL be tread links only. Attachments SHALL count as held by their tread links, SHALL NOT be collisions with them, and SHALL come apart with the track in Explode. Canceling the dialog SHALL build nothing.
 
 #### Scenario: Track with grippers
-- **WHEN** two 24 Tooth Sprockets are selected, the user picks Track builder, leaves "Add rubber grippers" ticked and picks Build
+- **WHEN** two 24 Tooth Sprockets are selected, the user picks Track builder, leaves Traction Link and every 1 and picks Build
 - **THEN** a loop of Tank Tread Attachment Links wraps the sprockets with a Traction Link in every link, all facing outward
 
+#### Scenario: Intake flaps every 4th link
+- **WHEN** the user picks Track builder, chooses Long Intake Flap and sets the slider to 4
+- **THEN** a Long Intake Flap sits in every 4th tread link, pointing out of the loop, and the message names the flaps and the spacing
+
 #### Scenario: Track without grippers
-- **WHEN** the user picks Track builder and unticks "Add rubber grippers"
-- **THEN** only Tank Tread Attachment Links are placed
+- **WHEN** the user picks Track builder and chooses None
+- **THEN** only Tank Tread Attachment Links are placed and the slider isn't shown
 
 #### Scenario: Track over a standoff
 - **WHEN** two sprockets and a standoff on the outer loop are selected and the user builds a track
@@ -84,7 +100,7 @@ The audit SHALL count each link of a chain or track group as held: its links are
 - **THEN** the audit reports the chain's links as no longer seated on that sprocket
 
 ### Requirement: Build a chain over MCP
-The MCP server SHALL offer a `build_chain` tool that takes `kind` (`chain` or `track`), the parts' `instanceIds` (sprockets and standoffs; default: the current selection), `route` (chain only: an object mapping each enclosed part's instance id to `"over"` or `"under"`), `grippers` (track only, default true) and an optional group `name`. It SHALL follow the same rules as the Build menu and produce the same parts, group and single history step, and SHALL refuse with the same messages. A chain call with an enclosed part missing from `route` SHALL build nothing and reply with each such part's id and label and that it needs `"over"` or `"under"`. Its reply SHALL give the group id and name, the link and gripper counts, the parts on the loop and how each enclosed part was wrapped, any left out and why, the length gap in mm, the sprockets it turned, and the usual placement check summary.
+The MCP server SHALL offer a `build_chain` tool that takes `kind` (`chain` or `track`), the parts' `instanceIds` (sprockets and standoffs; default: the current selection), `route` (chain only: an object mapping each enclosed part's and crossing sprocket's instance id to `"over"` or `"under"`), `attachment` (track only: `"none"`, `"traction"`, `"short-flap"`, `"medium-flap"` or `"long-flap"`, default `"traction"`), `attachmentEvery` (track only, 1 to 20, default 1), `grippers` (track only, the older form: `false` is `"none"`, `true` is `"traction"` every 1) and an optional group `name`. It SHALL follow the same rules as the Build menu and produce the same parts, group and single history step, and SHALL refuse with the same messages. A chain call with an enclosed part or crossing sprocket missing from `route` SHALL build nothing and reply with each such part's id and label and that it needs `"over"` or `"under"`. Its reply SHALL give the group id and name, the link and attachment counts, the parts on the loop and how each enclosed part was wrapped, any left out and why, the length gap in mm, the sprockets it turned, and the usual placement check summary.
 
 #### Scenario: Track over MCP
 - **WHEN** a client calls `build_chain` with `kind: "track"` and two sprocket ids
@@ -116,9 +132,9 @@ A selected standoff SHALL act as a smooth round guide for a chain or track when 
 - **THEN** the Build menu items are greyed out and their hover text says the standoff's axle isn't parallel to the sprockets'
 
 ### Requirement: Over or under an enclosed part
-When Chain builder is picked and the selection has enclosed parts, the app SHALL open a dialog listing each enclosed part by name before building. While a part's row is focused or hovered, that part SHALL be highlighted in the 3D view; the first part SHALL be highlighted when the dialog opens. Each row SHALL offer two choices, with no default:
-- **Under / inner**: the run above the part bends down and passes under it, so the chain wraps round the part's lower side;
-- **Over / outer**: the return run below the part bends up and passes over it, so the chain wraps round the part's upper side.
+When Chain builder is picked and the selection has enclosed parts or crossing sprockets, the app SHALL open a dialog listing each of them by name before building. While a part's row is focused or hovered, that part SHALL be highlighted in the 3D view; the first part SHALL be highlighted when the dialog opens. Each row SHALL offer two choices, **Under** and **Over**, with no default, and a hint saying which one wraps round the part's outside:
+- for an enclosed part, **Under**: the run above the part bends down and passes under it; **Over**: the return run below the part bends up and passes over it;
+- for a crossing sprocket that sticks out above the run it crosses, **Over** wraps round its top as the outer loop does, and **Under** keeps that run below it, passing under it; for one that sticks out below, **Under** wraps round its bottom and **Over** keeps the run above it.
 "Above" SHALL mean the in-plane direction of world up (+Y); when the parts lie flat (the plane's normal within 17° of world Y), it SHALL mean toward world −Z. The Build button SHALL be available only when every listed part has a choice. Canceling SHALL build nothing. The highlight SHALL end when the dialog closes. The choices SHALL be remembered per part while the page is open and offered again next time. Several enclosed parts on the same run SHALL all be wrapped by that run, in order along it.
 
 #### Scenario: Ask about an enclosed sprocket
@@ -140,6 +156,14 @@ When Chain builder is picked and the selection has enclosed parts, the app SHALL
 #### Scenario: Unselected part inside the loop
 - **WHEN** a standoff inside the loop is not selected
 - **THEN** the dialog doesn't list it and the chain doesn't touch it
+
+#### Scenario: Under a crossing sprocket
+- **WHEN** the user picks Under for the 24 Tooth Sprocket in "Crossing sprocket with a chain" and Build
+- **THEN** the top run passes beneath the 24 Tooth, touching it from below, and the chain still wraps the 16 Tooth and the 40 Tooth
+
+#### Scenario: Over a crossing sprocket
+- **WHEN** the user picks Over instead
+- **THEN** the chain wraps round the top of the 24 Tooth, as it does without asking today
 
 ### Requirement: Say why a chain can't be built
 When the chosen parts and route can't make a chain, nothing SHALL be built and the message SHALL name the part involved and the reason. At least these cases SHALL be refused with their reason:

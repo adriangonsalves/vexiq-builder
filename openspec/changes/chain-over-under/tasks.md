@@ -8,6 +8,8 @@
 - [x] 1.6 Choose the slack run only among runs between two outer parts, else the longest (design 5). Verify a check case with Under on the top run and a slack chain sags on the bottom run.
 - [x] 1.7 Update `chainMessage` and the result shape (`wrapped`, `leftOut` with reasons, standoff counts) per design 7 and 9. Verify check cases on the message text for a route build and for a track with an enclosed part ("tracks only go round the outside").
 
+- [ ] 1.8 Crossing sprockets (design 2b): find them with their run and above/below side, return `crossing` from `checkSprocketsForChain`, route "the other side" answers by rebuilding the outer loop and inserting them with side −1, list them in `needsRoute`; standoffs on the outer loop and tracks never ask. Verify check cases: the 16T/40T/24T layout reports the 24T as crossing (sticks out above); Under builds a chain with every link clear of the 24T's teeth and touching it from below; Over gives the same chain as without a route today; a wide triangle reports nothing; a standoff poking out past a run isn't asked about; two crossing sprockets both sent the other side are refused with "wouldn't reach".
+
 ## 2. Fit and audit (`src/utils/chainFit.js`, `mcp/assembly-engine.mjs`)
 
 - [x] 2.1 Add `isLinkOnStandoff` and use it in `isChainFit` and `unsupportedBends` (design 8). Verify in `check-chain-builder.mjs`: links built over a standoff and under an enclosed sprocket count as chain fits, and none of their bends are reported unsupported.
@@ -25,7 +27,16 @@
 - [ ] 4.2 In `src/App.jsx`: Build menu passes standoffs through `chainCheck`; Chain builder opens the dialog when `chainCheck.enclosed` is not empty; remember choices per part for the page; pass `route` to `build_chain`; Track builder unchanged apart from the left-out reason. Verify in the app that Under and Over each build the expected bend, and a second build offers the last answers.
 - [ ] 4.3 `attentionIds` highlight in `src/components/Viewport3D.jsx`: a pulsing tint separate from the selection, on the asked-about part, first row on open, cleared on close; selection unchanged. Verify in the app with a screenshot while the dialog is open.
 
+- [ ] 4.4 Route dialog rows (design 6): plain Under and Over buttons, a per-row hint saying which is the outside wrap, rows for crossing sprockets as well as enclosed parts. Verify in the app with the 16T/40T/24T layout.
+
 ## 5. Docs and end-to-end check
 
 - [x] 5.1 Update `features.md` (Chain and track builder, `build_chain`) and the chain bullet in `AGENTS.md` between the MCP markers (over/under, standoffs, tracks outside only). Verify the MCP server's connect text includes the new sentence (`node scripts/check-mcp-tools.mjs`, or start the server and read the instructions).
-- [ ] 5.2 Build a chain over MCP round two 24T sprockets with an 8T idler (Under) and a standoff (Over), then `audit_assembly` and `capture_screenshot` from two views; compare with the expected bends. Verify a clean audit and screenshots showing the top run under the idler and the bottom run over the standoff. Run all `node scripts/check-*.mjs` and confirm each exits 0.
+- [ ] 5.2 Build a chain over MCP round two 24T sprockets with an 8T idler (Under) and a standoff (Over), then `audit_assembly` and `capture_screenshot` from two views; compare with the expected bends. Also build the 16T/40T/24T layout with Under and with Over and screenshot both. Verify a clean audit and screenshots showing the top run under the idler and the bottom run over the standoff. Run all `node scripts/check-*.mjs` and confirm each exits 0.
+
+## 6. Track attachments
+
+- [ ] 6.1 Measure where each Intake Flap (Short 228-2500-240, Medium -241, Long -242) seats in a tread link in `scripts/index-part-metadata.mjs`, as for the Traction Link, and store `chainSpecs: { role: 'attachment', seatInLink }`; run `npm run index-metadata`. Verify each flap's two pegs sit in the tread link's two holes (within 0.1 mm) and the flap points out of the loop.
+- [ ] 6.2 `buildChainPath` takes `attachment` and `attachmentEvery` (design 8b): attachments on links 0, N, 2N, …; `grippers` still maps to traction / none; the message names the attachment and spacing, and says when the last gap is shorter. Verify check cases: every size at every 1 round two 8T sprockets with no attachment overlapping another or its link; Long every 4 on a 49-link track gives 13 flaps and the shorter-gap note.
+- [ ] 6.3 Fit, audit and explode take any attachment (`isGripperOnLink` and the chain joins). Verify an engine-level check: a track with Medium flaps every 2 audits clean (no collisions, no unpinned parts) and explodes as one piece.
+- [ ] 6.4 Track dialog (design 8b): Attachment choice and Every slider (1–20, hidden for None), remembered for the page, alongside the slack question; the `build_chain` action and MCP tool take `attachment` and `attachmentEvery`, reply with `attachmentCount`; update `scripts/check-mcp-tools.mjs`, `features.md` and the `build_chain` description. Verify `node scripts/check-mcp-tools.mjs` passes and, in the app, a track with Short flaps every 3.
