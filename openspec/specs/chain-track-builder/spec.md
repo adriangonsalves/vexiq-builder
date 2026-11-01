@@ -43,7 +43,7 @@ Chain builder SHALL place a closed loop of `Chain Link` parts round the sprocket
 - **THEN** one chain goes round all three, with three straight runs
 
 ### Requirement: Whole number of links
-A chain SHALL be made of a whole number of links (VEX IQ links are all alike, so odd counts are fine). A chain can't stretch, so the builder SHALL use the fewest links that reach all the way round: never more than 0.5 mm shorter than the path (the play in its joints), and at most one link longer. Links SHALL stay 6.35 mm apart (eased by at most 0.2 mm per link): a chain longer than the path SHALL sag outward on one run, the run facing the floor (world −Y) or the longest when the sprockets lie flat. The message SHALL say how much longer or shorter the true path is and which sprocket to move and by how much for an exact fit, and when the chain is more than half a link longer it SHALL say it will sag.
+A chain SHALL be made of a whole number of links (VEX IQ links are all alike, so odd counts are fine). A chain can't stretch, so the builder SHALL use the fewest links that reach all the way round: never more than 0.75 mm shorter than the path (the play in its joints), and at most one link longer. Links SHALL stay 6.35 mm apart (eased by at most 0.2 mm per link). Every run but one SHALL be straight. A chain longer than the path SHALL hang on one run, the run facing the floor (world −Y), as a catenary sagging toward the floor; when the sprockets lie flat, or gravity would pull that run into the loop, it SHALL sag outward on the longest run instead. No link SHALL turn more than a tooth step of the smallest loop sprocket, so the chain has no kinks where a run meets a sprocket. The message SHALL say how much longer or shorter the true path is and which sprocket to move and by how much for an exact fit, and when the chain is more than half a link longer it SHALL say it will sag.
 
 #### Scenario: Exact fit
 - **WHEN** two 16 Tooth Sprockets are 8 pitches apart (101.6 mm) and the user picks Chain builder
@@ -51,11 +51,15 @@ A chain SHALL be made of a whole number of links (VEX IQ links are all alike, so
 
 #### Scenario: Never too tight
 - **WHEN** the path round two sprockets is 3 mm longer than 48 links
-- **THEN** the chain is built with 49 links, 3.35 mm longer than the path, one run sags, and the message names the sprocket to move about 1.7 mm away for an exact fit
+- **THEN** the chain is built with 49 links, 3.35 mm longer than the path, the bottom run hangs in a smooth curve toward the floor while the top run stays straight, and the message names the sprocket to move about 1.7 mm away for an exact fit
 
 #### Scenario: Within the chain's play
 - **WHEN** the path round two sprockets is 0.3 mm longer than 48 links
 - **THEN** the chain is built with 48 links and the message reports 0.3 mm short, with no sag
+
+#### Scenario: Just inside the chain's play
+- **WHEN** the path round three sprockets is 0.55 mm longer than 65 links
+- **THEN** the chain is built with 65 links, straight on every run, with no sag
 
 ### Requirement: Wrap a track with rubber grippers
 Track builder SHALL first ask, in a small dialog, whether to add rubber grippers (a checkbox, remembered for the next time while the page is open), then build the same loop as Chain builder with `Tank Tread, Attachment Link` parts in place of Chain Links (they share the Chain Link's pivots). With grippers on, a `Traction Link` SHALL be plugged into the two holes of every tread link, its pad on the outer side of the loop, so the grippers face away from the sprockets all round. With grippers off, the track SHALL be tread links only. Canceling the dialog SHALL build nothing.

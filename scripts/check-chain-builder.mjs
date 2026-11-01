@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { angleAbout } from '../src/utils/axisFrame.js';
-import { buildChainPath, chainMessage, checkSprocketsForChain, nextChainName, worldSprocket } from '../src/utils/chainPath.js';
+import { CHAIN_PLAY_MM, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName, worldSprocket } from '../src/utils/chainPath.js';
 import { areChainNeighbours, isChainFit, isGripperOnLink, isLinkOnSprocket, unsupportedBends } from '../src/utils/chainFit.js';
 import { buildChain, explodeInputs } from '../mcp/assembly-engine.mjs';
 import { buildPieces } from '../src/utils/explodePlan.js';
@@ -43,7 +43,11 @@ function checkChain(name, input, res) {
   const normal = sprockets[0].axis;
   const pivots = res.links.map((l) => local(l, [0, 0, 0]));
   const ends = res.links.map((l) => local(l, [0, 0, -6.35]));
-  check(`${name}: the fewest whole links that reach round the path`, res.linkCount === res.links.length && res.linkCount === Math.ceil(res.exactLinks - 0.5 / 6.35 - 1e-9), `${res.linkCount} vs ${res.exactLinks}`);
+  // No kinks: no link turns more than a tooth step of the smallest sprocket on the loop
+  const step = 360 / Math.min(...sprockets.map((sp) => sp.teeth));
+  const turns = pivots.map((b, i) => THREE.MathUtils.radToDeg(b.clone().sub(pivots[(i - 1 + pivots.length) % pivots.length]).angleTo(pivots[(i + 1) % pivots.length].clone().sub(b))));
+  check(`${name}: no kink sharper than a tooth step (${step.toFixed(1)}°)`, Math.max(...turns) <= step + 0.5, Math.max(...turns).toFixed(1));
+  check(`${name}: the fewest whole links that reach round the path`, res.linkCount === res.links.length && res.linkCount === Math.ceil(res.exactLinks - CHAIN_PLAY_MM / 6.35 - 1e-9), `${res.linkCount} vs ${res.exactLinks}`);
   // The loop closes: each link's far pivot is near the next link's roller (eased runs differ a little)
   const worstJoin = Math.max(...ends.map((e, i) => e.distanceTo(pivots[(i + 1) % pivots.length])));
   check(`${name}: the loop closes (link ends meet the next roller)`, worstJoin < 1.0, worstJoin.toFixed(3));
@@ -94,7 +98,7 @@ function checkChain(name, input, res) {
     });
   });
   check(`${name}: after turning, every sprocket has a tooth gap at a chain pivot`, gapsOk);
-  check(`${name}: never more than 0.5 mm short of the path, at most a link longer`, res.gapMm <= 0.5 + 1e-6 && res.gapMm > -6.35, String(res.gapMm));
+  check(`${name}: never more than ${CHAIN_PLAY_MM} mm short of the path, at most a link longer`, res.gapMm <= CHAIN_PLAY_MM + 1e-6 && res.gapMm > -6.35, String(res.gapMm));
 }
 
 // --- Which sprockets can carry a chain --------------------------------------------------------
@@ -145,6 +149,36 @@ function checkChain(name, input, res) {
   const pair = [sprocket(16, [0, 0, 0]), sprocket(16, [101.75, 0, 0])];
   const res = buildChainPath(pair, { kind: 'chain', metaByPartNumber });
   check('0.3 mm longer path: 48 links (the chain\'s play takes it up)', res.ok && res.linkCount === 48 && near(res.gapMm, 0.3, 0.01) && !/sag/.test(chainMessage(res)), `${res.linkCount} ${res.gapMm}`);
+}
+{
+  // A slack chain hangs: the bottom run sags toward the floor on a smooth curve, the top run stays
+  // straight, and no join bends more than a tooth step (22.5° on a 16T)
+  const pair = [sprocket(16, [0, 0, 0]), sprocket(16, [103.1, 0, 0])];
+  const res = buildChainPath(pair, { kind: 'chain', metaByPartNumber });
+  const P = res.links.map((l) => new THREE.Vector3(...l.position));
+  const bend = (i) => {
+    const [a, b, c] = [P[(i - 1 + P.length) % P.length], P[i], P[(i + 1) % P.length]];
+    return THREE.MathUtils.radToDeg(b.clone().sub(a).angleTo(c.clone().sub(b)));
+  };
+  const bends = P.map((_, i) => bend(i));
+  const between = (p) => p.x > 1 && p.x < 102;
+  const top = P.filter((p) => between(p) && p.y > 0);
+  const bottom = P.filter((p) => between(p) && p.y < 0);
+  check('slack chain: no kink sharper than a tooth step', Math.max(...bends) <= 22.5 + 0.5, Math.max(...bends).toFixed(1));
+  check('  the top run is straight and tight', top.every((p) => near(p.y, 16.27, 0.05)), top.map((p) => p.y.toFixed(2)).join(' '));
+  check('  the bottom run hangs below the sprockets, lowest near the middle', Math.min(...bottom.map((p) => p.y)) < -16.27 - 3 && Math.abs(bottom.reduce((m, p) => (p.y < m.y ? p : m)).x - 51.55) < 10, bottom.map((p) => p.y.toFixed(1)).join(' '));
+  const runBends = P.map((p, i) => [p, bends[i]]).filter(([p]) => between(p) && p.y < -16.5).map(([, b]) => b);
+  check('  and bends a little at every link of the sag, not in one place', runBends.every((b) => b > 0.5 && b < 8), runBends.map((b) => b.toFixed(1)).join(' '));
+}
+{
+  // A tilted triangle (a real build): runs straight, every join no sharper than its sprocket's tooth step
+  const tri = [sprocket(16, [30.42, 0.005, 176.405], [0, 30, 4.26]), sprocket(40, [123.92, 6.355, 122.786], [0, 30, 1.56]), sprocket(24, [63.414, 31.755, 157.72], [0, 30, -7.44])];
+  const res = buildChainPath(tri, { kind: 'chain', metaByPartNumber });
+  check('tilted triangle 0.55 mm longer than 65 links: 65 links (within the 0.75 mm play)', res.ok && res.linkCount === 65 && near(res.gapMm, 0.55, 0.05), `${res.linkCount} ${res.gapMm}`);
+  checkChain('tilted triangle', tri, res);
+  const P = res.links.map((l) => new THREE.Vector3(...l.position));
+  const worst = Math.max(...P.map((b, i) => THREE.MathUtils.radToDeg(b.clone().sub(P[(i - 1 + P.length) % P.length]).angleTo(P[(i + 1) % P.length].clone().sub(b)))));
+  check('  no join sharper than a tooth step on the 16T', worst <= 22.5 + 0.5, worst.toFixed(1));
 }
 {
   const pair = [sprocket(8, [0, 0, 0]), sprocket(24, [70, 20, 0])];
@@ -225,7 +259,7 @@ function checkChain(name, input, res) {
   check('60 random layouts of 2-4 sprockets all build', failed.length === 0, failed.slice(0, 3).join(' | '));
   check('  every link within 0.3 mm of the chain pitch', worstSpacing < 0.3, worstSpacing.toFixed(3));
   check('  every link end meets the next roller within 0.3 mm', worstJoin < 0.3, worstJoin.toFixed(3));
-  check('  never too tight, at most a link slack', worstGap < 6.35 && tightest <= 0.5 + 1e-6, `${worstGap.toFixed(3)} / tightest ${tightest.toFixed(3)}`);
+  check('  never too tight, at most a link slack', worstGap < 6.35 && tightest <= CHAIN_PLAY_MM + 1e-6, `${worstGap.toFixed(3)} / tightest ${tightest.toFixed(3)}`);
   console.log(`      (${built} built, worst spacing ${worstSpacing.toFixed(3)} mm, worst gap ${worstGap.toFixed(2)} mm)`);
 }
 
