@@ -24,6 +24,7 @@ import { installKind, isAppleMobile, isInstalled, onInstallChange, promptInstall
 
 const RECORD_KEY = 'vexiq-offline';
 const CHECK_EVERY_MS = 60_000; // version checks at most this often
+const OFFER_DECLINES = 2; // the installed app stops offering to download after this many Not nows
 
 function readRecord() {
   try {
@@ -58,6 +59,8 @@ export const formatMB = (bytes) => `${Math.max(0, Math.round(bytes / 1e6))} MB`;
  * - 'update': a newer version is published (the older copy still works offline);
  * - 'stopped': switch on, no complete copy (see `stop`).
  *
+ * `offer` is `{ total }` while the installed app offers to download everything (Use offline off).
+ *
  * `onBeforeReload` runs (awaited) before the page reloads into a newly downloaded version.
  */
 export default function useOffline({ enabled = true, onBeforeReload } = {}) {
@@ -75,6 +78,7 @@ export default function useOffline({ enabled = true, onBeforeReload } = {}) {
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [notice, setNotice] = useState(null); // a one-line message in the section (can't reach the site…)
   const [updating, setUpdating] = useState(false); // the download in progress is an update
+  const [offer, setOffer] = useState(null); // { total } while the installed app offers the download
 
   const abortRef = useRef(null);
   const latestRef = useRef(null); // the newest file list seen
@@ -113,6 +117,16 @@ export default function useOffline({ enabled = true, onBeforeReload } = {}) {
             : (record.stop ?? { reason: 'stopped', message: 'The download stopped' })
         );
         setStatus('stopped');
+      } else if (isInstalled() && (record.offerDeclines ?? 0) < OFFER_DECLINES) {
+        // Installed without the download: offer it, with its size (offline, nothing to offer)
+        fetchManifest()
+          .then((manifest) => {
+            if (cancelled || statusRef.current !== 'off') return;
+            latestRef.current = manifest;
+            pendingManifestRef.current = manifest;
+            setOffer({ total: manifest.total });
+          })
+          .catch(() => {});
       }
       setReady(true);
     })();
@@ -132,6 +146,7 @@ export default function useOffline({ enabled = true, onBeforeReload } = {}) {
     setNotice(null);
     setUpdating(update);
     setShowUpdateMessage(false);
+    setOffer(null);
     setStatus('downloading');
     setProgress({ done: 0, total: 0 }); // until the download has looked at what is already saved
     requestPersistence().then(setPersisted);
@@ -186,8 +201,28 @@ export default function useOffline({ enabled = true, onBeforeReload } = {}) {
     }
   }, []);
 
+  /** Download on the installed app's offer: the space check, then the download with no second question. */
+  const acceptOffer = useCallback(async () => {
+    setOffer(null);
+    const manifest = pendingManifestRef.current;
+    if (!manifest) return;
+    const room = await spaceFor(manifest);
+    if (!enoughSpace(room)) {
+      setNotice(`There isn’t enough space on this device. It needs about ${formatMB(room.needed)}; about ${formatMB(room.available)} is free.`);
+      return;
+    }
+    runDownload(manifest);
+  }, [runDownload]);
+
+  /** Not now: hidden until the app is next opened; after OFFER_DECLINES of these, not offered again. */
+  const declineOffer = useCallback(() => {
+    writeRecord({ offerDeclines: (readRecord().offerDeclines ?? 0) + 1 });
+    setOffer(null);
+  }, []);
+
   /** The Use offline switch turned on. */
   const turnOn = useCallback(() => {
+    setOffer(null);
     if (isAppleMobile() && !isInstalled()) setStatus('ios-first');
     else showSizeCheck();
   }, [showSizeCheck]);
@@ -320,6 +355,7 @@ export default function useOffline({ enabled = true, onBeforeReload } = {}) {
     stop,
     notice,
     updating,
+    offer,
     downloadedAt,
     persisted,
     install,
@@ -334,6 +370,8 @@ export default function useOffline({ enabled = true, onBeforeReload } = {}) {
     resume,
     turnOff,
     dismissUpdate,
+    acceptOffer,
+    declineOffer,
     promptInstall: handlePromptInstall
   };
 }

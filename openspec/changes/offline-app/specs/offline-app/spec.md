@@ -98,6 +98,31 @@ When the site is already running as an installed app, the guidance SHALL say it 
 - **WHEN** the visitor opens the installed app and opens the Offline section
 - **THEN** it says the app is installed and shows no install steps
 
+### Requirement: The installed app offers to work offline
+Whenever the site is opened as an installed app, however it was installed (the Install app button, the browser's own install button or menu, or Add to Home Screen), with Use offline off and a connection, it SHALL show a message over the app: "Use VEX IQ without internet? Downloads the app and all parts (about N MB)." with **Download** and **Not now**.
+
+- **Download** SHALL start the download straight away, with no second confirmation. The space check still applies: if there isn't enough space, the Offline section SHALL say so and nothing is downloaded. Settings SHALL open at the Offline section so the progress can be seen.
+- **Not now** SHALL hide the message until the app is next opened. After **Not now** has been chosen twice, the message SHALL NOT be shown again. Use offline in Settings still works.
+- The message SHALL NOT be shown when there is no connection, when Use offline is already on, or in a browser tab.
+
+The **Install app** guidance SHALL say that the installed app will offer to download everything for offline use when it opens.
+
+#### Scenario: Installed from Chrome before downloading
+- **WHEN** the visitor installs the app in Chrome without turning on Use offline, and the installed app opens
+- **THEN** it shows the "Use VEX IQ without internet?" message with the download size
+
+#### Scenario: Download from the message
+- **WHEN** the visitor selects Download on the message
+- **THEN** Settings opens at the Offline section with the download in progress, and when it ends the Available offline label shows
+
+#### Scenario: Not now twice
+- **WHEN** the visitor selects Not now, opens the app again and selects Not now again
+- **THEN** the next time the app opens, no message is shown
+
+#### Scenario: Not in a browser tab
+- **WHEN** the site is opened in a normal browser tab with Use offline off
+- **THEN** no message is shown
+
 ### Requirement: iPad and iPhone keep a separate copy for the Home Screen app
 On an iPad or iPhone, a Home Screen app keeps its own storage, apart from Safari. So in Safari there (not installed), turning Use offline on SHALL first show the Add to Home Screen steps and explain that:
 - the Home Screen app downloads its own copy, so Use offline should be turned on inside it;

@@ -5,8 +5,11 @@ import { formatMB } from '../offline/useOffline.js';
 const dateText = (at) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
 
 /** Steps for installing the app in this browser (see installKind in src/offline/install.js). */
-function InstallSteps({ kind, onInstall }) {
+function InstallSteps({ kind, onInstall, downloaded }) {
   if (kind === 'installed') return <p className="settings-note">The app is installed on this device.</p>;
+  const offerNote = !downloaded && (
+    <p className="settings-note">The installed app will offer to download everything for offline use when it opens.</p>
+  );
   if (kind === 'prompt') {
     return (
       <div className="offline-install">
@@ -14,6 +17,7 @@ function InstallSteps({ kind, onInstall }) {
         <button type="button" className="btn btn-primary-action" onClick={onInstall}>
           Install app
         </button>
+        {offerNote}
       </div>
     );
   }
@@ -27,6 +31,7 @@ function InstallSteps({ kind, onInstall }) {
           Tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>.
         </li>
         <li>Open VEX IQ from the Home Screen.</li>
+        {!downloaded && <li>Tap Download when the app offers to work without internet.</li>}
       </ol>
     );
   }
@@ -37,6 +42,7 @@ function InstallSteps({ kind, onInstall }) {
           In Safari’s menu bar, choose <strong>File → Add to Dock…</strong>
         </li>
         <li>Open VEX IQ from the Dock or Launchpad.</li>
+        {!downloaded && <li>Choose Download when the app offers to work without internet.</li>}
       </ol>
     );
   }
@@ -86,7 +92,7 @@ export default function OfflineSection({ offline, sectionRef }) {
           <div className="offline-card">
             <p className="settings-note">
               On iPad and iPhone, an app on the Home Screen keeps its own copy, apart from Safari. Add it to the Home Screen first, open it from
-              there, and turn on Use offline inside it.
+              there, and let it download when it asks.
             </p>
             <InstallSteps kind={install} />
             <p className="settings-note">
@@ -187,7 +193,7 @@ export default function OfflineSection({ offline, sectionRef }) {
       {status !== 'ios-first' && (
         <div className="offline-install-wrap">
           {offline.showInstallGuide || install === 'installed' ? (
-            <InstallSteps kind={install} onInstall={offline.promptInstall} />
+            <InstallSteps kind={install} onInstall={offline.promptInstall} downloaded={status === 'available' || status === 'update'} />
           ) : (
             <button type="button" className="link-btn" onClick={() => offline.setShowInstallGuide(true)}>
               Install the app

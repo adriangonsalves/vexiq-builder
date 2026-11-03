@@ -11,6 +11,7 @@ The static site (openspec static-site) runs everything in the browser, but nothi
   - when everything is saved, shows **Available offline** and walks the user through installing the app for their device: Add to Home Screen on iPad/iPhone, the Install button in Chrome and Edge, and a note for browsers that can't install;
   - reminds them that builds live only in this browser and that **Export** is their backup.
 - Turning the switch off deletes the downloaded files and stops offline use. Builds and settings are not touched.
+- When the site is opened as an **installed app** with Use offline off, offer to download everything at once ("Use VEX IQ without internet?" with Download / Not now), however it was installed. Installing on its own doesn't save anything.
 - Show an **Available offline** label in the toolbar next to the part count while the downloaded copy is complete and current. Tapping it opens the Offline section.
 - **New versions:** whenever the app is online (opening, coming back online, returning to the tab), it checks whether a newer version has been published. If one has:
   - the Available offline label goes away;

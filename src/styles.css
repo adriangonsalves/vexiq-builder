@@ -2068,3 +2068,11 @@ body,
 .offline-update-banner > span {
   flex: 1 1 240px;
 }
+
+/* Buttons in offline messages and cards size to their text (.btn-primary-action is full width) */
+.offline-update-banner .btn,
+.offline-actions .btn,
+.offline-install .btn {
+  width: auto;
+  flex: 0 0 auto;
+}

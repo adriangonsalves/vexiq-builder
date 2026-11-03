@@ -67,7 +67,7 @@ import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
 import LibraryDialog from './components/LibraryDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
 import backend from './backend/index.js';
-import useOffline from './offline/useOffline.js';
+import useOffline, { formatMB } from './offline/useOffline.js';
 import { assetUrl } from './utils/assetUrl.js';
 import { DEFAULT_SETTINGS, isLinearHistory, normalizeSettings } from './utils/appSettings.js';
 import {
@@ -3197,6 +3197,27 @@ export default function App() {
         onDelete={handleDeleteBuild}
         onOpenFile={handleOpenFile}
       />
+      {offline.offer && offline.status === 'off' && (
+        <div className="offline-update-banner" role="status">
+          <span>
+            <strong>Use VEX IQ without internet?</strong> Downloads the app and all parts (about {formatMB(offline.offer.total)}).
+          </span>
+          <button
+            type="button"
+            className="btn btn-primary-action"
+            onClick={() => {
+              offline.acceptOffer();
+              openOfflineSettings();
+            }}
+          >
+            Download
+          </button>
+          <button type="button" className="btn" onClick={offline.declineOffer}>
+            Not now
+          </button>
+        </div>
+      )}
+
       {offline.showUpdateMessage && (
         <div className="offline-update-banner" role="status">
           <span>A new version of VEX IQ Builder is out. Download it to keep using it offline.</span>
