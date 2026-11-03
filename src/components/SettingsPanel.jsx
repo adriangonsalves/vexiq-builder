@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import OfflineSection from './OfflineSection.jsx';
 
 /** One labeled on/off switch row. */
 function SwitchRow({ label, hint, checked, onChange }) {
@@ -18,6 +19,8 @@ function SwitchRow({ label, hint, checked, onChange }) {
  * The Settings panel (openspec app-settings): Display (shadows, AO), History, Assistant (MCP) and
  * Advanced options. History's choice and the Assistant section only show with advanced options on,
  * and the Assistant section only where there is an assistant (`hasAssistant`; not the static site).
+ * On the static site, `offline` (from useOffline) adds the Offline section (openspec offline-app);
+ * `focusSection: 'offline'` scrolls to it when the panel opens.
  * Every change applies at once; closing (button, Esc, a click outside) changes nothing.
  */
 export default function SettingsPanel({
@@ -26,6 +29,8 @@ export default function SettingsPanel({
   settings,
   onChange,
   hasAssistant = true,
+  offline = null,
+  focusSection = null,
   shadows,
   setShadows,
   ambientOcclusion,
@@ -36,13 +41,15 @@ export default function SettingsPanel({
   setReflectionIntensity
 }) {
   const ref = useRef(null);
+  const offlineRef = useRef(null);
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
-  }, [open]);
+    if (open && focusSection === 'offline') offlineRef.current?.scrollIntoView({ block: 'start' });
+  }, [open, focusSection]);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -144,6 +151,8 @@ export default function SettingsPanel({
             />
           </section>
         )}
+
+        {offline?.supported && <OfflineSection offline={offline} sectionRef={offlineRef} />}
 
         <section className="settings-section">
           <h3>Advanced options</h3>

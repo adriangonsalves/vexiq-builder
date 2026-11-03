@@ -6,6 +6,9 @@
  */
 export const hasAssistant = true;
 
+/** Offline use and installing the app (openspec offline-app) need the static site's file list. */
+export const hasOffline = false;
+
 /** The saved state (with its history), or null when there is none or the server can't be reached. */
 export async function loadState() {
   try {

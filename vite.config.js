@@ -9,6 +9,7 @@ import { runAction } from './src/engine/actions.js';
 import { actionStepLabel, applyOps, diffParts, loadHistory, mergeBrowserSave, recordStep, summarize } from './src/utils/buildHistory.js';
 import { syncSelection } from './src/utils/partGroups.js';
 import { MCP_OFF_MESSAGE, isLinearHistory, normalizeSettings } from './src/utils/appSettings.js';
+import { SERVICE_WORKER_FILE, writeOfflineManifest } from './scripts/offline-manifest.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -415,11 +416,68 @@ function copyStaticPublicFilesPlugin() {
   };
 }
 
+// Offline use and installing (openspec offline-app): icons, the web app manifest and the service
+// worker at the site root, and the file list with sizes and hashes that the app downloads from
+const OFFLINE_DIR = path.join(__dirname, 'src', 'offline');
+const APP_ICONS = [
+  { src: 'icon-192.png', sizes: '192x192' },
+  { src: 'icon-512.png', sizes: '512x512' },
+  { src: 'icon-maskable-512.png', sizes: '512x512', purpose: 'maskable' }
+];
+const APP_COLOR = '#111827'; // --bg-panel
+
+/** Adds the files that make the static site installable and usable offline. */
+function offlineAppPlugin() {
+  let outDir;
+  let base = '/';
+  return {
+    name: 'vexiq-offline-app',
+    apply: 'build',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+      base = config.base;
+    },
+    transformIndexHtml() {
+      return [
+        { tag: 'link', attrs: { rel: 'manifest', href: `${base}manifest.webmanifest` }, injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'theme-color', content: APP_COLOR }, injectTo: 'head' },
+        { tag: 'link', attrs: { rel: 'apple-touch-icon', href: `${base}icons/apple-touch-icon.png` }, injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'apple-mobile-web-app-capable', content: 'yes' }, injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'mobile-web-app-capable', content: 'yes' }, injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'apple-mobile-web-app-title', content: 'VEX IQ' }, injectTo: 'head' }
+      ];
+    },
+    // After every other plugin has written its files, so the list has the copied models too
+    closeBundle() {
+      fs.mkdirSync(path.join(outDir, 'icons'), { recursive: true });
+      for (const file of [...APP_ICONS.map((i) => i.src), 'apple-touch-icon.png']) {
+        fs.copyFileSync(path.join(OFFLINE_DIR, 'icons', file), path.join(outDir, 'icons', file));
+      }
+      const webManifest = {
+        name: 'VEX IQ Builder',
+        short_name: 'VEX IQ',
+        description: 'Build VEX IQ robots from the official parts.',
+        start_url: base,
+        scope: base,
+        id: base,
+        display: 'standalone',
+        background_color: APP_COLOR,
+        theme_color: APP_COLOR,
+        icons: APP_ICONS.map(({ src, ...rest }) => ({ src: `icons/${src}`, type: 'image/png', ...rest }))
+      };
+      fs.writeFileSync(path.join(outDir, 'manifest.webmanifest'), JSON.stringify(webManifest, null, 2));
+      fs.copyFileSync(path.join(OFFLINE_DIR, 'sw.js'), path.join(outDir, SERVICE_WORKER_FILE));
+      const { files, total } = writeOfflineManifest(outDir);
+      this.info?.(`offline-manifest.json: ${files.length} files, ${(total / 1e6).toFixed(1)} MB`);
+    }
+  };
+}
+
 export default defineConfig(({ mode }) =>
   mode === 'static'
     ? {
         // `npm run build:static`: plain files for any static host, at the base path VEXIQ_BASE
-        plugins: [react(), copyStaticPublicFilesPlugin()],
+        plugins: [react(), copyStaticPublicFilesPlugin(), offlineAppPlugin()],
         base: process.env.VEXIQ_BASE || '/',
         define: { 'import.meta.env.VITE_STATIC': JSON.stringify('true') },
         worker: { format: 'es' },

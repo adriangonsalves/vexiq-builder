@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Box,
+  CloudCheck,
   Columns2,
   Cuboid,
   Glasses,
@@ -66,6 +67,7 @@ import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
 import LibraryDialog from './components/LibraryDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
 import backend from './backend/index.js';
+import useOffline from './offline/useOffline.js';
 import { assetUrl } from './utils/assetUrl.js';
 import { DEFAULT_SETTINGS, isLinearHistory, normalizeSettings } from './utils/appSettings.js';
 import {
@@ -287,9 +289,17 @@ export default function App() {
   currentBuildRef.current = currentBuild;
   const lastPostedBuildIdRef = useRef(null); // the build the bridge last got from this tab
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsFocus, setSettingsFocus] = useState(null); // a section to scroll to as Settings opens
   const [viewMenuAt, setViewMenuAt] = useState(null); // { x, y } while the view menu is open
   const closeViewMenu = useCallback(() => setViewMenuAt(null), []);
-  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+    setSettingsFocus(null);
+  }, []);
+  const openOfflineSettings = useCallback(() => {
+    setSettingsFocus('offline');
+    setSettingsOpen(true);
+  }, []);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const keepSettings = useCallback((next) => {
@@ -653,6 +663,9 @@ export default function App() {
     document.addEventListener('visibilitychange', flush);
     return () => document.removeEventListener('visibilitychange', flush);
   }, [saveCurrentBuildNow]);
+
+  // Offline use on the static site (openspec offline-app); the build is saved before an update reloads
+  const offline = useOffline({ enabled: backend.hasOffline, onBeforeReload: saveCurrentBuildNow });
 
   // Subscribe to real-time SSE updates pushed by the MCP Server (none on the static site)
   useEffect(() => {
@@ -1925,6 +1938,17 @@ export default function App() {
               return mcpConnected ? `MCP Live • ${count}` : count;
             })()}
           </span>
+          {offline.status === 'available' && (
+            <button
+              type="button"
+              className="offline-label"
+              onClick={openOfflineSettings}
+              title="Everything is downloaded: the app works with no internet. Select for offline settings."
+            >
+              <CloudCheck size={12} />
+              Available offline
+            </button>
+          )}
         </div>
 
         {/* Transform, Snap & Explode Controls */}
@@ -3173,12 +3197,33 @@ export default function App() {
         onDelete={handleDeleteBuild}
         onOpenFile={handleOpenFile}
       />
+      {offline.showUpdateMessage && (
+        <div className="offline-update-banner" role="status">
+          <span>A new version of VEX IQ Builder is out. Download it to keep using it offline.</span>
+          <button
+            type="button"
+            className="btn btn-primary-action"
+            onClick={() => {
+              offline.resume();
+              openOfflineSettings();
+            }}
+          >
+            Download update
+          </button>
+          <button type="button" className="btn" onClick={offline.dismissUpdate}>
+            Later
+          </button>
+        </div>
+      )}
+
       <SettingsPanel
         open={settingsOpen}
         onClose={closeSettings}
         settings={settings}
         onChange={updateSettings}
         hasAssistant={backend.hasAssistant}
+        offline={offline}
+        focusSection={settingsFocus}
         shadows={shadows}
         setShadows={setShadows}
         ambientOcclusion={ambientOcclusion}

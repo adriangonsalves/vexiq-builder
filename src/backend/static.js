@@ -8,6 +8,9 @@ import { getBuild, libraryAvailable, listBuilds } from '../utils/buildLibrary.js
 
 export const hasAssistant = false;
 
+/** Offline use and installing the app (openspec offline-app) need the static site's file list. */
+export const hasOffline = true;
+
 /**
  * One engine worker, started on first use. `ask(message, onProgress)` resolves to the worker's
  * result or rejects with its error.

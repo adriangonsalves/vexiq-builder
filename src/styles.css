@@ -1962,3 +1962,109 @@ body,
     transform: rotate(360deg);
   }
 }
+
+/* --- Offline use (openspec offline-app) -------------------------------------------------------- */
+
+.offline-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.offline-label:hover {
+  background: rgba(74, 222, 128, 0.18);
+}
+
+.offline-card {
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--bg-panel-elevated);
+  margin-bottom: 6px;
+}
+
+.offline-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.offline-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-app);
+  overflow: hidden;
+}
+
+.offline-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.offline-progress-text {
+  margin-right: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.offline-ok {
+  color: #4ade80;
+}
+
+.offline-warn {
+  color: #fbbf24;
+}
+
+.offline-steps {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.offline-steps svg {
+  vertical-align: -2px;
+}
+
+.offline-install-wrap {
+  margin-top: 4px;
+}
+
+.offline-update-banner {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: min(640px, calc(100vw - 32px));
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-panel-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.offline-update-banner > span {
+  flex: 1 1 240px;
+}
