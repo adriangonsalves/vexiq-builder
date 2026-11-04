@@ -13,8 +13,10 @@ import {
   groupsOf,
   nextGroupName,
   renameGroup,
+  setGridPivot,
   setPivot,
   spotBesideBuild,
+  stepDelta,
   syncSelection,
   ungroupParts
 } from '../src/utils/partGroups.js';
@@ -183,6 +185,34 @@ const relative = (a, b) => matrixOf(a).invert().multiply(matrixOf(b));
   check('  across from the build\'s middle, one pitch up', spot && spot[1] === 12.7 && Math.abs(spot[2] - 30) <= 3.175, JSON.stringify(spot));
   check('  hidden parts are left out', spotBesideBuild([part('h', { position: [500, 0, 0], visible: false }), part('v')], beamBox, () => ({ min: [-5, -5, -5], max: [5, 5, 5] }))[0] < 200);
   check('  an empty build gives no spot', spotBesideBuild([], beamBox, () => null) === null);
+}
+
+// Whole snap steps and the set's hole-grid pivot (group-snapping)
+{
+  check('step: 12.68 mm at 0.5P rounds to 12.7', stepDelta([12.68, 0, 0], 6.35).join() === '12.7,0,0', stepDelta([12.68, 0, 0], 6.35).join());
+  check('step: -9.6 mm at 0.5P rounds to -12.7, 3.1 to 0', stepDelta([-9.6, 3.1, 0], 6.35).join() === '-12.7,0,0', stepDelta([-9.6, 3.1, 0], 6.35).join());
+  check('step: Free stays exact', stepDelta([12.68, -0.004, 1.2345], 0).join() === '12.68,-0.004,1.235');
+
+  // A flat 1x6 beam (holes along Y) and two pins standing in it, off the world grid by 1.2 / 2.1 mm
+  const hole = (x, z) => ({ origin: new THREE.Vector3(1.2 + x, 4, 2.1 + z), axis: new THREE.Vector3(0, 1, 0) });
+  const start = [0, 12.7, 25.4, 38.1, 50.8, 63.5].map((x) => hole(x, 0)).concat([hole(0, 0), hole(63.5, 0)]);
+  const centre = new THREE.Vector3(1.2 + 31.75 + 0.9, 5, 2.1 + 1.3); // box centre, not on the grid
+  const pivot = setGridPivot(start, centre);
+  const onGrid = (fs) => fs.every((f) => ['x', 'z'].every((k) => {
+    const r = ((f.origin[k] - pivot[k]) / 6.35) % 1;
+    return Math.min(Math.abs(r), 1 - Math.abs(r)) < 1e-6;
+  }));
+  check('grid pivot: on the set\'s own hole grid, near the centre', onGrid(start) && pivot.distanceTo(centre) <= 6.35, pivot.toArray().join());
+  let fs = start.map((f) => ({ origin: f.origin.clone(), axis: f.axis.clone() }));
+  const q = axisTurn('Y', 90);
+  let allOnGrid = true;
+  for (let i = 0; i < 4; i++) {
+    fs = fs.map((f) => ({ origin: f.origin.clone().sub(pivot).applyQuaternion(q).add(pivot), axis: f.axis.clone().applyQuaternion(q) }));
+    if (!onGrid(fs)) allOnGrid = false;
+  }
+  check('grid pivot: every quarter turn keeps the holes on the grid', allOnGrid);
+  check('grid pivot: four quarter turns come back to the start', fs.every((f, i) => f.origin.distanceTo(start[i].origin) < 1e-6));
+  check('grid pivot: no features gives the centre', setGridPivot([], centre).equals(centre));
 }
 
 console.log(failures === 0 ? '\nAll part group checks passed.' : `\n${failures} part group check(s) failed.`);

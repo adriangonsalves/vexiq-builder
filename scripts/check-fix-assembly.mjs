@@ -4,7 +4,7 @@
  * Run: node scripts/check-fix-assembly.mjs   (exits 1 on any failure)
  */
 import * as THREE from 'three';
-import { checkCandidateCollision, placeParts, buildWorldMatrix, jointGraph } from '../mcp/assembly-engine.mjs';
+import { checkCandidateCollision, placeParts, buildWorldMatrix, jointGraph, worldFeaturesFor } from '../mcp/assembly-engine.mjs';
 import { runAction } from '../src/engine/actions.js';
 
 let failures = 0;
@@ -148,6 +148,43 @@ for (const from of ['Beam', 'Pin 1', 'Plate']) {
   // 3.4 mm sideways is within reach: it's still lined up
   const err = beam ? poseError(beam, goodBeam) : null;
   check('3.4 mm sideways (within reach) is lined up', reply.ok && err.mm < 0.1, reply.ok ? `${err.mm.toFixed(3)}` : reply.error);
+}
+
+// The release fit of a dragged set (fit_set, openspec group-snapping): the beam and its two pins as
+// one set, all four parts in one group, dropped tilted and short of the plate
+{
+  const grouped = good.map((i) => ({ ...i, groupId: 'g', groupName: 'G' }));
+  const setLabels = ['Beam', 'Pin 1', 'Pin 2'];
+  const setIds = setLabels.map(id);
+  const pinAxis = worldFeaturesFor(good.find((i) => i.label === 'Pin 1')).find((f) => f.kind === 'pin').axis.clone();
+  const beamC = new THREE.Vector3(...goodBeam.position);
+  const plate = good.find((i) => i.label === 'Plate');
+  const away = beamC.clone().sub(new THREE.Vector3(...plate.position)).dot(pinAxis) > 0 ? pinAxis.clone() : pinAxis.clone().negate();
+  // The set turned `deg` about a tilted axis through the beam's centre and moved `liftMm` away from the plate
+  const drop = (deg, liftMm) => {
+    const turn = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(1, 0.4, 0.3).normalize(), THREE.MathUtils.degToRad(deg));
+    const m = new THREE.Matrix4().makeTranslation(-beamC.x, -beamC.y, -beamC.z).premultiply(turn)
+      .premultiply(new THREE.Matrix4().makeTranslation(beamC.x + away.x * liftMm, beamC.y + away.y * liftMm, beamC.z + away.z * liftMm));
+    const poses = {};
+    for (const i of grouped) {
+      if (!setLabels.includes(i.label)) continue;
+      const p = new THREE.Vector3();
+      const q = new THREE.Quaternion();
+      matrixOf(i).premultiply(m).decompose(p, q, new THREE.Vector3());
+      const e = new THREE.Euler().setFromQuaternion(q, 'XYZ');
+      poses[i.instanceId] = { position: p.toArray(), rotation: [e.x, e.y, e.z].map((r) => THREE.MathUtils.radToDeg(r)) };
+    }
+    return poses;
+  };
+  const fit = runAction('fit_set', { instances: grouped }, { ids: setIds, poses: drop(3, 2) });
+  const errs = fit.ok ? setIds.map((sid) => poseError(fit.poses[sid], good.find((i) => i.instanceId === sid))) : [];
+  check('fit_set: a set 3° off and 2 mm short comes back square and seated', fit.ok && errs.every((e) => e.mm < 0.3 && e.deg < 0.2), JSON.stringify(fit.ok ? errs : fit));
+  check('  though the set is only part of its group', fit.ok && fit.pairs >= 2 && fit.onto === 'Plate', JSON.stringify({ pairs: fit.pairs, onto: fit.onto }));
+  check('  saves nothing', fit.ok && !fit.record && !fit.state);
+  const far = runAction('fit_set', { instances: grouped }, { ids: setIds, poses: drop(30, 2) });
+  check('fit_set: 30° off is too far', !far.ok && ['too-far', 'none'].includes(far.reason), JSON.stringify(far));
+  const seated = runAction('fit_set', { instances: grouped }, { ids: setIds, poses: drop(0, 0) });
+  check('fit_set: already seated gives "done"', !seated.ok && seated.reason === 'done', JSON.stringify(seated));
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll fix-assembly checks passed');

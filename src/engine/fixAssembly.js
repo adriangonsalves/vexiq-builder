@@ -349,83 +349,17 @@ function setName(ids, byId, groups) {
 }
 
 /**
- * Lines up the selected part's block with the block it is nearly mated to (see file comment).
- * Returns { ok, state, record, stepLabel, message, moved: [ids], pairs } or { ok: false, error }.
+ * Lines up the `moving` side (a Set of ids) on the `fixed` side as one rigid piece and seats it (steps
+ * 3-5 of fixAssembly). `featuresOfSet(ids)` gives the world features to pair (already limited to the
+ * region looked at); `visible` the parts that can be overlapped. Saves nothing. Returns
+ * { ok: true, pairs, movedParts } (the moving parts at their new poses) or { ok: false, reason, error }
+ * with reason 'none' | 'disagree' | 'too-far' | 'done'.
  */
-export function fixAssembly(state, { instanceId } = {}) {
-  const { catalogById } = getCatalog();
-  const instances = state.instances || [];
-  const byId = new Map(instances.map((i) => [i.instanceId, i]));
-  const selected = byId.get(instanceId);
-  if (!selected) return { ok: false, error: 'Select a part first.' };
-  if (selected.visible === false) return { ok: false, error: `${selected.label} is hidden.` };
-  const selectedPart = catalogById.get(selected.partId);
-  if (!selectedPart) return { ok: false, error: `${selected.label} isn't in the part library.` };
-
-  const graph = jointGraph(state);
-  const blocks = blocksOf(state, graph);
-  const visible = instances.filter((i) => i.visible !== false && blocks.has(i.instanceId));
-  const region = worldPartBox(selectedPart, buildWorldMatrix(selected.position, selected.rotation)).expandByScalar(REGION_MM);
-  const featureCache = new Map();
-  const featuresOf = (id) => {
-    if (!featureCache.has(id)) featureCache.set(id, worldFeaturesFor(byId.get(id)).filter((f) => region.containsPoint(midOf(f))));
-    return featureCache.get(id);
-  };
-  const featuresOfSet = (ids) => [...ids].flatMap(featuresOf);
-  const ownBlock = blocks.get(instanceId);
-  const blockIds = (block) => visible.filter((i) => blocks.get(i.instanceId) === block).map((i) => i.instanceId);
-  const nearby = visible.filter((i) => {
-    const part = catalogById.get(i.partId);
-    return part && worldPartBox(part, buildWorldMatrix(i.position, i.rotation))?.intersectsBox(region);
-  });
-
-  // 1. Another block nearly mated to the selected part's block
-  let sideS = null;
-  let sideP = null;
-  const ownIds = new Set(blockIds(ownBlock));
-  const outside = nearby.filter((i) => !ownIds.has(i.instanceId)).map((i) => i.instanceId);
-  const firstPairs = nearPairs(featuresOfSet(ownIds), featuresOfSet(outside)).filter((p) => !p.done);
-  if (firstPairs.length > 0) {
-    const counts = new Map();
-    for (const p of firstPairs) counts.set(blocks.get(p.b.instanceId), (counts.get(blocks.get(p.b.instanceId)) || 0) + 1);
-    const partnerBlock = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    sideS = ownIds;
-    sideP = new Set(blockIds(partnerBlock));
-  } else {
-    // 2. Inside its own block: the selected part, and what hangs only off it, against the rest
-    const others = [...ownIds].filter((id) => id !== instanceId);
-    // Pairs already on their lines still say where the part may need seating along them
-    const all = nearPairs(featuresOf(instanceId), featuresOfSet(others));
-    const inner = all.some((p) => !p.done) ? all.filter((p) => !p.done) : all;
-    if (inner.length === 0) {
-      return { ok: false, error: `No pins or holes near ${selected.label} are nearly lined up with another part.` };
-    }
-    const counts = new Map();
-    for (const p of inner) counts.set(p.b.instanceId, (counts.get(p.b.instanceId) || 0) + 1);
-    const partner = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    // Group members stay together: a partner in the selected part's group can't be split off
-    const groupOf = (id) => byId.get(id).groupId;
-    if (groupOf(instanceId) && groupOf(instanceId) === groupOf(partner)) {
-      return { ok: false, error: `${selected.label} and ${byId.get(partner).label} are in one group; ungroup them to fix how they fit.` };
-    }
-    sideP = reachable(graph, partner, instanceId, ownIds);
-    sideS = new Set([...ownIds].filter((id) => !sideP.has(id)));
-    if (sideS.size === 0 || [...sideS].some((id) => groupOf(id) && [...sideP].some((p) => groupOf(p) === groupOf(id)))) {
-      return { ok: false, error: `${selected.label} can't be moved apart from ${byId.get(partner).label}: they are joined some other way too.` };
-    }
-  }
-
-  // 2. Which side moves: the smaller, never one with a locked part
-  const locked = (ids) => [...ids].some((id) => byId.get(id).locked);
-  let moving = sideS.size <= sideP.size ? sideS : sideP;
-  if (locked(moving)) moving = moving === sideS ? sideP : sideS;
-  if (locked(moving)) return { ok: false, error: 'Both blocks have a locked part, so neither can be moved.' };
-  const fixed = moving === sideS ? sideP : sideS;
-
+function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, label }) {
   // 3. Every pair between the two sides near the selected part, moving feature first
   let pairs = nearPairs(featuresOfSet(moving), featuresOfSet(fixed)).map((p) => ({ m: p.a, f: p.b, kind: p.kind, done: p.done }));
   if (pairs.length === 0) {
-    return { ok: false, error: `No pins or holes near ${selected.label} are nearly lined up with another part.` };
+    return { ok: false, reason: 'none', error: `No pins or holes near ${label} are nearly lined up with another part.` };
   }
 
   // 4. Line them all up: turn and move the moving side as one piece
@@ -443,7 +377,7 @@ export function fixAssembly(state, { instanceId } = {}) {
     if (!worst.p) break;
     pairs = pairs.filter((p) => p !== worst.p);
     if (pairs.length === 0) {
-      return { ok: false, error: `The pins and holes near ${selected.label} don't agree on one way to line up. Move the parts closer first.` };
+      return { ok: false, reason: 'disagree', error: `The pins and holes near ${label} don't agree on one way to line up. Move the parts closer first.` };
     }
     T = solveLines(pairs, keep);
   }
@@ -451,7 +385,7 @@ export function fixAssembly(state, { instanceId } = {}) {
   const turnDeg = THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, Math.abs(new THREE.Quaternion().setFromRotationMatrix(T).w))));
   const moveMm = centre.clone().applyMatrix4(T).distanceTo(centre);
   if (turnDeg > MAX_TURN_DEG || moveMm > MAX_MOVE_MM) {
-    return { ok: false, error: `Lining these up would turn ${turnDeg.toFixed(0)}° and move ${moveMm.toFixed(1)} mm, too far for a fix. Move the parts closer first.` };
+    return { ok: false, reason: 'too-far', error: `Lining these up would turn ${turnDeg.toFixed(0)}° and move ${moveMm.toFixed(1)} mm, too far for a fix. Move the parts closer first.` };
   }
 
   // 5. Seat it along the shared line: out of any overlap, or in until it touches
@@ -557,10 +491,91 @@ export function fixAssembly(state, { instanceId } = {}) {
     const p = posed.get(i.instanceId);
     return p.position.every((v, k) => Math.abs(v + axis.getComponent(k) * slide - i.position[k]) < 0.005) && p.rotation.every((r, k) => Math.abs(r - i.rotation[k]) < 0.01);
   });
-  if (unchanged) return { ok: false, error: `${selected.label} is already lined up and seated.` };
+  if (unchanged) return { ok: false, reason: 'done', error: `${label} is already lined up and seated.` };
+  return { ok: true, pairs, movedParts: at(slide, axis) };
+
+}
+
+/**
+ * Lines up the selected part's block with the block it is nearly mated to (see file comment).
+ * Returns { ok, state, record, stepLabel, message, moved: [ids], pairs } or { ok: false, error }.
+ */
+export function fixAssembly(state, { instanceId } = {}) {
+  const { catalogById } = getCatalog();
+  const instances = state.instances || [];
+  const byId = new Map(instances.map((i) => [i.instanceId, i]));
+  const selected = byId.get(instanceId);
+  if (!selected) return { ok: false, error: 'Select a part first.' };
+  if (selected.visible === false) return { ok: false, error: `${selected.label} is hidden.` };
+  const selectedPart = catalogById.get(selected.partId);
+  if (!selectedPart) return { ok: false, error: `${selected.label} isn't in the part library.` };
+
+  const graph = jointGraph(state);
+  const blocks = blocksOf(state, graph);
+  const visible = instances.filter((i) => i.visible !== false && blocks.has(i.instanceId));
+  const region = worldPartBox(selectedPart, buildWorldMatrix(selected.position, selected.rotation)).expandByScalar(REGION_MM);
+  const featureCache = new Map();
+  const featuresOf = (id) => {
+    if (!featureCache.has(id)) featureCache.set(id, worldFeaturesFor(byId.get(id)).filter((f) => region.containsPoint(midOf(f))));
+    return featureCache.get(id);
+  };
+  const featuresOfSet = (ids) => [...ids].flatMap(featuresOf);
+  const ownBlock = blocks.get(instanceId);
+  const blockIds = (block) => visible.filter((i) => blocks.get(i.instanceId) === block).map((i) => i.instanceId);
+  const nearby = visible.filter((i) => {
+    const part = catalogById.get(i.partId);
+    return part && worldPartBox(part, buildWorldMatrix(i.position, i.rotation))?.intersectsBox(region);
+  });
+
+  // 1. Another block nearly mated to the selected part's block
+  let sideS = null;
+  let sideP = null;
+  const ownIds = new Set(blockIds(ownBlock));
+  const outside = nearby.filter((i) => !ownIds.has(i.instanceId)).map((i) => i.instanceId);
+  const firstPairs = nearPairs(featuresOfSet(ownIds), featuresOfSet(outside)).filter((p) => !p.done);
+  if (firstPairs.length > 0) {
+    const counts = new Map();
+    for (const p of firstPairs) counts.set(blocks.get(p.b.instanceId), (counts.get(blocks.get(p.b.instanceId)) || 0) + 1);
+    const partnerBlock = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    sideS = ownIds;
+    sideP = new Set(blockIds(partnerBlock));
+  } else {
+    // 2. Inside its own block: the selected part, and what hangs only off it, against the rest
+    const others = [...ownIds].filter((id) => id !== instanceId);
+    // Pairs already on their lines still say where the part may need seating along them
+    const all = nearPairs(featuresOf(instanceId), featuresOfSet(others));
+    const inner = all.some((p) => !p.done) ? all.filter((p) => !p.done) : all;
+    if (inner.length === 0) {
+      return { ok: false, error: `No pins or holes near ${selected.label} are nearly lined up with another part.` };
+    }
+    const counts = new Map();
+    for (const p of inner) counts.set(p.b.instanceId, (counts.get(p.b.instanceId) || 0) + 1);
+    const partner = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    // Group members stay together: a partner in the selected part's group can't be split off
+    const groupOf = (id) => byId.get(id).groupId;
+    if (groupOf(instanceId) && groupOf(instanceId) === groupOf(partner)) {
+      return { ok: false, error: `${selected.label} and ${byId.get(partner).label} are in one group; ungroup them to fix how they fit.` };
+    }
+    sideP = reachable(graph, partner, instanceId, ownIds);
+    sideS = new Set([...ownIds].filter((id) => !sideP.has(id)));
+    if (sideS.size === 0 || [...sideS].some((id) => groupOf(id) && [...sideP].some((p) => groupOf(p) === groupOf(id)))) {
+      return { ok: false, error: `${selected.label} can't be moved apart from ${byId.get(partner).label}: they are joined some other way too.` };
+    }
+  }
+
+  // 2. Which side moves: the smaller, never one with a locked part
+  const locked = (ids) => [...ids].some((id) => byId.get(id).locked);
+  let moving = sideS.size <= sideP.size ? sideS : sideP;
+  if (locked(moving)) moving = moving === sideS ? sideP : sideS;
+  if (locked(moving)) return { ok: false, error: 'Both blocks have a locked part, so neither can be moved.' };
+  const fixed = moving === sideS ? sideP : sideS;
+
+  const fit = fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, label: selected.label });
+  if (!fit.ok) return { ok: false, error: fit.error };
+  const { pairs } = fit;
 
   // 6. One step with the moved parts' overlap flags
-  const movedParts = at(slide, axis).map((c) => ({ ...c, position: c.position.map((v) => Number(v.toFixed(3)) + 0) }));
+  const movedParts = fit.movedParts.map((c) => ({ ...c, position: c.position.map((v) => Number(v.toFixed(3)) + 0) }));
   const movedById = new Map(movedParts.map((c) => [c.instanceId, c]));
   const nextInstances = instances.map((i) => movedById.get(i.instanceId) || i);
   for (const c of movedParts) {
@@ -595,4 +610,47 @@ export function fixAssembly(state, { instanceId } = {}) {
     pairs: lined,
     state: { ...state, instances: finalInstances, updatedAt: new Date().toISOString() }
   };
+}
+
+/**
+ * The release fit of a dragged set (openspec group-snapping): the set `ids`, at `poses` ({ [id]:
+ * { position, rotation } }, where it was dropped, not saved yet), lined up and seated on the visible
+ * parts outside it near it, with Fix assembly's rules. The set always moves, even when it is part of
+ * a group. Saves nothing. Returns { ok: true, poses: { [id]: { position, rotation } }, pairs, onto }
+ * or { ok: false, reason, error }.
+ */
+export function fitSet(state, { ids = [], poses = {} } = {}) {
+  const { catalogById } = getCatalog();
+  const instances = (state.instances || []).map((i) => (poses[i.instanceId] ? { ...i, ...poses[i.instanceId] } : i));
+  const byId = new Map(instances.map((i) => [i.instanceId, i]));
+  const moving = new Set(ids.filter((id) => byId.has(id) && byId.get(id).visible !== false));
+  if (moving.size === 0) return { ok: false, reason: 'none', error: 'Nothing to fit.' };
+  const boxOf = (i) => {
+    const part = catalogById.get(i.partId);
+    return part ? worldPartBox(part, buildWorldMatrix(i.position, i.rotation)) : null;
+  };
+  const region = new THREE.Box3();
+  for (const id of moving) {
+    const box = boxOf(byId.get(id));
+    if (box) region.union(box);
+  }
+  if (region.isEmpty()) return { ok: false, reason: 'none', error: 'Nothing to fit.' };
+  region.expandByScalar(REGION_MM);
+  const visible = instances.filter((i) => i.visible !== false && catalogById.has(i.partId));
+  const fixed = new Set(visible.filter((i) => !moving.has(i.instanceId) && boxOf(i)?.intersectsBox(region)).map((i) => i.instanceId));
+  if (fixed.size === 0) return { ok: false, reason: 'none', error: 'Nothing near to fit onto.' };
+  const featureCache = new Map();
+  const featuresOf = (id) => {
+    if (!featureCache.has(id)) featureCache.set(id, worldFeaturesFor(byId.get(id)).filter((f) => region.containsPoint(midOf(f))));
+    return featureCache.get(id);
+  };
+  const featuresOfSet = (set) => [...set].flatMap(featuresOf);
+  const fit = fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, label: 'the set' });
+  if (!fit.ok) return { ok: false, reason: fit.reason, error: fit.error };
+  const fixedCounts = new Map();
+  for (const p of fit.pairs) fixedCounts.set(p.f.instanceId, (fixedCounts.get(p.f.instanceId) || 0) + 1);
+  const ontoId = [...fixedCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const out = {};
+  for (const c of fit.movedParts) out[c.instanceId] = { position: c.position.map((v) => Number(v.toFixed(3)) + 0), rotation: c.rotation };
+  return { ok: true, poses: out, pairs: fit.pairs.length, onto: byId.get(ontoId).label };
 }

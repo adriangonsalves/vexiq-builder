@@ -922,13 +922,24 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   res = await call('update_group', { groupId: stackId, turn: { axis: 'Y', deg: 90 } });
   const audit1 = (await call('audit_assembly')).data;
   check('update_group turn 90° about Y: pins still seated in both beams', res.data?.ok && ['Pin1', 'Pin6'].every((l) => jointOf(audit1, l).sort().join() === 'Beam,Top') && res.data.audit.floatingFastenerCount === 0 && res.data.audit.halfSeatedFastenerCount === 0, JSON.stringify(res.data?.audit));
-  check('  centre stays put and the step is labeled', res.data.centre.every((v, k) => Math.abs(v - centre0[k]) < 0.05) && readState().history.steps.at(-1).label === 'update_group: Turn Stack', JSON.stringify([res.data.centre, centre0, readState().history.steps.at(-1).label]));
+  // The turn goes about a point on the set's hole grid near its centre, so the centre moves at most a half-pitch diagonal
+  check('  centre stays near and the step is labeled', res.data.centre.every((v, k) => Math.abs(v - centre0[k]) <= 6.35 * Math.SQRT2 + 0.05) && readState().history.steps.at(-1).label === 'update_group: Turn Stack', JSON.stringify([res.data.centre, centre0, readState().history.steps.at(-1).label]));
+  // Three more quarter turns about Y come back to the start (group-snapping: the pivot is on the hole grid)
+  const before4 = readState().instances.filter((i) => i.groupId === stackId).map((i) => i.position);
+  for (let k = 0; k < 4; k++) await call('update_group', { groupId: stackId, turn: { axis: 'Y', deg: 90 } });
+  const after4 = readState().instances.filter((i) => i.groupId === stackId).map((i) => i.position);
+  check('update_group: four 90° turns about Y return every part to where it was', after4.every((p, k) => p.every((v, a) => Math.abs(v - before4[k][a]) < 0.01)), JSON.stringify([before4, after4]));
+  const centreBeforeMove = (await call('get_assembly')).data.groups.find((g) => g.id === stackId).centre;
   const zBefore = readState().instances.filter((i) => i.groupId === stackId).map((i) => i.position[2]);
   res = await call('update_group', { groupId: stackId, moveBy: [0, 0, 25.4] });
   const zAfter = readState().instances.filter((i) => i.groupId === stackId).map((i) => i.position[2]);
-  check('update_group moveBy moves every part 25.4 mm along Z in one step', zAfter.every((z, k) => Math.abs(z - zBefore[k] - 25.4) < 1e-6) && Math.abs(res.data.centre[2] - centre0[2] - 25.4) < 0.05);
-  res = await call('update_group', { groupId: stackId, moveCentreTo: [50, 50, 50] });
-  check('update_group moveCentreTo puts the centre there', res.data.centre.every((v) => Math.abs(v - 50) < 0.01), JSON.stringify(res.data.centre));
+  check('update_group moveBy moves every part 25.4 mm along Z in one step', zAfter.every((z, k) => Math.abs(z - zBefore[k] - 25.4) < 1e-6) && Math.abs(res.data.centre[2] - centreBeforeMove[2] - 25.4) < 0.05);
+  // Whole 0.5P steps (the saved snap) from where it is, the nearest to the given centre
+  const c1 = (await call('get_assembly')).data.groups.find((g) => g.id === stackId).centre;
+  const target = [c1[0] + 2 * 6.35 + 2, c1[1] - 6.35 - 2, c1[2] + 2];
+  res = await call('update_group', { groupId: stackId, moveCentreTo: target });
+  const moved = res.data.centre.map((v, k) => v - c1[k]);
+  check('update_group moveCentreTo 2 mm off a step lands on whole steps', [12.7, -6.35, 0].every((v, k) => Math.abs(moved[k] - v) < 0.01), JSON.stringify({ moved, centre: res.data.centre }));
   res = await call('update_group', { groupId: stackId, name: 'Claw' });
   check('update_group renames', (await call('get_assembly')).data.groups.some((g) => g.name === 'Claw'));
   res = await callRaw('update_group', { groupId: stackId, name: '  ' });

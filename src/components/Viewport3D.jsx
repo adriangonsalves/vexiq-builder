@@ -20,6 +20,7 @@ import { settlePlacement } from '../utils/placementFit.js';
 import { isTireOnHub } from '../utils/tireFit.js';
 import { isChainFit } from '../utils/chainFit.js';
 import { batteryBayPose } from '../utils/batteryBay.js';
+import { setGridPivot, wholeGroupOf } from '../utils/partGroups.js';
 import {
   HOLE_SNAP_AXIAL_REACH_MM,
   MAX_AXIAL_GAP_MM,
@@ -29,7 +30,14 @@ import {
   findEngagedJoints,
   parallelLines,
   findHoleSnap,
+  findStraighten,
   findTooWideInserts,
+  freeSetFeatures,
+  freeSetLeadEnds,
+  listSetInsertFits,
+  setLeadsFacing,
+  HOLE_SNAP_RADIUS_MM,
+  SET_HOLE_SNAP_AXIAL_REACH_MM,
   getLocalFeatures,
   gridPivot,
   boreTargets,
@@ -471,6 +479,21 @@ function createPickOverlay() {
       }
     });
   };
+  /** See-through copy of several part groups (a set), in world space (built once per pick). */
+  const setGhostSources = (sourceGroups) => {
+    ghost.clear();
+    for (const sourceGroup of sourceGroups) {
+      sourceGroup.updateMatrixWorld(true);
+      sourceGroup.traverse((child) => {
+        if (child.isMesh && child.userData.isPartMesh) {
+          const copy = new THREE.Mesh(child.geometry, ghostMaterial);
+          child.matrixWorld.decompose(copy.position, copy.quaternion, copy.scale);
+          copy.renderOrder = 1001;
+          ghost.add(copy);
+        }
+      });
+    }
+  };
   /** Pose of the preview copy ({ position, quaternion }), or null to hide it. */
   const showGhost = (pose) => {
     ghost.visible = Boolean(pose);
@@ -510,7 +533,7 @@ function createPickOverlay() {
     markerMaterials.green.dispose();
     markerMaterials.red.dispose();
   };
-  return { group, showRing, showRings, setGhostSource, showGhost, showMarkers, clear, dispose };
+  return { group, showRing, showRings, setGhostSource, setGhostSources, showGhost, showMarkers, clear, dispose };
 }
 
 /**
@@ -1373,6 +1396,7 @@ export default function Viewport3D({
   onExpandSelection,
   onUpdateTransform,
   onUpdateSet,
+  onFitSet,
   onRegisterFlushMover,
   onRegisterScreenshot,
   onRegisterViewSpot,
@@ -1502,10 +1526,14 @@ export default function Viewport3D({
   onExpandSelectionRef.current = onExpandSelection;
   const onUpdateSetRef = useRef(onUpdateSet);
   onUpdateSetRef.current = onUpdateSet;
+  const onFitSetRef = useRef(onFitSet);
+  onFitSetRef.current = onFitSet;
   // Moving several parts as one (openspec outliner-part-groups): the Move arrows sit on this pivot at
   // the set's centre; a drag moves every member from where it started
   const setPivotRef = useRef(null);
-  const setDragRef = useRef(null); // { ids, ignore, starts: Map<id, Vector3>, lastCheckAt }
+  const setDragRef = useRef(null); // a set drag in progress (startSetDrag)
+  const fitPendingRef = useRef(false); // a dropped set is being fitted: viewport input waits
+  const straightenedRef = useRef(false); // the dragged part is turned square onto a hole line
 
   const explodeModeRef = useRef(explodeMode);
   explodeModeRef.current = explodeMode;
@@ -1591,8 +1619,9 @@ export default function Viewport3D({
     group.updateMatrixWorld(true);
   };
 
-  // ignoreIds: parts moving together with the target (a set), which never count as overlapping it
-  const checkGroupCollision = (targetGroup, useAssembledPositions = false, ignoreIds = null) => {
+  // ignoreIds: parts moving together with the target (a set), which never count as overlapping it.
+  // hits: when given, every overlapped part's id is pushed to it (all of them, not just the first)
+  const checkGroupCollision = (targetGroup, useAssembledPositions = false, ignoreIds = null, hits = null) => {
     if (!targetGroup || !targetGroup.visible) return false;
     const colGeosA = targetGroup.userData.collisionGeometries;
     const localBoxA = targetGroup.userData.localBox;
@@ -1617,6 +1646,7 @@ export default function Viewport3D({
     const matrixBtoA = new THREE.Matrix4();
 
     let collided = false;
+    let anyHit = false;
     let featuresA; // worked out only when a shaft and a hole meet
     for (const [otherId, otherGroup] of meshMapRef.current.entries()) {
       if (otherId === targetGroup.userData.instanceId) continue;
@@ -1660,8 +1690,15 @@ export default function Viewport3D({
         if (featuresA === undefined) featuresA = worldFeaturesOfGroup(targetGroup);
         collided = findTooWideInserts(featuresA, worldFeaturesOfGroup(otherGroup)).length > 0;
       }
+      if (collided && hits) {
+        hits.push(otherId);
+        anyHit = true;
+        collided = false;
+        continue;
+      }
       if (collided) break;
     }
+    if (anyHit) collided = true;
 
     if (useAssembledPositions) {
       for (const [g, pos] of savedPos.entries()) {
@@ -1741,12 +1778,13 @@ export default function Viewport3D({
 
   /**
    * Caches world pins/shafts/openings of every visible non-selected part. Nothing but the selected
-   * part moves during a drag, so this is rebuilt only at drag start and after scene syncs.
+   * part moves during a drag, so this is rebuilt only at drag start and after scene syncs. `exclude`:
+   * the ids left out instead of the selected part (a set being dragged).
    */
-  const rebuildOtherFeatures = () => {
+  const rebuildOtherFeatures = (exclude = null) => {
     const entries = [];
     for (const [instId, group] of meshMapRef.current.entries()) {
-      if (instId === selectedIdRef.current || !group.visible) continue;
+      if ((exclude ? exclude.has(instId) : instId === selectedIdRef.current) || !group.visible) continue;
       const partMeta = catalogMapRef.current.get(group.userData.partId);
       if (!partMeta) continue;
       group.updateMatrixWorld();
@@ -1764,11 +1802,13 @@ export default function Viewport3D({
         continue;
       }
       const features = collectWorldFeatures(partMeta, group.matrixWorld, instId, measured);
+      const partBox = worldPartBox(partMeta, group.matrixWorld);
       const entry = features.length === 0
         ? null
         : {
             instanceId: instId,
-            box: worldPartBox(partMeta, group.matrixWorld)?.expandByScalar(MAX_AXIAL_GAP_MM),
+            box: partBox?.clone().expandByScalar(MAX_AXIAL_GAP_MM),
+            partBox,
             features
           };
       group.userData.featureCache = {
@@ -2096,7 +2136,8 @@ export default function Viewport3D({
     const arrows = arrowOverlayRef.current;
     const transform = transformRef.current;
     if (!arrows || !transform) return;
-    const center = new THREE.Box3().setFromObject(group).getCenter(new THREE.Vector3());
+    // `group` may be a point instead (a set's centre)
+    const center = group.isVector3 ? group.clone() : new THREE.Box3().setFromObject(group).getCenter(new THREE.Vector3());
     arrowPlansRef.current = plans;
     arrows.show(
       plans.map((p) => p.direction),
@@ -2281,7 +2322,7 @@ export default function Viewport3D({
       onPickStatusRef.current?.(null);
       return;
     }
-    const name = pickLabelOf(pick.selId);
+    const name = pick.set ? pick.set.name : pickLabelOf(pick.selId);
     if (pick.kind === 'copy') {
       // Copy preview: a short line only while a hole is lit (or after a refusal); none over the
       // hole a copy just went into
@@ -2623,7 +2664,14 @@ export default function Viewport3D({
       const listFits = pick.bore ? listBoreFits : listInsertFits;
       pick.fits = taken
         ? []
-        : listFits({
+        : pick.set
+          ? listSetInsertFits({ leadEnds: pick.set.leads, hovered: front, otherFeatures: pick.others }).map((fit) => ({
+              ...fit,
+              // The preview copy's pose: turned about the leading tip, then moved
+              quaternion: fit.quaternion,
+              position: fit.pivot.clone().add(fit.offset).sub(fit.pivot.clone().applyQuaternion(fit.quaternion))
+            }))
+          : listFits({
             partMeta: pick.partMeta,
             measured: pick.measured,
             instanceId: pick.selId,
@@ -2665,6 +2713,10 @@ export default function Viewport3D({
     if (pick.hovered.taken) {
       pick.message = 'That hole already has a part in it';
       emitPickStatus();
+      return;
+    }
+    if (pick.set) {
+      setPickClick(pick);
       return;
     }
     const fit = pick.fits[pick.fitIndex];
@@ -2815,6 +2867,8 @@ export default function Viewport3D({
   };
 
   const handleMateRequest = () => {
+    const members = selectedSetMembers();
+    if (members) return mateSetRequest(members);
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
@@ -2931,6 +2985,15 @@ export default function Viewport3D({
     return box.getCenter(new THREE.Vector3());
   };
 
+  /** Every member's world pins and holes, as posed in the scene. */
+  const setMemberFeatures = (members) =>
+    members.flatMap(({ id, group }) => {
+      const meta = catalogMapRef.current.get(group.userData.partId);
+      if (!meta) return [];
+      group.updateMatrixWorld();
+      return collectWorldFeatures(meta, group.matrixWorld, id, getMeshMeasurements(group, meta));
+    });
+
   // Why a set can't be moved, or null
   const setBlockedMessage = (members) =>
     members.some((m) => m.inst.locked) ? 'Part is locked' : members.some((m) => m.inst.visible === false) ? 'Some parts are hidden' : null;
@@ -2960,7 +3023,7 @@ export default function Viewport3D({
     ref.updateMatrixWorld();
     // The pivot stays in the first member's frame between turns, so repeated turns go about one point
     const pivot =
-      prev?.setKey === setKey && prev.localPivot ? prev.localPivot.clone().applyMatrix4(ref.matrixWorld) : setCentreOf(members);
+      prev?.setKey === setKey && prev.localPivot ? prev.localPivot.clone().applyMatrix4(ref.matrixWorld) : setGridPivot(setMemberFeatures(members), setCentreOf(members));
     const rings = [
       { name: 'X', axis: new THREE.Vector3(1, 0, 0) },
       { name: 'Y', axis: new THREE.Vector3(0, 1, 0) },
@@ -2997,11 +3060,449 @@ export default function Viewport3D({
     refreshAnchorLines();
   };
 
-  // Members of a moving set marked overlapping only by parts outside the set
-  const markSetOverlaps = (members, ignore) => {
+  // --- Dragging a set (openspec group-snapping) -------------------------------------------------------
+
+  /** A part's world box as posed (a point box at its position when it has no model box). */
+  const posedBox = (group) => {
+    group.updateMatrixWorld();
+    const lb = group.userData.localBox;
+    return lb && !lb.isEmpty() ? lb.clone().applyMatrix4(group.matrixWorld) : new THREE.Box3(group.position.clone(), group.position.clone());
+  };
+
+  /**
+   * The set's edge members: those whose box, grown by `marginMm`, meets the box of a visible part
+   * outside the set (cached at drag start; outside parts don't move). Only these can overlap anything,
+   * so overlap tests that look only at them give the same answer as testing every member.
+   */
+  const setEdgeIds = (drag, marginMm = 0.5) => {
+    const edge = new Set();
+    for (const id of drag.ids) {
+      const g = meshMapRef.current.get(id);
+      if (!g) continue;
+      const box = posedBox(g).expandByScalar(marginMm);
+      if (drag.outsideBoxes.some((b) => b.intersectsBox(box))) edge.add(id);
+    }
+    return edge;
+  };
+
+  /** Overlaps of the set's edge members with outside parts, as a Set of `memberId|otherId`. */
+  const setOverlapPairs = (drag) => {
+    const pairs = new Set();
+    for (const id of drag.edge) {
+      const g = meshMapRef.current.get(id);
+      if (!g) continue;
+      const hits = [];
+      checkGroupCollision(g, false, drag.ignore, hits);
+      for (const other of hits) pairs.add(`${id}|${other}`);
+    }
+    return pairs;
+  };
+
+  /** A point of the set at its start pose, turned by `turn` ({ quaternion, pivot } or null) and moved by `delta`. */
+  const setPointAt = (p, delta, turn) => {
+    const out = p.clone();
+    if (turn) out.sub(turn.pivot).applyQuaternion(turn.quaternion).add(turn.pivot);
+    return out.add(delta);
+  };
+
+  /** Poses every member from its start pose: turned by `turn`, then moved by `delta`. */
+  const poseSetMembers = (drag, delta, turn = null) => {
+    for (const [id, start] of drag.starts) {
+      const g = meshMapRef.current.get(id);
+      if (!g) continue;
+      g.position.copy(setPointAt(start.pos, delta, turn));
+      g.quaternion.copy(start.quat);
+      if (turn) g.quaternion.premultiply(turn.quaternion);
+      g.updateMatrixWorld();
+    }
+  };
+
+  /** The set's free outer features (taken at its start pose) where `delta` and `turn` put them. */
+  const setFeaturesAt = (drag, delta, turn = null) =>
+    drag.features.map((f) => {
+      const moved = { ...f, origin: setPointAt(f.origin, delta, turn), start: setPointAt(f.start, delta, turn), end: setPointAt(f.end, delta, turn) };
+      if (turn) {
+        moved.axis = f.axis.clone().applyQuaternion(turn.quaternion);
+        if (f.flatDir) moved.flatDir = f.flatDir.clone().applyQuaternion(turn.quaternion);
+      }
+      return moved;
+    });
+
+  /** Outside parts' features near the set at `delta` (its start box moved, grown by the set reach). */
+  const setSnapCandidates = (drag, delta) => {
+    const reach = drag.box.clone().translate(delta).expandByScalar(SET_HOLE_SNAP_AXIAL_REACH_MM + drag.turnSlackMm);
+    const out = [];
+    for (const other of otherFeaturesRef.current) {
+      if (other.partBox && !reach.intersectsBox(other.partBox)) continue;
+      for (const f of other.features) out.push(f);
+    }
+    return out;
+  };
+
+  /**
+   * The selected set as it is now, for moving it as one: start poses, its free outer features, the
+   * outside parts' boxes (and their features in otherFeaturesRef), its edge members and its overlaps.
+   */
+  const setContext = () => {
+    const ids = selectedIdsRef.current.filter((id) => meshMapRef.current.has(id));
+    const ignore = new Set(ids);
+    rebuildOtherFeatures(ignore);
+    const members = ids.map((id) => ({ id, group: meshMapRef.current.get(id) }));
+    const starts = new Map(members.map(({ id, group }) => [id, { pos: group.position.clone(), quat: group.quaternion.clone() }]));
+    const box = new THREE.Box3();
+    for (const { group } of members) box.union(posedBox(group));
+    const outsideBoxes = [];
+    for (const [id, g] of meshMapRef.current.entries()) if (!ignore.has(id) && g.visible) outsideBoxes.push(posedBox(g));
+    const all = setMemberFeatures(members);
+    const ctx = { ids, ignore, starts, box, outsideBoxes, all, features: freeSetFeatures(all), turnSlackMm: 0 };
+    ctx.edge = setEdgeIds(ctx);
+    ctx.startOverlap = setOverlapPairs(ctx);
+    return ctx;
+  };
+
+  /** The set's name for messages and steps: its group's name when it is a whole group, else "N parts". */
+  const setNameOf = (ids) => wholeGroupOf(instancesRef.current, ids)?.name || `${ids.length} parts`;
+
+  /** Starts a set drag from the set's context. */
+  const startSetDrag = () => {
+    const drag = setContext();
+    Object.assign(drag, {
+      // A straightening turn (at most 5°) can swing the far end of a big set this much
+      turnSlackMm: drag.box.getSize(new THREE.Vector3()).length() * Math.sin(THREE.MathUtils.degToRad(5)),
+      delta: new THREE.Vector3(),
+      turn: null,
+      snapLine: null,
+      leftStart: false,
+      lastCheckAt: 0,
+      moved: [],
+      candidates: []
+    });
+    setDragRef.current = drag;
+  };
+
+  /** Lined-up pairs no further apart along their line than the set reach. */
+  const withinSetReach = (a) =>
+    Math.min(a.insertStart.clone().sub(a.face).dot(a.outward), a.insertEnd.clone().sub(a.face).dot(a.outward)) <= SET_HOLE_SNAP_AXIAL_REACH_MM;
+
+  /** True when the set (`ctx`) as posed overlaps an outside part it didn't overlap in its context. */
+  const setHasNewOverlap = (ctx) => {
+    ctx.edge = setEdgeIds(ctx);
+    return [...setOverlapPairs(ctx)].some((pair) => !ctx.startOverlap.has(pair));
+  };
+
+  /**
+   * Pushes the selected set along `plan` (planMates, or a picked hole's fit): sideways onto the line,
+   * then along the direction until a member touches an outside part (bisected to contact) or the plan's
+   * travel ends; one step. A push that ends in a new overlap leaves the set where it was. `ctx`: the
+   * set's context (taken now when not given); `from` ({ quaternion, pivot, offset }): a picked fit's
+   * pose to start from instead of where the set is.
+   */
+  const mateSet = async (plan, { ctx = setContext(), from = null, label = null, message = null } = {}) => {
+    const feedback = (text, isError = false) => onMateFeedbackRef.current?.(text, isError);
+    const turn = from ? { quaternion: from.quaternion, pivot: from.pivot } : null;
+    const base = (from ? from.offset.clone() : new THREE.Vector3()).add(plan.lateral || new THREE.Vector3());
+    const poseAt = (d) => poseSetMembers(ctx, base.clone().addScaledVector(plan.direction, d), turn);
+    const putBack = (text) => {
+      poseSetMembers(ctx, new THREE.Vector3(), null);
+      const members = selectedSetMembers();
+      if (members) markSetOverlaps(members, ctx.ignore);
+      feedback(text, true);
+      syncGizmos();
+    };
+    poseAt(0);
+    if (setHasNewOverlap(ctx)) return putBack(from ? 'The way in is blocked: something is in the way just outside that hole' : "Can't mate: already touching another part");
+    const STEP_MM = 0.5;
+    const travel = Math.max(0, plan.travelMm);
+    const sweep = Math.max(travel, plan.sweepMm ?? 0);
+    let clear = 0;
+    let final = null;
+    for (let d = Math.min(STEP_MM, sweep); d > 0; d = Math.min(d + STEP_MM, sweep)) {
+      poseAt(d);
+      if (setHasNewOverlap(ctx)) {
+        let blocked = d;
+        for (let i = 0; i < 10; i++) {
+          const mid = (clear + blocked) / 2;
+          poseAt(mid);
+          if (setHasNewOverlap(ctx)) blocked = mid;
+          else clear = mid;
+        }
+        final = clear;
+        break;
+      }
+      clear = d;
+      if (d >= sweep) break;
+    }
+    poseAt(final ?? travel);
+    // Then Fix assembly's fit (square up and seat), as when a dragged set is let go; Alt skips it
+    let fitNote = '';
+    if (!altKeyRef.current) {
+      const fitted = await fitSetNow(ctx.ids);
+      if (fitted.aborted) return;
+      fitNote = fitted.note;
+    }
+    roundSetPoses(ctx.ids);
+    if (setHasNewOverlap(ctx)) return putBack("Can't place it there: it would overlap another part. Put back.");
+    const partnerIds = new Set(plan.pairs?.map((p) => (ctx.ignore.has(p.insertInstanceId) ? p.instanceId : p.insertInstanceId)) || []);
+    if (plan.receivingId) partnerIds.add(plan.receivingId);
+    const onto = [...partnerIds].map((id) => instancesRef.current.find((i) => i.instanceId === id)?.label || id).join(', ');
+    const name = setNameOf(ctx.ids);
+    const stepLabel = label || `Mate ${name} onto ${onto}`;
+    commitSetPoses(ctx.ids, 'move', { edge: ctx.edge, label: fitNote ? `${stepLabel}. ${fitNote}` : stepLabel });
+    feedback([message || `Mated ${name} with ${onto}`, fitNote].filter(Boolean).join('. '));
+    syncGizmos();
+  };
+
+  /** A clicked mate arrow: mates the selected set, or the selected part. */
+  const mateArrowPlan = (plan) => {
+    if (selectedSetMembers()) mateSet(plan);
+    else mateSelected(plan);
+  };
+
+  /**
+   * Double-click on a selected set: push it in when its free pins and holes are lined up within the set
+   * reach (arrows when there are several ways in), else hole picking with the pins that face a hole.
+   */
+  const mateSetRequest = (members) => {
+    const feedback = (text, isError = false) => onMateFeedbackRef.current?.(text, isError);
+    try {
+      mateSetRequestUnchecked(members, feedback);
+    } catch (err) {
+      console.error('Mating the set failed', err);
+      feedback(`Couldn't mate the set: ${err.message}`, true);
+    }
+  };
+  const mateSetRequestUnchecked = (members, feedback) => {
+    if (explodeModeRef.current !== 'off') return feedback("Can't mate in Explode view", true);
+    const blocked = setBlockedMessage(members);
+    if (blocked) return feedback(blocked, true);
+    const ctx = setContext();
+    const candidates = setSnapCandidates(ctx, new THREE.Vector3());
+    const aligned = findAlignedOpenings(ctx.features, candidates).filter(withinSetReach);
+    const plans = planMates(aligned, ctx.ignore);
+    if (plans.length === 1) return mateSet(plans[0], { ctx });
+    if (plans.length > 1) return showMateArrows(plans, setCentreOf(members));
+    if (!startSetPick(ctx)) feedback('Turn or move the group so its pins face the part to mate it to', true);
+  };
+
+  /**
+   * Hole picking for the selected set (group-snapping): only the hole faces that one of its leading
+   * ends points within 30° of straight into. Returns false when there are none.
+   */
+  const startSetPick = (ctx) => {
+    const capped = (f, which) =>
+      which === 'end' && catalogMapRef.current.get(meshMapRef.current.get(f.instanceId)?.userData.partId)?.fastenerSpecs?.fastenerType === 'capped_shaft';
+    const leads = freeSetLeadEnds(ctx.all, { isCapped: capped });
+    if (!leads.length) return false;
+    const others = otherFeaturesRef.current.flatMap((o) => o.features);
+    const candidates = [];
+    for (const f of others) {
+      for (const face of openFaces(f)) if (setLeadsFacing(leads, f, face).length) candidates.push({ opening: f, face });
+    }
+    if (!candidates.length) return false;
+    const selId = selectedIdRef.current;
+    pickModeRef.current = {
+      kind: 'pick',
+      selId,
+      set: { ...ctx, leads, name: setNameOf(ctx.ids) },
+      partMeta: null,
+      bore: false,
+      followOnly: false,
+      measured: null,
+      meshNeighbours: null,
+      startPosition: meshMapRef.current.get(selId)?.position.clone() ?? new THREE.Vector3(),
+      startQuaternion: meshMapRef.current.get(selId)?.quaternion.clone() ?? new THREE.Quaternion(),
+      transformMode: transformModeRef.current,
+      explodeMode: explodeModeRef.current,
+      candidates,
+      others,
+      hovered: null,
+      fits: [],
+      fitIndex: 0,
+      message: null
+    };
+    const transform = transformRef.current;
+    if (transform) {
+      transform.enabled = false;
+      transform.getHelper().visible = false;
+    }
+    pickOverlayRef.current?.setGhostSources(ctx.ids.map((id) => meshMapRef.current.get(id)).filter(Boolean));
+    refreshRotateSetup();
+    renderPick();
+    return true;
+  };
+
+  /** A click on a hovered hole while picking for a set: pose the set at the fit and push it in. */
+  const setPickClick = (pick) => {
+    const fit = pick.fits[pick.fitIndex];
+    if (!fit) return;
+    const into = pickLabelOf(pick.hovered.opening.instanceId);
+    const label = `Insert ${pick.set.name} into ${into}`;
+    const ctx = pick.set;
+    pick.keepPose = true;
+    endPick();
+    mateSet(
+      { lateral: new THREE.Vector3(), direction: fit.direction, travelMm: fit.travelMm, sweepMm: fit.sweepMm, pairs: [], receivingId: pick.hovered.opening.instanceId },
+      { ctx, from: fit, label, message: `Inserted ${pick.set.name} into ${into}` }
+    );
+  };
+
+  /** World directions the Move arrows drag a set along (sets always use the world's axes). */
+  const setDragDirections = () =>
+    [...(transformRef.current?.axis || '').replace(/[^XYZ]/g, '')].map((l) => new THREE.Vector3(l === 'X' ? 1 : 0, l === 'Y' ? 1 : 0, l === 'Z' ? 1 : 0));
+
+  /**
+   * One frame of a set drag, with the pivot at its whole-step position: straightens a small tilt, pulls
+   * onto holes within the set reach (never back to the start until it has left it), poses the members.
+   */
+  const dragSetFrame = (drag, pivotObj, rawPos) => {
+    const start = dragStartPosRef.current;
+    if (rawPos.distanceTo(start) > HOLE_SNAP_RADIUS_MM) drag.leftStart = true;
+    let delta = pivotObj.position.clone().sub(start);
+    let turn = null;
+    drag.snapLine = null;
+    const directions = setDragDirections();
+    if (!altKeyRef.current && drag.features.length && directions.length) {
+      drag.candidates = setSnapCandidates(drag, delta);
+      const reach = { axialReachMm: SET_HOLE_SNAP_AXIAL_REACH_MM };
+      const st = findStraighten(setFeaturesAt(drag, delta), drag.candidates, reach);
+      if (st) turn = { quaternion: st.quaternion, pivot: st.pivot.clone().sub(delta) };
+      const rejectMove = (offset) => !drag.leftStart && !turn && delta.clone().add(offset).length() < 0.25;
+      const snap = findHoleSnap(setFeaturesAt(drag, delta, turn), drag.candidates, directions, { ...reach, rejectMove });
+      if (snap) {
+        const snapped = delta.clone().add(snap.offset);
+        // Dragged axes along the hole's line stay on the drag grid
+        for (const dir of directions) {
+          if (Math.abs(dir.dot(snap.opening.axis)) > 0.999) snapped.addScaledVector(dir, delta.clone().sub(snapped).dot(dir));
+        }
+        delta = new THREE.Vector3(...snapped.toArray().map((v) => Number(v.toFixed(3))));
+        drag.snapLine = snap.opening.axis.clone();
+      }
+    }
+    drag.delta = delta;
+    drag.turn = turn;
+    drag.moved = altKeyRef.current ? [] : setFeaturesAt(drag, delta, turn);
+    pivotObj.position.copy(start).add(delta);
+    poseSetMembers(drag, delta, turn);
+  };
+
+  /** The set's lined-up pairs (within the set reach along the line) as hole highlights. */
+  const showSetHighlights = (drag) => {
+    const overlay = holeOverlayRef.current;
+    if (!overlay) return;
+    const aligned = drag.moved.length
+      ? findAlignedOpenings(drag.moved, drag.candidates).filter((a) => {
+          const gap = Math.min(a.insertStart.clone().sub(a.face).dot(a.outward), a.insertEnd.clone().sub(a.face).dot(a.outward));
+          return gap <= SET_HOLE_SNAP_AXIAL_REACH_MM;
+        })
+      : [];
+    lastAlignedRef.current = aligned;
+    overlay.show(aligned);
+  };
+
+  /** Puts each member at its pose as it will be saved (mm to 0.001, degrees to 0.01), so overlap tests see it. */
+  const roundSetPoses = (ids) => {
+    for (const id of ids) {
+      const g = meshMapRef.current.get(id);
+      if (g) poseGroup(g, groupPose(g));
+    }
+  };
+
+  /**
+   * Fix assembly's fit for the set `ids` where it is now (the engine's fit_set), while viewport input
+   * waits; the members are posed at the fit. Returns { note } ('' when nothing was fitted), or
+   * { aborted: true } when the build or selection changed meanwhile (the move is then not saved).
+   */
+  const fitSetNow = async (ids) => {
+    if (!onFitSetRef.current) return { note: '' };
+    const poses = {};
+    for (const id of ids) {
+      const g = meshMapRef.current.get(id);
+      if (g) poses[id] = groupPose(g);
+    }
+    const instancesBefore = instancesRef.current;
+    const selectionBefore = selectedIdsRef.current.join(',');
+    fitPendingRef.current = true;
+    transformRef.current?.detach();
+    let fit = null;
+    try {
+      fit = await onFitSetRef.current(ids, poses);
+    } catch {
+      fit = null;
+    } finally {
+      fitPendingRef.current = false;
+    }
+    // The build or the selection changed while it was worked out: the scene already shows that
+    if (instancesRef.current !== instancesBefore || selectedIdsRef.current.join(',') !== selectionBefore) {
+      onMateFeedbackRef.current?.('The build changed while the parts were being lined up, so the move was not saved.', true);
+      syncGizmos();
+      return { aborted: true };
+    }
+    if (!fit?.ok || !fit.poses) return { note: '' };
+    for (const id of ids) {
+      const g = meshMapRef.current.get(id);
+      if (g && fit.poses[id]) poseGroup(g, fit.poses[id]);
+    }
+    return { note: `Lined up ${fit.pairs} pin${fit.pairs === 1 ? '' : 's'} and hole${fit.pairs === 1 ? '' : 's'} with ${fit.onto}` };
+  };
+
+  /**
+   * A set drag let go: slide clear along the snap line, fit onto nearby holes (Fix assembly's rules, in
+   * the engine), then save as one step, or put the set back when it now overlaps something new.
+   */
+  const finishSetDrag = async (drag) => {
+    const members = () => selectedSetMembers() || [];
+    const factor = snapPitchFactorRef.current;
+    const step = factor && factor > 0 ? VEX_PITCH_MM * factor : 0;
+    // 1. Lined up on a hole line but pressed into something: the nearest clear spot along it
+    if (drag.snapLine) {
+      const reach = Math.max(VEX_PITCH_MM * 0.25, step / 2);
+      drag.edge = setEdgeIds(drag, reach + 0.5);
+      if (setOverlapPairs(drag).size) {
+        const base = new Map(drag.ids.map((id) => [id, meshMapRef.current.get(id)?.position.clone()]));
+        const shiftBy = (t) => {
+          for (const [id, pos] of base) {
+            const g = meshMapRef.current.get(id);
+            if (!g || !pos) continue;
+            g.position.copy(pos).addScaledVector(drag.snapLine, t);
+            g.updateMatrixWorld();
+          }
+        };
+        const d = clearSpotAlongLine((t) => {
+          shiftBy(t);
+          return setOverlapPairs(drag).size === 0;
+        }, reach);
+        shiftBy(d ?? 0);
+      }
+    }
+    // 2. The fit, unless Alt is held or the set never left where it started
+    let note = '';
+    if (!altKeyRef.current && drag.leftStart) {
+      const fitted = await fitSetNow(drag.ids);
+      if (fitted.aborted) return;
+      note = fitted.note;
+    }
+    roundSetPoses(drag.ids);
+    // 3. Something new overlapped: back to where the drag started, nothing saved
+    drag.edge = setEdgeIds(drag);
+    const overlaps = setOverlapPairs(drag);
+    if ([...overlaps].some((pair) => !drag.startOverlap.has(pair))) {
+      poseSetMembers(drag, new THREE.Vector3(), null);
+      markSetOverlaps(members(), drag.ignore);
+      onMateFeedbackRef.current?.("Can't place it there: it would overlap another part. Put back.", true);
+      syncGizmos();
+      return;
+    }
+    commitSetPoses(drag.ids, 'move', { note, edge: drag.edge });
+    if (note) onMateFeedbackRef.current?.(note);
+    syncGizmos();
+  };
+
+  // Members of a moving set marked overlapping only by parts outside the set. `edge`: when given, only
+  // these members are tested (the others are too far from every outside part to overlap one)
+  const markSetOverlaps = (members, ignore, edge = null) => {
     const overlaps = new Map();
     for (const { id, group, inst } of members) {
-      const isColliding = checkGroupCollision(group, false, ignore);
+      const isColliding = edge && !edge.has(id) ? false : checkGroupCollision(group, false, ignore);
       group.userData.isIntersecting = isColliding;
       overlaps.set(id, isColliding);
       applyGroupAppearance(group, {
@@ -3287,10 +3788,10 @@ export default function Viewport3D({
   };
 
   /** Saves a set's moved or turned poses as one step (`kind`: 'move' | 'turn'), with overlaps against outside parts. */
-  const commitSetPoses = (ids, kind) => {
+  const commitSetPoses = (ids, kind, { note = '', edge = null, label = null } = {}) => {
     const members = ids.map((id) => ({ id, group: meshMapRef.current.get(id), inst: instancesRef.current.find((i) => i.instanceId === id) })).filter((m) => m.group && m.inst);
     if (!members.length) return;
-    const overlaps = markSetOverlaps(members, new Set(ids));
+    const overlaps = markSetOverlaps(members, new Set(ids), edge);
     const patches = members.map(({ id, group }) => ({
       id,
       fields: {
@@ -3299,7 +3800,7 @@ export default function Viewport3D({
         isIntersecting: overlaps.get(id)
       }
     }));
-    onUpdateSetRef.current?.(ids, patches, { kind });
+    onUpdateSetRef.current?.(ids, patches, { kind, note, label });
   };
 
   /** Typed angle on a ring label: turn so the label reads `value` (exact, not snapped), then save. */
@@ -3811,29 +4312,25 @@ export default function Viewport3D({
       if (!obj) return;
       dragMovedRef.current = true;
       if (obj.userData.isSetPivot) {
-        // A set: snap the pivot in whole steps from where it started, move every member by as much.
-        // No hole snap or flush stop for sets.
+        // A set: snap the pivot in whole steps from where it started, then straighten and pull onto
+        // nearby holes (dragSetFrame) and move every member by as much. Contact is settled on release.
         const drag = setDragRef.current;
         if (!drag) return;
+        const rawPos = obj.position.clone();
         const factor = snapPitchFactorRef.current;
         const step = factor && factor > 0 ? VEX_PITCH_MM * factor : 0;
         const start = dragStartPosRef.current;
         if (step > 0) {
           for (const ax of ['x', 'y', 'z']) obj.position[ax] = Number((start[ax] + Math.round((obj.position[ax] - start[ax]) / step) * step).toFixed(3));
         }
-        const delta = obj.position.clone().sub(start);
-        for (const [id, startPos] of drag.starts) {
-          const g = meshMapRef.current.get(id);
-          if (g) {
-            g.position.copy(startPos).add(delta);
-            g.updateMatrixWorld();
-          }
-        }
+        dragSetFrame(drag, obj, rawPos);
         const now = performance.now();
         if (now - drag.lastCheckAt > 150) {
           drag.lastCheckAt = now;
           const members = selectedSetMembers();
-          if (members) markSetOverlaps(members, drag.ignore);
+          drag.edge = setEdgeIds(drag);
+          if (members) markSetOverlaps(members, drag.ignore, drag.edge);
+          showSetHighlights(drag);
         }
         return;
       }
@@ -3879,6 +4376,35 @@ export default function Viewport3D({
           });
           const p = posFrom(snappedOffsets);
           snappedPos.set(Number(p.x.toFixed(3)), Number(p.y.toFixed(3)), Number(p.z.toFixed(3)));
+        }
+
+        // Within 5° of a matching hole's line: turn square to it first, about the matched pin or hole,
+        // then pull on as usual. Worked out from the drag's start turn, so it never adds up; skipped with Alt
+        if (!altKeyRef.current && partMeta) {
+          const current = obj.quaternion.clone();
+          obj.quaternion.copy(dragStartQuatRef.current);
+          obj.position.copy(snappedPos);
+          obj.updateMatrixWorld();
+          const features = collectWorldFeatures(partMeta, obj.matrixWorld, instId, getMeshMeasurements(obj, partMeta));
+          const reachBox = worldPartBox(partMeta, obj.matrixWorld)?.expandByScalar(HOLE_SNAP_AXIAL_REACH_MM);
+          const candidates = [];
+          for (const other of otherFeaturesRef.current) {
+            if (reachBox && other.box && !reachBox.intersectsBox(other.box)) continue;
+            for (const f of other.features) candidates.push(f);
+          }
+          const st = features.length ? findStraighten(features, candidates) : null;
+          if (st) {
+            obj.quaternion.premultiply(st.quaternion);
+            const shift = snappedPos.clone().sub(st.pivot).applyQuaternion(st.quaternion).add(st.pivot).sub(snappedPos);
+            snappedPos.add(shift);
+            rawPos.add(shift);
+            straightenedRef.current = true;
+          } else if (!straightenedRef.current) {
+            obj.quaternion.copy(current); // keep a meshing or square-fit turn made earlier in the drag
+          } else {
+            straightenedRef.current = false;
+          }
+          obj.updateMatrixWorld();
         }
 
         // Near a hole that a pin/shaft (or one of its own holes) can line up with: snap onto it
@@ -3972,14 +4498,13 @@ export default function Viewport3D({
         wasDraggingRef.current = true;
         dragMovedRef.current = false;
         hideMateArrows();
-        rebuildOtherFeatures();
         lineSettleCacheRef.current = { key: '', settled: null };
         if (transform.object?.userData.isSetPivot) {
           dragStartPosRef.current.copy(transform.object.position);
-          const ids = selectedIdsRef.current.filter((id) => meshMapRef.current.has(id));
-          const starts = new Map(ids.map((id) => [id, meshMapRef.current.get(id).position.clone()]));
-          setDragRef.current = { ids, ignore: new Set(ids), starts, lastCheckAt: 0 };
+          startSetDrag();
         } else if (transform.object) {
+          rebuildOtherFeatures();
+          straightenedRef.current = false;
           dragStartPosRef.current.copy(transform.object.position);
           dragStartQuatRef.current.copy(transform.object.quaternion);
           const startColliding = checkGroupCollision(transform.object, false);
@@ -3993,7 +4518,9 @@ export default function Viewport3D({
       } else if (transform.object?.userData.isSetPivot) {
         const drag = setDragRef.current;
         setDragRef.current = null;
-        if (drag && dragMovedRef.current) commitSetPoses(drag.ids, 'move');
+        holeOverlayRef.current?.show([]);
+        lastAlignedRef.current = [];
+        if (drag && dragMovedRef.current) finishSetDrag(drag);
       } else if (transform.object) {
         const obj = transform.object;
         const instId = obj.userData.instanceId;
@@ -4352,7 +4879,7 @@ export default function Viewport3D({
             if (plan) {
               endPick();
               lastArrowClickAt = performance.now();
-              mateSelected(plan);
+              mateArrowPlan(plan);
               return;
             }
           }
@@ -4374,7 +4901,7 @@ export default function Viewport3D({
         hideMateArrows();
         if (plan) {
           lastArrowClickAt = performance.now();
-          mateSelected(plan);
+          mateArrowPlan(plan);
           return;
         }
       }
@@ -4388,9 +4915,12 @@ export default function Viewport3D({
         if (front) onSelectRef.current(front, { additive: true });
         return;
       }
-      // Wait for a possible double-click before selecting: on the selected part behind another, or on
-      // a brain the selected battery fits (the double-click slides it in)
-      if (selId && front !== selId && (ids.includes(selId) || batteryFitsBrain(selId, front))) {
+      // Wait for a possible double-click before selecting: on the selected part behind another, on
+      // a brain the selected battery fits (the double-click slides it in), or on any part of a selected
+      // set (the double-click mates the whole set, so the first click mustn't narrow the selection)
+      const selIds = selectedIdsRef.current;
+      const onSet = selIds.length > 1 && ids.some((id) => selIds.includes(id));
+      if (onSet || (selId && front !== selId && (ids.includes(selId) || batteryFitsBrain(selId, front)))) {
         pendingSelectTimer = setTimeout(() => {
           pendingSelectTimer = null;
           onSelectRef.current(front);
@@ -4464,27 +4994,35 @@ export default function Viewport3D({
     const GIZMO_CENTER_AXES = new Set(['XYZ', 'XYZE']);
     const handleDoubleClick = (e) => {
       if (performance.now() - lastCubeClickAt < 600) return; // clicks on the view cube
-      // Mating, hole picking and copy-insert work on one part: with several selected, say so
+      // Copy-insert works on one part: with several selected, say so. A plain double-click on a part of
+      // the set mates the whole set (group-snapping)
       const multi = selectedIdsRef.current;
-      if (multi.length > 1 && !pickModeRef.current && !transform.dragging) {
-        if (pickPartsAt(e).some((id) => multi.includes(id))) {
-          onMateFeedbackRef.current?.(
-            e.ctrlKey || e.metaKey ? 'Copies are inserted one part at a time: select a single part.' : 'Mating works on one part: select a single part.',
-            true
-          );
-        }
+      if (multi.length > 1 && (e.ctrlKey || e.metaKey) && !pickModeRef.current && !transform.dragging) {
+        if (pickPartsAt(e).some((id) => multi.includes(id))) onMateFeedbackRef.current?.('Copies are inserted one part at a time: select a single part.', true);
         return;
       }
       if (e.ctrlKey || e.metaKey) return; // Ctrl/Cmd+double-click inserts a copy, never mates
       if (pickModeRef.current) return; // picking: single clicks insert
       if (transform.dragging) return;
       if (wasDraggingRef.current && dragMovedRef.current) return;
-      if (transform.object && transform.axis && !GIZMO_CENTER_AXES.has(transform.axis)) return;
+      // A small set sits under its own Move arrows: a double-click on one of its parts counts even over
+      // an arrow or plane handle, as long as nothing was dragged
+      const onSetPart = multi.length > 1 && pickPartsAt(e).some((id) => multi.includes(id));
+      // The centre of a set's Move gizmo counts as the set, even over empty space between its parts
+      const onSetCentre = multi.length > 1 && transform.object?.userData.isSetPivot && GIZMO_CENTER_AXES.has(transform.axis);
+      if (!onSetPart && transform.object && transform.axis && !GIZMO_CENTER_AXES.has(transform.axis)) return;
       if (arrowOverlay.isShown()) return;
       if (performance.now() - lastArrowClickAt < 600) return; // second click of an arrow double-click
       if (rotateGizmo.isShown()) {
         setRayFromEvent(e);
         if (rotateGizmo.pick(raycaster)) return; // double-clicking a ring handle never mates
+      }
+      // A set has no single selected part (selectedId is null), so it is handled before that check
+      if (multi.length > 1) {
+        if (!onSetPart && !onSetCentre) return;
+        cancelPendingSelect();
+        handleMateRequest();
+        return;
       }
       const selId = selectedIdRef.current;
       if (!selId) return;
@@ -4736,6 +5274,13 @@ export default function Viewport3D({
         inputEl.style.cursor = '';
       }
     };
+    // While a dropped set is being fitted, clicks and drags in the view wait
+    const blockWhileFitting = (e) => {
+      if (!fitPendingRef.current) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    };
+    inputEl.addEventListener('pointerdown', blockWhileFitting, true);
     inputEl.addEventListener('pointerdown', handleCubePointerDown, true);
     inputEl.addEventListener('pointerup', handleCubePointerUp, true);
     inputEl.addEventListener('pointermove', handleCubePointerMove, true);
@@ -5389,6 +5934,7 @@ export default function Viewport3D({
       window.removeEventListener('blur', trackAltKey);
       inputEl.removeEventListener('pointermove', trackAltKey, true);
       container.removeEventListener('pointermove', handleStereoSideMove, true);
+      inputEl.removeEventListener('pointerdown', blockWhileFitting, true);
       inputEl.removeEventListener('pointerdown', handleCubePointerDown, true);
       inputEl.removeEventListener('pointerup', handleCubePointerUp, true);
       inputEl.removeEventListener('pointermove', handleCubePointerMove, true);

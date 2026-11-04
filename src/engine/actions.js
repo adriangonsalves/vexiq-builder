@@ -18,9 +18,9 @@ import {
   jointGraph,
   mirrorSubassembly
 } from './core.js';
-import { fixAssembly } from './fixAssembly.js';
+import { fitSet, fixAssembly } from './fixAssembly.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'fix_assembly'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'fix_assembly', 'fit_set'];
 
 export function runAction(action, state, params = {}) {
   const { catalogById } = getCatalog();
@@ -262,6 +262,11 @@ export function runAction(action, state, params = {}) {
   // The audit and the blueprint picture (`ortho.svg`)
   if (action === 'fix_assembly') {
     return fixAssembly(state, { instanceId: params.instanceId || state.selectedId });
+  }
+
+  // A dragged set's release fit (openspec group-snapping): the fitted poses, nothing saved
+  if (action === 'fit_set') {
+    return fitSet(state, { ids: params.ids, poses: params.poses });
   }
 
   if (action === 'audit_and_blueprint') {

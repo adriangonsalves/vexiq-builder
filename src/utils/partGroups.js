@@ -7,6 +7,7 @@
  */
 import * as THREE from 'three';
 import { quaternionToEulerDeg } from './gearMeshing.js';
+import { collectWorldFeatures, gridPivot } from './pinHoleAlignment.js';
 
 export const newGroupId = () => `group-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -203,6 +204,45 @@ export function applySetTransform(instances, ids, pivot, { deltaPos, deltaQuat }
     });
   }
   return patches;
+}
+
+/**
+ * A set move of `delta` ([x, y, z] or Vector3) rounded per axis to whole `stepMm` steps (the nearest),
+ * as [x, y, z]; `stepMm` 0 (Free) keeps it exact. Moving by whole steps keeps a set on its hole grid.
+ */
+export function stepDelta(delta, stepMm) {
+  const d = delta?.isVector3 ? delta.toArray() : [...(delta || [0, 0, 0])];
+  if (!(stepMm > 0)) return d.map(round3);
+  return d.map((v) => round3(Math.round(v / stepMm) * stepMm));
+}
+
+/**
+ * The point a set turns about: a point on its own hole grid near `centre` (gridPivot over every
+ * member's world features), so turns in multiples of 90° keep its holes on that grid. The centre
+ * itself when the set has no pins or holes. `features`: world features ({ origin, axis } Vector3s).
+ */
+export function setGridPivot(features, centre) {
+  const c = toVec(centre);
+  if (!features?.length) return c;
+  return gridPivot(features, c);
+}
+
+/** World pins and holes of the set `ids` as placed, from `partOf(inst)` (the catalog part). */
+export function setWorldFeatures(instances, ids, partOf) {
+  const wanted = new Set(ids);
+  const out = [];
+  for (const inst of instances) {
+    if (!wanted.has(inst.instanceId)) continue;
+    const part = partOf(inst);
+    if (!part) continue;
+    const matrix = new THREE.Matrix4().compose(
+      toVec(inst.position),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(...(inst.rotation || [0, 0, 0]).map((d) => THREE.MathUtils.degToRad(d || 0)), 'XYZ')),
+      new THREE.Vector3(1, 1, 1)
+    );
+    out.push(...collectWorldFeatures(part, matrix, inst.instanceId));
+  }
+  return out;
 }
 
 /**

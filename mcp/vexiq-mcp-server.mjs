@@ -22,6 +22,7 @@ import {
   summarizeAudit,
   applyPosePatches,
   placeParts,
+  worldFeaturesFor,
   readAppSettings,
   settlePlacedInstance,
   readAssemblyState,
@@ -37,8 +38,10 @@ import {
   groupParts,
   groupsOf,
   renameGroup,
+  setGridPivot,
   setPivot,
   setWorldBoxes,
+  stepDelta,
   ungroupParts,
   wholeGroupOf
 } from '../src/utils/partGroups.js';
@@ -719,7 +722,7 @@ const TOOLS = [
   {
     name: 'update_group',
     description:
-      "Change a group (groupId) or a set of parts (instanceIds) as one undo step: rename it, hide/show, lock/unlock, move it by a distance, move its centre (the parts' combined bounding box centre) to a point, or turn it about that centre. The parts keep their places relative to one another. Refused for a move or turn when a part is locked. Replies with the new centre and the same short check summary as place_parts.",
+      "Change a group (groupId) or a set of parts (instanceIds) as one undo step: rename it, hide/show, lock/unlock, move it by a distance, move its centre (the parts' combined bounding box centre) toward a point in whole snap steps (the app's snap setting; exact when it is Free) so it stays on its own hole grid, or turn it about a point on its own hole grid near that centre (so quarter turns keep its holes on the grid). The parts keep their places relative to one another. Refused for a move or turn when a part is locked. Replies with the new centre and the same short check summary as place_parts.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -1079,14 +1082,18 @@ async function executeTool(name, args = {}) {
       if (instances.some((i) => wanted.has(i.instanceId) && i.locked)) return { isError: true, error: 'Part is locked' };
       if (args.turn !== undefined) {
         const centre = setPivot(instances, ids, boxesOf(instances));
-        instances = applyPatches(instances, applySetTransform(instances, ids, centre, { deltaQuat: axisTurn(String(args.turn.axis).toUpperCase(), Number(args.turn.deg)) }));
+        const features = instances.filter((i) => wanted.has(i.instanceId)).flatMap((i) => worldFeaturesFor(i));
+        const pivot = setGridPivot(features, centre).toArray();
+        instances = applyPatches(instances, applySetTransform(instances, ids, pivot, { deltaQuat: axisTurn(String(args.turn.axis).toUpperCase(), Number(args.turn.deg)) }));
         changes.push(`Turn ${label}`);
       }
       if (args.moveBy !== undefined || args.moveCentreTo !== undefined) {
         const delta = args.moveBy !== undefined ? args.moveBy.map(Number) : [0, 0, 0];
         if (args.moveCentreTo !== undefined) {
+          // Whole snap steps from where the set is, the nearest to the given centre
           const centre = setPivot(instances, ids, boxesOf(instances));
-          args.moveCentreTo.forEach((v, k) => (delta[k] += Number(v) - centre[k]));
+          const factor = Number(state.viewport?.snapPitchFactor ?? 0.5);
+          stepDelta(args.moveCentreTo.map((v, k) => Number(v) - centre[k]), factor > 0 ? VEX_PITCH_MM * factor : 0).forEach((v, k) => (delta[k] += v));
         }
         instances = applyPatches(instances, applySetTransform(instances, ids, [0, 0, 0], { deltaPos: delta }));
         changes.push(`Move ${label}`);

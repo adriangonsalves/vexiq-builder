@@ -81,7 +81,10 @@ import {
   groupParts,
   groupsOf,
   renameGroup,
+  setGridPivot,
   setPivot,
+  setWorldFeatures,
+  stepDelta,
   setWorldBoxes,
   spotBesideBuild,
   ungroupParts,
@@ -1072,18 +1075,24 @@ export default function App() {
       mergeKey: `${mergeKey}:${setKey}`
     });
   };
+  // Whole snap steps toward the typed value, so the set stays on its own hole grid
   const handleMoveSetCentreTo = (axis, value) => {
     const delta = [0, 0, 0];
     delta[axis] = value - setCentre[axis];
-    if (Math.abs(delta[axis]) < 1e-6) return;
-    moveSetBy(delta, `set-position-${axis}`);
+    const stepped = stepDelta(delta, VEX_PITCH_MM * (snapPitchFactor || 0));
+    if (Math.abs(stepped[axis]) < 1e-6) return;
+    moveSetBy(stepped, `set-position-${axis}`);
   };
+  // About a point on the set's hole grid, so quarter turns keep its holes on that grid
   const handleTurnSet90 = (axis) => {
     if (setMoveBlocked()) return;
-    handleUpdateSet(selectedIds, applySetTransform(instances, selectedIds, setCentre, { deltaQuat: axisTurn('XYZ'[axis], 90) }), {
+    const pivot = setGridPivot(setWorldFeatures(instances, selectedIds, (i) => catalogMap.get(i.partId)), setCentre).toArray();
+    handleUpdateSet(selectedIds, applySetTransform(instances, selectedIds, pivot, { deltaQuat: axisTurn('XYZ'[axis], 90) }), {
       label: `Turn ${setName}`
     });
   };
+  // A dragged set's release fit (openspec group-snapping): the fitted poses from the engine, nothing saved
+  const handleFitSet = (ids, poses) => backend.runAction('fit_set', { instances }, { ids, poses });
   const handleSetSetFlag = (field, value) => {
     const verb = field === 'visible' ? (value ? 'Show' : 'Hide') : value ? 'Lock' : 'Unlock';
     const wanted = new Set(selectedIds);
@@ -2373,7 +2382,10 @@ export default function App() {
             onSelect={preview ? noop : handleSelectInstance}
             onExpandSelection={preview ? noop : handleExpandSelection}
             onUpdateTransform={preview ? noop : handleUpdateTransform}
-            onUpdateSet={preview ? noop : (ids, patches, { kind }) => handleUpdateSet(ids, patches, { label: `${kind === 'turn' ? 'Turn' : 'Move'} ${setName}` })}
+            onUpdateSet={
+              preview ? noop : (ids, patches, { kind, note, label }) => handleUpdateSet(ids, patches, { label: label || `${kind === 'turn' ? 'Turn' : 'Move'} ${setName}${note ? `. ${note}` : ''}` })
+            }
+            onFitSet={preview ? null : handleFitSet}
             onRegisterFlushMover={handleRegisterFlushMover}
             onRegisterScreenshot={handleRegisterScreenshot}
             onRegisterViewSpot={handleRegisterViewSpot}

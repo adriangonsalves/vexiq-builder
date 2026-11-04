@@ -12,6 +12,11 @@ import {
   findEngagedJoints,
   parallelLines,
   findHoleSnap,
+  freeSetFeatures,
+  freeSetLeadEnds,
+  listSetInsertFits,
+  findStraighten,
+  SET_HOLE_SNAP_AXIAL_REACH_MM,
   gridPivot,
   clearSpotAlongLine,
   findSeatedPairs,
@@ -1086,6 +1091,109 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   const pegs = (link.ports || []).filter((p) => p.type === 'pin_peg');
   const inBox = (o) => o.every((v, i) => v >= link.bbox.min[i] - 0.5 && v <= link.bbox.max[i] + 0.5);
   check('Traction Link: its two split pegs are found, inside the model, one pitch apart', pegs.length === 2 && pegs.every((p) => inBox(p.origin)) && near(Math.abs(pegs[0].origin[0] - pegs[1].origin[0]), 12.7, 0.05), JSON.stringify(pegs));
+}
+
+// Set hole snapping (group-snapping): free outer features, the set reach, refused moves
+{
+  const X = new THREE.Vector3(1, 0, 0);
+  const at = (id, name, position) => collectWorldFeatures(part(name), buildWorldMatrix(position, [0, 0, 0]), id);
+  // Beam b1 with pin p1 sticking ~6 mm out of its top at x = -31.75, and pin p2 through b1 and a
+  // second beam b2 stacked on it (flush both ends) at x = 31.75
+  const set = [
+    ...at('b1', '1x6 Beam', [0, 0, 0]),
+    ...at('b2', '1x6 Beam', [63.5, 0, 6.1]),
+    ...at('p1', '0x2 Connector Pin', [-31.75, 0, 3.2]),
+    ...at('p2', '0x2 Connector Pin', [31.75, 0, 3.05])
+  ];
+  const free = freeSetFeatures(set);
+  const kept = (id, x) => free.some((f) => f.instanceId === id && Math.abs(f.origin.x - x) < 0.01);
+  check('free set features: the pin sticking out is kept', kept('p1', -31.75));
+  check('  the pin flush in two beams is left out', !kept('p2', 31.75));
+  check('  the filled holes are left out', !kept('b1', -31.75) && !kept('b1', 31.75) && !kept('b2', 31.75));
+  check('  the empty holes are kept', kept('b1', -19.05) && kept('b1', 0) && kept('b1', 19.05) && kept('b2', 44.45));
+
+  const beamF = at('beam', '1x6 Beam', [0, 0, 0]);
+  // A pin 0.3 mm off the line of hole x = 0, its low end 30 mm above the hole's top face
+  const far = at('far', '0x2 Connector Pin', [0.3, 0, 2.46 + 30 + 6.26]);
+  const longSnap = findHoleSnap(far, beamF, [X]);
+  check('set reach: one part 30 mm along the line is pulled', longSnap && near(longSnap.offset.x, -0.3), JSON.stringify(longSnap?.offset));
+  check('  a set (25.4 mm reach) is not', SET_HOLE_SNAP_AXIAL_REACH_MM === 25.4 && findHoleSnap(far, beamF, [X], { axialReachMm: SET_HOLE_SNAP_AXIAL_REACH_MM }) === null);
+
+  // A pin between holes x = 0 and x = 6.35, 5 mm above the beam: the nearer pull is -3 mm
+  const between = at('between', '0x2 Connector Pin', [3, 0, 2.46 + 5 + 6.26]);
+  const nearest = findHoleSnap(between, beamF, [X]);
+  const next = findHoleSnap(between, beamF, [X], { rejectMove: (o) => o.x < 0 });
+  check('refused move: the nearest pull is -3 mm', nearest && near(nearest.offset.x, -3), JSON.stringify(nearest?.offset));
+  check('  refusing it gives the next best, +3.35 mm', next && near(next.offset.x, 3.35), JSON.stringify(next?.offset));
+}
+
+// Straightening small tilts (findStraighten)
+{
+  const Z = new THREE.Vector3(0, 0, 1);
+  const feature = (id, kind, origin, axis, len) => {
+    const o = new THREE.Vector3(...origin);
+    const a = axis.clone().normalize();
+    return { instanceId: id, featureId: `${id}-${kind}`, kind, origin: o, axis: a, start: o.clone().addScaledVector(a, -len / 2), end: o.clone().addScaledVector(a, len / 2) };
+  };
+  const tilted = (deg, about = new THREE.Vector3(1, 0, 0)) => Z.clone().applyAxisAngle(about, THREE.MathUtils.degToRad(deg));
+  const hole = (x, y = 0) => feature('plate', 'pin_hole', [x, y, 0], Z, 4.9);
+  const pinAt = (id, x, deg, y = 0) => feature(id, 'pin', [x, y, 10], tilted(deg), 11.7);
+
+  let st = findStraighten([pinAt('p', 1, 3)], [hole(0)]);
+  check('straighten: a pin 3° off a hole turns 3°', st && near(st.angleDeg, 3, 0.01), JSON.stringify(st?.angleDeg));
+  check('  about the pin\'s point, making it parallel', st && st.pivot.distanceTo(new THREE.Vector3(1, 0, 10)) < 1e-6 && tilted(3).applyQuaternion(st.quaternion).angleTo(Z) < 1e-6);
+  check('straighten: 6° off gives none', findStraighten([pinAt('p', 1, 6)], [hole(0)]) === null);
+  check('straighten: 0.05° off gives none', findStraighten([pinAt('p', 1, 0.05)], [hole(0)]) === null);
+  // Three pins 2° off the plate's holes the same way, and one pin, nearer its hole, 4° off another way
+  const moving = [pinAt('m', 0.4, 2), pinAt('m', 12.7 + 0.4, 2), pinAt('m', 25.4 + 0.4, 2), pinAt('m', 50.8 + 0.1, 4, 0)];
+  moving[3].axis = tilted(4, new THREE.Vector3(0, 1, 0));
+  st = findStraighten(moving, [hole(0), hole(12.7), hole(25.4), hole(50.8)]);
+  check('straighten: three agreeing pairs beat one nearer pair', st && st.count === 3 && near(st.angleDeg, 2, 0.01), JSON.stringify(st && { n: st.count, deg: st.angleDeg }));
+}
+
+// Hole picking for a set (listSetInsertFits) and planMates with a set of ids (group-snapping)
+{
+  const at = (id, name, position, rotation = [0, 0, 0]) => collectWorldFeatures(part(name), buildWorldMatrix(position, rotation), id);
+  const X = new THREE.Vector3(1, 0, 0);
+  // A 1x6 Beam 20 mm up with four pins 12.7 mm apart sticking ~6.8 mm out of its bottom; a 1x6 Beam below as the receiver
+  const xs = [-31.75, -19.05, -6.35, 6.35];
+  const setAt = (turnDeg = 0) => {
+    const feats = [...at('top', '1x6 Beam', [0, 0, 20]), ...xs.flatMap((x, k) => at(`pin${k}`, '0x2 Connector Pin', [x, 0, 17]))];
+    if (!turnDeg) return feats;
+    // The whole set turned about X through its middle
+    const q = new THREE.Quaternion().setFromAxisAngle(X, THREE.MathUtils.degToRad(turnDeg));
+    const c = new THREE.Vector3(0, 0, 17);
+    const turn = (p) => p.clone().sub(c).applyQuaternion(q).add(c);
+    return feats.map((f) => ({ ...f, origin: turn(f.origin), start: turn(f.start), end: turn(f.end), axis: f.axis.clone().applyQuaternion(q) }));
+  };
+  const receiver = at('base', '1x6 Beam', [0, 0, 0]);
+  const hole = receiver.find((f) => Math.abs(f.origin.x + 31.75) < 0.01 && f.kind === 'pin_hole');
+  const top = openFaces(hole).find((f) => f.outward.z > 0.9);
+  const hovered = { opening: hole, face: top };
+
+  let leads = freeSetLeadEnds(setAt());
+  check('set leads: the four pins lead downward, nothing else', leads.length === 4 && leads.every((l) => l.dir.z < -0.99), JSON.stringify(leads.map((l) => [l.feature.instanceId, l.which, l.dir.toArray().map((v) => v.toFixed(2))])));
+  let fits = listSetInsertFits({ leadEnds: leads, hovered, otherFeatures: receiver });
+  check('set fits: four (one per pin), the all-four-green fit first', fits.length === 4 && fits[0].green === 4 && fits[0].lead.feature.instanceId === 'pin0', JSON.stringify(fits.map((f) => [f.lead.feature.instanceId, f.green])));
+  check('  no turn, the pin waits just above the hole', fits[0].turnRad < 1e-6 && fits[0].pivot.clone().add(fits[0].offset).distanceTo(top.point.clone().add(new THREE.Vector3(0, 0, 1))) < 0.01);
+
+  leads = freeSetLeadEnds(setAt(20));
+  fits = listSetInsertFits({ leadEnds: leads, hovered, otherFeatures: receiver });
+  check('set fits: pins tilted 20° give a 20° turn', fits.length > 0 && near(THREE.MathUtils.radToDeg(fits[0].turnRad), 20, 0.05), JSON.stringify(fits.map((f) => THREE.MathUtils.radToDeg(f.turnRad))));
+  check('  and all four land over holes', fits[0]?.green === 4, JSON.stringify(fits.map((f) => f.green)));
+
+  leads = freeSetLeadEnds(setAt(40));
+  check('set fits: 40° off gives none', listSetInsertFits({ leadEnds: leads, hovered, otherFeatures: receiver }).length === 0);
+
+  const sideways = freeSetLeadEnds(at('side', '0x2 Connector Pin', [-31.75, 0, 20], [0, 90, 0]));
+  check('set fits: a sideways pin gives none at a top-face hole', sideways.length === 2 && listSetInsertFits({ leadEnds: sideways, hovered, otherFeatures: receiver }).length === 0);
+
+  // planMates: a single id as before, and a set of ids
+  const pin = at('pin', '0x2 Connector Pin', [-31.75, 0, 2.46 + 4 + 6.26]);
+  const aligned = findAlignedOpenings(pin, receiver);
+  const one = planMates(aligned, 'pin');
+  const asSet = planMates(aligned, new Set(['pin', 'other']));
+  check('planMates: a set of ids plans like the single id', one.length === 1 && asSet.length === 1 && one[0].direction.equals(asSet[0].direction) && near(one[0].travelMm, asSet[0].travelMm) && one[0].direction.z < -0.99, JSON.stringify([one.map((p) => p.direction.toArray()), asSet.map((p) => p.direction.toArray())]));
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);

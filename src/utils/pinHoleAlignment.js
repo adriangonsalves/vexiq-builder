@@ -771,6 +771,9 @@ export const HOLE_SNAP_SETTLE_MM = 1.0;
 // The bigger sideways settle allowed when another of the moving part's lines agrees on the same move
 // (a whole pattern a little off, like a brain's eight side holes 2.7 mm off its pins)
 export const HOLE_SNAP_PATTERN_SETTLE_MM = HOLE_SNAP_RADIUS_MM;
+// A set (group or multi-selection) pulls onto holes only this far along the line: bringing it this
+// close shows the user means to mate it, and keeps the pairs to compare down (group-snapping)
+export const SET_HOLE_SNAP_AXIAL_REACH_MM = 25.4;
 const HOLE_SNAP_AGREE_MM = 0.25; // two pairs' moves this close count as the same move
 const HOLE_SNAP_MAX_PAIRS = 64; // pairs compared for agreement (nearest first)
 const SAME_LINE_MM = 0.5; // features whose lines are this close are one line (some holes are listed twice)
@@ -838,13 +841,14 @@ const onSameLine = (a, b) => {
  * along the line, or overlapping. Works at any part angle, since it uses the real hole lines.
  * A sideways settle over HOLE_SNAP_SETTLE_MM (up to HOLE_SNAP_PATTERN_SETTLE_MM) only counts when
  * another pair, on a different line of the selected part, needs the same move within 0.25 mm.
+ * `rejectMove(offset)`: moves it returns true for are skipped, so the next best one is taken.
  * Returns { offset: Vector3 (world mm), insert, opening } or null.
  */
 export function findHoleSnap(
   selectedFeatures,
   otherFeatures,
   directions,
-  { radiusMm = HOLE_SNAP_RADIUS_MM, axialReachMm = HOLE_SNAP_AXIAL_REACH_MM } = {}
+  { radiusMm = HOLE_SNAP_RADIUS_MM, axialReachMm = HOLE_SNAP_AXIAL_REACH_MM, rejectMove = null } = {}
 ) {
   const pairs = [];
   for (const s of selectedFeatures) {
@@ -873,6 +877,7 @@ export function findHoleSnap(
 
   let best = null;
   for (const p of pairs) {
+    if (rejectMove?.(p.offset)) continue;
     if (p.settle > HOLE_SNAP_SETTLE_MM && !agreed(p)) continue;
     const { pull, gap } = p;
     const better =
@@ -882,6 +887,208 @@ export function findHoleSnap(
     if (better) best = { offset: p.offset, pull, gap, ...p.roles };
   }
   return best;
+}
+
+// Straightening small tilts while dragging (group-snapping): pairs this far off parallel are turned
+// square first; turns this close count as the same turn
+export const STRAIGHTEN_MAX_DEG = 5;
+export const STRAIGHTEN_MIN_DEG = 0.1;
+const STRAIGHTEN_AGREE_DEG = 0.5;
+
+/**
+ * The small turn that makes a dragged part's (or set's) pins, shafts or holes exactly parallel to
+ * matching ones on other parts, before the hole pull. Pairs are found as for findHoleSnap (same kinds,
+ * within `radiusMm` sideways and `axialReachMm` along the line) but up to `maxDeg` off parallel. Each
+ * pair's turn makes the moving axis parallel to the other, about the moving feature's point; pairs
+ * whose turns agree within 0.5° are counted together, the most agreeing win, then the smallest
+ * sideways pull. Returns { quaternion, pivot, angleDeg, count } or null (nothing in reach, or the
+ * winning turn is under `minDeg`).
+ */
+export function findStraighten(
+  movingFeatures,
+  otherFeatures,
+  { maxDeg = STRAIGHTEN_MAX_DEG, minDeg = STRAIGHTEN_MIN_DEG, radiusMm = HOLE_SNAP_RADIUS_MM, axialReachMm = HOLE_SNAP_AXIAL_REACH_MM } = {}
+) {
+  const minDot = Math.cos(THREE.MathUtils.degToRad(maxDeg));
+  const pairs = [];
+  for (const s of movingFeatures) {
+    for (const o of otherFeatures) {
+      if (s.instanceId === o.instanceId || !pairOf(s, o)) continue;
+      const dot = s.axis.dot(o.axis);
+      if (Math.abs(dot) < minDot) continue;
+      _v.subVectors(o.origin, s.origin);
+      const along = _v.dot(o.axis);
+      const pull = Math.sqrt(Math.max(0, _v.lengthSq() - along * along));
+      if (pull > radiusMm) continue;
+      const [sMin, sMax] = projectRange(s.start, s.end, o.origin, o.axis);
+      const [oMin, oMax] = projectRange(o.start, o.end, o.origin, o.axis);
+      if (Math.max(0, oMin - sMax, sMin - oMax) > axialReachMm) continue;
+      const from = s.axis.clone().multiplyScalar(dot < 0 ? -1 : 1);
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(from, o.axis);
+      pairs.push({ quaternion, pivot: s.origin, pull, angleDeg: THREE.MathUtils.radToDeg(from.angleTo(o.axis)) });
+    }
+  }
+  if (!pairs.length) return null;
+  const agreeRad = THREE.MathUtils.degToRad(STRAIGHTEN_AGREE_DEG);
+  let best = null;
+  for (const p of pairs) {
+    const count = pairs.filter((q) => q.quaternion.angleTo(p.quaternion) <= agreeRad).length;
+    if (!best || count > best.count || (count === best.count && p.pull < best.pull)) best = { ...p, count };
+  }
+  if (best.angleDeg < minDeg) return null;
+  return { quaternion: best.quaternion, pivot: best.pivot.clone(), angleDeg: best.angleDeg, count: best.count };
+}
+
+// A set pin or shaft seated in the set's own openings still counts when this much of it sticks out
+// past them at either end (a pin flush with a beam's faces sticks out ~0.6 mm past the hole's faces)
+export const FREE_INSERT_MIN_MM = 1.5;
+
+/**
+ * The free outer features of a set (group-snapping): `features` of several parts, without the
+ * openings that have a pin or shaft of another part in the set seated in them, and without the pins
+ * and shafts seated in the set's own openings that stick out less than FREE_INSERT_MIN_MM past them
+ * at both ends. Only these can pull onto parts outside the set.
+ */
+export function freeSetFeatures(features) {
+  const filled = new Set();
+  const covered = new Map(); // insert -> { iMin, iMax, lo, hi } along the insert's axis
+  for (const { insert, opening } of findSeatedPairs(features, features)) {
+    filled.add(opening);
+    const spans = coaxialSpans(insert, opening);
+    const c = covered.get(insert);
+    if (!c) covered.set(insert, { iMin: spans.iMin, iMax: spans.iMax, lo: spans.oMin, hi: spans.oMax });
+    else {
+      c.lo = Math.min(c.lo, spans.oMin);
+      c.hi = Math.max(c.hi, spans.oMax);
+    }
+  }
+  return features.filter((f) => {
+    if (filled.has(f)) return false;
+    const c = covered.get(f);
+    return !c || Math.max(c.lo - c.iMin, c.iMax - c.hi) >= FREE_INSERT_MIN_MM;
+  });
+}
+
+/**
+ * The leading ends of a set's free pins, pegs and shafts (group-snapping): the ends that stick out of
+ * the set, past every set opening the insert is seated in by FREE_INSERT_MIN_MM (any end of a loose
+ * insert). A pin's end that doesn't stick out of its own part (`freeAtStart` / `freeAtEnd` false) and
+ * an end `isCapped(feature, 'start' | 'end')` says is a cap don't lead. Returns
+ * [{ feature, which: 'start' | 'end', point (tip), dir (unit, pointing out of the tip) }].
+ */
+export function freeSetLeadEnds(features, { isCapped = null } = {}) {
+  const covered = new Map(); // insert -> { lo, hi } along its axis from its origin
+  for (const { insert, opening } of findSeatedPairs(features, features)) {
+    const { oMin, oMax } = coaxialSpans(insert, opening);
+    const c = covered.get(insert);
+    if (!c) covered.set(insert, { lo: oMin, hi: oMax });
+    else {
+      c.lo = Math.min(c.lo, oMin);
+      c.hi = Math.max(c.hi, oMax);
+    }
+  }
+  const ends = [];
+  for (const f of features) {
+    if (!OPENINGS_BY_INSERT[f.kind]) continue;
+    const c = covered.get(f);
+    for (const which of ['start', 'end']) {
+      if (f.kind === 'pin' && (which === 'start' ? f.freeAtStart : f.freeAtEnd) === false) continue;
+      if (isCapped?.(f, which)) continue;
+      const point = which === 'start' ? f.start : f.end;
+      const other = which === 'start' ? f.end : f.start;
+      const dir = point.clone().sub(other);
+      if (dir.lengthSq() < 1e-9) continue;
+      dir.normalize();
+      if (c) {
+        const t = _v.subVectors(point, f.origin).dot(f.axis);
+        const out = t >= _v.subVectors(other, f.origin).dot(f.axis) ? t - c.hi : c.lo - t;
+        if (out < FREE_INSERT_MIN_MM) continue;
+      }
+      ends.push({ feature: f, which, point: point.clone(), dir });
+    }
+  }
+  return ends;
+}
+
+// Hole picking for a set (group-snapping): a leading end must already point this close to straight
+// into a hole, and the set turns at most this much to fit
+export const SET_PICK_MAX_DEG = 30;
+
+/** Leading ends (freeSetLeadEnds) that fit `opening` and point within `maxDeg` of straight into `face`. */
+export function setLeadsFacing(leadEnds, opening, face, maxDeg = SET_PICK_MAX_DEG) {
+  const into = face.outward.clone().normalize().negate();
+  const minDot = Math.cos(THREE.MathUtils.degToRad(maxDeg));
+  return leadEnds.filter((l) => OPENINGS_BY_INSERT[l.feature.kind]?.has(opening.kind) && l.dir.dot(into) >= minDot - 1e-9);
+}
+
+/**
+ * The ways a set can go into the hovered hole face (group-snapping, hole picking for a set): one per
+ * leading end within `maxDeg` of pointing straight in. The set turns by the smallest turn that makes
+ * that end point straight in (about the end's tip; plus the square-fit turn about the hole's line for
+ * a square shaft into a square hole), then moves so the tip waits PICK_GAP_MM outside the face on the
+ * hole's line. `otherFeatures`: features of parts outside the set. Each fit marks every leading end
+ * green when, after the fit, it is on a matching outside hole's line (parallel within 2°, within
+ * 0.25 mm, within `reachMm` along it). Sorted: most green, then the smallest turn, then the smallest
+ * move. [{ lead, quaternion, pivot, offset, markers, green, total, turnRad, moveMm, travelMm, sweepMm, direction }]
+ */
+export function listSetInsertFits({ leadEnds, hovered, otherFeatures, maxDeg = SET_PICK_MAX_DEG, reachMm = SET_HOLE_SNAP_AXIAL_REACH_MM }) {
+  const { opening, face } = hovered;
+  const n = face.outward.clone().normalize();
+  const into = n.clone().negate();
+  const farFace = face.point.distanceTo(opening.start) < face.point.distanceTo(opening.end) ? opening.end : opening.start;
+  const depth = face.point.distanceTo(farFace);
+  const target = face.point.clone().addScaledVector(n, PICK_GAP_MM);
+  const openings = otherFeatures.filter((o) => !OPENINGS_BY_INSERT[o.kind]);
+  const fits = [];
+  for (const lead of setLeadsFacing(leadEnds, opening, face, maxDeg)) {
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(lead.dir, into);
+    // A square shaft into a square hole: also turn about the hole's line so the flats line up
+    if (lead.feature.flatDir && opening.flatDir) {
+      const flat = lead.feature.flatDir.clone().applyQuaternion(quaternion);
+      const deg = wrapDeg(angleAbout(into, opening.flatDir) - angleAbout(into, flat), 90);
+      quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(into, THREE.MathUtils.degToRad(deg)));
+    }
+    const pivot = lead.point.clone();
+    const offset = target.clone().sub(pivot);
+    const place = (p) => p.clone().sub(pivot).applyQuaternion(quaternion).add(pivot).add(offset);
+    const markers = [];
+    for (const other of leadEnds) {
+      const tip = place(other.point);
+      const dir = other.dir.clone().applyQuaternion(quaternion);
+      const onPlane = tip.clone().addScaledVector(n, -tip.clone().sub(face.point).dot(n));
+      if (other === lead) {
+        markers.push({ point: onPlane, green: true, opening, anchor: true });
+        continue;
+      }
+      if (dir.dot(into) < PARALLEL_MIN_DOT) continue; // not going in this way
+      const match = openings.find((o) => {
+        if (!OPENINGS_BY_INSERT[other.feature.kind]?.has(o.kind) || Math.abs(o.axis.dot(dir)) < PARALLEL_MIN_DOT) return false;
+        _v.subVectors(tip, o.origin);
+        const along = _v.dot(o.axis);
+        if (_v.lengthSq() - along * along > MAX_LINE_DISTANCE_MM * MAX_LINE_DISTANCE_MM) return false;
+        // The tip in front of the opening (or in it), within reach along the line
+        const [oMin, oMax] = projectRange(o.start, o.end, tip, dir);
+        return oMax >= -0.5 && oMin <= reachMm;
+      });
+      markers.push({ point: onPlane, green: Boolean(match), opening: match ?? null });
+    }
+    const length = lead.feature.start.distanceTo(lead.feature.end);
+    fits.push({
+      lead,
+      quaternion,
+      pivot,
+      offset,
+      markers,
+      green: markers.filter((m) => m.green).length,
+      total: markers.length,
+      turnRad: 2 * Math.acos(Math.min(1, Math.abs(quaternion.w))),
+      moveMm: offset.length(),
+      travelMm: PICK_GAP_MM + depth,
+      sweepMm: PICK_GAP_MM + depth + length,
+      direction: into.clone()
+    });
+  }
+  return fits.sort((a, b) => b.green - a.green || a.turnRad - b.turnRad || a.moveMm - b.moveMm);
 }
 
 /**
@@ -987,9 +1194,11 @@ const minAlong = (a, b, dir) => Math.min(a.dot(dir), b.dot(dir));
  *    travelMm.
  */
 export function planMates(alignedOpenings, selectedId) {
+  // `selectedId` may be a Set of ids: a set moved as one (group-snapping)
+  const ours = (id) => (selectedId instanceof Set ? selectedId.has(id) : id === selectedId);
   const plans = [];
   for (const pair of alignedOpenings) {
-    const holdsInsert = pair.insertInstanceId === selectedId;
+    const holdsInsert = ours(pair.insertInstanceId);
     const direction = pair.outward.clone().multiplyScalar(holdsInsert ? -1 : 1);
     let plan = plans.find((p) => p.direction.dot(direction) >= PARALLEL_MIN_DOT);
     if (!plan) {
@@ -1002,7 +1211,7 @@ export function planMates(alignedOpenings, selectedId) {
   for (const plan of plans) {
     let nearestGap = Infinity;
     for (const pair of plan.pairs) {
-      const holdsInsert = pair.insertInstanceId === selectedId;
+      const holdsInsert = ours(pair.insertInstanceId);
       const v = plan.direction.clone().multiplyScalar(holdsInsert ? 1 : -1);
       // Two holes stack: go until the faces meet. A pin/shaft goes on into the opening.
       const faceGap = minAlong(pair.start, pair.end, v) - maxAlong(pair.insertStart, pair.insertEnd, v);
