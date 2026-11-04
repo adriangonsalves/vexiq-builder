@@ -1375,6 +1375,9 @@ export default function Viewport3D({
   onUpdateSet,
   onRegisterFlushMover,
   onRegisterScreenshot,
+  onRegisterViewSpot,
+  placeRequest = null,
+  onCancelPlace,
   transformMode,
   snapPitchFactor,
   rotationSnapDeg,
@@ -1453,6 +1456,10 @@ export default function Viewport3D({
   onPickStatusRef.current = onPickStatus;
   const onInsertCopyRef = useRef(onInsertCopy);
   onInsertCopyRef.current = onInsertCopy;
+  const onCancelPlaceRef = useRef(onCancelPlace);
+  onCancelPlaceRef.current = onCancelPlace;
+  // A library drag's release is still to come: it must not count as a click (easier-placing-and-fix-assembly)
+  const pendingDropRef = useRef(false);
   const holeOverlayRef = useRef(null);
   const otherFeaturesRef = useRef([]); // [{ instanceId, box, features }] for visible non-selected parts
   const lastSceneSyncRef = useRef(null); // what the scene sync effect last applied, to spot selection-only changes
@@ -1924,7 +1931,7 @@ export default function Viewport3D({
    * Commits a part that just landed (drag release, mate, pick) with the placement step's turns as
    * one history step. Returns the step's notes (meshes, conflicts, hub turns).
    */
-  const commitPlacement = (group, { label, receivingId = null, settle = true } = {}) => {
+  const commitPlacement = (group, { label, receivingId = null, settle = true, stepMeta = null } = {}) => {
     const id = group.userData.instanceId;
     const inst = instancesRef.current.find((i) => i.instanceId === id);
     const settled = settle ? settleInstances(id, groupPose(group), { receivingId }) : { patches: [], messages: [] };
@@ -1938,7 +1945,9 @@ export default function Viewport3D({
     onUpdateTransformRef.current(
       id,
       { ...groupPose(group), isIntersecting, ...(own && 'socketAngleDeg' in own ? { socketAngleDeg: own.socketAngleDeg } : {}) },
-      stepLabel || extraPatches.length ? { ...(stepLabel ? { label: stepLabel } : {}), ...(extraPatches.length ? { extraPatches } : {}) } : undefined
+      stepLabel || extraPatches.length || stepMeta
+        ? { ...stepMeta, ...(stepLabel ? { label: stepLabel } : {}), ...(extraPatches.length ? { extraPatches } : {}) }
+        : undefined
     );
     return notes;
   };
@@ -2144,7 +2153,7 @@ export default function Viewport3D({
    * plan's travel limit (leading end flush with the far face). Commits like a drag release, after
    * making sure the rounded position is clear.
    */
-  const mateSelected = (plan, { label, message, receivingId: receivingIdArg = null } = {}) => {
+  const mateSelected = (plan, { label, message, receivingId: receivingIdArg = null, stepMeta = null } = {}) => {
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     if (!group || !plan) return;
@@ -2165,7 +2174,7 @@ export default function Viewport3D({
     start.add(preTurnForPlacement(group, plan.direction, plan.travelMm, { receivingId }, plan.sweepMm));
     const final = sweepToContact(group, start, plan.direction, plan.travelMm, plan.sweepMm);
     group.position.copy(final);
-    const notes = commitPlacement(group, { label, receivingId });
+    const notes = commitPlacement(group, { label, receivingId, stepMeta });
     const withNotes = (text) => [text, ...notes].join('. ');
     if (message) {
       feedback(withNotes(message));
@@ -2292,6 +2301,13 @@ export default function Viewport3D({
       return;
     }
     const arrowHint = pick.alongsideArrows ? ', or click the arrow to stack along the lined-up holes' : '';
+    if (pick.place && !pick.hovered && !pick.message) {
+      const text = pick.place.followOnly
+        ? `Placing ${name}: move it where it goes (it pulls onto lined-up holes), click to put it down, Esc to cancel`
+        : `Placing ${name}: point at a ${pick.bore ? "hole or an axle's end" : 'hole'} to fit it, click to put it down here, Esc to cancel`;
+      onPickStatusRef.current?.({ text, tone: 'info' });
+      return;
+    }
     let text = pick.bore
       ? `Pick a place for ${name}: point at an axle's end or a hole, click to put it on${arrowHint}, Esc to cancel`
       : `Pick a hole for ${name}: point at a hole, click to insert${arrowHint}, Esc to cancel`;
@@ -2332,7 +2348,9 @@ export default function Viewport3D({
     } else {
       overlay.showRing(hovered ? { ...hovered.face, radiusMm: hovered.opening.radiusMm, taken: hovered.taken } : null);
     }
-    overlay.showGhost(fit ? { position: fit.position, quaternion: fit.quaternion } : null);
+    // Placing poses the part itself at the fit instead of a see-through copy
+    if (pick.place) poseFollowAtFit(fit);
+    overlay.showGhost(fit && !pick.place ? { position: fit.position, quaternion: fit.quaternion } : null);
     overlay.showMarkers(fit ? fit.markers : [], hovered ? hovered.face.outward : new THREE.Vector3(0, 0, 1));
     emitPickStatus();
   };
@@ -2350,7 +2368,9 @@ export default function Viewport3D({
     const insertKinds = [...new Set(getLocalFeatures(partMeta).filter((f) => f.kind === 'pin' || f.kind === 'shaft').map((f) => f.kind))];
     // A bore part (gear, hub, pulley, motor) is picked onto axle ends and hole faces instead
     const bore = insertKinds.length === 0 && isBorePart(partMeta);
-    if (insertKinds.length === 0 && !bore) return null;
+    // Placing a part with nothing to insert (beam, plate, brain): it only follows the pointer
+    const followOnly = insertKinds.length === 0 && !bore;
+    if (followOnly && !extra.allowFollowOnly) return null;
 
     rebuildOtherFeatures();
     const others = otherFeaturesRef.current.flatMap((o) => o.features);
@@ -2364,6 +2384,7 @@ export default function Viewport3D({
       selId,
       partMeta,
       bore,
+      followOnly,
       measured: getMeshMeasurements(group, partMeta),
       // Gears and racks a gear preview meshes with (a copy also meshes with the original)
       meshNeighbours: isMeshingGear(partMeta) ? toothedNeighbours(kind === 'copy' ? null : selId) : null,
@@ -2406,6 +2427,105 @@ export default function Viewport3D({
     return true;
   };
 
+  // --- Placing a part dragged in from the library (openspec easier-placing-and-fix-assembly) -------
+
+  /**
+   * Starts placing the just-added part `request.instanceId`: a hole-picking session whose part follows
+   * the pointer and sits at the hovered hole's fit. Parts with nothing to insert only follow (and pull
+   * onto lined-up holes). Returns false when the part isn't the selected one.
+   */
+  const startPlace = (request) => {
+    if (selectedIdRef.current !== request.instanceId || explodeModeRef.current !== 'off') return false;
+    if (pickModeRef.current) endPick();
+    const session = buildPickSession('pick', { allowFollowOnly: true });
+    const group = meshMapRef.current.get(request.instanceId);
+    if (!session || !group) return false;
+    session.place = { request, followOnly: session.followOnly };
+    pickModeRef.current = session;
+    const transform = transformRef.current;
+    if (transform) {
+      transform.enabled = false;
+      transform.getHelper().visible = false;
+    }
+    hideMateArrows();
+    pickOverlayRef.current?.setGhostSource(group);
+    refreshRotateSetup();
+    const at = copyPointerRef.current;
+    if (at) {
+      updatePickHover(at.x, at.y);
+      followPointer(at.x, at.y);
+    }
+    renderPick();
+    return true;
+  };
+
+  /** Poses the placed part at `fit` (a hovered hole's fit). */
+  const poseFollowAtFit = (fit) => {
+    const pick = pickModeRef.current;
+    const group = pick ? meshMapRef.current.get(pick.selId) : null;
+    if (!group || !fit) return;
+    group.position.copy(fit.position);
+    group.quaternion.copy(fit.quaternion);
+    group.updateMatrixWorld(true);
+  };
+
+  /**
+   * Moves the placed part under the pointer (canvas px), keeping its turn and its distance from the
+   * camera; at the hovered hole's fit while one is lit. A part with nothing to insert pulls onto
+   * lined-up holes as a drag does (not with Alt).
+   */
+  const followPointer = (canvasX, canvasY) => {
+    const pick = pickModeRef.current;
+    const camera = pointerCameraRef.current();
+    const inputEl = inputElRef.current;
+    const group = pick?.place ? meshMapRef.current.get(pick.selId) : null;
+    if (!group || !camera || !inputEl) return;
+    const fit = pick.hovered && !pick.hovered.taken ? pick.fits[pick.fitIndex] : null;
+    if (fit) {
+      poseFollowAtFit(fit);
+      return;
+    }
+    const rect = inputEl.getBoundingClientRect();
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2((canvasX / rect.width) * 2 - 1, -(canvasY / rect.height) * 2 + 1), camera);
+    const box = group.userData.localBox;
+    const centreLocal = box ? box.getCenter(new THREE.Vector3()) : new THREE.Vector3();
+    group.quaternion.copy(pick.startQuaternion);
+    group.updateMatrixWorld(true);
+    const centre = centreLocal.clone().applyMatrix4(group.matrixWorld);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), centre);
+    const hit = raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+    if (!hit) return;
+    group.position.add(hit.sub(centre));
+    group.updateMatrixWorld(true);
+    if (pick.place.followOnly && !altKeyRef.current) {
+      const features = collectWorldFeatures(pick.partMeta, group.matrixWorld, pick.selId, pick.measured);
+      const reachBox = worldPartBox(pick.partMeta, group.matrixWorld)?.expandByScalar(HOLE_SNAP_AXIAL_REACH_MM);
+      const candidates = [];
+      for (const other of otherFeaturesRef.current) {
+        if (reachBox && other.box && !reachBox.intersectsBox(other.box)) continue;
+        for (const f of other.features) candidates.push(f);
+      }
+      const axes = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
+      const snap = features.length ? findHoleSnap(features, candidates, axes) : null;
+      if (snap) {
+        group.position.add(snap.offset);
+        group.updateMatrixWorld(true);
+      }
+    }
+  };
+
+  /** A click away from any hole while placing: put the part down where it is shown. */
+  const dropPlacedPart = () => {
+    const pick = pickModeRef.current;
+    const group = pick?.place ? meshMapRef.current.get(pick.selId) : null;
+    if (!group) return;
+    const { request } = pick.place;
+    pick.keepPose = true;
+    endPick();
+    commitPlacement(group, { label: `Add ${pickLabelOf(pick.selId)}`, stepMeta: { mergeKey: request.mergeKey, mergeWindowMs: Infinity } });
+  };
+
   /**
    * Starts the Ctrl/Cmd copy preview (openspec: quick-copy-insert) when nothing else is going on: a
    * visible selected part with inserts, no drag or ring turn, no picking, no arrows, no Explode, and
@@ -2442,6 +2562,17 @@ export default function Viewport3D({
     pickModeRef.current = null;
     if (pick.alongsideArrows) hideMateArrows();
     pickOverlayRef.current?.clear();
+    if (pick.place && !pick.keepPose) {
+      // Placing ended without putting the part down: it goes away again (App removes it)
+      const group = meshMapRef.current.get(pick.selId);
+      if (group) {
+        group.position.copy(pick.startPosition);
+        group.quaternion.copy(pick.startQuaternion);
+        group.updateMatrixWorld(true);
+      }
+      const request = pick.place.request;
+      setTimeout(() => onCancelPlaceRef.current?.(request), 0);
+    }
     const transform = transformRef.current;
     if (transform && pick.kind === 'pick') {
       transform.enabled = true;
@@ -2527,7 +2658,8 @@ export default function Viewport3D({
     const pick = pickModeRef.current;
     if (!pick) return;
     if (!pick.hovered) {
-      endPick();
+      if (pick.place) dropPlacedPart();
+      else endPick();
       return;
     }
     if (pick.hovered.taken) {
@@ -2551,12 +2683,15 @@ export default function Viewport3D({
       emitPickStatus();
       return;
     }
-    const label = `Insert ${pickLabelOf(pick.selId)} into ${pickLabelOf(pick.hovered.opening.instanceId)}`;
+    const verb = pick.place ? 'Add' : 'Insert';
+    const label = `${verb} ${pickLabelOf(pick.selId)} into ${pickLabelOf(pick.hovered.opening.instanceId)}`;
     const receivingInstanceId = pick.hovered.opening.instanceId;
+    const stepMeta = pick.place ? { mergeKey: pick.place.request.mergeKey, mergeWindowMs: Infinity } : null;
+    pick.keepPose = true;
     endPick();
     mateSelected(
       { lateral: new THREE.Vector3(), direction: fit.direction, travelMm: fit.travelMm, sweepMm: fit.sweepMm, pairs: [] },
-      { label, message: label.replace(/^Insert/, 'Inserted'), receivingId: receivingInstanceId }
+      { label, message: label.replace(/^(Insert|Add)/, pick.place ? 'Added' : 'Inserted'), receivingId: receivingInstanceId, stepMeta }
     );
   };
 
@@ -3351,6 +3486,71 @@ export default function Viewport3D({
     onRegisterScreenshot(shoot);
   }, [onRegisterScreenshot]);
 
+  // Where a part added from the library goes (openspec easier-placing-and-fix-assembly):
+  // `viewSpot(bbox, pointer?)` returns the part's position (mm). With a pointer (client px), the point
+  // under it on the plane through the orbit target facing the camera; without, the clear spot nearest
+  // that target on the plane, on the 1-pitch world grid, with the whole part in view.
+  useEffect(() => {
+    if (!onRegisterViewSpot) return;
+    onRegisterViewSpot((bbox, pointer = null) => {
+      const camera = cameraRef.current;
+      const target = orbitRef.current?.target;
+      const inputEl = inputElRef.current;
+      if (!camera || !target || !inputEl || !bbox) return null;
+      camera.updateMatrixWorld();
+      const viewDir = camera.getWorldDirection(new THREE.Vector3());
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(viewDir, target);
+      const local = new THREE.Box3(new THREE.Vector3(...bbox.min), new THREE.Vector3(...bbox.max));
+      const centre = local.getCenter(new THREE.Vector3());
+      const size = local.getSize(new THREE.Vector3());
+      const round3 = (v) => v.toArray().map((n) => Number(n.toFixed(3)) + 0);
+      const rect = inputEl.getBoundingClientRect();
+      if (pointer) {
+        const ndc = new THREE.Vector2(((pointer.x - rect.left) / rect.width) * 2 - 1, -((pointer.y - rect.top) / rect.height) * 2 + 1);
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(ndc, camera);
+        const hit = raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+        return hit ? round3(hit.sub(centre)) : null;
+      }
+      const boxes = [];
+      for (const group of meshMapRef.current.values()) {
+        if (!group.visible) continue;
+        group.updateMatrixWorld();
+        const box = worldPartBox(catalogMapRef.current.get(group.userData.partId), group.matrixWorld);
+        if (box) boxes.push(box);
+      }
+      const corner = new THREE.Vector3();
+      const fits = (origin) => {
+        const box = local.clone().translate(origin);
+        const grown = box.clone().expandByScalar(2);
+        if (boxes.some((b) => b.intersectsBox(grown))) return false;
+        for (const x of [box.min.x, box.max.x]) {
+          for (const y of [box.min.y, box.max.y]) {
+            for (const z of [box.min.z, box.max.z]) {
+              corner.set(x, y, z).project(camera);
+              if (corner.z > 1 || Math.abs(corner.x) > 0.9 || Math.abs(corner.y) > 0.9) return false;
+            }
+          }
+        }
+        return true;
+      };
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+      const step = Math.max(size.x, size.y, size.z, VEX_PITCH_MM) + 4;
+      for (let ring = 0; ring <= 6; ring++) {
+        const count = ring === 0 ? 1 : 8 * ring;
+        for (let k = 0; k < count; k++) {
+          const angle = (k / count) * Math.PI * 2;
+          const point = target.clone().addScaledVector(right, Math.cos(angle) * ring * step).addScaledVector(up, Math.sin(angle) * ring * step);
+          const origin = point.sub(centre);
+          origin.set(...origin.toArray().map((n) => Math.round(n / VEX_PITCH_MM) * VEX_PITCH_MM));
+          if (fits(origin)) return round3(origin);
+        }
+      }
+      return round3(target.clone().sub(centre));
+    });
+  }, [onRegisterViewSpot]);
+
   // Expose a contact-aware nudge/move resolver to App.jsx for the Inspector -X/+X/-Y/+Y/-Z/+Z buttons
   useEffect(() => {
     if (!onRegisterFlushMover) return;
@@ -4102,6 +4302,11 @@ export default function Viewport3D({
     };
 
     const handlePointerUp = (e) => {
+      // The release that ends a drag from the library: placing carries on
+      if (pendingDropRef.current && e.button === 0) {
+        pendingDropRef.current = false;
+        return;
+      }
       const dx = e.clientX - pointerDownPos.x;
       const dy = e.clientY - pointerDownPos.y;
       if (boxDrag && e.button === 0) {
@@ -4216,10 +4421,14 @@ export default function Viewport3D({
           arrowOverlay.setHover(arrowOverlay.pick(raycaster));
         }
         pickHoverAt = [e.clientX - rect.left, e.clientY - rect.top];
+        // A placed part follows the pointer, but not while a button turns the camera
+        const follow = pendingDropRef.current || e.buttons === 0;
         if (!pickHoverFrame) {
           pickHoverFrame = requestAnimationFrame(() => {
             pickHoverFrame = 0;
-            if (pickHoverAt) updatePickHover(...pickHoverAt);
+            if (!pickHoverAt) return;
+            updatePickHover(...pickHoverAt);
+            if (follow) followPointer(...pickHoverAt);
           });
         }
         return;
@@ -5521,6 +5730,34 @@ export default function Viewport3D({
       endPick();
     }
   }, [instances, selectedId, transformMode, explodeMode]);
+
+  // A part dragged in from the library: placing starts once its mesh has loaded
+  useEffect(() => {
+    if (!placeRequest) return undefined;
+    pendingDropRef.current = Boolean(placeRequest.dropPending);
+    // Released anywhere (the view's own handler sees it first when it is over the view)
+    const released = () => {
+      pendingDropRef.current = false;
+    };
+    window.addEventListener('pointerup', released);
+    window.addEventListener('pointercancel', released);
+    let cancelled = false;
+    const inst = instancesRef.current.find((i) => i.instanceId === placeRequest.instanceId);
+    const partMeta = inst ? catalogMapRef.current.get(inst.partId) : null;
+    if (partMeta) {
+      loadPartAsset(partMeta).then(() =>
+        requestAnimationFrame(() => {
+          if (!cancelled && !startPlace(placeRequest)) onCancelPlaceRef.current?.(placeRequest);
+        })
+      );
+    }
+    return () => {
+      cancelled = true;
+      window.removeEventListener('pointerup', released);
+      window.removeEventListener('pointercancel', released);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeRequest]);
 
   // Undo, redo and history jumps put parts back without their overlap flags: check the moved parts
   // again (after the effect above has posed them) and report any flag that changed

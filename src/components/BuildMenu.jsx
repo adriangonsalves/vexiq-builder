@@ -1,59 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, Hammer, Link2, X } from 'lucide-react';
-import PopoverMenu, { MenuItem } from './PopoverMenu.jsx';
+import React, { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { ATTACHMENT_EVERY_MAX, UPPER_BLOCKED } from '../utils/chainPath.js';
-
-/**
- * The toolbar's Build menu (openspec chain-track-builder): Chain builder and Track builder, for two
- * or more sprockets in one plane. `chainCheck` is checkSprocketsForChain's answer for the selection;
- * when it isn't ok both items are greyed out and its message says what is missing.
- */
-export default function BuildMenu({ chainCheck, disabledReason = null, onChain, onTrack }) {
-  const buttonRef = useRef(null);
-  const [at, setAt] = useState(null);
-  const close = useCallback(() => setAt(null), []);
-  const choose = (fn) => () => {
-    close();
-    fn();
-  };
-  const toggle = () => {
-    if (at) {
-      close();
-      return;
-    }
-    const r = buttonRef.current.getBoundingClientRect();
-    setAt({ x: r.left, y: r.bottom + 4 });
-  };
-  const reason = disabledReason || (chainCheck?.ok ? null : chainCheck?.error || 'Select two or more sprockets in one plane.');
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        className={`btn ${at ? 'active' : ''}`}
-        onClick={toggle}
-        aria-haspopup="menu"
-        aria-expanded={Boolean(at)}
-        title="Build a chain or a track round sprockets"
-      >
-        <Hammer size={14} />
-        Build
-        <ChevronDown size={12} />
-      </button>
-      {at && (
-        <PopoverMenu at={at} onClose={close} label="Build">
-          <MenuItem icon={Link2} disabled={Boolean(reason)} onSelect={choose(onChain)} title={reason || 'Wrap a loop of Chain Links round the selected sprockets'}>
-            Chain builder
-          </MenuItem>
-          <MenuItem disabled={Boolean(reason)} onSelect={choose(onTrack)} title={reason || 'Wrap a tank track round the selected sprockets, with rubber grippers if you like'}>
-            Track builder…
-          </MenuItem>
-          {reason && <div className="popover-note">{reason}</div>}
-        </PopoverMenu>
-      )}
-    </>
-  );
-}
 
 /**
  * Lets a modal <dialog> be dragged by the element these props go on (its header). The offset is kept

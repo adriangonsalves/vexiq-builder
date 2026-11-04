@@ -2056,7 +2056,7 @@ export function summarizeAudit(audit) {
 }
 
 /**
- * Chain or track round the selected sprockets (openspec chain-track-builder), as the app's Build menu
+ * Chain or track round the selected sprockets (openspec chain-track-builder), as the app's Tools → Chain builder
  * and the build_chain tool do it: link (and gripper) instances made into one new "Chain N" /
  * "Track N" group, and each loop sprocket turned with its shaft group so its teeth sit in the chain.
  * `instanceIds` default to the selection. Returns { error } or { instances (all, new state),

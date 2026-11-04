@@ -43,7 +43,8 @@ import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
 import ExplodePanel from './components/ExplodePanel.jsx';
 import SelectMenu from './components/SelectMenu.jsx';
-import BuildMenu, { ChainBuilderDialog, ChainRouteDialog } from './components/BuildMenu.jsx';
+import { ChainBuilderDialog, ChainRouteDialog } from './components/BuildMenu.jsx';
+import ToolsMenu from './components/ToolsMenu.jsx';
 import { buildChainPath, checkSprocketsForChain } from './utils/chainPath.js';
 import AssemblyOutliner from './components/AssemblyOutliner.jsx';
 import SetInspector from './components/SetInspector.jsx';
@@ -369,6 +370,7 @@ export default function App() {
         source,
         label: meta.label,
         mergeKey: meta.mergeKey,
+        ...(meta.mergeWindowMs !== undefined ? { mergeWindowMs: meta.mergeWindowMs } : {}),
         linear: isLinearHistory(settingsRef.current)
       });
       return { instances: next, history: recorded.history };
@@ -492,6 +494,10 @@ export default function App() {
   // The viewport's screenshot renderer, used to answer the MCP server's capture_screenshot requests
   const screenshotRef = useRef(null);
   const waitForExplodeRef = useRef(async () => {}); // resolves once an open Explode panel shows its plan
+  const viewSpotRef = useRef(null); // (bbox, pointer?) => position: where a library part lands in view
+  const handleRegisterViewSpot = useCallback((fn) => {
+    viewSpotRef.current = fn;
+  }, []);
   const handleRegisterScreenshot = useCallback((fn) => {
     screenshotRef.current = fn;
   }, []);
@@ -1140,16 +1146,12 @@ export default function App() {
     }
     if (explodeMode !== 'off') setExplodeMode('off');
     const samePartCount = instances.filter((i) => i.partId === part.id).length;
+    // In view, clear of other parts (or in front of the build when the view can't say)
     const basePos =
       customPos ||
-      (selectedInstance
-        ? [
-            Number((selectedInstance.position[0] + VEX_PITCH_MM * 2).toFixed(3)),
-            selectedInstance.position[1],
-            selectedInstance.position[2]
-          ]
-        : // In front of the build, so it lands in view however many parts there are
-          spotBesideBuild(instances, part.bbox, (i) => catalogMap.get(i.partId)?.bbox, VEX_PITCH_MM) || [0, VEX_PITCH_MM, 0]);
+      viewSpotRef.current?.(part.bbox) ||
+      spotBesideBuild(instances, part.bbox, (i) => catalogMap.get(i.partId)?.bbox, VEX_PITCH_MM) ||
+      [0, VEX_PITCH_MM, 0];
 
     const newInst = {
       instanceId: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1173,12 +1175,10 @@ export default function App() {
     return newInst;
   };
 
-  // Adding by clicking a library part also counts as a use of it (the Recent list)
-  const handleLibraryAdd = (part) => {
-    const added = handleAddPart(part);
-    if (!added) return;
+  // Adding a library part (click or drag) also counts as a use of it (the Recent list)
+  const recordLibraryUse = (partId) => {
     setRecentEntries((prev) => {
-      const next = recordUse(prev, part.id);
+      const next = recordUse(prev, partId);
       try {
         saveRecent(window.localStorage, next);
       } catch {
@@ -1187,6 +1187,79 @@ export default function App() {
       return next;
     });
   };
+
+  const handleLibraryAdd = (part) => {
+    // The click that ends a drag from the library doesn't add another
+    if (suppressLibraryClickRef.current) return;
+    const added = handleAddPart(part);
+    if (added) recordLibraryUse(part.id);
+  };
+
+  // Dragging a library part into the 3D view places it (openspec easier-placing-and-fix-assembly):
+  // past 6 px a chip follows the pointer; over the view the part is added under the pointer and the
+  // viewport starts placing it (placeRequest). The add and the placing share a merge key, so they are
+  // one history step, and cancelling takes the step away again.
+  const viewportAreaRef = useRef(null);
+  const suppressLibraryClickRef = useRef(false);
+  const [libraryDrag, setLibraryDrag] = useState(null); // { name, x, y } while a library part is dragged outside the view
+  const [placeRequest, setPlaceRequest] = useState(null); // { instanceId, label, mergeKey, dropPending }
+  const startLibraryDrag = (e, part) => {
+    if (e.button !== 0 || e.pointerType === 'touch') return; // touch scrolls the list
+    const drag = { x0: e.clientX, y0: e.clientY, started: false, added: false };
+    const overView = (x, y) => {
+      const r = viewportAreaRef.current?.getBoundingClientRect();
+      return Boolean(r) && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    };
+    const move = (ev) => {
+      if (!drag.started) {
+        if (Math.hypot(ev.clientX - drag.x0, ev.clientY - drag.y0) < 6) return;
+        drag.started = true;
+        hideTileTip();
+      }
+      if (drag.added) return;
+      if (overView(ev.clientX, ev.clientY)) {
+        drag.added = true;
+        setLibraryDrag(null);
+        const mergeKey = `place:${Date.now().toString(36)}`;
+        const pos = viewSpotRef.current?.(part.bbox, { x: ev.clientX, y: ev.clientY }) ?? null;
+        const added = handleAddPart(part, pos, null, { mergeKey, mergeWindowMs: Infinity });
+        if (!added) return;
+        recordLibraryUse(part.id);
+        setPlaceRequest({ instanceId: added.instanceId, label: added.label, mergeKey, dropPending: true });
+        return;
+      }
+      setLibraryDrag({ name: part.name, x: ev.clientX, y: ev.clientY });
+    };
+    const end = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      setLibraryDrag(null);
+      if (drag.started) {
+        suppressLibraryClickRef.current = true;
+        setTimeout(() => {
+          suppressLibraryClickRef.current = false;
+        }, 0);
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  };
+
+  // Placing a dragged-in part was cancelled (Esc, another selection, ...): the part goes, and with the
+  // shared merge key so does its add step
+  const handleCancelPlace = useCallback(
+    (req) => {
+      setInstances((prev) => (prev.some((i) => i.instanceId === req.instanceId) ? prev.filter((i) => i.instanceId !== req.instanceId) : prev), {
+        label: `Remove ${req.label}`,
+        mergeKey: req.mergeKey,
+        mergeWindowMs: Infinity
+      });
+      setSelectedIds((ids) => ids.filter((id) => id !== req.instanceId));
+    },
+    [setInstances]
+  );
 
   const showTileTip = (part, el) => {
     clearTimeout(tileTipTimerRef.current);
@@ -1618,7 +1691,7 @@ export default function App() {
 
   // --- Builds: New, Starter, the library, Open from computer (openspec build-library) -------------
   const [libraryOpen, setLibraryOpen] = useState(false);
-  // Build menu (openspec chain-track-builder, chain-over-under): the route dialog for enclosed parts,
+  // Tools menu's Build items (openspec chain-track-builder, chain-over-under): the route dialog for enclosed parts,
   // the builder dialog ({ kind, slackMm, route } while open), and their choices for this page
   const [builderDialog, setBuilderDialog] = useState(null);
   const [trackAttachment, setTrackAttachment] = useState('traction');
@@ -1840,7 +1913,7 @@ export default function App() {
     }
   };
 
-  // Can the selection carry a chain? Drives the Build menu's items and their hover text
+  // Can the selection carry a chain? Drives the Tools menu's Build items and their hover text
   const chainParts = useMemo(() => {
     const byId = new Map(instances.map((i) => [i.instanceId, i]));
     return selectedIds
@@ -1848,7 +1921,7 @@ export default function App() {
       .filter((i) => i && i.visible !== false)
       .map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogMap.get(i.partId), position: i.position, rotation: i.rotation }));
   }, [instances, selectedIds, catalogMap]);
-  // The parts alone decide whether the Build menu is available; a route that can't work is caught in
+  // The parts alone decide whether the Build items are available; a route that can't work is caught in
   // the route dialog, so the same parts can always be asked again with other answers
   const chainCheck = useMemo(() => checkSprocketsForChain(chainParts), [chainParts]);
 
@@ -2002,9 +2075,11 @@ export default function App() {
               onGroup={handleGroupSelected}
               onUngroup={handleUngroupSelected}
             />
-            <BuildMenu
-              chainCheck={chainCheck}
+            <ToolsMenu
               disabledReason={preview ? "This is a preview of an earlier point. Go to a step's end to edit." : isRunningAction ? 'Working…' : null}
+              fixReason={primaryId ? null : 'Select a part first: the part, or a part it should fit onto.'}
+              chainCheck={chainCheck}
+              onFixAssembly={() => handleRunSmartAction('fix_assembly', { instanceId: primaryId })}
               onChain={() => openChainBuilder('chain')}
               onTrack={() => openChainBuilder('track')}
             />
@@ -2208,6 +2283,8 @@ export default function App() {
                   key={part.id}
                   type="button"
                   className={`part-tile ${idx >= 18 ? 'part-card-deferred' : ''}`}
+                  onPointerDown={(e) => startLibraryDrag(e, part)}
+                  onDragStart={(e) => e.preventDefault()}
                   aria-label={part.name}
                   onClick={() => handleLibraryAdd(part)}
                   onPointerEnter={(e) => showTileTip(part, e.currentTarget)}
@@ -2223,6 +2300,8 @@ export default function App() {
                   key={part.id}
                   type="button"
                   className={`part-card ${idx >= 18 ? 'part-card-deferred' : ''}`}
+                  onPointerDown={(e) => startLibraryDrag(e, part)}
+                  onDragStart={(e) => e.preventDefault()}
                   onClick={() => handleLibraryAdd(part)}
                   onPointerEnter={(e) => showTileTip(part, e.currentTarget)}
                   onPointerLeave={hideTileTip}
@@ -2275,7 +2354,7 @@ export default function App() {
         </aside>
 
         {/* Center 3D Viewport */}
-        <main className={`viewport-container layout-${viewLayout}`}>
+        <main ref={viewportAreaRef} className={`viewport-container layout-${viewLayout}`}>
           {actionFeedback && (
             <div className={`message-strip ${actionFeedback.isError ? 'error' : ''}`} role="status" aria-live="polite">
               {actionFeedback.message}
@@ -2297,6 +2376,9 @@ export default function App() {
             onUpdateSet={preview ? noop : (ids, patches, { kind }) => handleUpdateSet(ids, patches, { label: `${kind === 'turn' ? 'Turn' : 'Move'} ${setName}` })}
             onRegisterFlushMover={handleRegisterFlushMover}
             onRegisterScreenshot={handleRegisterScreenshot}
+            onRegisterViewSpot={handleRegisterViewSpot}
+            placeRequest={placeRequest}
+            onCancelPlace={handleCancelPlace}
             transformMode={transformMode}
             snapPitchFactor={snapPitchFactor}
             rotationSnapDeg={rotationSnapDeg}
@@ -3430,6 +3512,11 @@ export default function App() {
           )}
         </div>
       </dialog>
+      {libraryDrag && (
+        <div className="library-drag-chip" style={{ left: libraryDrag.x + 14, top: libraryDrag.y + 10 }} aria-hidden="true">
+          {libraryDrag.name}
+        </div>
+      )}
     </div>
   );
 }

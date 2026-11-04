@@ -18,8 +18,9 @@ import {
   jointGraph,
   mirrorSubassembly
 } from './core.js';
+import { fixAssembly } from './fixAssembly.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'fix_assembly'];
 
 export function runAction(action, state, params = {}) {
   const { catalogById } = getCatalog();
@@ -259,6 +260,10 @@ export function runAction(action, state, params = {}) {
   }
 
   // The audit and the blueprint picture (`ortho.svg`)
+  if (action === 'fix_assembly') {
+    return fixAssembly(state, { instanceId: params.instanceId || state.selectedId });
+  }
+
   if (action === 'audit_and_blueprint') {
     return { ok: true, audit: auditAssembly(state), ortho: generateOrthographicViews(state) };
   }
