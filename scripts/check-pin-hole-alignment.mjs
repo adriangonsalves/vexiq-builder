@@ -13,6 +13,7 @@ import {
   parallelLines,
   findHoleSnap,
   freeSetFeatures,
+  findNearSeatedPairs,
   freeSetLeadEnds,
   listSetInsertFits,
   findStraighten,
@@ -1194,6 +1195,18 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   const one = planMates(aligned, 'pin');
   const asSet = planMates(aligned, new Set(['pin', 'other']));
   check('planMates: a set of ids plans like the single id', one.length === 1 && asSet.length === 1 && one[0].direction.equals(asSet[0].direction) && near(one[0].travelMm, asSet[0].travelMm) && one[0].direction.z < -0.99, JSON.stringify([one.map((p) => p.direction.toArray()), asSet.map((p) => p.direction.toArray())]));
+}
+
+// Near-seated pairs (the audit's "this hole is 0.31 mm off")
+{
+  const at = (id, name, position) => collectWorldFeatures(part(name), buildWorldMatrix(position, [0, 0, 0]), id);
+  const beam = at('beam', '1x6 Beam', [0, 0, 0]);
+  const pinAt = (dx) => at('pin', '0x2 Connector Pin', [-31.75 + dx, 0, 0]);
+  const near = (dx) => findNearSeatedPairs(pinAt(dx), beam);
+  check('near-seated: a pin 0.4 mm off a hole line is reported, 0.4 mm', near(0.4).length === 1 && Math.abs(near(0.4)[0].lineMm - 0.4) < 0.02, JSON.stringify(near(0.4).map((p) => p.lineMm)));
+  check('  seated within 0.25 mm: not reported', near(0.1).length === 0);
+  check('  3 mm off: not reported', near(3).length === 0);
+  check('  with the Fix assembly limits (4.5 mm, 20°): 3 mm off is reported', findNearSeatedPairs(pinAt(3), beam, { maxLineMm: 4.5, maxAngleDeg: 20, maxGapMm: 4 }).length >= 1);
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);

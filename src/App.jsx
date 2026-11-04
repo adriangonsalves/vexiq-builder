@@ -9,14 +9,13 @@ import {
   LayoutGrid,
   Square,
   Sun,
-  Compass,
   Contrast,
   Copy,
   Crosshair,
   Download,
-  Expand,
   Fullscreen,
   Grid,
+  Magnet,
   History as HistoryIcon,
   List as ListIcon,
   Maximize2,
@@ -45,6 +44,8 @@ import ExplodePanel from './components/ExplodePanel.jsx';
 import SelectMenu from './components/SelectMenu.jsx';
 import { ChainBuilderDialog, ChainRouteDialog } from './components/BuildMenu.jsx';
 import ToolsMenu from './components/ToolsMenu.jsx';
+import AuditPanel from './components/AuditPanel.jsx';
+import { auditIssues, problemCount } from './utils/auditIssues.js';
 import { buildChainPath, checkSprocketsForChain } from './utils/chainPath.js';
 import AssemblyOutliner from './components/AssemblyOutliner.jsx';
 import SetInspector from './components/SetInspector.jsx';
@@ -334,7 +335,9 @@ export default function App() {
     backend.loadSettings().then((loaded) => loaded && keepSettings(loaded));
   }, [keepSettings]);
   const [isRunningAction, setIsRunningAction] = useState(false);
-  const [auditModalData, setAuditModalData] = useState(null);
+  const [auditOpen, setAuditOpen] = useState(false); // the Audit panel is up
+  const [auditData, setAuditData] = useState(null); // the audit's report, kept fresh while the panel is open
+  const [blueprintData, setBlueprintData] = useState(null); // { blueprintUrl } of the last blueprint
 
   // The history the server last confirmed (its rev and the parts at that point), so a save built on
   // an older history is refused by the bridge and re-recorded on top instead of overwriting MCP steps
@@ -485,7 +488,7 @@ export default function App() {
     if (selectedIds.some((id) => !ids.has(id))) setSelectedIds((prev) => prev.filter((id) => ids.has(id)));
   }, [instances, selectedIds]);
 
-  const auditDialogRef = useRef(null);
+  const blueprintDialogRef = useRef(null);
   const suppressNextServerSyncRef = useRef(false);
   const webMcpContextRef = useRef(null);
   const flushMoverRef = useRef(null);
@@ -507,7 +510,7 @@ export default function App() {
 
   // Fallback for browsers without <dialog closedby="any"> support
   useEffect(() => {
-    const dialog = auditDialogRef.current;
+    const dialog = blueprintDialogRef.current;
     if (!dialog) return undefined;
     if (!('closedBy' in HTMLDialogElement.prototype)) {
       const onDialogClick = (event) => {
@@ -1868,7 +1871,8 @@ export default function App() {
     [mateTargetInst, catalogMap]
   );
 
-  const handleRunSmartAction = async (action, params = {}) => {
+  // `override.instances`: the parts to run on instead of the page's own (right after an action changed them)
+  const handleRunSmartAction = async (action, params = {}, override = {}) => {
     setIsRunningAction(true);
     setActionFeedback(null);
     try {
@@ -1896,7 +1900,7 @@ export default function App() {
             environmentReflections,
             reflectionIntensity
           },
-          instances
+          instances: override.instances ?? instances
         },
         params,
         { history, linear: isLinearHistory(settingsRef.current) }
@@ -1975,20 +1979,61 @@ export default function App() {
     handleRunSmartAction('build_chain', { kind, attachment, attachmentEvery, slack, ...(route ? { route } : {}), instanceIds: selectedIds });
   };
 
-  // The blueprint picture of the last audit, from the audit's reply (no file on the static site)
+  const [auditFixNote, setAuditFixNote] = useState(null); // { text, isError, title } of the last Attempt Fix
+  const auditIssueList = useMemo(() => auditIssues(auditData), [auditData]);
+  const auditProblems = problemCount(auditIssueList);
+
+  // The audit, without the blueprint and without the busy state, so the panel can keep itself fresh
+  const auditSeqRef = useRef(0);
+  const runAuditQuiet = useCallback(async (list) => {
+    const n = ++auditSeqRef.current;
+    try {
+      const data = await backend.runAction('audit', { instances: list }, {});
+      if (n === auditSeqRef.current && data?.ok) setAuditData(data.audit);
+    } catch {
+      /* the next change tries again */
+    }
+  }, []);
+  // While the panel is open: the audit now, and again (after a short pause) whenever the build changes
+  useEffect(() => {
+    if (!auditOpen) return undefined;
+    const timer = setTimeout(() => runAuditQuiet(instances), auditData ? 400 : 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auditOpen, instances, runAuditQuiet]);
+  const toggleAuditPanel = () => {
+    setAuditFixNote(null);
+    setAuditOpen((open) => !open);
+  };
+
+  // A finding clicked: select and frame its part(s); the panel stays open and the row lights up
+  const handleAuditSelect = (issue) => {
+    changeSelection(issue.parts.map((p) => p.instanceId));
+    setFocusTrigger((c) => c + 1);
+  };
+
+  // "Attempt Fix": Fix assembly from each of the finding's parts in turn until one does something; the
+  // panel then refreshes itself as the build changes
+  const handleAuditFix = async (issue) => {
+    setAuditFixNote({ text: 'Working…', isError: false, title: issue.title });
+    let result = null;
+    for (const id of issue.fixIds) {
+      result = await handleRunSmartAction('fix_assembly', { instanceId: id });
+      if (result?.ok) break;
+    }
+    const text = result?.ok ? result.message : result?.error || 'Fix assembly could not do anything here.';
+    setAuditFixNote({ text, isError: !result?.ok || Boolean(result?.isIntersecting), title: issue.title });
+  };
+
+  // The 3-view blueprint, on its own (no file on the static site: the picture comes from the reply)
   const blueprintUrlRef = useRef(null);
-  const handleOpenAuditDialog = async () => {
-    const data = await handleRunSmartAction('audit_and_blueprint', {});
+  const handleOpenBlueprint = async () => {
+    const data = await handleRunSmartAction('blueprint', {});
     if (data && data.ok) {
       if (blueprintUrlRef.current) URL.revokeObjectURL(blueprintUrlRef.current);
       blueprintUrlRef.current = URL.createObjectURL(new Blob([data.ortho.svg], { type: 'image/svg+xml' }));
-      setAuditModalData({
-        audit: data.audit,
-        ortho: data.ortho,
-        blueprintUrl: blueprintUrlRef.current,
-        timestamp: Date.now()
-      });
-      auditDialogRef.current?.showModal();
+      setBlueprintData({ blueprintUrl: blueprintUrlRef.current });
+      blueprintDialogRef.current?.showModal();
     }
   };
 
@@ -2089,6 +2134,12 @@ export default function App() {
               fixReason={primaryId ? null : 'Select a part first: the part, or a part it should fit onto.'}
               chainCheck={chainCheck}
               onFixAssembly={() => handleRunSmartAction('fix_assembly', { instanceId: primaryId })}
+              auditReason={instances.length === 0 ? 'Add some parts first.' : null}
+              auditOpen={auditOpen}
+              onAudit={toggleAuditPanel}
+              onBlueprint={handleOpenBlueprint}
+              exploded={explodeMode !== 'off'}
+              onExplode={toggleExplode}
               onChain={() => openChainBuilder('chain')}
               onTrack={() => openChainBuilder('track')}
             />
@@ -2128,16 +2179,6 @@ export default function App() {
                 { label: 'Free', value: 0 }
               ]}
             />
-            <button
-              type="button"
-              className={`btn ${explodeMode !== 'off' ? 'active' : ''}`}
-              onClick={toggleExplode}
-              aria-pressed={explodeMode !== 'off'}
-              title="Take the robot apart with a slider (Shortcut: X)"
-            >
-              <Expand size={14} />
-              Explode
-            </button>
           </div>
 
           <div className="toolbar-group" role="group" aria-label="View">
@@ -2191,16 +2232,6 @@ export default function App() {
             onExport={handleExportJson}
             onDeleteCurrent={() => currentBuild && handleDeleteBuild(currentBuild.id)}
           />
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={handleOpenAuditDialog}
-            disabled={isRunningAction || instances.length === 0}
-            title="Run 6-Stage Mechanical & Kinematic Audit and Open 3-View Orthographic Blueprint"
-          >
-            <Compass size={14} />
-            Audit &amp; Blueprint
-          </button>
           <button
             type="button"
             className={`btn btn-outline ${settingsOpen ? 'active' : ''}`}
@@ -2550,6 +2581,20 @@ export default function App() {
               </div>
             </div>
           )}
+
+          <AuditPanel
+            open={auditOpen}
+            audit={auditData}
+            issues={auditIssueList}
+            problems={auditProblems}
+            busy={isRunningAction}
+            note={auditFixNote}
+            selectedIds={selectedIds}
+            onSelect={handleAuditSelect}
+            onFix={handleAuditFix}
+            onRefresh={() => runAuditQuiet(instances)}
+            onClose={toggleAuditPanel}
+          />
         </main>
 
         {/* Right Sidebar: Scene Assembly Outliner + Precision Inspector */}
@@ -3349,39 +3394,22 @@ export default function App() {
         setReflectionIntensity={setReflectionIntensity}
       />
 
-      {/* Native Light-Dismiss Modal Dialog for 6-Stage Mechanical Audit & 3-View Blueprint */}
-      <dialog
-        ref={auditDialogRef}
-        closedby="any"
-        className="audit-dialog"
-        aria-labelledby="auditDialogTitle"
-      >
+      {/* Native light-dismiss dialog for the 3-view blueprint (the audit is the panel in the 3D view) */}
+      <dialog ref={blueprintDialogRef} closedby="any" className="audit-dialog" aria-labelledby="blueprintDialogTitle">
         <div className="audit-dialog-inner">
           <div className="audit-dialog-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="brand-badge">AUDIT &amp; BLUEPRINT</span>
-              <strong id="auditDialogTitle" style={{ fontSize: 14 }}>
-                6-Stage Mechanical Connectivity &amp; Kinematic Audit
+              <span className="brand-badge">BLUEPRINT</span>
+              <strong id="blueprintDialogTitle" style={{ fontSize: 14 }}>
+                3-View Orthographic Blueprint
               </strong>
-              {auditModalData?.audit && (
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: auditModalData.audit.isMechanicallySound ? '#4ade80' : '#f87171'
-                  }}
-                >
-                  {auditModalData.audit.isMechanicallySound
-                    ? '● MECHANICALLY SOUND (0 ISSUES)'
-                    : '▲ WARNINGS DETECTED'}
-                </span>
-              )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => window.open(auditModalData.blueprintUrl, '_blank', 'noopener,noreferrer')}
+                disabled={!blueprintData}
+                onClick={() => window.open(blueprintData.blueprintUrl, '_blank', 'noopener,noreferrer')}
               >
                 Open Full SVG
               </button>
@@ -3393,132 +3421,10 @@ export default function App() {
               </form>
             </div>
           </div>
-
-          {auditModalData?.audit && (
+          {blueprintData && (
             <div className="audit-dialog-body">
-              <div className="audit-kpi-grid">
-                <div className="audit-kpi-card">
-                  <span className="audit-kpi-label">1. Solid Collisions</span>
-                  <span
-                    className="audit-kpi-value"
-                    style={{
-                      color: auditModalData.audit.collisionCount === 0 ? '#4ade80' : '#f87171'
-                    }}
-                  >
-                    {auditModalData.audit.collisionCount} Intersections
-                  </span>
-                </div>
-                <div className="audit-kpi-card">
-                  <span className="audit-kpi-label">2. Floating Fasteners</span>
-                  <span
-                    className="audit-kpi-value"
-                    style={{
-                      color:
-                        auditModalData.audit.floatingFastenerCount === 0 ? '#4ade80' : '#f87171'
-                    }}
-                  >
-                    {auditModalData.audit.floatingFastenerCount} Unconnected
-                  </span>
-                </div>
-                <div className="audit-kpi-card">
-                  <span className="audit-kpi-label">3. Unsecured / Heavy</span>
-                  <span
-                    className="audit-kpi-value"
-                    style={{
-                      color:
-                        auditModalData.audit.unsecuredPartCount === 0 &&
-                        auditModalData.audit.underSecuredHeavyPartCount === 0
-                          ? '#4ade80'
-                          : '#f87171'
-                    }}
-                  >
-                    {auditModalData.audit.unsecuredPartCount} Unpinned ·{' '}
-                    {auditModalData.audit.underSecuredHeavyPartCount} Heavy
-                  </span>
-                </div>
-                <div className="audit-kpi-card">
-                  <span className="audit-kpi-label">4. Connectivity Graph</span>
-                  <span
-                    className="audit-kpi-value"
-                    style={{
-                      color:
-                        auditModalData.audit.disconnectedIslandCount === 0 ? '#4ade80' : '#f87171'
-                    }}
-                  >
-                    {auditModalData.audit.connectedComponentCount} Unified (
-                    {auditModalData.audit.disconnectedIslandCount} Islands)
-                  </span>
-                </div>
-                <div className="audit-kpi-card">
-                  <span className="audit-kpi-label">5. Shaft Protrusions</span>
-                  <span
-                    className="audit-kpi-value"
-                    style={{
-                      color:
-                        auditModalData.audit.protrudingShaftCount === 0 ? '#4ade80' : '#f87171'
-                    }}
-                  >
-                    {auditModalData.audit.protrudingShaftCount} Overhanging
-                  </span>
-                </div>
-                <div className="audit-kpi-card">
-                  <span className="audit-kpi-label">6. Kinematic Drivetrain</span>
-                  <span className="audit-kpi-value" style={{ color: '#38bdf8' }}>
-                    {auditModalData.audit.kinematics?.motorCount || 0}M →{' '}
-                    {auditModalData.audit.kinematics?.meshedGearPairCount || 0}G →{' '}
-                    {auditModalData.audit.kinematics?.drivenWheelCount || 0}/
-                    {auditModalData.audit.kinematics?.totalWheelCount || 0}W
-                  </span>
-                </div>
-              </div>
-
-              {/* Clickable Issue Callouts (Select & Focus in 3D Viewport) */}
-              {(auditModalData.audit.unsecuredParts?.length > 0 ||
-                auditModalData.audit.floatingFasteners?.length > 0 ||
-                auditModalData.audit.protrudingShafts?.length > 0) && (
-                <div className="metadata-card">
-                  <div className="field-label">
-                    <span>Flagged Parts (Click to Select &amp; Focus in 3D)</span>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {[
-                      ...(auditModalData.audit.unsecuredParts || []).map((x) => ({
-                        ...x,
-                        tag: 'Unsecured'
-                      })),
-                      ...(auditModalData.audit.floatingFasteners || []).map((x) => ({
-                        ...x,
-                        tag: 'Floating Pin/Shaft'
-                      })),
-                      ...(auditModalData.audit.protrudingShafts || []).map((x) => ({
-                        ...x,
-                        tag: 'Protruding Shaft'
-                      }))
-                    ].map((item) => (
-                      <button
-                        key={`${item.tag}-${item.instanceId}`}
-                        type="button"
-                        className="btn btn-outline"
-                        style={{ borderColor: '#f87171', color: '#fecaca', fontSize: 11 }}
-                        onClick={() => {
-                          handleSelectInstance(item.instanceId);
-                          setFocusTrigger((c) => c + 1);
-                          auditDialogRef.current?.close();
-                        }}
-                      >
-                        {item.tag}: {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Embedded 3-View Orthographic Blueprint SVG */}
               <div className="blueprint-preview-wrap">
-                <img
-                  src={auditModalData.blueprintUrl}
-                  alt="3-View Orthographic Engineering Blueprint (Top XZ, Side XY, Front ZY)"
-                />
+                <img src={blueprintData.blueprintUrl} alt="3-View Orthographic Blueprint (Top XZ, Side XY, Front ZY)" />
               </div>
             </div>
           )}

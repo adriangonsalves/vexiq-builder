@@ -134,7 +134,7 @@
   - A **tire on its hub** isn't an overlap: tires are moulded smaller than the hub they stretch over, so a tire whose axis lines up with a hub's and whose width covers the hub's middle is left out of the check (`src/utils/tireFit.js`, shared by the app and the MCP engine).
   - Intersecting parts render in **transparent grey** (`opacity: 0.42`) with a top HUD warning and a one-click **Revert Pose / Cancel Placement** button.
   - Selecting another part automatically reverts any unplaced intersecting part to its `lastValidPosition` / `lastValidRotation`.
-- **Explode (openspec explode-view):** the toolbar's **Explode** button or `X` opens a small panel. It always takes the robot apart every way the parts come apart (there is no X / Y / Z choice). While that's being worked out, the panel shows a ring filling up with a percentage; then a slider from 0% (built) to 100% (fully apart) appears and plays from 0% to 100% over about 2.5 s. Pressing the slider stops the play there; a save from another open tab doesn't. Closing the panel (its ×, the toolbar button, `X` or `Esc`) puts every part back.
+- **Explode (openspec explode-view):** **Tools → Explode** (ticked while the panel is open) or `X` opens a small panel. It always takes the robot apart every way the parts come apart (there is no X / Y / Z choice). While that's being worked out, the panel shows a ring filling up with a percentage; then a slider from 0% (built) to 100% (fully apart) appears and plays from 0% to 100% over about 2.5 s. Pressing the slider stops the play there; a save from another open tab doesn't. Closing the panel (its ×, Tools → Explode, `X` or `Esc`) puts every part back.
   - **Parts come apart in a real order, with nothing passing through anything.** The bridge works out how the robot comes apart (`src/utils/explodePlan.js`, run in a worker by the dev server): each piece slides out in a straight line along a pin or shaft axis it sits on when that way is clear, otherwise along a main axis, carrying the parts held on it. A shaft's stop ring or cap never goes through a hole it can't pass. The brain (or the largest part) stays put. Pieces held on the brain move first; the parts held on them spread from them after, so a piece never leaves its holder before the holder moves. A lump of parts that only comes apart once it is away from the rest (a side frame) is taken apart again on its own.
   - **No overlaps at any slider value:** every start time is checked against the motion of everything else at each 1% of the slider, with the same shrunk meshes and stop-ring test the audit uses. A piece that can't come off cleanly any way stays on the part it is held on. Pairs that overlap as built (a tire on its hub) don't count.
   - **What moves as one:** a group; a pin or standoff and the part it sits deeper in (the larger part on a tie); a tire and its hub; a chain or track (its links and grippers, grouped or not; it slides off its sprockets in one piece). Shafts move on their own; the battery slides out of the brain's bay. Hidden parts are left out.
@@ -228,7 +228,7 @@
 
 ## 2b. Simple Mode, Settings & the Compact Toolbar
 
-- **Simple by default, for young builders:** the toolbar holds Undo / Redo / History, the **Select** and **Build** menus, Move / Rotate, the **Snap** drop-down (it shows its current choice), the **Explode** button (`X`), Focus, Wide, the **File** menu, Audit & Blueprint and a **Settings** gear, with the open build's name beside the title. View options are in the view cube's menu (see above).
+- **Simple by default, for young builders:** the toolbar holds Undo / Redo / History, the **Select** and **Tools** menus (Fix assembly, Audit, Blueprint, Explode, Chain and Track builders), Move / Rotate, the **Snap** drop-down (it shows its current choice), Focus, Wide, the **File** menu and a **Settings** gear, with the open build's name beside the title. View options are in the view cube's menu (see above).
 - **Settings panel (gear button; Esc, the close button or a click outside closes it):**
   - **Display:** Shadows, Ambient occlusion, Environment reflections & Reflection brightness slider.
   - **History:** Linear (the default) or Keep branches; the choice shows with advanced options on.
@@ -271,9 +271,9 @@ With one part selected:
 
 ---
 
-## 4. 6-Stage Mechanical & Kinematic Audit + 3-View Blueprint Modal
+## 4. 6-Stage Mechanical & Kinematic Audit (panel) + 3-View Blueprint (dialog)
 
-Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP tools `audit_assembly` / `capture_viewport_views`):
+**Tools → Audit** opens or closes the **Audit panel** (ticked while open); **Tools → Blueprint** shows the 3-view drawing on its own (a dialog with Open Full SVG). Also available via MCP tools `audit_assembly` / `capture_viewport_views`:
 
 - **6-Stage Engineering Verification (`isMechanicallySound`):**
   1. **Solid Collisions (`collisionCount`):** Pairwise concave BVH mesh intersection check across all visible parts.
@@ -283,10 +283,16 @@ Accessible via the **Audit & Blueprint** button in the top toolbar (and via MCP 
   5. **Shaft Protrusions (`protrudingShaftCount`):** Flags shafts reaching more than `4.5 mm` past the outer faces of the parts they sit in (collars included).
   - **Real hole depths:** hole depths are measured on each part's 3D model. A hole listed as going through but blocked inside is treated as a blind hole from each face that is open at least `1 mm` deep; for example, the Smart Motor's back face only has `~0.4 mm` marks, not holes.
   6. **Kinematic Drivetrain Trace (`kinematics`):** Traces torque transmission from each `Smart Motor` $\rightarrow$ `Motor Shaft` $\rightarrow$ `Driver Gear` $\rightarrow$ `Meshed Idler/Driven Gears` $\rightarrow$ `Driven Shafts` $\rightarrow$ `Driven Wheels`.
-- **Interactive Issue Callouts:**
-  - Any flagged part appears as a clickable pill in the Audit dialog; clicking it selects the part, closes the modal, and focuses the 3D camera directly on the offending component.
+- **The Audit panel (`src/components/AuditPanel.jsx`, `src/utils/auditIssues.js`):**
+  - It slides up from the bottom of the 3D view (up to 42% of its height) and **stays open** while the user works: the 3D view above it keeps working (select, orbit, move). The header says "● Mechanically sound (0 issues)" or "▲ N warnings"; a row of small counters (overlaps, loose pins, half-seated, unpinned, under-fastened, not joined, overhanging shafts, and the drivetrain "1M → 2G → 2/4W") sits under it. Refresh runs the audit again; × (or Tools → Audit again) closes it.
+  - **It keeps itself up to date:** while open, the audit runs again (after a short pause) whenever the build changes, with no blueprint work. Nothing else in the app waits on it.
+  - **The list says what was found, in words:** overlaps (and what they pass into), pins in no hole, **half-seated pins** (which part they are in), unpinned and under-fastened parts, parts not joined to the rest, shafts sticking out. Parts held by only one pin are listed as notes (amber); they don't count as warnings.
+  - A pin that sits in one part but nearly sits in another says which hole is how far off: "Seated in Claw 3x3 Beam R only. Claw Crank Arm R hole_1 is 0.31 mm off its line (up to 0.25 mm and 2° is accepted)." (`nearMiss` on each floating and half-seated fastener in the audit, looking as far as Fix assembly does: 4.5 mm off the line, 20°, up to 4 mm short.) With no hole near, it says so.
+  - **Clicking a finding** selects its part(s) (all of a not-joined group) and frames them in the 3D view; the panel stays open and the row is highlighted. The highlighted row always follows the selection, so picking a flagged part in the 3D view lights its row too.
+  - **Attempt Fix** (beside overlaps, pins in no hole, and every half-seated pin; Fix assembly says when there is nothing it can do) runs Fix assembly from the part the pin sits in first, then the others in turn, until one does something. The panel stays open, says what happened ("Lined up 4 pins and holes: moved …") and refreshes the list. One history step, like Tools → Fix assembly.
+  - Engine actions: `audit` (the report only) and `blueprint` (the drawing only); `audit_and_blueprint` still gives both.
 - **3-View Orthographic Engineering Blueprint (`/assembly-blueprint.svg`):**
-  - Generates and embeds a high-resolution `1600×1050` SVG engineering drawing showing **TOP (`X–Z`)**, **SIDE (`X–Y`)**, and **FRONT (`Z–Y`)** true-scale orthographic projections with part outlines, holes, pitch grids, and callout badges.
+  - **Tools → Blueprint** (a dialog, separate from the Audit panel) generates and shows a high-resolution `1600×1050` SVG engineering drawing showing **TOP (`X–Z`)**, **SIDE (`X–Y`)**, and **FRONT (`Z–Y`)** true-scale orthographic projections with part outlines, holes, pitch grids, and callout badges.
 
 ---
 

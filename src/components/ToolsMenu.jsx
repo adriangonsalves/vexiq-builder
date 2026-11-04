@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ChevronDown, Link2, Magnet, Wrench } from 'lucide-react';
+import { ChevronDown, ClipboardCheck, Expand, Link2, Magnet, Ruler, Wrench } from 'lucide-react';
 import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.jsx';
 
 /**
@@ -7,9 +7,12 @@ import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.j
  * selected part's block with the block it is nearly mated to; Chain builder and Track builder wrap
  * sprockets (openspec chain-track-builder, formerly their own Build menu). `disabledReason` greys out
  * every item (history preview, an action running); `fixReason` and the chain check's error grey out
- * their own items. Each reason shows as the item's hover text.
+ * their own items. Each reason shows as the item's hover text. Audit & Blueprint (formerly its own
+ * toolbar button) is now two items: Audit opens or closes the Audit panel that slides up in the 3D
+ * view (ticked while open), and Blueprint shows the 3-view drawing on its own. Explode
+ * (formerly a toolbar button; shortcut X) opens or closes the Explode panel and shows a tick while it is open.
  */
-export default function ToolsMenu({ disabledReason = null, fixReason = null, chainCheck, onFixAssembly, onChain, onTrack }) {
+export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, exploded = false, auditOpen = false, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack }) {
   const buttonRef = useRef(null);
   const [at, setAt] = useState(null);
   const close = useCallback(() => setAt(null), []);
@@ -26,6 +29,7 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, cha
     setAt({ x: r.left, y: r.bottom + 4 });
   };
   const fixOff = disabledReason || fixReason;
+  const auditOff = disabledReason || auditReason;
   const chainOff = disabledReason || (chainCheck?.ok ? null : chainCheck?.error || 'Select two or more sprockets in one plane.');
   return (
     <>
@@ -36,7 +40,7 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, cha
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={Boolean(at)}
-        title="Fix how parts fit together, or build a chain or track round sprockets"
+        title="Check the build, fix how parts fit together, or build a chain or track round sprockets"
       >
         <Wrench size={14} />
         Tools
@@ -44,7 +48,7 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, cha
       </button>
       {at && (
         <PopoverMenu at={at} onClose={close} label="Tools">
-          <MenuHeading>Fit</MenuHeading>
+          <MenuHeading>Check and fit</MenuHeading>
           <MenuItem
             icon={Magnet}
             disabled={Boolean(fixOff)}
@@ -52,6 +56,32 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, cha
             title={fixOff || 'Line up the pins and holes of the selected part’s block with a block it nearly fits, and seat it. The smaller block moves.'}
           >
             Fix assembly
+          </MenuItem>
+          <MenuItem
+            icon={ClipboardCheck}
+            checked={auditOpen}
+            disabled={Boolean(auditOff)}
+            onSelect={choose(onAudit)}
+            title={auditOff || (auditOpen ? 'Close the Audit panel' : 'Check the build and list what it found, in a panel that stays open while you work')}
+          >
+            Audit
+          </MenuItem>
+          <MenuItem
+            icon={Ruler}
+            disabled={Boolean(auditOff)}
+            onSelect={choose(onBlueprint)}
+            title={auditOff || 'Show the 3-view orthographic blueprint (top, side, front) of the build'}
+          >
+            Blueprint
+          </MenuItem>
+          <MenuItem
+            icon={Expand}
+            checked={exploded}
+            shortcut="X"
+            onSelect={choose(onExplode)}
+            title={exploded ? 'Close the Explode panel and put every part back (Shortcut: X)' : 'Take the robot apart with a slider (Shortcut: X)'}
+          >
+            Explode
           </MenuItem>
           <MenuDivider />
           <MenuHeading>Build</MenuHeading>

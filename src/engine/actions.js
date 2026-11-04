@@ -20,7 +20,7 @@ import {
 } from './core.js';
 import { fitSet, fixAssembly } from './fixAssembly.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'fix_assembly', 'fit_set'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set'];
 
 export function runAction(action, state, params = {}) {
   const { catalogById } = getCatalog();
@@ -267,6 +267,14 @@ export function runAction(action, state, params = {}) {
   // A dragged set's release fit (openspec group-snapping): the fitted poses, nothing saved
   if (action === 'fit_set') {
     return fitSet(state, { ids: params.ids, poses: params.poses });
+  }
+
+  // The audit alone (the Audit panel, refreshed as the build changes) and the blueprint alone
+  if (action === 'audit') {
+    return { ok: true, audit: auditAssembly(state) };
+  }
+  if (action === 'blueprint') {
+    return { ok: true, ortho: generateOrthographicViews(state) };
   }
 
   if (action === 'audit_and_blueprint') {

@@ -602,6 +602,41 @@ function pairRoles(s, o) {
   return null;
 }
 
+/**
+ * Pin/shaft-in-opening pairs between `featuresA` and `featuresB` (different parts) that would be
+ * seated if they were a little better lined up: matching kinds, overlapping along the axis by more
+ * than OUTSIDE_OVERLAP_ALLOWANCE_MM, but off by more than the seated tolerance (2° / 0.25 mm) and
+ * within `maxLineMm` / `maxAngleDeg`. For the audit to say which hole is how far off. With
+ * `maxGapMm`, a pin that stops that far short of the hole (no overlap yet) counts too.
+ * [{ insert, opening, lineMm, angleDeg }], nearest first.
+ */
+export function findNearSeatedPairs(featuresA, featuresB, { maxLineMm = 2, maxAngleDeg = 5, maxGapMm = null } = {}) {
+  const minDot = Math.cos(THREE.MathUtils.degToRad(maxAngleDeg));
+  const pairs = [];
+  for (const a of featuresA) {
+    for (const b of featuresB) {
+      if (a.instanceId === b.instanceId) continue;
+      const roles = pairRoles(a, b);
+      if (!roles) continue;
+      const { insert, opening } = roles;
+      const dot = Math.abs(insert.axis.dot(opening.axis));
+      if (dot < minDot) continue;
+      _v.subVectors(opening.origin, insert.origin);
+      const along = _v.dot(insert.axis);
+      const lineMm = Math.sqrt(Math.max(0, _v.lengthSq() - along * along));
+      if (lineMm > maxLineMm) continue;
+      const [iMin, iMax] = projectRange(insert.start, insert.end, insert.origin, insert.axis);
+      const [oMin, oMax] = projectRange(opening.start, opening.end, insert.origin, insert.axis);
+      const overlap = Math.min(iMax, oMax) - Math.max(iMin, oMin);
+      if (maxGapMm === null ? overlap <= OUTSIDE_OVERLAP_ALLOWANCE_MM : overlap < -maxGapMm) continue;
+      const angleDeg = THREE.MathUtils.radToDeg(Math.acos(Math.min(1, dot)));
+      if (dot >= PARALLEL_MIN_DOT && lineMm <= MAX_LINE_DISTANCE_MM) continue; // that one is seated
+      pairs.push({ insert, opening, lineMm, angleDeg });
+    }
+  }
+  return pairs.sort((x, y) => x.lineMm + x.angleDeg * 0.2 - (y.lineMm + y.angleDeg * 0.2));
+}
+
 // Gap the facing faces of two lined-up holes must have for them to count as apart (not stacked)
 const HOLE_APART_MIN_MM = 0.05;
 

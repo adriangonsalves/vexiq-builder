@@ -12,6 +12,7 @@ import {
   collectWorldFeatures,
   getLocalFeatures,
   findAlignedOpenings,
+  findNearSeatedPairs,
   findSeatedPairs,
   findTooWideInserts,
   measureOpeningDepths,
@@ -661,15 +662,40 @@ function findJoints(state) {
     if (direct) directEdges.push([idA, idB]);
   };
 
+  // The holes a fastener nearly sits in (a little off their line or tilted), outside the parts it is
+  // already seated in: [{ instanceId, part, port, lineMm, angleDeg }], nearest first
+  const nearMissesFor = (fastener, alreadyIn) => {
+    const mine = featuresById.get(fastener.inst.instanceId);
+    const boxF = rawWorldBoxes.get(fastener.inst.instanceId).clone().expandByScalar(5);
+    const out = [];
+    for (const n of nonFasteners) {
+      if (alreadyIn.has(n.inst.instanceId) || !boxF.intersectsBox(rawWorldBoxes.get(n.inst.instanceId))) continue;
+      for (const m of findNearSeatedPairs(mine, featuresById.get(n.inst.instanceId), { maxLineMm: 4.5, maxAngleDeg: 20, maxGapMm: 4 })) {
+        out.push({
+          instanceId: n.inst.instanceId,
+          part: n.inst.label,
+          port: m.opening.featureId,
+          lineMm: Number(m.lineMm.toFixed(2)),
+          angleDeg: Number(m.angleDeg.toFixed(1))
+        });
+      }
+    }
+    return out.sort((a, b) => a.lineMm + a.angleDeg * 0.2 - (b.lineMm + b.angleDeg * 0.2));
+  };
+
   for (const f of fasteners) {
     const ports = seatedIn.get(f.inst.instanceId);
     const partners = [...ports.keys()];
-    const seatedList = partners.map((id) => ({ part: labelOf(id), ports: ports.get(id) }));
+    const seatedList = partners.map((id) => ({ part: labelOf(id), instanceId: id, ports: ports.get(id) }));
     joints.push({ instanceId: f.inst.instanceId, label: f.inst.label, seatedIn: seatedList });
-    if (partners.length === 0) {
-      floatingFasteners.push({ instanceId: f.inst.instanceId, label: f.inst.label, engagedWith: [] });
-    } else if (partners.length === 1) {
-      halfSeatedFasteners.push({ instanceId: f.inst.instanceId, label: f.inst.label, seatedIn: seatedList });
+    if (partners.length <= 1) {
+      // Holes this fastener nearly sits in (a little off their line), so the report can say which and by how much
+      const nearMiss = nearMissesFor(f, new Set(partners));
+      if (partners.length === 0) {
+        floatingFasteners.push({ instanceId: f.inst.instanceId, label: f.inst.label, engagedWith: [], nearMiss });
+      } else {
+        halfSeatedFasteners.push({ instanceId: f.inst.instanceId, label: f.inst.label, seatedIn: seatedList, nearMiss });
+      }
     } else {
       for (let i = 0; i < partners.length; i++) {
         fastenerCountByPartInstance.set(partners[i], (fastenerCountByPartInstance.get(partners[i]) || 0) + 1);
