@@ -37,3 +37,6 @@ Thumbs.db
 # Your own build (per machine)
 public/assembly-state.json
 public/assembly-blueprint.svg
+
+# Downloaded VEX CAD projects (scripts/fit-cad-frames.mjs)
+.cache/

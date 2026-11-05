@@ -30,6 +30,7 @@ const slice = read('scripts/fixtures/flop-cad-slice.json');
   check('Bumper Switch: its own origin, offset -19.05, 0, 6.35', frames['228-2677']?.rule === 'origin' && JSON.stringify(frames['228-2677'].offsetMm) === '[-19.05,0,6.35]');
   check('omni wheel and Long Intake Flap carry a turn', frames['228-2536-000']?.turn && frames['228-2500-242']?.turn);
   check('the Double Offset Corner Connector uses the box-centre rule', frames['228-2500-277']?.rule === 'centre');
+  check('the 4x and 5x Pitch Capped Shafts use their own origin', ['228-2500-2223', '228-2500-2225'].every((pn) => frames[pn]?.rule === 'origin'));
 }
 
 // --- Converting the slice --------------------------------------------------------------------------

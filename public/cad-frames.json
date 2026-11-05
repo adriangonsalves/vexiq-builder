@@ -292,12 +292,22 @@
    "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
   },
   "228-2500-2223": {
-   "rule": "centre",
+   "rule": "origin",
+   "offsetMm": [
+    0,
+    0,
+    0
+   ],
    "source": "pins",
    "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
   },
   "228-2500-2225": {
-   "rule": "centre",
+   "rule": "origin",
+   "offsetMm": [
+    0,
+    0,
+    0
+   ],
    "source": "pins",
    "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
   },
@@ -342,14 +352,20 @@
    "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
   },
   "228-2500-242": {
-   "rule": "centre",
+   "rule": "origin",
    "turn": [
-    90,
     0,
-    180
+    180,
+    0
+   ],
+   "offsetMm": [
+    8.98,
+    12.03,
+    13.09
    ],
    "source": "pins",
-   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop",
+   "note": "its pegs sit in the tread link holes"
   },
   "228-2500-263": {
    "rule": "centre",
@@ -380,8 +396,8 @@
    "library": "228-2536",
    "rule": "centre",
    "turn": [
-    -90,
-    0,
+    90,
+    180,
     0
    ],
    "source": "pins",
@@ -440,8 +456,9 @@
    "library": "228-2500-2712",
    "rule": "centre",
    "onlyName": "Split Bodies-1$",
-   "source": "pins",
-   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+   "source": "default",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop",
+   "note": "bent in the CAD, flat in the library: no turn or offset matches it"
   }
  }
 }

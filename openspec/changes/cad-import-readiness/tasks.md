@@ -36,7 +36,7 @@
   - print the report.
   
   Verify the Flop import has no lost parts after a click in the app, the expected left-out and duplicate lists, and every chain link present.
-- [ ] 4.3 Write `scripts/fit-cad-frames.mjs`: download and cache the project archive, decode the Draco meshes, try both rules and the 24 turns, refine, then write `mesh` entries (never over `pins`) or report poor matches. Verify that on Flop it reproduces every seeded `pins` entry within 0.5 mm.
+- [x] 4.3 Write `scripts/fit-cad-frames.mjs`: download and cache the project archive, decode the Draco meshes, try both rules and the 24 turns, refine, then write `mesh` entries (never over `pins`) or report poor matches. Verify that on Flop it reproduces every seeded `pins` entry within 0.5 mm.
 - [x] 4.4 Write `scripts/check-cad-import.mjs` on a saved slice of the Flop data (motor, motor shaft, pins, a corner connector, two chains with the same link names). Verify it exits 0.
 
 ## 5. Wrap-up
