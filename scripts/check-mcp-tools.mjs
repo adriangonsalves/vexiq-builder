@@ -299,6 +299,12 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
     JSON.stringify(res.data.connections.filter((c) => /socket|hole_1$|hole_8$|@/.test(c.port)))
   );
   check('  no cylinder list, reply under 8,000 characters', !('cylinders' in res.data) && text.length < 8000, `${text.length} chars`);
+  check('  its CAD frame entry: own origin, turned 180° about Z', res.data.cadFrames?.['228-2560']?.rule === 'origin', JSON.stringify(res.data.cadFrames));
+  const socketPort = res.data.connections.find((c) => c.kind === 'shaft_socket');
+  check('  the socket by its stable id, with its old id, shape and face', /^socket\./.test(socketPort?.port) && socketPort.aliases?.includes('motor_drive_socket') && socketPort.shape === 'square' && socketPort.faces?.join() === '+y', JSON.stringify(socketPort));
+  const shaftDetails = (await call('get_part_details', { partQuery: '4x Pitch Motor Shaft' })).data;
+  const shaftPoint = shaftDetails.connections.find((c) => c.kind === 'shaft');
+  check('4x Pitch Motor Shaft details: its shaft point with both ends and the stop ring', shaftPoint?.ends?.length === 2 && shaftPoint.stop?.kind === 'stop_ring', JSON.stringify(shaftPoint));
   const cc = await call('get_part_details', { partQuery: '1x Wide, 1x1 Corner Connector' });
   const peg = cc.data.connections.find((c) => c.kind === 'pin');
   check('1x Wide, 1x1 Corner Connector peg sticks out on its +Z end only', peg && peg.sticksOut === 'hi' && peg.axis[2] === 1, JSON.stringify(cc.data.connections));

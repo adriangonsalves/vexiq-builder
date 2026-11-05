@@ -2452,6 +2452,27 @@ function shapeOverlap(a, b) {
 const sameShape = (a, b) => shapeOverlap(a, b) >= SAME_SHAPE_MIN;
 
 /**
+ * True when two poses of a part fill the same space (a 2x12 Beam turned end for end in place):
+ * nearly every sampled point of its surface at pose `a` lies on its surface at pose `b`.
+ */
+export function looksTheSame(part, a, b, toleranceMm = 0.3) {
+  const geo = getPartRawGeometry(part);
+  const pos = geo.attributes.position;
+  const aToB = buildWorldMatrix(b.position, b.rotation).invert().multiply(buildWorldMatrix(a.position, a.rotation));
+  const stride = Math.max(1, Math.floor(pos.count / 2000));
+  const v = new THREE.Vector3();
+  const target = {};
+  let on = 0;
+  let n = 0;
+  for (let i = 0; i < pos.count; i += stride) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(aToB);
+    n++;
+    if (geo.boundsTree.closestPointToPoint(v, target)?.distance <= toleranceMm) on++;
+  }
+  return n > 0 && on / n >= 0.98;
+}
+
+/**
  * The other ways `part` goes into the same opening: led with the other end (`flip`) and rolled in
  * quarter turns, keeping those that fit without overlapping and don't look the same as the chosen
  * pose or each other (a round pin rolled is still the same pin). Returns [{ flip, rollDeg, ... }].

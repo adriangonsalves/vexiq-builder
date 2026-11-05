@@ -1,0 +1,447 @@
+{
+ "about": "How a library part sits relative to the frame VEX CAD (Cadasio / instructions.online) uses for it: p_lib = Q * p_cad + o, Q from turn (XYZ degrees), o the library part box centre (rule centre) or offsetMm (rule origin). source: pins (checked against seated pins and holes in a real build), mesh (matched against Cadasio's model of the part), default (box centre, unchecked). See src/engine/cadFrames.js.",
+ "frames": {
+  "228-2500-005": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-007": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-009": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-011": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-015": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-017": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-019": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-020": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-021": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-022": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-023": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-024": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-025": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-026": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-027": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-030": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-031": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-036": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-060": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-061": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-062": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-063": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-064": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-065": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-067": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-070": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-072": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-082": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-086": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-099": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-1061": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-109": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-112": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-114": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-1208": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-122": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-1245": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-1253": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-126": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-128": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-129": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-130": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-133": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-134": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-135": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-137": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-143": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-147": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-154": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-158": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-1600": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-170": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-178": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-206": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-209": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-213": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-215": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-220": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-2223": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-2225": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-2238": {
+   "rule": "origin",
+   "offsetMm": [
+    0,
+    0,
+    0
+   ],
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-227": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-228": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-230": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-231": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-232": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-233": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-242": {
+   "rule": "centre",
+   "turn": [
+    90,
+    0,
+    180
+   ],
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-263": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-271": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-277": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-371": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2500-372": {
+   "rule": "centre",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2536-000": {
+   "library": "228-2536",
+   "rule": "centre",
+   "turn": [
+    -90,
+    0,
+    0
+   ],
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2560": {
+   "rule": "origin",
+   "turn": [
+    0,
+    0,
+    180
+   ],
+   "offsetMm": [
+    0,
+    0,
+    0
+   ],
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-2677": {
+   "rule": "origin",
+   "offsetMm": [
+    -19.05,
+    0,
+    6.35
+   ],
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-6480": {
+   "library": "228-2540 + 228-2604",
+   "rule": "origin",
+   "turn": [
+    -90,
+    0,
+    0
+   ],
+   "offsetMm": [
+    0,
+    0,
+    0
+   ],
+   "note": "2nd gen brain; the library has the 1st gen brain with battery as a stand-in",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-7711-711 Split Bodies": {
+   "library": "228-2500-2711",
+   "rule": "centre",
+   "onlyName": "Split Bodies-1$",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  },
+  "228-7711-712 Split Bodies": {
+   "library": "228-2500-2712",
+   "rule": "centre",
+   "onlyName": "Split Bodies-1$",
+   "source": "pins",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+  }
+ }
+}

@@ -8,7 +8,7 @@ Turns an official VEX CAD assembly (an instructions.online / Cadasio project) in
 The project SHALL keep a table, per part number, of the offset and turn that take a part's pose in VEX's CAD to its pose in the app. Each entry SHALL say how it was found (`pins`: checked against seated pins and holes in a real build; `mesh`: matched against Cadasio's model of the part; `default`: the box-centre rule with no check) and the build it was checked on. It SHALL be seeded from the 2026-27 Herobot Flop:
 - every part type that build checked, except those below, uses the box-centre rule;
 - the Smart Motor (228-2560) uses its own origin, turned 180° about Z;
-- the 4x Pitch Motor Shaft (228-2500-2238), the Double 2x Wide, 2x2 Double Offset Corner Connector (228-2500-277), the Bumper Switch (228-2677, offset -19.05, 0, 6.35 mm) and the Robot Brain use their own origin;
+- the 4x Pitch Motor Shaft (228-2500-2238), the Bumper Switch (228-2677, offset -19.05, 0, 6.35 mm) and the Robot Brain use their own origin;
 - the omni wheel (228-2536) and the Long Intake Flap (228-2500-242, turned 90°, 0°, 180° about its centre) need a turn.
 
 A part number with no entry SHALL use the box-centre rule and be reported as unchecked.

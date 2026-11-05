@@ -57,6 +57,21 @@ import {
 } from '../src/utils/buildHistory.js';
 
 // capture_screenshot's named views (src/components/Viewport3D.jsx frames them)
+// How VEX CAD places a library part (openspec cad-import): its entries in public/cad-frames.json,
+// keyed by the CAD part number (usually the library's own)
+let cadFrames = null;
+const cadFrameEntries = (part) => {
+  if (!cadFrames) {
+    try {
+      cadFrames = JSON.parse(fs.readFileSync(new URL('../public/cad-frames.json', import.meta.url), 'utf8')).frames || {};
+    } catch {
+      cadFrames = {};
+    }
+  }
+  const found = Object.entries(cadFrames).filter(([cadPn, e]) => (e.library || cadPn) === part.partNumber || e.library === part.name);
+  return found.length ? { cadFrames: Object.fromEntries(found) } : {};
+};
+
 // Tight fits (openspec tight-fits): contacts within TIGHT_FIT_MM, reported but not overlaps
 const tightFitsReply = (tightFits) => (tightFits?.length ? { tightFits: tightFits.map((c) => c.label) } : {});
 const SCREENSHOT_VIEWS = ['current', 'iso', 'iso-front-left', 'iso-back-right', 'iso-back-left', 'front', 'back', 'side', 'right', 'left', 'top', 'bottom'];
@@ -874,6 +889,7 @@ async function executeTool(name, args = {}) {
       fastenerSpecs: part.fastenerSpecs || null,
       ...(part.hubSpecs ? { hubSpecs: part.hubSpecs } : {}),
       ...(part.chainSpecs ? { chainSpecs: part.chainSpecs } : {}),
+      ...cadFrameEntries(part),
       connections: describePartConnections(part)
     };
     if (!args.verbose) return compact;
