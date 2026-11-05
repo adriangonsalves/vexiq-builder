@@ -84,6 +84,32 @@ export function getCatalog() {
   return { catalog: catalogCache, catalogById };
 }
 
+/**
+ * A part's connection point by its stable id or an alias (an id from before stable ids, such as
+ * `hole_14`; openspec connection-points). Null when the part has none by that id.
+ */
+export function findPort(part, id) {
+  const key = String(id ?? '').trim();
+  if (!key) return null;
+  const ports = part?.ports || [];
+  return ports.find((p) => p.portId === key) || ports.find((p) => p.aliases?.includes(key)) || null;
+}
+
+/** A feature id from a port id or alias, keeping a split opening's `@lo` / `@hi` half. */
+function featureIdFor(part, id) {
+  if (id == null) return id;
+  const [, base, half = ''] = String(id).trim().match(/^(.*?)(@lo|@hi)?$/);
+  const port = findPort(part, base);
+  return port ? `${port.portId}${half}` : id;
+}
+
+/** The error for a port id a part doesn't have, listing the ids it does have. */
+export function unknownPortError(part, label, id) {
+  const ids = (part?.ports || []).map((p) => p.portId);
+  const shown = ids.length > 80 ? `${ids.slice(0, 80).join(', ')}, … (${ids.length} in all)` : ids.join(', ');
+  return `"${label}" has no port "${id}". Its ports: ${shown || 'none'}`;
+}
+
 export function findPart(query) {
   const { catalog, catalogById } = getCatalog();
   if (!query) return null;
@@ -516,17 +542,27 @@ const round2 = (n) => Number(n.toFixed(2)) + 0;
 export function describePartConnections(part) {
   const identity = new THREE.Matrix4();
   const features = collectWorldFeatures(part, identity, part.id, getPartMeasurements(part));
+  const portById = new Map((part.ports || []).map((p) => [p.portId, p]));
   return features.map((f) => {
     const axis = f.axis.toArray().map(round2);
     const lo = f.start.dot(f.axis);
     const hi = f.end.dot(f.axis);
+    // The indexed point (a split opening's `@lo` / `@hi` half belongs to its port)
+    const port = portById.get(f.featureId.replace(/@(lo|hi)$/, ''));
     const entry = {
       port: f.featureId,
+      ...(port?.aliases?.length ? { aliases: port.aliases } : {}),
       kind: f.kind,
+      ...(port?.shape ? { shape: port.shape } : {}),
+      ...(port?.faces ? { faces: port.faces } : {}),
       origin: f.origin.toArray().map(round2),
       axis,
       span: [round2(Math.min(lo, hi)), round2(Math.max(lo, hi))]
     };
+    if (port?.type === 'shaft') {
+      entry.ends = port.ends;
+      if (port.stop) entry.stop = port.stop;
+    }
     if (f.kind === 'pin') {
       const atLo = lo <= hi ? f.freeAtStart : f.freeAtEnd;
       const atHi = lo <= hi ? f.freeAtEnd : f.freeAtStart;
@@ -1414,16 +1450,21 @@ export function computeMateTransform(
   if (typeof targetPortId === 'number') {
     tPort = targetPorts[Math.min(Math.max(targetPortId, 0), targetPorts.length - 1)];
   } else if (typeof targetPortId === 'string' && targetPortId.trim()) {
-    tPort = targetPorts.find((p) => p.portId === targetPortId.trim());
+    const targetPart = getCatalog().catalogById.get(targetInst.partId);
+    const id = findPort(targetPart, targetPortId)?.portId;
+    tPort = id && targetPorts.find((p) => p.portId === id);
+    if (!tPort) return { error: unknownPortError(targetPart, targetInst.label, targetPortId) };
   }
   if (!tPort) {
-    tPort = targetPorts[0];
+    tPort = targetPorts.find((p) => p.type !== 'shaft') || targetPorts[0];
   }
 
-  const sPorts = Array.isArray(sourcePart.ports) ? sourcePart.ports : [];
+  // A shaft's own axis point is for describing it, not a default to mate by
+  const sPorts = (Array.isArray(sourcePart.ports) ? sourcePart.ports : []).filter((p) => p.type !== 'shaft');
   let sPort = null;
   if (typeof sourcePortId === 'string' && sourcePortId.trim()) {
-    sPort = sPorts.find((p) => p.portId === sourcePortId.trim());
+    sPort = findPort(sourcePart, sourcePortId);
+    if (!sPort) return { error: unknownPortError(sourcePart, sourcePart.name, sourcePortId) };
   } else if (typeof sourcePortId === 'number') {
     sPort = sPorts[Math.min(Math.max(sourcePortId, 0), sPorts.length - 1)];
   }
@@ -1513,7 +1554,7 @@ export function buildMeshedGearTrain(state, options = {}) {
 
   // Pick start port
   let currentPort =
-    (startPortId && beamPorts.find((p) => p.portId === startPortId)) || beamPorts[0];
+    (startPortId && beamPorts.find((p) => p.portId === findPort(getCatalog().catalogById.get(beamInst.partId), startPortId)?.portId)) || beamPorts[0];
 
   const holeAxis = new THREE.Vector3(...currentPort.worldAxis).normalize();
 
@@ -2290,6 +2331,7 @@ export function placeParts(state, items, options = {}) {
     let stoppedAgainst;
     let preTurned = false;
     let otherFits = [];
+    let usedPorts = null;
 
     if (item.insert) {
       const target = resolveInstance(item.insert.into);
@@ -2300,6 +2342,7 @@ export function placeParts(state, items, options = {}) {
       inst.rotation = pose.rotation;
       stoppedAgainst = pose.stoppedAgainst;
       preTurned = pose.preTurned;
+      usedPorts = pose.ports;
       // A part that fits more than one way (flipped, rolled) gets the others listed, unless the
       // caller already chose with flip / rollDeg
       if (item.insert.flip === undefined && item.insert.rollDeg === undefined) {
@@ -2337,6 +2380,7 @@ export function placeParts(state, items, options = {}) {
       ref: item.ref,
       inst,
       stoppedAgainst,
+      ...(usedPorts ? { ports: usedPorts } : {}),
       ...(otherFits.length ? { otherFits } : {}),
       notes: settled.messages,
       ...((own?.rotation || preTurned) && rollGiven ? { rollReplaced: true } : {}),
@@ -2466,19 +2510,20 @@ function insertIntoOpening(part, insert, target, others, instanceId) {
   const measured = getPartMeasurements(part);
   const local = collectWorldFeatures(part, new THREE.Matrix4(), instanceId, measured);
   const targetFeatures = worldFeaturesFor(target);
-  const port = insert.into?.port;
+  const targetPart = getCatalog().catalogById.get(target.partId);
+  const port = featureIdFor(targetPart, insert.into?.port);
 
   const sideArg = insert.fromSide === '-' ? -1 : insert.fromSide === '+' ? 1 : null;
   const targetFeature = pickFeature(targetFeatures, port, sideArg ?? 1);
-  if (!targetFeature) return { error: `"${target.label}" has no port "${port}"` };
+  if (!targetFeature) return { error: unknownPortError(targetPart, target.label, insert.into?.port) };
   // Blind openings open toward +axis (`@lo` halves toward -axis); through ones default to +
   const side = sideArg ?? (targetFeature.featureId.endsWith('@lo') ? -1 : 1);
 
   const isInsert = (f) => f.kind === 'pin' || f.kind === 'shaft';
   let source;
   if (insert.sourcePort) {
-    source = pickFeature(local, insert.sourcePort, -side);
-    if (!source) return { error: `"${part.name}" has no port "${insert.sourcePort}"` };
+    source = pickFeature(local, featureIdFor(part, insert.sourcePort), -side);
+    if (!source) return { error: unknownPortError(part, part.name, insert.sourcePort) };
   } else {
     source = isInsert(targetFeature)
       ? local.find((f) => !isInsert(f) && f.through) || local.find((f) => !isInsert(f))
@@ -2605,7 +2650,15 @@ function insertIntoOpening(part, insert, target, others, instanceId) {
     final.addScaledVector(plan.direction, -INSERT_BACK_OFF_MM);
     rounded = roundVec(final);
   }
-  return { position: rounded.toArray(), rotation, stoppedAgainst: stoppedAgainst || 'flush with far face', preTurned: Boolean(own) };
+  // The points used, by stable id (a split opening's `@lo` / `@hi` half named by its port)
+  const portOf = (featureId) => featureId.replace(/@(lo|hi)$/, '');
+  return {
+    position: rounded.toArray(),
+    rotation,
+    stoppedAgainst: stoppedAgainst || 'flush with far face',
+    preTurned: Boolean(own),
+    ports: { source: portOf(source.featureId), into: portOf(targetFeature.featureId) }
+  };
 }
 /**
  * Mirror image of a placed part across world plane x_i = offsetMm, as a proper pose. A mirror image

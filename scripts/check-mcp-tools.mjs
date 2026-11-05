@@ -178,17 +178,17 @@ check(
 // 1.3 Engine features with mesh measurements
 // ---------------------------------------------------------------------------
 {
-  const { findPart, worldFeaturesFor } = await import('../mcp/assembly-engine.mjs');
+  const { findPart, findPort, worldFeaturesFor } = await import('../mcp/assembly-engine.mjs');
   const { findSeatedPairs } = await import('../src/utils/pinHoleAlignment.js');
   const inst = (id, name, position, rotation = [0, 0, 0]) => ({ instanceId: id, partId: findPart(name).id, label: id, position, rotation, visible: true });
   const motor = worldFeaturesFor(inst('motor', 'VEX IQ Smart Motor', [0, 0, 0]));
-  const hole1 = motor.find((f) => f.featureId === 'hole_1');
+  const hole1 = motor.find((f) => f.featureId === findPort(findPart('VEX IQ Smart Motor'), 'hole_1').portId);
   check('worldFeaturesFor: Smart Motor hole_1 is blind from the front face and closed at the back', hole1 && !hole1.through && Math.min(hole1.start.y, hole1.end.y) > -12, JSON.stringify(hole1 && [hole1.start.y, hole1.end.y]));
   // 0x2 pin seated in a 1x6 Beam hole (beam at identity, hole_2 axis +Z)
   const beam = inst('beam', '1x6 Beam', [0, 0, 0]);
   const pin = inst('pin', '0x2 Connector Pin', [-19.05, 0, 3.175]);
   const pairs = findSeatedPairs(worldFeaturesFor(pin), worldFeaturesFor(beam));
-  check('worldFeaturesFor + findSeatedPairs: seated pin pairs with the beam hole', pairs.length === 1 && pairs[0].opening.featureId === 'hole_2' && pairs[0].insert.instanceId === 'pin', JSON.stringify(pairs.map((p) => [p.insert.featureId, p.opening.featureId])));
+  check('worldFeaturesFor + findSeatedPairs: seated pin pairs with the beam hole', pairs.length === 1 && pairs[0].opening.featureId === findPort(findPart('1x6 Beam'), 'hole_2').portId && pairs[0].insert.instanceId === 'pin', JSON.stringify(pairs.map((p) => [p.insert.featureId, p.opening.featureId])));
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +289,8 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
 {
   const res = await call('get_part_details', { partQuery: 'VEX IQ Smart Motor' });
   const text = res.content.find((c) => c.type === 'text').text;
-  const conn = (port) => res.data.connections.find((c) => c.port === port);
+  // By stable id or by an older id kept as an alias
+  const conn = (port) => res.data.connections.find((c) => c.port === port || c.aliases?.includes(port));
   const socket = conn('motor_drive_socket');
   check(
     'Smart Motor details: socket along +Y about 4.7 mm deep, hole_1/hole_8 blind from the front and closed at the back',

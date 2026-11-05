@@ -13,15 +13,15 @@
 
 ## 3. Connection points
 
-- [ ] 3.1 In `scripts/index-part-metadata.mjs`, keep each part's current port ids. After indexing, match new points to old ones by position and store the old id in `aliases`. Verify a check reports zero lost ids.
-- [ ] 3.2 Give every point a stable id `<kind>.<face>.<x>_<y>_<z>` (quarter pitches, `#n` on clashes), plus `shape` and `faces`. Verify that running `npm run index-metadata` twice gives identical ids.
-- [ ] 3.3 Turn unported pin-hole and square-hole cylinders into ports when a pin probe fits from their face. Verify the Bumper Switch gets its four top holes and no beam gains a false hole (diff the port counts per part).
-- [ ] 3.4 Add `shaft` ports (axis, both ends, cross-section, capped or stop-ring end) to every shaft. Verify the 4x Pitch Motor Shaft and 4x Pitch Capped Shaft entries.
-- [ ] 3.5 Derive attachment pegs from the tread link's `gripperHoles` and each attachment's `seatInLink`. Verify the Long Intake Flap's two pegs line up with the link's holes in a track built by `build_chain`.
-- [ ] 3.6 Type the Mini Standoff Connector's bore as `pin_hole`. Verify a pin in it is seated in the audit.
-- [ ] 3.7 Add `findPort(part, id)` in `src/engine/core.js` (stable id or alias) and use it everywhere a port id is read: `place_parts` insert, `mate_parts`, `align_part_to_hole`, `mesh_gear_train`, `build_chain`, the app's hole picking. On an unknown id, the error lists the stable ids. Verify an insert by `hole_14` and by stable id give the same pose.
+- [x] 3.1 In `scripts/index-part-metadata.mjs`, keep each part's current port ids. After indexing, match new points to old ones by position and store the old id in `aliases`. Verify a check reports zero lost ids.
+- [x] 3.2 Give every point a stable id `<kind>.<face>.<x>_<y>_<z>` (quarter pitches, `#n` on clashes), plus `shape` and `faces`. Verify that running `npm run index-metadata` twice gives identical ids.
+- [x] 3.3 Turn unported pin-hole and square-hole cylinders into ports when a pin probe fits from their face. Verify the Bumper Switch gets its four top holes and no beam gains a false hole (diff the port counts per part).
+- [x] 3.4 Add `shaft` ports (axis, both ends, cross-section, capped or stop-ring end) to every shaft. Verify the 4x Pitch Motor Shaft and 4x Pitch Capped Shaft entries.
+- [x] 3.5 Derive attachment pegs from the tread link's `gripperHoles` and each attachment's `seatInLink`. Verify the Long Intake Flap's two pegs line up with the link's holes in a track built by `build_chain`.
+- [x] 3.6 Type the Mini Standoff Connector's bore as `pin_hole`. Verify a pin in it is seated in the audit.
+- [x] 3.7 Add `findPort(part, id)` in `src/engine/core.js` (stable id or alias) and use it everywhere a port id is read: `place_parts` insert, `mate_parts`, `align_part_to_hole`, `mesh_gear_train`, `build_chain`, the app's hole picking. On an unknown id, the error lists the stable ids. Verify an insert by `hole_14` and by stable id give the same pose.
 - [ ] 3.8 Update `get_part_details` (stable id, aliases, shape, faces, shaft ends, frame entry) and `audit_assembly` (shafts checked along their indexed axis). Verify with `scripts/check-mcp-tools.mjs` and the capped-shaft-through-gear scenario.
-- [ ] 3.9 Write `scripts/check-connection-points.mjs`, covering the connection-points spec scenarios, and verify it exits 0.
+- [x] 3.9 Write `scripts/check-connection-points.mjs`, covering the connection-points spec scenarios, and verify it exits 0.
 
 ## 4. CAD frame table and import
 

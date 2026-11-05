@@ -3,7 +3,7 @@
  * Run: node scripts/check-pin-hole-alignment.mjs   (exits 1 on any failure)
  */
 import * as THREE from 'three';
-import { auditAssembly, buildWorldMatrix, checkCandidateCollision, touchesAny, findPart, getPartCollisionBvh, getPartMeasurements, worldFeaturesFor } from '../mcp/assembly-engine.mjs';
+import { auditAssembly, buildWorldMatrix, checkCandidateCollision, touchesAny, findPart, findPort, getPartCollisionBvh, getPartMeasurements, worldFeaturesFor } from '../mcp/assembly-engine.mjs';
 import fs from 'node:fs';
 import {
   EXCLUDED_PART_NAMES,
@@ -58,8 +58,11 @@ const place = (name, position = [0, 0, 0], rotation = [0, 0, 0]) => {
   };
 };
 
+// A port's stable id from an older id (`hole_2`) of the named part (openspec connection-points)
+const sid = (name, id) => findPort(part(name), id)?.portId ?? id;
+const idOn = (placed, id) => findPort(placed.meta, id)?.portId ?? id;
 const local = (name, kind) => getLocalFeatures(part(name)).find((f) => f.kind === kind);
-const featureById = (placed, featureId) => placed.features.find((f) => f.featureId === featureId);
+const featureById = (placed, featureId) => placed.features.find((f) => f.featureId === idOn(placed, featureId));
 const near = (a, b, tol = 0.01) => Math.abs(a - b) <= tol;
 const dot3v = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const fmt = (hits) => JSON.stringify(hits.map((h) => `${h.instanceId}:${h.featureId}`));
@@ -68,9 +71,9 @@ const fmt = (hits) => JSON.stringify(hits.map((h) => `${h.instanceId}:${h.featur
 const highlights = (selected, others) =>
   findAlignedOpenings(selected.features, others.flatMap((o) => o.features));
 const has = (hits, placed, featureId) =>
-  hits.some((h) => h.instanceId === placed.instanceId && h.featureId === featureId);
+  hits.some((h) => h.instanceId === placed.instanceId && h.featureId === idOn(placed, featureId));
 const hitOf = (hits, placed, featureId) =>
-  hits.find((h) => h.instanceId === placed.instanceId && h.featureId === featureId);
+  hits.find((h) => h.instanceId === placed.instanceId && h.featureId === idOn(placed, featureId));
 /** Ring drawn on the facing face: face coordinate `axisIndex` ≈ value, rim radius ≈ radiusMm. */
 const ringAt = (hit, axisIndex, value, radiusMm) =>
   Boolean(hit) && near(hit.face.getComponent(axisIndex), value) && near(hit.radiusMm, radiusMm);
@@ -129,7 +132,7 @@ const placeAboveOpening = (name, kind, opening, openingTopZ, gapMm) => {
 // ---------------------------------------------------------------------------
 const beam = place('1x6 Beam');
 const beamHole = featureById(beam, 'hole_2');
-const beamHoleLocal = getLocalFeatures(beam.meta).find((f) => f.featureId === 'hole_2');
+const beamHoleLocal = getLocalFeatures(beam.meta).find((f) => f.featureId === sid('1x6 Beam', 'hole_2'));
 const beamTop = beamHoleLocal.tMax; // beam at identity, hole axis +Z
 
 {
@@ -302,13 +305,13 @@ const placeMeasured = (name, position = [0, 0, 0], rotation = [0, 0, 0]) => {
   };
 };
 {
-  const beamSurf = surfacesOf('1x6 Beam').get('hole_2');
+  const beamSurf = surfacesOf('1x6 Beam').get(sid('1x6 Beam', 'hole_2'));
   check(
     '1x6 Beam hole_2 measured faces sit inside the bbox faces (recess around the rim), symmetric',
     beamSurf && beamSurf.hi < 3.05 - 0.2 && beamSurf.hi > 1.5 && near(beamSurf.lo, -beamSurf.hi, 0.05),
     JSON.stringify(beamSurf)
   );
-  const socketSurf = surfacesOf('VEX IQ Smart Motor').get('motor_drive_socket');
+  const socketSurf = surfacesOf('VEX IQ Smart Motor').get(sid('VEX IQ Smart Motor', 'motor_drive_socket'));
   check('Smart Motor socket measured face is clamped to the motor top (≤ 0.13)', socketSurf && socketSurf.hi <= 0.13 + 1e-6, JSON.stringify(socketSurf));
 
   const mBeam = placeMeasured('1x6 Beam');
@@ -361,7 +364,8 @@ const placeFull = (name, position = [0, 0, 0], rotation = [0, 0, 0]) => {
 };
 {
   const ends = (name) => Object.fromEntries([...pinEndsOf(name).entries()].map(([id, e]) => [id, `${e.lo ? 'lo' : '-'}/${e.hi ? 'hi' : '-'}`]));
-  const expectEnds = (name, expected) => {
+  const expectEnds = (name, given) => {
+    const expected = Object.fromEntries(Object.entries(given).map(([id, e]) => [sid(name, id), e]));
     const got = ends(name);
     check(`Pin ends of ${name}: ${JSON.stringify(expected)}`, JSON.stringify(got) === JSON.stringify(expected), JSON.stringify(got));
   };
@@ -518,10 +522,11 @@ const placeFull = (name, position = [0, 0, 0], rotation = [0, 0, 0]) => {
   const show = (fs) => JSON.stringify(fs.map((f) => ({ id: f.featureId, len: +spanLen(f).toFixed(2), through: f.through })));
 
   const motor = measuredFeatures('VEX IQ Smart Motor');
-  const hole1 = motor.filter((f) => f.featureId.startsWith('hole_1') && !/^hole_1\d/.test(f.featureId));
+  const motorHole1 = sid('VEX IQ Smart Motor', 'hole_1');
+  const hole1 = motor.filter((f) => f.featureId.split('@')[0] === motorHole1);
   check(
     'Smart Motor hole_1 (listed as through) is one blind hole from the front face (~9 mm), closed at the back',
-    hole1.length === 1 && hole1[0].featureId === 'hole_1' && !hole1[0].through && spanLen(hole1[0]) > 7 && spanLen(hole1[0]) < 11 && hole1[0].end.y > -2,
+    hole1.length === 1 && hole1[0].featureId === motorHole1 && !hole1[0].through && spanLen(hole1[0]) > 7 && spanLen(hole1[0]) < 11 && hole1[0].end.y > -2,
     show(hole1)
   );
   // Made-up 10 mm block with a hole listed as through but solid for z in [-1, 1]
@@ -537,15 +542,17 @@ const placeFull = (name, position = [0, 0, 0], rotation = [0, 0, 0]) => {
     blockFeatures.length === 2 && blockFeatures.every((f) => !f.through && Math.abs(spanLen(f) - 4) < 0.01) && blockFeatures.some((f) => f.featureId === 'hole_1@lo') && blockFeatures.some((f) => f.featureId === 'hole_1@hi'),
     show(blockFeatures)
   );
-  const socket = motor.filter((f) => f.featureId.startsWith('motor_drive_socket'));
+  const motorSocket = sid('VEX IQ Smart Motor', 'motor_drive_socket');
+  const socket = motor.filter((f) => f.featureId.split('@')[0] === motorSocket);
   check(
     'Smart Motor drive socket stays one blind opening about 4.7 mm deep',
-    socket.length === 1 && socket[0].featureId === 'motor_drive_socket' && !socket[0].through && Math.abs(spanLen(socket[0]) - 4.7) <= 0.6,
+    socket.length === 1 && socket[0].featureId === motorSocket && !socket[0].through && Math.abs(spanLen(socket[0]) - 4.7) <= 0.6,
     show(socket)
   );
-  const beamHole = measuredFeatures('1x6 Beam').filter((f) => f.featureId.startsWith('hole_2'));
-  check('1x6 Beam hole_2 stays one through opening', beamHole.length === 1 && beamHole[0].featureId === 'hole_2' && beamHole[0].through, show(beamHole));
-  const gearBore = measuredFeatures('36 Tooth Gear').filter((f) => f.featureId.startsWith('center_shaft_bore'));
+  const beamHole2 = sid('1x6 Beam', 'hole_2');
+  const beamHole = measuredFeatures('1x6 Beam').filter((f) => f.featureId.split('@')[0] === beamHole2);
+  check('1x6 Beam hole_2 stays one through opening', beamHole.length === 1 && beamHole[0].featureId === beamHole2 && beamHole[0].through, show(beamHole));
+  const gearBore = measuredFeatures('36 Tooth Gear').filter((f) => f.featureId.split('@')[0] === sid('36 Tooth Gear', 'center_shaft_bore'));
   check('36 Tooth Gear bore stays one through opening', gearBore.length === 1 && gearBore[0].through, show(gearBore));
 }
 
@@ -768,12 +775,12 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
 
   // 1.1 pose
   const tilted = inst('tilted', '2x12 Beam', [10, 20, 30], [30, 0, 0]);
-  const tHole = worldFeaturesFor(tilted).find((f) => f.featureId === 'hole_22');
+  const tHole = worldFeaturesFor(tilted).find((f) => f.featureId === sid('2x12 Beam', 'hole_22'));
   const faces = openFaces(tHole);
   const pin = part('0x2 Connector Pin');
   const pinEnds = insertLeadEnds(pin, getLocalFeatures(pin)[0], getPartMeasurements(pin)).map((e) => e.end);
   for (const [i, face] of faces.entries()) {
-    const pose = insertPose({ partMeta: pin, measured: getPartMeasurements(pin), featureId: 'peg_1', end: pinEnds[0], face: face.point, outward: face.outward, receivingQuaternion: quatOf(tilted.rotation) });
+    const pose = insertPose({ partMeta: pin, measured: getPartMeasurements(pin), featureId: sid('0x2 Connector Pin', 'peg_1'), end: pinEnds[0], face: face.point, outward: face.outward, receivingQuaternion: quatOf(tilted.rotation) });
     const peg = posed('0x2 Connector Pin', pose).find((f) => f.kind === 'pin');
     const tip = leadPointOf(peg, pinEnds[0]);
     check(
@@ -785,7 +792,7 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   const capped = part('2x Pitch Capped Shaft');
   const cappedEnds = insertLeadEnds(capped, getLocalFeatures(capped)[0]);
   check('pick: a capped shaft only leads with its uncapped end', cappedEnds.length === 1 && cappedEnds[0].end === 'lo');
-  const sPose = insertPose({ partMeta: capped, featureId: 'shaft', end: 'lo', face: faces[0].point, outward: faces[0].outward, receivingQuaternion: quatOf(tilted.rotation) });
+  const sPose = insertPose({ partMeta: capped, featureId: sid('2x Pitch Capped Shaft', 'shaft'), end: 'lo', face: faces[0].point, outward: faces[0].outward, receivingQuaternion: quatOf(tilted.rotation) });
   const sFeature = posed('2x Pitch Capped Shaft', sPose).find((f) => f.kind === 'shaft');
   const out = (p) => p.clone().sub(faces[0].point).dot(faces[0].outward);
   check('  it goes in shaft-first: the cap end stays outside, farther out than the tip', near(out(sFeature.start), 1, 0.01) && out(sFeature.end) > out(sFeature.start) + 20, JSON.stringify([out(sFeature.start), out(sFeature.end)]));
@@ -793,13 +800,13 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   const socket = worldFeaturesFor(motor).find((f) => f.kind === 'shaft_socket');
   const socketFaces = openFaces(socket);
   const motorBox = new THREE.Box3(new THREE.Vector3(...part('VEX IQ Smart Motor').bbox.min), new THREE.Vector3(...part('VEX IQ Smart Motor').bbox.max)).applyMatrix4(buildWorldMatrix(motor.position, motor.rotation));
-  const mPose = insertPose({ partMeta: capped, featureId: 'shaft', end: 'lo', face: socketFaces[0].point, outward: socketFaces[0].outward, receivingQuaternion: quatOf(motor.rotation) });
+  const mPose = insertPose({ partMeta: capped, featureId: sid('2x Pitch Capped Shaft', 'shaft'), end: 'lo', face: socketFaces[0].point, outward: socketFaces[0].outward, receivingQuaternion: quatOf(motor.rotation) });
   check('pick: the Smart Motor socket offers one face, and a shaft comes in from outside the motor', socketFaces.length === 1 && !motorBox.containsPoint(mPose.leadPoint), JSON.stringify(mPose.leadPoint.toArray()));
 
   // 1.3 faces and taken holes
   const rail = inst('rail', '2x12 Beam', [0, 0, 0]);
   const railFeatures = worldFeaturesFor(rail);
-  const rHole = railFeatures.find((f) => f.featureId === 'hole_22');
+  const rHole = railFeatures.find((f) => f.featureId === sid('2x12 Beam', 'hole_22'));
   check('pick: a beam hole offers 2 faces, pointing out of the beam both ways', openFaces(rHole).length === 2 && near(openFaces(rHole)[0].outward.dot(openFaces(rHole)[1].outward), -1));
   const seated = worldFeaturesFor(inst('pinIn', '0x2 Connector Pin', [rHole.origin.x, rHole.origin.y, 0]));
   const above = worldFeaturesFor(inst('pinUp', '0x2 Connector Pin', [rHole.origin.x, rHole.origin.y, 20]));
@@ -811,14 +818,14 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   const turned = inst('turned', '2x12 Beam', [0, 0, 0], [0, 0, 30]);
   const turnedFeatures = worldFeaturesFor(turned);
   const fitsAt = (holeId, beam = turned, feats = turnedFeatures, name = '2x Wide, 2x2 Corner Connector') => {
-    const opening = feats.find((f) => f.featureId === holeId);
+    const opening = feats.find((f) => f.featureId === findPort(findPart(beam.partId), holeId)?.portId);
     const face = openFaces(opening).find((f) => f.outward.z > 0);
     return listInsertFits({ partMeta: part(name), measured: getPartMeasurements(part(name)), instanceId: 'sel', hovered: { opening, face }, receivingQuaternion: quatOf(beam.rotation), otherFeatures: feats, currentQuaternion: new THREE.Quaternion() });
   };
   let fits = fitsAt('hole_31'); // centre hole
   const best = fits[0];
   const beamX = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), deg(30));
-  const pegLine = best && best.markers[0] ? best.markers[0].point.clone().sub(openFaces(turnedFeatures.find((f) => f.featureId === 'hole_31')).find((f) => f.outward.z > 0).point).normalize() : null;
+  const pegLine = best && best.markers[0] ? best.markers[0].point.clone().sub(openFaces(turnedFeatures.find((f) => f.featureId === sid('2x12 Beam', 'hole_31'))).find((f) => f.outward.z > 0).point).normalize() : null;
   check('pick: corner connector into a beam turned 30°: best fit has both pegs in holes', best && best.green === 2 && best.total === 2, JSON.stringify(fits.map((f) => [f.featureId, f.roll, f.green, f.total])));
   check('  and its peg line runs along the beam\'s 30° hole row', pegLine && Math.abs(pegLine.dot(beamX)) > 0.999, JSON.stringify(pegLine?.toArray()));
   fits = fitsAt('hole_26'); // last centre hole, x = 63.5 along the beam
@@ -831,7 +838,7 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
     const recv = inst('angled', '2x Wide, 30 Degree Left 1x2 Corner Connector', [-15.011, 44.131, 378.096], [0, 0, -45]);
     const sel = inst('sel', '2x Wide, 2x3 Corner Connector', [-19.26, 39.661, 352.696], [-90, 45, -90]);
     const recvFeatures = worldFeaturesFor(recv);
-    const opening = recvFeatures.find((f) => f.featureId === 'hole_1');
+    const opening = recvFeatures.find((f) => f.featureId === sid('2x Wide, 30 Degree Left 1x2 Corner Connector', 'hole_1'));
     const selPart = part('2x Wide, 2x3 Corner Connector');
     const results = openFaces(opening).map((face) => {
       const fit = listInsertFits({ partMeta: selPart, measured: getPartMeasurements(selPart), instanceId: 'sel', hovered: { opening, face }, receivingQuaternion: quatOf(recv.rotation), otherFeatures: recvFeatures, currentQuaternion: quatOf(sel.rotation) })[0];
@@ -894,7 +901,7 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   al = findAlignedOpenings(worldFeaturesFor(motorAt(0, 4)), beamF);
   check(
     'hole-to-hole: a Smart Motor 4 mm above a beam lines its drive socket up with a beam hole (and its mounting holes too)',
-    al.some((a) => a.insertFeatureId === 'motor_drive_socket' && a.featureId === 'hole_22' && a.pairKind === 'hole') && al.length > 1,
+    al.some((a) => a.insertFeatureId === sid('VEX IQ Smart Motor', 'motor_drive_socket') && a.featureId === sid('2x12 Beam', 'hole_22') && a.pairKind === 'hole') && al.length > 1,
     JSON.stringify(al.map((a) => [a.featureId, a.insertFeatureId]))
   );
   check(
@@ -969,7 +976,7 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
 {
   const inst = (id, name, position, rotation = [0, 0, 0]) => ({ instanceId: id, label: id, partId: part(name).id, position, rotation });
   const beamF = worldFeaturesFor(inst('beam', '2x12 Beam', [0, 0, 0]));
-  const opening = beamF.find((f) => f.featureId === 'hole_31');
+  const opening = beamF.find((f) => f.featureId === sid('2x12 Beam', 'hole_31'));
   const face = openFaces(opening).find((f) => f.outward.z > 0);
   const fitsFor = (name) =>
     listInsertFits({ partMeta: part(name), measured: getPartMeasurements(part(name)), instanceId: 'sel', hovered: { opening, face }, receivingQuaternion: new THREE.Quaternion(), otherFeatures: beamF, currentQuaternion: new THREE.Quaternion() });

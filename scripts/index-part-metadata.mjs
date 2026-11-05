@@ -10,7 +10,7 @@ import {
   buildWorldMatrix,
   VEX_PITCH_MM
 } from '../mcp/assembly-engine.mjs';
-import { getLocalFeatures, SHAFT_FASTENER_TYPES } from '../src/utils/pinHoleAlignment.js';
+import { getLocalFeatures, measurePinEnds, SHAFT_FASTENER_TYPES } from '../src/utils/pinHoleAlignment.js';
 import {
   measureMotorHub,
   measureOpeningShape,
@@ -632,6 +632,270 @@ function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasu
   return { rackSpecs, hubSpecs };
 }
 
+const FACE_TOL_MM = 0.3; // a hole's surfaces within this of a face of the part's box reach that face
+const QUARTER_PITCH_MM = VEX_PITCH_MM / 4;
+const MINI_STANDOFF_CONNECTOR = '228-2500-170';
+const PEG_INTO_LINK_MAX_MM = 6; // an attachment's peg reaches at most this far into a tread link hole
+
+const signedAxisName = (axis, sign = 1) => {
+  const k = [0, 1, 2].reduce((best, i) => (Math.abs(axis[i]) > Math.abs(axis[best]) ? i : best), 0);
+  return `${axis[k] * sign >= 0 ? '+' : '-'}${'xyz'[k]}`;
+};
+const along = (point, axis) => point[0] * axis[0] + point[1] * axis[1] + point[2] * axis[2];
+const boxRangeAlong = (bbox, axis) => {
+  const ts = [];
+  for (const x of [bbox.min[0], bbox.max[0]]) for (const y of [bbox.min[1], bbox.max[1]]) for (const z of [bbox.min[2], bbox.max[2]]) ts.push(along([x, y, z], axis));
+  return [Math.min(...ts), Math.max(...ts)];
+};
+const perpDistance = (point, linePoint, axis) => {
+  const d = point.map((v, i) => v - linePoint[i]);
+  const t = along(d, axis);
+  return Math.hypot(...d.map((v, i) => v - t * axis[i]));
+};
+const isParallel = (a, b) => Math.abs(along(a, b)) > 0.999;
+
+/**
+ * Holes on a face that are too shallow for a whole pin leg (the Bumper Switch's top holes take a
+ * corner connector's peg): for each end of a pin-hole line that reaches a face of the part's box
+ * and has no port at that face yet, push a 1x1 Connector Pin in from the face as far as it goes
+ * clear. A hole is at least 2.5 mm deep, with walls (the pin moved 2.6 mm sideways meets the part).
+ */
+/**
+ * How far a 1x1 Connector Pin goes into a hole line from the face at `faceT` (`out`: +1 when the
+ * face is at the line's + end), and whether the hole has walls there (the pin moved 2.6 mm sideways
+ * meets the part). At most a pin leg's length.
+ */
+function pinDepthFrom(g, faceT, out, refPinBvh, partBvh) {
+  const halfLen = Math.max(-refPinBvh.localBox.min.z, refPinBvh.localBox.max.z);
+  const rot = eulerFromZAxis(g.axis);
+  const radVec = Math.abs(g.axis[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+  const pinAt = (depth, shift = 0) => g.perpOrigin.map((v, i) => v + (faceT + out * (halfLen - depth)) * g.axis[i] + radVec[i] * shift);
+  let depth = 0;
+  while (depth + 0.25 <= halfLen && !probeIntersectsPart(refPinBvh, pinAt(depth + 0.25), rot, partBvh)) depth += 0.25;
+  return { depth, walled: probeIntersectsPart(refPinBvh, pinAt(depth, 2.6), rot, partBvh) };
+}
+
+/**
+ * The face a blind hole opens on: the one a pin goes into deeper; on a tie the face the hole's
+ * surfaces reach when they reach only one, else `fallback` (the face nearer the pin that fitted).
+ */
+function entryFace(g, fallback, refPinBvh, partBvh) {
+  const dMax = pinDepthFrom(g, g.boxMaxT, 1, refPinBvh, partBvh).depth;
+  const dMin = pinDepthFrom(g, g.boxMinT, -1, refPinBvh, partBvh).depth;
+  if (Math.abs(dMax - dMin) > 0.5) return dMax > dMin ? g.boxMaxT : g.boxMinT;
+  const reachesMax = Math.abs(g.maxT - g.boxMaxT) < FACE_TOL_MM;
+  const reachesMin = Math.abs(g.minT - g.boxMinT) < FACE_TOL_MM;
+  if (reachesMax !== reachesMin) return reachesMax ? g.boxMaxT : g.boxMinT;
+  return fallback;
+}
+
+function addFaceHoles(part, groups, ports, refPinBvh, partBvh) {
+  for (const g of groups) {
+    if (!g.hasLockingRidge && !g.hasPinBore) continue;
+    const [lo, hi] = boxRangeAlong(part.bbox, g.axis);
+    const onLine = ports.filter((p) => (p.type === 'pin_hole' || p.type === 'shaft_bore') && isParallel(p.axis, g.axis) && perpDistance(p.origin, g.perpOrigin, g.axis) < 0.5);
+    for (const [faceT, out] of [[hi, 1], [lo, -1]]) {
+      if (Math.abs((out > 0 ? g.maxT : g.minT) - faceT) >= FACE_TOL_MM) continue;
+      if (onLine.some((p) => p.through || Math.abs(along(p.origin, g.axis) - faceT) < 1)) continue;
+      const { depth, walled } = pinDepthFrom(g, faceT, out, refPinBvh, partBvh);
+      if (depth < 2.5 || !walled) continue;
+      const origin = g.perpOrigin.map((v, i) => Number((v + faceT * g.axis[i]).toFixed(3)));
+      ports.push({
+        portId: null,
+        type: 'pin_hole',
+        origin,
+        axis: g.axis,
+        through: false,
+        spanMm: [faceT - out * depth, faceT].sort((a, b) => a - b).map((t) => Number(t.toFixed(3))),
+        pitchCoord: origin.map((v) => Number((v / VEX_PITCH_MM).toFixed(2))),
+        verified: true,
+        foundFrom: 'face'
+      });
+    }
+  }
+}
+
+/**
+ * Pegs of a part that plugs into a Tank Tread Attachment Link: the link's attachment holes taken
+ * into the part's frame through its seat (the track builder places it at the link's turn, moved by
+ * seatInLink), so pegs and the builder's seat agree. A peg already found on the mesh is kept.
+ */
+function addAttachmentPegs(part, ports) {
+  const seat = CHAIN_SPECS[part.partNumber]?.seatInLink;
+  const link = Object.values(CHAIN_SPECS).find((s) => s.role === 'tread_link');
+  if (!seat || !link) return;
+  const axis = link.outward;
+  for (const hole of link.gripperHoles) {
+    const face = hole.map((v, i) => v - seat[i]);
+    if (ports.some((p) => p.type === 'pin_peg' && isParallel(p.axis, axis) && perpDistance(p.origin, face, axis) < 0.5)) continue;
+    const faceT = along(face, axis);
+    const depth = Math.min(PEG_INTO_LINK_MAX_MM, faceT - boxRangeAlong(part.bbox, axis)[0]);
+    const origin = face.map((v, i) => Number((v - (depth / 2) * axis[i]).toFixed(3)));
+    ports.push({
+      portId: null,
+      type: 'pin_peg',
+      origin,
+      axis: [...axis],
+      spanMm: [faceT - depth, faceT].map((t) => Number(t.toFixed(3))),
+      verified: true,
+      foundFrom: 'tread link seat'
+    });
+  }
+}
+
+/**
+ * A shaft's own point: its axis (local Z), both ends, its cross-section, and for a capped or motor
+ * shaft which end has the cap or stop ring, found as the end nearer the part of the shaft wider than
+ * its body (looking in at the axis from the side).
+ */
+function addShaftPort(part, ports, fastenerSpecs, rawRaycast) {
+  if (!SHAFT_FASTENER_TYPES.has(fastenerSpecs?.fastenerType) || /collar|bushing/i.test(part.name)) return;
+  const [zMin, zMax] = [part.bbox.min[2], part.bbox.max[2]];
+  const port = {
+    portId: null,
+    type: 'shaft',
+    origin: [0, 0, Number(((zMin + zMax) / 2).toFixed(3))],
+    axis: [0, 0, 1],
+    ends: [[0, 0, zMin], [0, 0, zMax]],
+    spanMm: [zMin, zMax],
+    lengthMm: Number((zMax - zMin).toFixed(2)),
+    shape: fastenerSpecs.shape || 'square',
+    verified: true
+  };
+  if (fastenerSpecs.hasEndCap) {
+    const reach = Math.max(-part.bbox.min[0], part.bbox.max[0]) + 2;
+    const raycast = rawRaycast();
+    const widths = [];
+    for (let z = zMin + 0.1; z < zMax; z += 0.2) {
+      const hit = raycast([reach, 0, z], [-1, 0, 0]);
+      widths.push({ z, r: hit === null ? 0 : reach - hit });
+    }
+    const body = widths.map((w) => w.r).sort((a, b) => a - b)[Math.floor(widths.length / 2)];
+    const wide = widths.filter((w) => w.r > body + 0.4);
+    if (wide.length) {
+      const zs = wide.map((w) => w.z);
+      const [lo, hi] = [Math.min(...zs), Math.max(...zs)];
+      const capEnd = zMax - hi < lo - zMin ? 'max' : 'min';
+      port.stop = {
+        kind: fastenerSpecs.fastenerType === 'motor_shaft' ? 'stop_ring' : 'cap',
+        end: capEnd === 'max' ? '+z' : '-z',
+        spanMm: [Number(lo.toFixed(2)), Number(hi.toFixed(2))]
+      };
+    }
+  }
+  ports.push(port);
+}
+
+const KIND_BY_TYPE = { pin_hole: 'hole', shaft_bore: 'bore', shaft_socket: 'socket', pin_peg: 'peg', shaft: 'shaft' };
+
+/**
+ * Each point's shape and the face or faces it opens on (signed local axes). Depth is the socket's
+ * own; an opening's real depth is measured on the mesh where it is used (getPartMeasurements).
+ */
+function describePorts(part, ports, fastenerSpecs, partBvh) {
+  // Which ends of each peg stick out, measured as the engine does (getPartMeasurements)
+  ports.forEach((p, i) => {
+    p.portId ||= `new_${i}`;
+  });
+  const ray = new THREE.Ray();
+  const pinEnds = measurePinEnds({ ...part, ports, fastenerSpecs }, (o, d) => {
+    ray.origin.set(o[0], o[1], o[2]);
+    ray.direction.set(d[0], d[1], d[2]);
+    const hit = partBvh.colGeo.boundsTree.raycastFirst(ray, THREE.DoubleSide);
+    return hit ? { distance: hit.distance, normal: hit.face.normal.toArray() } : null;
+  });
+  for (const p of ports) {
+    const axis = p.axis;
+    const t0 = along(p.origin, axis);
+    const span = p.spanMm && p.spanMm.every(Number.isFinite) && Math.abs(p.spanMm[1] - p.spanMm[0]) < 1000 ? p.spanMm : null;
+    if (p.type === 'shaft') {
+      p.faces = ['+z', '-z'];
+      continue;
+    }
+    if (p.type === 'shaft_socket') {
+      p.shape = p.shape || 'square';
+      p.faces = [signedAxisName(axis)];
+      p.depthMm = p.maxDepthMm;
+      continue;
+    }
+    if (p.type === 'pin_hole') p.shape = 'round';
+    if (p.type === 'shaft_bore' && p.shape === 'square') p.kindName = 'sq';
+    const [lo, hi] = boxRangeAlong(part.bbox, axis);
+    if (p.type === 'pin_peg') {
+      p.shape = 'round';
+      // The ends that stick out (both when they can't be measured)
+      const ends = pinEnds.get(p.portId) || { lo: true, hi: true };
+      p.faces = [...(ends.hi ? [signedAxisName(axis)] : []), ...(ends.lo ? [signedAxisName(axis, -1)] : [])];
+      if (!p.faces.length) p.faces = [signedAxisName(axis), signedAxisName(axis, -1)];
+      continue;
+    }
+    if (p.through) {
+      p.faces = [signedAxisName(axis), signedAxisName(axis, -1)];
+      continue;
+    }
+    // Blind: it opens at the end of its span nearer its origin (the entry face)
+    const ref = span ? (span[0] + span[1]) / 2 : (lo + hi) / 2;
+    p.faces = [signedAxisName(axis, t0 >= ref ? 1 : -1)];
+  }
+}
+
+const quarterPitches = (v) => {
+  const n = Math.round(v / QUARTER_PITCH_MM);
+  return n === 0 ? 0 : n;
+};
+
+/**
+ * Ids from where each point is: <kind>.<face>.<x>_<y>_<z> (quarter pitches; face 'thru' for a
+ * through hole or a peg sticking out both ways), '#2', '#3' on a clash, in a fixed order. Each point
+ * keeps the ids it had in the last index as aliases: the old point on the same line, of the same
+ * type, nearest along it. Old ids with no point now go to `lost`.
+ */
+function assignStableIds(part, ports, oldPorts, lost) {
+  for (const p of ports) {
+    const kind = p.kindName || KIND_BY_TYPE[p.type] || p.type;
+    delete p.kindName;
+    p.kind = kind;
+    const face = p.faces.length > 1 ? 'thru' : p.faces[0];
+    p.portId = `${kind}.${face}.${p.origin.map(quarterPitches).join('_')}`;
+  }
+  const key = (p) => [p.axis.map((v) => v.toFixed(3)).join(','), ...p.origin.map((v) => v.toFixed(3))].join('|');
+  const byId = new Map();
+  for (const p of [...ports].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0))) {
+    const n = (byId.get(p.portId) || 0) + 1;
+    byId.set(p.portId, n);
+    if (n > 1) p.portId = `${p.portId}#${n}`;
+  }
+
+  // Aliases: match old points to new ones on the same line, nearest first
+  const pairs = [];
+  oldPorts.forEach((o, oi) => {
+    ports.forEach((p, pi) => {
+      if (o.type !== p.type && !(part.partNumber === MINI_STANDOFF_CONNECTOR && o.type === 'shaft_bore')) return;
+      if (!isParallel(o.axis, p.axis) || perpDistance(o.origin, p.origin, p.axis) > 0.5) return;
+      pairs.push({ oi, pi, d: Math.hypot(...o.origin.map((v, i) => v - p.origin[i])) });
+    });
+  });
+  pairs.sort((a, b) => a.d - b.d);
+  const usedOld = new Set();
+  const usedNew = new Set();
+  for (const { oi, pi } of pairs) {
+    if (usedOld.has(oi) || usedNew.has(pi)) continue;
+    usedOld.add(oi);
+    usedNew.add(pi);
+    const o = oldPorts[oi];
+    const p = ports[pi];
+    const aliases = [o.portId, ...(o.aliases || [])].filter((id) => id && id !== p.portId);
+    if (aliases.length) p.aliases = [...new Set(aliases)];
+  }
+  // A shaft's feature was called `shaft` before it had a point of its own
+  for (const p of ports) if (p.type === 'shaft') p.aliases = [...new Set(['shaft', ...(p.aliases || [])])];
+  oldPorts.forEach((o, oi) => {
+    if (!usedOld.has(oi)) lost.push(`${part.name}: ${[o.portId, ...(o.aliases || [])].join(', ')}`);
+  });
+  // Unused fields of the search
+  for (const p of ports) delete p.foundFrom;
+}
+
 async function main() {
   const t0 = Date.now();
   const { catalog } = getCatalog();
@@ -646,6 +910,9 @@ async function main() {
   const metadataById = {};
   let totalVerifiedPorts = 0;
   const unmeasured = [];
+  // Today's ports, before this run replaces them: their ids live on as aliases (assignStableIds)
+  const oldPortsById = new Map(catalog.map((part) => [part.id, structuredClone(part.ports || [])]));
+  const lostIds = [];
 
   for (let idx = 0; idx < catalog.length; idx++) {
     const part = catalog[idx];
@@ -734,9 +1001,11 @@ async function main() {
           probeIntersectsPart(refPinBvh, shiftedPinPos, rot, partBvh)
         ) {
           pinVerified = true;
-          // If blind hole on a thick body, record the entry surface coordinate
+          // If blind hole on a thick body, record the entry surface coordinate: the face its
+          // surfaces reach when they reach only one, else the face nearer the pin that fitted
           if (!isThrough) {
-            holeOriginT = Math.abs(pt - g.boxMaxT) < Math.abs(pt - g.boxMinT) ? g.boxMaxT : g.boxMinT;
+            const nearer = Math.abs(pt - g.boxMaxT) < Math.abs(pt - g.boxMinT) ? g.boxMaxT : g.boxMinT;
+            holeOriginT = entryFace(g, nearer, refPinBvh, partBvh);
           }
           break;
         }
@@ -900,6 +1169,15 @@ async function main() {
       }
     }
 
+    // 4. Shallow holes on a face that a whole pin leg can't go into (the Bumper Switch's top holes)
+    addFaceHoles(part, coaxialGroups, ports, refPinBvh, partBvh);
+    // 5. A pin goes into the Mini Standoff Connector's bore
+    if (part.partNumber === MINI_STANDOFF_CONNECTOR) {
+      for (const port of ports) if (port.type === 'shaft_bore') port.type = 'pin_hole';
+    }
+    // 6. Intake flaps and grippers: the pegs that plug into a tread link's attachment holes
+    addAttachmentPegs(part, ports);
+
     totalVerifiedPorts += ports.length;
 
     const pitchSize = [
@@ -912,12 +1190,18 @@ async function main() {
     const fastenerSpecs = inferFastenerSpecs(part);
     const mountingRules = classifyMountingRules(part);
     const { rackSpecs, hubSpecs } = measureShapes(part, ports, gearSpecs, fastenerSpecs, rawCylinders, unmeasured);
+    // 7. Shafts: their axis, ends, cross-section and cap or stop ring
+    addShaftPort(part, ports, fastenerSpecs, rawRaycast);
+    // Facts for every point, then ids from where each point is, keeping today's ids as aliases
+    describePorts(part, ports, fastenerSpecs, partBvh);
+    assignStableIds(part, ports, oldPortsById.get(part.id) || [], lostIds);
 
     const portCounts = {
       total: ports.length,
       pinHoles: ports.filter((p) => p.type === 'pin_hole').length,
       shaftBores: ports.filter((p) => p.type === 'shaft_bore' || p.type === 'shaft_socket').length,
-      pinPegs: ports.filter((p) => p.type === 'pin_peg').length
+      pinPegs: ports.filter((p) => p.type === 'pin_peg').length,
+      shafts: ports.filter((p) => p.type === 'shaft').length
     };
 
     const metaEntry = {
@@ -970,6 +1254,11 @@ async function main() {
 
   fs.writeFileSync(CATALOG_PATH, JSON.stringify(catalog, null, 2));
 
+  if (lostIds.length) {
+    console.log(`${lostIds.length} port id(s) of the last index have no point now:`);
+    for (const l of lostIds) console.log(`  ${l}`);
+    process.exitCode = 1;
+  }
   if (unmeasured.length) {
     console.log(`Couldn't measure ${unmeasured.length} part(s); they won't be turned to mesh or fit:`);
     for (const u of unmeasured) console.log(`  ${u}`);

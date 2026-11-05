@@ -446,7 +446,7 @@ const TOOLS = [
         sourcePortId: {
           type: 'string',
           description:
-            'Optional semantic portId on the source part (e.g. "motor_drive_socket", "hole_1", "bore_1", "peg_1"). Defaults to the primary bore/socket/peg.'
+            'Optional port id on the source part, from get_part_details (a stable id such as "socket.+y.-3_0_0", or an older alias such as "motor_drive_socket" or "hole_1"). Defaults to the primary bore/socket/peg.'
         },
         targetInstanceId: {
           type: 'string',
@@ -455,7 +455,7 @@ const TOOLS = [
         targetPortId: {
           type: 'string',
           description:
-            'The semantic portId on the target part (e.g. "hole_12", "motor_drive_socket", "bore_1").'
+            'The port id on the target part, from get_part_details (a stable id such as "hole.thru.4_0_0", or an older alias such as "hole_12").'
         },
         flipAxis: {
           type: 'boolean',
@@ -1801,6 +1801,7 @@ async function executeTool(name, args = {}) {
       ...(p.collidingWith.length ? { overlaps: p.collidingWith } : {}),
       ...(p.tightFits?.length ? { tightFits: p.tightFits } : {}),
       ...(p.stoppedAgainst ? { stoppedAgainst: p.stoppedAgainst } : {}),
+      ...(p.ports ? { ports: p.ports } : {}),
       ...(p.otherFits?.length
         ? {
             otherFits: p.otherFits,

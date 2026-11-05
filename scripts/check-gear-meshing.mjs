@@ -4,7 +4,7 @@
  * Run: node scripts/check-gear-meshing.mjs   (exits 1 on any failure)
  */
 import * as THREE from 'three';
-import { buildWorldMatrix, checkCandidateCollision, findPart, getPartCollisionBvh, getPartRawGeometry, worldFeaturesFor } from '../mcp/assembly-engine.mjs';
+import { buildWorldMatrix, checkCandidateCollision, findPart, findPort, getPartCollisionBvh, getPartRawGeometry, worldFeaturesFor } from '../mcp/assembly-engine.mjs';
 import { hubMatrix } from '../src/utils/motorHub.js';
 import { settlePlacement } from '../src/utils/placementFit.js';
 import { boreTargets, collectWorldFeatures, findHoleSnap, isBorePart, listBoreFits, listInsertFits, openFaces } from '../src/utils/pinHoleAlignment.js';
@@ -387,7 +387,7 @@ const SHAFT = part('4x Pitch Shaft');
   };
   const big = inst(G48, [0, 0, 0]);
   const beam = inst(part('1x2 Beam'), [38.1, 0, -3.6], [0, 0, 90]);
-  const hole = worldFeaturesFor(beam).find((f) => f.featureId === 'hole_2');
+  const hole = worldFeaturesFor(beam).find((f) => f.featureId === findPort(part('1x2 Beam'), 'hole_2').portId);
   const top = openFaces(hole).find((f) => f.outward.z > 0);
   const gearFits = listInsertFits({
     partMeta: gearWithAxle,

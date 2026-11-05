@@ -158,7 +158,10 @@ export function getLocalFeatures(partMeta) {
       }
     } else if (fs && SHAFT_FASTENER_TYPES.has(fs.fastenerType)) {
       const square = fs.shape === 'square' ? fs.squarePhaseDeg : null;
-      push('shaft', 'shaft', [0, 0, 0], fs.axis || [0, 0, 1], fs.usableSpanZ || [-Infinity, Infinity], undefined, false, square);
+      // The indexed shaft point (openspec connection-points): its axis and ends, by its stable id
+      const indexed = (partMeta.ports || []).find((p) => p.type === 'shaft');
+      if (indexed) push(indexed.portId, 'shaft', [0, 0, 0], indexed.axis, indexed.spanMm, undefined, false, square);
+      else push('shaft', 'shaft', [0, 0, 0], fs.axis || [0, 0, 1], fs.usableSpanZ || [-Infinity, Infinity], undefined, false, square);
     }
   }
 
