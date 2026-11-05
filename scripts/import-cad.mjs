@@ -39,11 +39,11 @@ export function projectIdFrom(arg) {
   return m ? decodeURIComponent(m[1]) : String(arg).trim();
 }
 
-/** The project's viewer data, from a saved file or downloaded from Cadasio. */
+/** The project's viewer data with its instruction steps, from a saved file or downloaded from Cadasio. */
 export async function loadProject(arg) {
   if (fs.existsSync(arg)) return JSON.parse(fs.readFileSync(arg, 'utf8'));
   const id = projectIdFrom(arg);
-  const url = `https://api.cadasio.com/api/getProjectViewer?id=${encodeURIComponent(id)}&withSteps=false&hostname=instructions.online`;
+  const url = `https://api.cadasio.com/api/getProjectViewer?id=${encodeURIComponent(id)}&withSteps=true&hostname=instructions.online`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Couldn't download project "${id}" (${res.status})`);
   return res.json();
@@ -57,26 +57,61 @@ const mul4 = (A, B) => A.map((r) => B[0].map((_, j) => r.reduce((s, x, k) => s +
 const IDENTITY = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
 
 /**
- * The project's parts: every node whose component is a VEX part number (or a leaf), with its CAD
- * part number, instance path, top subassembly, hidden flag and world matrix (row-vector form).
+ * Each part's state in the finished build: the instruction steps run in order up to the step named
+ * "Completed View" (or every step when there is none; the steps after it are exploded and showcase
+ * views). Map(node id -> { visible?, position?: {x, y, z}, rotation?: {x, y, z, w} }), position and
+ * rotation in the node's parent frame, CAD units. Empty when the project has no steps.
  */
-export function walkAssembly(project) {
+export function finalStepState(project) {
+  const order = project.orderedSteps || [];
+  const done = order.map((id) => project.steps?.[id]?.name).findLastIndex((n) => /^completed view$/i.test(String(n || '').trim()));
+  const out = new Map();
+  for (const id of done >= 0 ? order.slice(0, done + 1) : order) {
+    for (const [node, props] of Object.entries(project.steps?.[id]?.properties || {})) out.set(node, { ...(out.get(node) || {}), ...props });
+  }
+  return out;
+}
+
+/** A node's own transform (row-vector form) with the final step's position and turn, when it has them. */
+function localMatrix(r, state) {
+  const m = matrixOf(r.transform);
+  if (state?.rotation) {
+    // Row-vector form: row i is where the turn takes axis i (column i of the quaternion's matrix)
+    const R = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion(state.rotation.x, state.rotation.y, state.rotation.z, state.rotation.w)).elements;
+    for (let i = 0; i < 3; i++) m[i] = [R[4 * i], R[4 * i + 1], R[4 * i + 2], 0];
+  }
+  if (state?.position) m[3] = [state.position.x, state.position.y, state.position.z, 1];
+  return m;
+}
+
+/**
+ * The project's parts as the instructions finish them: every node whose component is a VEX part
+ * number (or a leaf), with its CAD part number, instance path, top subassembly, hidden flag (hidden
+ * in the CAD, or in the finished build's view: `hiddenBySteps`) and world matrix (row-vector form).
+ * Poses come from the CAD (`poses: 'cad'`, the default): the finished view nudges some parts a few
+ * millimetres without the pins in them (Flop's slanted beams, its brain's pins), so it is a picture,
+ * not a fit; `poses: 'steps'` uses it anyway.
+ */
+export function walkAssembly(project, { poses = 'cad' } = {}) {
   const a = project.assemblyStructure;
   const versions = a.rootVersions || {};
+  const final = finalStepState(project);
   const out = [];
-  const walk = (node, parent, top) => {
+  const walk = (node, parent, top, stepsHide) => {
     const r = node.rootReference;
-    const m = mul4(matrixOf(r.transform), parent);
+    const state = final.get(r.id);
+    const m = mul4(poses === 'steps' ? localMatrix(r, state) : matrixOf(r.transform), parent);
+    const hiddenBySteps = stepsHide || state?.visible === false;
     const v = versions[r.childVersionId] || {};
     const comp = String(v.versionComponentName || '').split(' [')[0];
     const kids = node.children || [];
     if ((PART_NUMBER.test(comp) && !comp.startsWith('228-9136-000-')) || !kids.length) {
-      out.push({ cadPartNumber: comp, path: r.name, top: top || r.name, hidden: Boolean(r.hidden), matrix: m });
+      out.push({ cadPartNumber: comp, path: r.name, top: top || r.name, hidden: Boolean(r.hidden) || hiddenBySteps, hiddenBySteps, matrix: m });
       return;
     }
-    for (const c of kids) walk(c, m, top || r.name);
+    for (const c of kids) walk(c, m, top || r.name, hiddenBySteps);
   };
-  for (const c of a.children || []) walk(c, IDENTITY, null);
+  for (const c of a.children || []) walk(c, IDENTITY, null, false);
   return { parts: out, scaleFactor: a.scaleFactor || 1 };
 }
 
@@ -101,7 +136,7 @@ export function convertParts(walked, { catalog, frames, liftMm = null, looksTheS
   for (const w of walked.parts) {
     const tail = w.path.split('/').pop();
     if (w.hidden) {
-      leftOut.push({ path: w.path, cadPartNumber: w.cadPartNumber, reason: 'hidden in the CAD' });
+      leftOut.push({ path: w.path, cadPartNumber: w.cadPartNumber, reason: w.hiddenBySteps ? 'hidden by the instructions' : 'hidden in the CAD' });
       continue;
     }
     const kind = NOT_IN_LIBRARY.find((k) => k.test.test(w.cadPartNumber) || k.test.test(tail));

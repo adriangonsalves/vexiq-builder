@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditAssembly, looksTheSame } from '../mcp/assembly-engine.mjs';
-import { convertParts, projectIdFrom, walkAssembly } from './import-cad.mjs';
+import { convertParts, finalStepState, projectIdFrom, walkAssembly } from './import-cad.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let failures = 0;
@@ -75,6 +75,29 @@ const audit = auditAssembly({ instances });
   check('structural parts come before pins', pinsAfter > 0 && conv.items.slice(pinsAfter).every((i) => i.isPin));
   const lowest = Math.min(...conv.items.map((i) => i.position[1]));
   check('the slice is raised so it rests on the floor', conv.liftMm > 0 && lowest > 0, `${conv.liftMm} mm`);
+}
+
+// --- The finished build: what the instruction steps show at "Completed View" -------------------------
+{
+  // Two parts; step 2 hides B and nudges A, "Completed View" ends the build, a later exploded view moves A far
+  const node = (id, name, x) => ({ rootReference: { id, name, childVersionId: id, transform: `1,0,0,0,0,1,0,0,0,0,1,0,${x},0,0,1` }, children: null });
+  const project = {
+    assemblyStructure: { scaleFactor: 1, rootVersions: { a: { versionComponentName: '228-2500-026' }, b: { versionComponentName: '228-2500-060' } }, children: [node('a', 'Drive Train-1/228-2500-026-1', 0), node('b', 'Drive Train-1/228-2500-060-1', 50)] },
+    orderedSteps: ['s1', 's2', 's3', 's4'],
+    steps: {
+      s1: { name: 'Step 1', properties: { a: { visible: true }, b: { visible: true } } },
+      s2: { name: 'Step 2', properties: { b: { visible: false }, a: { position: { x: 3, y: 0, z: 0 } } } },
+      s3: { name: 'Completed View', properties: {} },
+      s4: { name: 'Exploded', properties: { a: { position: { x: 900, y: 0, z: 0 } }, b: { visible: true } } }
+    }
+  };
+  const fin = finalStepState(project);
+  check('Finished build: the steps run up to "Completed View", not the exploded view after it', fin.get('a').position.x === 3 && fin.get('b').visible === false);
+  const w = walkAssembly(project);
+  const b = w.parts.find((q) => q.path.endsWith('060-1'));
+  const a = w.parts.find((q) => q.path.endsWith('026-1'));
+  check('  a part hidden in the finished build is left out as hidden by the instructions', b.hidden && b.hiddenBySteps);
+  check('  poses come from the CAD by default, the finished view\'s with poses: "steps"', a.matrix[3][0] === 0 && walkAssembly(project, { poses: 'steps' }).parts.find((q) => q.path.endsWith('026-1')).matrix[3][0] === 3);
 }
 
 // --- A part number with no table entry ------------------------------------------------------------------
