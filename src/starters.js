@@ -1,3 +1,5 @@
+import FLOP from './starters/flop.js';
+
 /**
  * Starter builds for File → Starter (openspec build-library). Each starter is a name and a function
  * that lays out its parts from the catalog; add drivetrains, claws and the like here.
@@ -418,11 +420,32 @@ function clawbotStarter(catalog) {
   });
 }
 
+/**
+ * Herobot Flop (VEX IQ 2026-27), imported from VEX's CAD as the instructions finish it, with built
+ * drive chains: parts keep their groups (Drive Train, Intake v2, Tower, Chain 1, Chain 2).
+ */
+function flopStarter(catalog) {
+  const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
+  const groupIds = new Map();
+  return FLOP.flatMap(([number, label, position, rotation, color, groupName, socketAngleDeg], i) => {
+    const p = byNumber.get(number);
+    if (!p) return [];
+    const inst = { ...part(p, `inst-flop-${i + 1}`, position, rotation, color || p.defaultColor), label };
+    if (groupName) {
+      if (!groupIds.has(groupName)) groupIds.set(groupName, `group-flop-${groupName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+      Object.assign(inst, { groupId: groupIds.get(groupName), groupName });
+    }
+    if (socketAngleDeg) inst.socketAngleDeg = socketAngleDeg;
+    return [inst];
+  });
+}
+
 export const STARTERS = [
   { id: 'sample', name: 'Sample starter', build: sampleStarter },
   { id: 'speedbot', name: 'Speedbot 2.0', build: speedbotStarter },
   { id: 'basebot', name: 'BaseBot', build: basebotStarter },
-  { id: 'clawbot', name: 'Clawbot', build: clawbotStarter }
+  { id: 'clawbot', name: 'Clawbot', build: clawbotStarter },
+  { id: 'flop', name: 'Flop', build: flopStarter }
 ];
 
 export const starterById = (id) => STARTERS.find((s) => s.id === id) || STARTERS[0];

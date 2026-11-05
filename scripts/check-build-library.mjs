@@ -44,6 +44,12 @@ check('  none of its parts overlap', basebotOverlapping.length === 0, basebotOve
 const clawbot = starterById('clawbot').build(catalog);
 check('the Clawbot starter has its 193 parts', clawbot.length === 193, String(clawbot.length));
 
+const flop = starterById('flop').build(catalog);
+const flopGroups = new Set(flop.map((p) => p.groupName));
+check('the Flop starter has its 593 parts in 5 groups', flop.length === 593 && flopGroups.size === 5, `${flop.length} parts, ${[...flopGroups].join(', ')}`);
+const flopOverlapping = flop.filter((inst) => checkCandidateCollision(inst, flop).isIntersecting).map((p) => p.label);
+check('  none of its parts overlap', flopOverlapping.length === 0, flopOverlapping.join(', '));
+
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);
