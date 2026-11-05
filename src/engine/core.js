@@ -30,7 +30,8 @@ import { isTireOnHub } from '../utils/tireFit.js';
 import { seatedBatteryBay } from '../utils/batteryBay.js';
 import { areChainNeighbours, isChainFit, isChainPart, isGripperOnLink, isLink, isLinkOnSprocket, unsupportedBends } from '../utils/chainFit.js';
 import { applyPatches, groupParts } from '../utils/partGroups.js';
-import { buildChainPath, chainMessage, nextChainName } from '../utils/chainPath.js';
+import { CHAIN_LINK_PART_NUMBER, TREAD_LINK_PART_NUMBER, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName } from '../utils/chainPath.js';
+import { sliceOutline } from '../utils/chainObstacles.js';
 import { buildExplodePlan } from '../utils/explodePlan.js';
 
 export const VEX_PITCH_MM = 12.7;
@@ -2195,14 +2196,38 @@ export function summarizeAudit(audit) {
   };
 }
 
+/** A part's outline where it crosses a chain's plane (chainPath's `outlineOf`), from its own mesh. */
+function chainOutlineOf(p, band) {
+  return sliceOutline(getPartRawGeometry(p.meta), { position: p.position, rotation: p.rotation, ...band, cacheKey: p.meta.id });
+}
+
 /**
- * Chain or track round the selected sprockets (openspec chain-track-builder), as the app's Tools → Chain builder
- * and the build_chain tool do it: link (and gripper) instances made into one new "Chain N" /
- * "Track N" group, and each loop sprocket turned with its shaft group so its teeth sit in the chain.
- * `instanceIds` default to the selection. Returns { error } or { instances (all, new state),
- * groupId, name, newIds, result (buildChainPath), message, turned: [instanceId] }.
+ * What Chain builder asks about for the parts `instanceIds` (default: the selection), obstacles
+ * included (openspec chain-routing-around-parts): { ok, error?, asked: [{ instanceId, label, kind
+ * ('sprocket' | 'standoff' | 'obstacle'), outside? }] }, for the app's over-or-under dialog.
  */
-export function buildChain(state, { kind = 'chain', instanceIds = null, route = null, grippers = true, attachment = null, attachmentEvery = 1, slack = 'lower', name = null } = {}) {
+export function chainAskedFor(state, { kind = 'chain', instanceIds = null } = {}) {
+  const { catalog, catalogById } = getCatalog();
+  const ids = Array.isArray(instanceIds) && instanceIds.length ? instanceIds : state.selectedIds || [];
+  const byId = new Map(state.instances.map((i) => [i.instanceId, i]));
+  const chosen = ids.map((id) => byId.get(id)).filter((i) => i && i.visible !== false);
+  const link = catalog.find((p) => p.partNumber === (kind === 'track' ? TREAD_LINK_PART_NUMBER : CHAIN_LINK_PART_NUMBER));
+  const chk = checkSprocketsForChain(
+    chosen.map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogById.get(i.partId), position: i.position, rotation: i.rotation })),
+    { kind, outlineOf: chainOutlineOf, ...(link?.bbox ? { linkHalfMm: Math.abs(link.bbox.min[1]), bandHalfMm: link.bbox.size[0] / 2 } : {}) }
+  );
+  if (!chk.ok) return { ok: false, error: chk.error };
+  const asked = kind === 'track' ? [] : [...chk.enclosed, ...chk.crossing].map((e) => ({ instanceId: e.instanceId, label: e.label, kind: e.kind, ...(e.outside ? { outside: e.outside } : {}) }));
+  return { ok: true, asked };
+}
+
+/**
+ * The chain or track `buildChain` would make, planned without changing anything (openspec
+ * chain-track-builder, chain-routing-around-parts): the selected sprockets, standoffs and obstacles,
+ * and the parts the planned links would overlap. Returns { error, needsRoute?, check } or { res
+ * (buildChainPath), chosen, blockedBy: [{ instanceId, label, run: { index, fromId, toId } }] }.
+ */
+export function planChainFor(state, { kind = 'chain', instanceIds = null, route = null, grippers = true, attachment = null, attachmentEvery = 1, slack = 'lower' } = {}) {
   const { catalog, catalogById } = getCatalog();
   if (kind !== 'chain' && kind !== 'track') return { error: 'kind must be "chain" or "track".' };
   const ids = Array.isArray(instanceIds) && instanceIds.length ? instanceIds : state.selectedIds?.length ? state.selectedIds : state.selectedId ? [state.selectedId] : [];
@@ -2212,9 +2237,41 @@ export function buildChain(state, { kind = 'chain', instanceIds = null, route = 
   const chosen = ids.map((id) => byId.get(id)).filter((i) => i.visible !== false);
   const res = buildChainPath(
     chosen.map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogById.get(i.partId), position: i.position, rotation: i.rotation })),
-    { kind, route, grippers: kind === 'track' && grippers !== false, attachment, attachmentEvery, slack: slack === 'upper' ? 'upper' : 'lower', metaByPartNumber: (pn) => catalog.find((p) => p.partNumber === pn) }
+    {
+      kind,
+      route,
+      grippers: kind === 'track' && grippers !== false,
+      attachment,
+      attachmentEvery,
+      slack: slack === 'upper' ? 'upper' : 'lower',
+      metaByPartNumber: (pn) => catalog.find((p) => p.partNumber === pn),
+      outlineOf: chainOutlineOf
+    }
   );
   if (!res.ok) return { error: res.error, ...(res.needsRoute ? { needsRoute: res.needsRoute } : {}) };
+  // Parts a planned link would overlap (tight fits aren't named): every visible part that isn't selected
+  const chosenIds = new Set(chosen.map((i) => i.instanceId));
+  const others = state.instances.filter((i) => i.visible !== false && !chosenIds.has(i.instanceId));
+  const blocked = new Map();
+  res.links.forEach((l, k) => {
+    const col = checkCandidateCollision({ instanceId: `planned-link-${k}`, partId: l.partId, position: l.position, rotation: l.rotation }, others);
+    for (const c of col.collidingWith) if (!blocked.has(c.instanceId)) blocked.set(c.instanceId, { instanceId: c.instanceId, label: c.label, run: res.runs[res.linkRuns[k]] });
+  });
+  return { res, chosen, blockedBy: [...blocked.values()] };
+}
+
+/**
+ * Chain or track round the selected sprockets (openspec chain-track-builder), as the app's Tools → Chain builder
+ * and the build_chain tool do it: link (and gripper) instances made into one new "Chain N" /
+ * "Track N" group, and each loop sprocket turned with its shaft group so its teeth sit in the chain.
+ * `instanceIds` default to the selection. Returns { error } or { instances (all, new state),
+ * groupId, name, newIds, result (buildChainPath), message, turned: [instanceId] }.
+ */
+export function buildChain(state, { kind = 'chain', instanceIds = null, route = null, grippers = true, attachment = null, attachmentEvery = 1, slack = 'lower', name = null } = {}) {
+  const { catalogById } = getCatalog();
+  const plan = planChainFor(state, { kind, instanceIds, route, grippers, attachment, attachmentEvery, slack });
+  if (plan.error) return plan;
+  const { res, blockedBy } = plan;
 
   // Turn each loop sprocket, with its axle and the parts on it, so a tooth gap sits at a pivot
   let instances = state.instances;
@@ -2282,7 +2339,9 @@ export function buildChain(state, { kind = 'chain', instanceIds = null, route = 
     result: res,
     wrapped: res.wrapped,
     leftOut: res.leftOut,
-    message,
+    obstacles: res.obstacles,
+    blockedBy,
+    message: blockedBy.length ? `${message} In the way: ${blockedBy.map((b) => b.label).join(', ')}.` : message,
     turned: [...turned]
   };
 }

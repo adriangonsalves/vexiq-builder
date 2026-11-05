@@ -8,9 +8,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { angleAbout } from '../src/utils/axisFrame.js';
-import { CHAIN_PLAY_MM, UPPER_BLOCKED, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName, worldGuide, worldSprocket } from '../src/utils/chainPath.js';
+import { CHAIN_PLAY_MM, UPPER_BLOCKED, buildChainPath as buildChainPathRaw, chainMessage, checkSprocketsForChain, nextChainName, worldGuide, worldSprocket } from '../src/utils/chainPath.js';
 import { areChainNeighbours, isChainFit, isGripperOnLink, isLinkOnSprocket, isLinkOnStandoff, unsupportedBends } from '../src/utils/chainFit.js';
-import { auditAssembly, buildChain, buildWorldMatrix, collisionPiecesFor, explodeInputs } from '../mcp/assembly-engine.mjs';
+import { auditAssembly, buildChain, buildWorldMatrix, checkCandidateCollision, collisionPiecesFor, explodeInputs, planChainFor } from '../mcp/assembly-engine.mjs';
 import { buildPieces } from '../src/utils/explodePlan.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -18,6 +18,20 @@ const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.js
 const parts = Array.isArray(catalog) ? catalog : catalog.parts || Object.values(catalog);
 const byName = (name) => parts.find((p) => p.name === name);
 const metaByPartNumber = (pn) => parts.find((p) => p.partNumber === pn);
+
+// Every chain built here, compared with scripts/fixtures/chain-paths.json (CHAIN_FIXTURE=record
+// rewrites it): an existing layout must give the same links, count and sprocket turns
+const FIXTURE_PATH = path.join(ROOT, 'scripts', 'fixtures', 'chain-paths.json');
+const recording = process.env.CHAIN_FIXTURE === 'record';
+const fixture = recording || !fs.existsSync(FIXTURE_PATH) ? {} : JSON.parse(fs.readFileSync(FIXTURE_PATH, 'utf8'));
+const recorded = {};
+const fixtureKey = (input, opts) => JSON.stringify([input.map((p) => [p.meta?.partNumber, p.position, p.rotation]), { ...opts, metaByPartNumber: undefined }]);
+const summary = (res) => (res.ok ? { links: res.links.map((l) => [...l.position, ...l.rotation]), linkCount: res.linkCount, sprocketTurns: res.sprocketTurns.map((t) => [t.instanceId, t.deg]) } : { error: res.error });
+const buildChainPath = (input, opts) => {
+  const res = buildChainPathRaw(input, opts);
+  recorded[fixtureKey(input, opts)] = summary(res);
+  return res;
+};
 
 let failures = 0;
 const check = (label, ok, detail = '') => {
@@ -180,6 +194,19 @@ function checkChain(name, input, res) {
   check(`${name}: never more than ${CHAIN_PLAY_MM} mm short of the path, at most a link longer`, res.gapMm <= CHAIN_PLAY_MM + 1e-6 && res.gapMm > -6.35, String(res.gapMm));
 }
 
+/** Every pivot on sprocket `p`'s pitch circle sits at a tooth gap once it is turned. */
+function allInGaps(p, res) {
+  const s = worldSprocket(p.meta, p.position, p.rotation, p.instanceId);
+  const t = res.sprocketTurns.find((x) => x.instanceId === p.instanceId);
+  const gapDir = s.gapDir.clone().applyAxisAngle(s.axis, THREE.MathUtils.degToRad(t ? t.deg : 0));
+  const period = 360 / s.teeth;
+  const on = res.links.map((l) => new THREE.Vector3(...l.position)).filter((pv) => near(pv.distanceTo(s.center), s.pitchRadius, 0.05));
+  const off = on.map((pv) => {
+    const w = (((angleAbout(s.axis, pv.clone().sub(s.center)) - angleAbout(s.axis, gapDir)) % period) + period) % period;
+    return Math.min(w, period - w);
+  });
+  return { count: on.length, worst: Math.max(0, ...off) };
+}
 // --- Which sprockets can carry a chain --------------------------------------------------------
 {
   check('two sprockets in one plane: ok', checkSprocketsForChain([sprocket(16, [0, 0, 0]), sprocket(32, [80, 0, 0])]).ok);
@@ -489,11 +516,14 @@ function checkChain(name, input, res) {
     route: outsideRoute([pL, pMid, pR, pIdler], { [pIdler.instanceId]: 'under' }),
     metaByPartNumber
   });
-  check(
-    'refusal 5 (passing through a part): names the part the run hits',
-    !r5.ok && r5.error.includes(pMid.label) && /would pass through/.test(r5.error),
-    r5.error
-  );
+  // (a run bent into a selected sprocket wraps it there: openspec chain-routing-around-parts)
+  checkChain('A bent run meets a wheel sprocket', [pL, pMid, pR, pIdler], r5);
+  if (r5.ok) {
+    const w = r5.wrapped.find((x) => x.instanceId === pMid.instanceId);
+    check('  the 24 Tooth it meets is wrapped on both runs', w?.side === 'both', JSON.stringify(r5.wrapped));
+    const g = allInGaps(pMid, r5);
+    check('  one turn of it puts a tooth gap at every pivot on it', g.worst < 0.05 && r5.sprocketTurns.filter((t) => t.instanceId === pMid.instanceId).length <= 1, `worst ${g.worst.toFixed(2)}°`);
+  }
 
   // 6. Self-crossing loop
   const cL = sprocket(16, [0, 0, 0]);
@@ -947,6 +977,92 @@ function checkChain(name, input, res) {
       trackPieces.size === 1 && !trackPieces.has(pieceOf.get('S16')) && !trackPieces.has(pieceOf.get('S32')),
       `${trackPieces.size} pieces`
     );
+  }
+}
+
+// --- A sprocket wrapped by both runs (openspec chain-routing-around-parts) -----------------------------
+{
+  // Flop's drive: 8T, 16T (the motor's), 8T in a line, centres 38.1 mm and 139.7 mm apart
+  const flop = () => [sprocket(8, [-206.4, 0, 0]), sprocket(16, [-168.3, 0, 0]), sprocket(8, [-28.6, 0, 0])];
+  const set = flop();
+  const [, mid] = set;
+  const chk = checkSprocketsForChain(set);
+  check(
+    'Motor sprocket between two wheel sprockets: the 16 Tooth is on the loop twice, nothing to ask',
+    chk.ok && chk.loop.filter((e) => e.from === 1).length === 2 && !chk.crossing.length && !chk.enclosed.length,
+    chk.error || JSON.stringify(chk.loop?.map((e) => e.from))
+  );
+  const res = buildChainPath(set, { kind: 'chain', metaByPartNumber });
+  checkChain("Flop's 8T-16T-8T drive", set, res);
+  if (res.ok) {
+    check('  built without a route, 65 links as on Flop', !res.needsRoute && res.linkCount === 65, String(res.linkCount));
+    const both = res.wrapped.filter((w) => w.instanceId === mid.instanceId);
+    check('  the 16 Tooth is listed as wrapped on both runs', both.length === 1 && both[0].side === 'both', JSON.stringify(res.wrapped));
+    const top = res.links.some((l) => l.position[1] > 15 && Math.abs(l.position[0] - mid.position[0]) < 3);
+    const bottom = res.links.some((l) => l.position[1] < -15 && Math.abs(l.position[0] - mid.position[0]) < 3);
+    check('  the top run rises over it and the bottom run dips under it', top && bottom);
+    const g = allInGaps(mid, res);
+    check('  one turn of the 16 Tooth puts a tooth gap at every pivot on it, on both runs', g.count >= 4 && g.worst < 0.05 && res.sprocketTurns.filter((t) => t.instanceId === mid.instanceId).length <= 1, `${g.count} pivots, worst ${g.worst.toFixed(2)}°`);
+  }
+  const tset = flop();
+  const track = buildChainPath(tset, { kind: 'track', metaByPartNumber });
+  checkChain("Flop's 8T-16T-8T drive as a track", tset, track);
+  if (track.ok) check('  the track wraps the 16 Tooth on both runs too', track.wrapped.some((w) => w.side === 'both'), JSON.stringify(track.wrapped));
+}
+
+// --- Obstacles and parts in the way, on Flop's own drive (VEX CAD poses) -----------------------------
+{
+  // One side of Flop's drive: 8T, 16T (the motor's), 8T, the 2x20 Beam across the top run just past the
+  // 16 Tooth, a Double Offset Corner Connector inside the loop, and one on the other side of the robot
+  const instances = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'fixtures', 'flop-drive-chain.json'), 'utf8'));
+  const state = { instances };
+  const byId = new Map(instances.map((i) => [i.instanceId, i]));
+  const drive = ['228-2500-232-2', '228-2500-233-1', '228-2500-232-1'];
+  const beam = byId.get('228-2500-030-2');
+  const asInput = (ids) => ids.map((id) => ({ ...byId.get(id), meta: parts.find((p) => p.id === byId.get(id).partId) }));
+  const overlapping = (links, part) => links.filter((l, k) => checkCandidateCollision({ instanceId: `l${k}`, ...l }, [part]).isIntersecting).length;
+
+  const plain = planChainFor(state, { kind: 'chain', instanceIds: drive });
+  check(
+    'Unselected bracket in the way: the beam is named as in the top run\'s way',
+    !plain.error && plain.blockedBy.length === 1 && plain.blockedBy[0].instanceId === beam.instanceId && plain.blockedBy[0].run.fromId === '228-2500-233-1',
+    plain.error || JSON.stringify(plain.blockedBy)
+  );
+  const asked = planChainFor(state, { kind: 'chain', instanceIds: [...drive, beam.instanceId] });
+  check('Selected beam: asked over or under', asked.needsRoute?.length === 1 && asked.needsRoute[0].instanceId === beam.instanceId, asked.error);
+  const ids = [...drive, beam.instanceId, '228-2500-277-2', '228-2500-277-3'];
+  const under = planChainFor(state, { kind: 'chain', instanceIds: ids, route: { [beam.instanceId]: 'under' } });
+  check('Chain past a crossbar: Under builds', !under.error, under.error);
+  if (!under.error) {
+    checkChain('Chain past a crossbar', asInput(ids), under.res);
+    check('  no link overlaps the beam, and nothing else is in the way', overlapping(under.res.links, beam) === 0 && under.blockedBy.length === 0, JSON.stringify(under.blockedBy));
+    check('  still 65 links, as on Flop', under.res.linkCount === 65, String(under.res.linkCount));
+    const ob = (id) => under.res.obstacles.find((o) => o.instanceId === id);
+    check('  the beam is listed as wrapped, under', ob(beam.instanceId)?.wrapped && ob(beam.instanceId).side === 'under', JSON.stringify(under.res.obstacles));
+    check('  the connector inside the loop, clear of the runs, is left alone as not in the way', ob('228-2500-277-2')?.wrapped === false && ob('228-2500-277-2').reason === 'not-in-the-way');
+    check('Obstacle out of the plane: the connector on the robot\'s other side is named as not reaching the chain', ob('228-2500-277-3')?.reason === 'out-of-plane' && /not in the chain's plane: 228-2500-277-3/.test(chainMessage(under.res)), chainMessage(under.res));
+    const without = planChainFor(state, { kind: 'chain', instanceIds: [...drive, beam.instanceId], route: { [beam.instanceId]: 'under' } });
+    check('  the chain is the same with the out-of-plane connector left out', !without.error && JSON.stringify(without.res.links) === JSON.stringify(under.res.links));
+  }
+  const over = planChainFor(state, { kind: 'chain', instanceIds: [...drive, beam.instanceId], route: { [beam.instanceId]: 'over' } });
+  check('  Over is refused, naming the 16 Tooth that would lose the chain', Boolean(over.error) && over.error.includes('228-2500-233-1'), over.error);
+  const engine = buildChain(state, { kind: 'chain', instanceIds: drive });
+  check('engine buildChain: still builds with a part in the way, and names it', !engine.error && engine.blockedBy?.length === 1 && /In the way: 228-2500-030-2/.test(engine.message), engine.error || engine.message);
+}
+
+{
+  if (recording) {
+    fs.writeFileSync(FIXTURE_PATH, `${JSON.stringify(recorded)}\n`);
+    console.log(`Recorded ${Object.keys(recorded).length} chains to ${path.relative(ROOT, FIXTURE_PATH)}`);
+  } else {
+    const keys = Object.keys(fixture);
+    // (instance ids differ between cases with one layout, so turns are compared by angle)
+    // (and labels by name: their numbers depend on how many parts the check made before)
+    const plain = (r) => JSON.stringify({ ...r, sprocketTurns: r.sprocketTurns?.map((t) => t[1]) }).replace(/ #\d+/g, '');
+    const same = (a, b) => plain(a) === plain(b);
+    const changed = keys.filter((k) => k in recorded && !same(recorded[k], fixture[k]));
+    if (process.env.CHAIN_FIXTURE === 'diff') for (const k of changed) console.log(k.slice(0, 400), '\n  now', JSON.stringify(recorded[k]).slice(0, 300), '\n  was', JSON.stringify(fixture[k]).slice(0, 300));
+    check(`existing layouts build the same chains as before (${keys.length} recorded)`, keys.length > 0 && changed.length === 0, changed.slice(0, 2).map((k) => k.slice(0, 160)).join(' | '));
   }
 }
 

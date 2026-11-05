@@ -1967,10 +1967,42 @@ export default function App() {
   // the route dialog, so the same parts can always be asked again with other answers
   const chainCheck = useMemo(() => checkSprocketsForChain(chainParts), [chainParts]);
 
-  // The parts Chain builder asks over or under about: enclosed parts and crossing sprockets
+  // The engine's plan for the selection (openspec chain-routing-around-parts): what it asks about,
+  // obstacles included, and the parts the chain would pass through with the remembered route
+  const [chainPlan, setChainPlan] = useState(null);
+  const chainPlanSeqRef = useRef(0);
+  const chainPlanKey = chainCheck.ok ? JSON.stringify(chainParts.map((p) => [p.instanceId, p.position, p.rotation])) : '';
+  // (the build as it is when asked; the effect below reruns only when the selected parts move)
+  const chainPlanInputRef = useRef({ instances, selectedIds });
+  chainPlanInputRef.current = { instances, selectedIds };
+  const planChainRoute = useCallback((route) => {
+    const { instances: list, selectedIds: ids } = chainPlanInputRef.current;
+    return backend.runAction('chain_plan', { instances: list }, { kind: 'chain', instanceIds: ids, route });
+  }, []);
+  useEffect(() => {
+    const n = ++chainPlanSeqRef.current;
+    if (!chainPlanKey) {
+      setChainPlan(null);
+      return undefined;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const data = await planChainRoute(Object.fromEntries(chainRoute));
+        if (n === chainPlanSeqRef.current) setChainPlan(data?.ok ? { key: chainPlanKey, ...data } : null);
+      } catch {
+        /* the next change tries again */
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [chainPlanKey, chainRoute, planChainRoute]);
+  const freshChainPlan = chainPlan?.key === chainPlanKey ? chainPlan : null;
+  const chainInTheWay = freshChainPlan && !freshChainPlan.error ? freshChainPlan.blockedBy.map((b) => b.label) : [];
+
+  // The parts Chain builder asks over or under about: enclosed parts, crossing sprockets and
+  // obstacles in a run's way (the engine's plan, once it has come back)
   const chainAsked = useMemo(
-    () => (chainCheck.ok ? [...(chainCheck.enclosed || []), ...(chainCheck.crossing || [])] : EMPTY_IDS),
-    [chainCheck]
+    () => (freshChainPlan ? (freshChainPlan.asked.length ? freshChainPlan.asked : EMPTY_IDS) : chainCheck.ok ? [...(chainCheck.enclosed || []), ...(chainCheck.crossing || [])] : EMPTY_IDS),
+    [chainCheck, freshChainPlan]
   );
 
   // Chain builder first asks over or under for each enclosed part or crossing sprocket; then either builder asks where
@@ -2185,6 +2217,7 @@ export default function App() {
               disabledReason={preview ? "This is a preview of an earlier point. Go to a step's end to edit." : isRunningAction ? 'Working…' : null}
               fixReason={primaryId ? null : 'Select a part first: the part, or a part it should fit onto.'}
               chainCheck={chainCheck}
+              chainInTheWay={chainInTheWay}
               onFixAssembly={() => handleRunSmartAction('fix_assembly', { instanceId: primaryId })}
               auditReason={instances.length === 0 ? 'Add some parts first.' : null}
               auditOpen={auditOpen}
@@ -3375,15 +3408,21 @@ export default function App() {
         initialRoute={chainRoute}
         onHighlight={handleHighlightAttention}
         onClose={closeChainRouteDialog}
-        onBuild={(chosenRoute) => {
+        checkRoute={async (chosenRoute) => {
+          // The parts the chain would pass through with these answers, for the dialog's note
+          const data = await planChainRoute(chosenRoute);
+          return data?.ok ? { error: data.error, inTheWay: data.blockedBy.map((b) => b.label) } : { error: data?.error || null, inTheWay: [] };
+        }}
+        onBuild={async (chosenRoute) => {
           setChainRoute((prev) => {
             const next = new Map(prev);
             for (const [id, side] of Object.entries(chosenRoute)) next.set(id, side);
             return next;
           });
           // A route that can't work keeps the dialog open with the reason
-          const routed = checkSprocketsForChain(chainParts, { route: chosenRoute });
-          if (!routed.ok) return routed.error;
+          const routed = await planChainRoute(chosenRoute);
+          if (!routed?.ok) return routed?.error || 'The chain can’t be planned.';
+          if (routed.error) return routed.error;
           setAttentionIds(EMPTY_IDS);
           setChainRouteDialogOpen(false);
           openChainBuilder('chain', chosenRoute);

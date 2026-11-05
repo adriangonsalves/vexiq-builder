@@ -1,0 +1,98 @@
+[
+ {
+  "instanceId": "228-2500-030-2",
+  "label": "228-2500-030-2",
+  "partId": "2x20-beam-228-2500-030-173",
+  "position": [
+   -142.875,
+   56.104,
+   0
+  ],
+  "rotation": [
+   -90,
+   0,
+   90
+  ],
+  "visible": true
+ },
+ {
+  "instanceId": "228-2500-232-2",
+  "label": "228-2500-232-2",
+  "partId": "8-tooth-sprocket-228-2500-232-277",
+  "position": [
+   -206.375,
+   40.229,
+   88.773
+  ],
+  "rotation": [
+   -180,
+   0,
+   76.648
+  ],
+  "visible": true
+ },
+ {
+  "instanceId": "228-2500-233-1",
+  "label": "228-2500-233-1",
+  "partId": "16-tooth-sprocket-228-2500-233-305",
+  "position": [
+   -168.275,
+   40.229,
+   88.773
+  ],
+  "rotation": [
+   -180,
+   0,
+   0
+  ],
+  "visible": true
+ },
+ {
+  "instanceId": "228-2500-232-1",
+  "label": "228-2500-232-1",
+  "partId": "8-tooth-sprocket-228-2500-232-277",
+  "position": [
+   -28.575,
+   40.229,
+   88.773
+  ],
+  "rotation": [
+   -180,
+   0,
+   -65.929
+  ],
+  "visible": true
+ },
+ {
+  "instanceId": "228-2500-277-3",
+  "label": "228-2500-277-3",
+  "partId": "double-2x-wide-2x2-double-offset-corner-connector-228-2500-277-374",
+  "position": [
+   -238.127,
+   33.879,
+   -120.65
+  ],
+  "rotation": [
+   0,
+   0,
+   -90
+  ],
+  "visible": true
+ },
+ {
+  "instanceId": "228-2500-277-2",
+  "label": "228-2500-277-2",
+  "partId": "double-2x-wide-2x2-double-offset-corner-connector-228-2500-277-374",
+  "position": [
+   -79.375,
+   40.232,
+   120.65
+  ],
+  "rotation": [
+   -180,
+   0,
+   0
+  ],
+  "visible": true
+ }
+]

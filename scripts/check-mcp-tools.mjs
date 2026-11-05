@@ -1038,6 +1038,31 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   res = await callRaw('build_chain', { kind: 'track', instanceIds: ['S16', 'S32'], attachment: 'traction', attachmentEvery: 0 });
   check('build_chain rejects a spacing outside 1-20', res.isError && /from 1 to 20/.test(res.data?.error || ''), JSON.stringify(res.data));
 
+  // chain-routing-around-parts: Flop's drive (VEX CAD poses), a sprocket on both runs, an obstacle, blockedBy
+  {
+    const flop = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'fixtures', 'flop-drive-chain.json'), 'utf8'));
+    writeState({ ...emptyState(), instances: flop });
+    const drive = ['228-2500-232-2', '228-2500-233-1', '228-2500-232-1'];
+    res = await call('build_chain', { kind: 'chain', instanceIds: drive });
+    const both = res.data?.wrapped?.find((w) => w.instanceId === '228-2500-233-1');
+    check('build_chain on Flop\'s 8T-16T-8T drive: built with no route, the 16 Tooth wrapped on both runs', res.data?.ok && res.data.linkCount === 65 && both?.side === 'both', JSON.stringify({ ...res.data, audit: undefined }).slice(0, 400));
+    check(
+      '  blockedBy names the 2x20 Beam on the run leaving the 16 Tooth, and the message says it is in the way',
+      res.data?.blockedBy?.length === 1 && res.data.blockedBy[0].instanceId === '228-2500-030-2' && res.data.blockedBy[0].run?.fromId === '228-2500-233-1' && /In the way: 228-2500-030-2/.test(res.data.message),
+      JSON.stringify(res.data?.blockedBy)
+    );
+    await call('undo');
+    res = await callRaw('build_chain', { kind: 'chain', instanceIds: [...drive, '228-2500-030-2'] });
+    check('  with the beam selected: needsRoute names it', res.isError && res.data?.needsRoute?.length === 1 && res.data.needsRoute[0].instanceId === '228-2500-030-2', JSON.stringify(res.data));
+    res = await call('build_chain', { kind: 'chain', instanceIds: [...drive, '228-2500-030-2', '228-2500-277-3'], route: { '228-2500-030-2': 'under' } });
+    const ob = (id) => res.data?.obstacles?.find((o) => o.instanceId === id);
+    check(
+      '  route under: built clear of it, the beam wrapped under, the far connector out of the plane, nothing in the way',
+      res.data?.ok && ob('228-2500-030-2')?.wrapped && ob('228-2500-030-2').side === 'under' && ob('228-2500-277-3')?.reason === 'out-of-plane' && res.data.blockedBy.length === 0,
+      JSON.stringify({ obstacles: res.data?.obstacles, blockedBy: res.data?.blockedBy, error: res.data?.error })
+    );
+  }
+
   // chain-over-under: enclosed parts, route, needsRoute, standoffs, wrapped & leftOut shape
   writeState({
     ...emptyState(),

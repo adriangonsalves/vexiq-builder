@@ -9,6 +9,7 @@ import {
   auditAssembly,
   buildChain,
   buildMeshedGearTrain,
+  chainAskedFor,
   checkCandidateCollision,
   computeMateTransform,
   findMatchingPinHoles,
@@ -16,11 +17,12 @@ import {
   generateOrthographicViews,
   getCatalog,
   jointGraph,
-  mirrorSubassembly
+  mirrorSubassembly,
+  planChainFor
 } from './core.js';
 import { fitSet, fixAssembly } from './fixAssembly.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'contacts'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'contacts', 'chain_plan'];
 
 export function runAction(action, state, params = {}) {
   const { catalogById } = getCatalog();
@@ -267,6 +269,25 @@ export function runAction(action, state, params = {}) {
   // A dragged set's release fit (openspec group-snapping): the fitted poses, nothing saved
   if (action === 'fit_set') {
     return fitSet(state, { ids: params.ids, poses: params.poses });
+  }
+
+  // Chain builder's plan for the selection, built from nothing (openspec chain-routing-around-parts):
+  // what it asks over or under about, obstacles included, and for a route, the parts in its way
+  if (action === 'chain_plan') {
+    const kind = params.kind === 'track' ? 'track' : 'chain';
+    const instanceIds = Array.isArray(params.instanceIds) ? params.instanceIds : null;
+    const asked = chainAskedFor(state, { kind, instanceIds });
+    if (!asked.ok) return { ok: false, error: asked.error };
+    const plan = planChainFor(state, { kind, instanceIds, route: params.route && typeof params.route === 'object' ? params.route : null });
+    return {
+      ok: true,
+      asked: asked.asked,
+      error: plan.error || null,
+      needsRoute: plan.needsRoute || null,
+      blockedBy: plan.blockedBy || [],
+      obstacles: plan.res?.obstacles || [],
+      wrapped: plan.res?.wrapped || []
+    };
   }
 
   // What one part overlaps and what it only tight-fits against (the Inspector, openspec tight-fits)

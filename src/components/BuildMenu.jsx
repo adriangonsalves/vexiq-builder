@@ -171,16 +171,20 @@ export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'tractio
 /**
  * Chain builder's over/under dialog (openspec chain-over-under), draggable by its header over a light
  * backdrop so the highlighted part stays in view: one row per part in the chain's
- * way (an enclosed sprocket or standoff, or a crossing sprocket, whose `outside` names the answer
- * that wraps round its outside) with two toggle buttons, Under and Over, a hint, and no default. `initialRoute`
- * (Map or plain object) holds any choices remembered for the page. Hovering or focusing a row calls
+ * way (an enclosed sprocket or standoff, a crossing sprocket, or an obstacle a run would pass through
+ * (openspec chain-routing-around-parts), whose `outside` names the answer that wraps round its
+ * outside) with two toggle buttons, Under and Over, a hint, and no default. `initialRoute` (Map or
+ * plain object) holds any choices remembered for the page. Hovering or focusing a row calls
  * `onHighlight(instanceId)` so the 3D view highlights that part; the first row is highlighted on
- * open. Build is enabled only when every row has a choice.
+ * open. Once every row has a choice, `checkRoute(choices)` (async: { error, inTheWay: [labels] })
+ * names the parts the chain would still pass through. Build is enabled only when every row has a
+ * choice; `onBuild(choices)` may return (or resolve to) a reason the route can't work.
  */
-export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onHighlight, onClose, onBuild }) {
+export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onHighlight, onClose, onBuild, checkRoute = null }) {
   const ref = useRef(null);
   const [choices, setChoices] = useState({});
   const [error, setError] = useState(null);
+  const [inTheWay, setInTheWay] = useState([]);
   const drag = useDialogDrag(ref);
 
   useEffect(() => {
@@ -222,6 +226,23 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
   const allChosen =
     enclosed.length > 0 && enclosed.every((item) => choices[item.instanceId] === 'over' || choices[item.instanceId] === 'under');
 
+  // With every answer given: what the chain would still pass through
+  const choicesKey = JSON.stringify(choices);
+  useEffect(() => {
+    if (!open || !allChosen || !checkRoute) {
+      setInTheWay([]);
+      return undefined;
+    }
+    let live = true;
+    checkRoute(choices)
+      .then((r) => live && setInTheWay(r?.error ? [] : r?.inTheWay || []))
+      .catch(() => live && setInTheWay([]));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, allChosen, choicesKey, checkRoute]);
+
   const pick = (instanceId, side) => {
     setChoices((prev) => ({ ...prev, [instanceId]: side }));
     setError(null);
@@ -252,7 +273,11 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
               <span className="settings-row-text">
                 <span className="settings-row-label">{item.label}</span>
                 <span className="settings-row-hint">
-                  {item.outside ? `${item.outside === 'over' ? 'Over' : 'Under'} wraps round its outside` : 'Inside the loop'}
+                  {item.kind === 'obstacle'
+                    ? `In a run's way; ${item.outside === 'over' ? 'Over' : 'Under'} goes round its outside`
+                    : item.outside
+                      ? `${item.outside === 'over' ? 'Over' : 'Under'} wraps round its outside`
+                      : 'Inside the loop'}
                 </span>
               </span>
               <div role="group" aria-label={`Route for ${item.label}`} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -282,6 +307,11 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
             {error} Change an answer and build again.
           </p>
         )}
+        {!error && inTheWay.length > 0 && (
+          <p className="settings-note chain-route-in-the-way">
+            In the way: {inTheWay.join(', ')}. The chain would pass through {inTheWay.length === 1 ? 'it' : 'them'}; select {inTheWay.length === 1 ? 'it' : 'them'} with the sprockets to bend round {inTheWay.length === 1 ? 'it' : 'them'}.
+          </p>
+        )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
           <button type="button" className="btn btn-outline" onClick={() => ref.current?.close()}>
             Cancel
@@ -290,10 +320,10 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
             type="button"
             className={`btn ${allChosen ? 'active' : 'btn-outline'}`}
             disabled={!allChosen}
-            onClick={() => {
+            onClick={async () => {
               if (!allChosen) return;
               // onBuild returns a reason when the route can't work: stay open to change an answer
-              const refused = onBuild?.(choices);
+              const refused = await onBuild?.(choices);
               if (typeof refused === 'string') {
                 setError(refused);
                 return;

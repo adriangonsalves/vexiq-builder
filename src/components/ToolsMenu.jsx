@@ -12,7 +12,7 @@ import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.j
  * view (ticked while open), and Blueprint shows the 3-view drawing on its own. Explode
  * (formerly a toolbar button; shortcut X) opens or closes the Explode panel and shows a tick while it is open.
  */
-export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, exploded = false, auditOpen = false, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack }) {
+export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack }) {
   const buttonRef = useRef(null);
   const [at, setAt] = useState(null);
   const close = useCallback(() => setAt(null), []);
@@ -31,6 +31,8 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, aud
   const fixOff = disabledReason || fixReason;
   const auditOff = disabledReason || auditReason;
   const chainOff = disabledReason || (chainCheck?.ok ? null : chainCheck?.error || 'Select two or more sprockets in one plane.');
+  // Parts a run would pass through (openspec chain-routing-around-parts): select one to bend round it
+  const inTheWay = chainInTheWay.length ? ` In the way: ${chainInTheWay.join(', ')}; select it to bend the chain round it.` : '';
   return (
     <>
       <button
@@ -85,10 +87,10 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, aud
           </MenuItem>
           <MenuDivider />
           <MenuHeading>Build</MenuHeading>
-          <MenuItem icon={Link2} disabled={Boolean(chainOff)} onSelect={choose(onChain)} title={chainOff || 'Wrap a loop of Chain Links round the selected sprockets'}>
+          <MenuItem icon={Link2} disabled={Boolean(chainOff)} onSelect={choose(onChain)} title={chainOff || `Wrap a loop of Chain Links round the selected sprockets.${inTheWay}`}>
             Chain builder
           </MenuItem>
-          <MenuItem disabled={Boolean(chainOff)} onSelect={choose(onTrack)} title={chainOff || 'Wrap a tank track round the selected sprockets, with rubber grippers if you like'}>
+          <MenuItem disabled={Boolean(chainOff)} onSelect={choose(onTrack)} title={chainOff || `Wrap a tank track round the selected sprockets, with rubber grippers if you like.${inTheWay}`}>
             Track builder…
           </MenuItem>
           {disabledReason && <div className="popover-note">{disabledReason}</div>}
