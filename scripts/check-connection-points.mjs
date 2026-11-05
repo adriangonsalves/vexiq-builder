@@ -61,6 +61,36 @@ const show = (ports) => JSON.stringify(ports.map((p) => [p.portId, p.origin, p.f
   check('  a 1x1 Connector Pin pushed into it counts as seated in it', joint?.seatedIn.some((s) => s.instanceId === 'msc' && s.ports.includes(bore.portId)), JSON.stringify(joint));
 }
 
+// --- Standoff Extender: a standoff goes into its end, and the two join the parts at both ends ----------
+{
+  const ext = part('0.5x Pitch Standoff Extender');
+  const hole = ext.ports.find((p) => p.type === 'pin_hole');
+  const peg = ext.ports.find((p) => p.type === 'pin_peg');
+  check('Standoff Extender has a pin hole in its body end, and its peg stops where the hole begins', hole?.faces?.join() === '-z' && peg && peg.spanMm[0] >= hole.spanMm[1] - 0.01, JSON.stringify(ext.ports));
+  // Herobot Flop's intake: an 8x Pitch Standoff into an extender whose pin sits in a 2x2 plate hole
+  const r = placeParts({ instances: [] }, [
+    { ref: 'upper', partQuery: '1x6 Beam', label: 'Upper Beam', position: [0, 0, 0] },
+    { ref: 'ext', partQuery: ext.name, label: 'Extender', insert: { sourcePort: peg.portId, into: { ref: 'upper', port: 'hole_2' }, fromSide: '-' } }
+  ]);
+  const extInst = r.instances?.find((i) => i.label === 'Extender');
+  const so = part('1x Pitch Standoff');
+  const m = buildWorldMatrix(extInst.position, extInst.rotation);
+  const holeFace = new THREE.Vector3(...hole.origin).applyMatrix4(m);
+  const down = new THREE.Vector3(0, 0, 1).transformDirection(m);
+  // The standoff's top pin in the extender's hole, its body hanging below; a lower beam on its bottom pin
+  const top = so.ports.find((p) => p.type === 'pin_peg').spanMm[1];
+  const soPos = holeFace.clone().addScaledVector(down, -(top - 5.25 - 0.01)).toArray();
+  const soInst = { instanceId: 'so', partId: so.id, label: 'Standoff', position: soPos, rotation: extInst.rotation };
+  const lower = { instanceId: 'lower', partId: part('1x6 Beam').id, label: 'Lower Beam', position: [0, 0, Number((soPos[2] - (so.bbox.min[2] + 3.6) * -down.z).toFixed(3))], rotation: [0, 0, 0] };
+  const audit = auditAssembly({ instances: [...r.instances, soInst, lower] });
+  const joint = audit.joints.find((j) => j.label === 'Standoff');
+  check(
+    '  a standoff in the extender is seated in it, and the stack joins both beams (not half-seated)',
+    joint?.seatedIn.some((s) => s.part === 'Extender' && s.fastener) && !audit.halfSeatedFasteners.some((f) => ['Standoff', 'Extender'].includes(f.label)) && audit.disconnectedIslandCount === 0,
+    JSON.stringify({ joints: audit.joints, half: audit.halfSeatedFasteners.map((f) => f.label), islands: audit.disconnectedIslands })
+  );
+}
+
 // --- Shafts have an axis -------------------------------------------------------------------------
 {
   const motorShaft = part('4x Pitch Motor Shaft');

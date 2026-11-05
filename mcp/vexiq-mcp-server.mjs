@@ -636,6 +636,7 @@ const TOOLS = [
         },
         dryRun: { type: 'boolean', default: false, description: 'Check only: same reply (with poses), nothing saved.' },
         rejectIntersecting: { type: 'boolean', default: false, description: 'Save nothing if any item overlaps another part.' },
+        keepPoses: { type: 'boolean', default: false, description: 'Place items given by position exactly as given: no turning to mesh gears or fit square holes (for poses taken from CAD).' },
         mirror: {
           type: 'object',
           description: 'Also place every item mirrored across this plane.',
@@ -1799,7 +1800,7 @@ async function executeTool(name, args = {}) {
   if (name === 'place_parts') {
     const state = readAssemblyState();
     const dryRun = Boolean(args.dryRun);
-    const result = placeParts(state, args.parts, { mirror: args.mirror });
+    const result = placeParts(state, args.parts, { mirror: args.mirror, keepPoses: Boolean(args.keepPoses) });
     if (result.error) {
       const { index, ref, reason } = result.error;
       const where = index == null ? '' : `item ${index}${ref ? ` (ref "${ref}")` : ''}: `;

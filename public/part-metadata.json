@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-11-05T01:47:33.997Z",
+  "generatedAt": "2026-11-05T02:44:48.885Z",
   "partCount": 480,
-  "totalVerifiedPorts": 4228,
+  "totalVerifiedPorts": 4232,
   "parts": {
     "5x-pitch-idler-pulley-228-2500-1413-0": {
       "id": "5x-pitch-idler-pulley-228-2500-1413-0",
@@ -239,20 +239,20 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 1,
-        "pinHoles": 0,
+        "total": 2,
+        "pinHoles": 1,
         "shaftBores": 0,
         "pinPegs": 1,
         "shafts": 0
       },
       "ports": [
         {
-          "portId": "peg.+z.0_0_-78739",
+          "portId": "peg.thru.0_0_1",
           "type": "pin_peg",
           "origin": [
             0,
             0,
-            -249997.28
+            2.615
           ],
           "axis": [
             0,
@@ -260,18 +260,50 @@
             1
           ],
           "spanMm": [
-            -500000,
+            -0.21,
             5.439
           ],
           "verified": true,
           "shape": "round",
           "faces": [
-            "+z"
+            "+z",
+            "-z"
           ],
           "kind": "peg",
           "aliases": [
+            "peg.+z.0_0_-78739",
             "peg_1"
           ]
+        },
+        {
+          "portId": "hole.-z.0_0_-2",
+          "type": "pin_hole",
+          "origin": [
+            0,
+            0,
+            -5.46
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            -5.46,
+            -0.21
+          ],
+          "pitchCoord": [
+            0,
+            0,
+            -0.43
+          ],
+          "verified": true,
+          "shape": "round",
+          "faces": [
+            "-z"
+          ],
+          "kind": "hole"
         }
       ]
     },
@@ -1885,7 +1917,7 @@
           "through": true,
           "spanMm": [
             -22.481,
-            -0.889
+            4.38
           ],
           "pitchCoord": [
             0,
@@ -1945,8 +1977,8 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
-            -0.125
+            -6.22,
+            4.38
           ],
           "pitchCoord": [
             0,
@@ -2061,7 +2093,7 @@
           "through": true,
           "spanMm": [
             -27.161,
-            -0.889
+            4.38
           ],
           "pitchCoord": [
             0,
@@ -2122,7 +2154,7 @@
           "through": true,
           "spanMm": [
             -6.225,
-            -0.125
+            4.37
           ],
           "pitchCoord": [
             0.5,
@@ -2183,7 +2215,7 @@
           "through": true,
           "spanMm": [
             -6.225,
-            -0.125
+            4.37
           ],
           "pitchCoord": [
             -0.5,
@@ -2217,7 +2249,7 @@
           "through": true,
           "spanMm": [
             -6.225,
-            -0.889
+            4.37
           ],
           "pitchCoord": [
             0,
@@ -6272,7 +6304,7 @@
           "through": true,
           "spanMm": [
             -5.462,
-            -0.889
+            2.29
           ],
           "pitchCoord": [
             2.5,
@@ -13442,7 +13474,7 @@
           "through": true,
           "spanMm": [
             -6.201,
-            8.98
+            6.2
           ],
           "pitchCoord": [
             -0.5,
@@ -13476,7 +13508,7 @@
           "through": true,
           "spanMm": [
             -6.201,
-            8.98
+            6.2
           ],
           "pitchCoord": [
             0.5,
@@ -15903,7 +15935,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.125
           ],
           "pitchCoord": [
@@ -15937,7 +15969,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.889
           ],
           "pitchCoord": [
@@ -15971,7 +16003,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.125
           ],
           "pitchCoord": [
@@ -16032,7 +16064,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.889
           ],
           "pitchCoord": [
@@ -16066,7 +16098,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.889
           ],
           "pitchCoord": [
@@ -16412,7 +16444,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.889
           ],
           "pitchCoord": [
@@ -16446,7 +16478,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.889
           ],
           "pitchCoord": [
@@ -16534,7 +16566,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.889
           ],
           "pitchCoord": [
@@ -16568,7 +16600,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.125
           ],
           "pitchCoord": [
@@ -16602,7 +16634,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.889
           ],
           "pitchCoord": [
@@ -16636,7 +16668,7 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
+            -6.22,
             -0.125
           ],
           "pitchCoord": [
@@ -19105,7 +19137,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.03,
             2.286
           ],
           "pitchCoord": [
@@ -19233,7 +19265,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.03,
             2.286
           ],
           "pitchCoord": [
@@ -19362,7 +19394,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.03,
             2.286
           ],
           "pitchCoord": [
@@ -19593,7 +19625,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.03,
             2.286
           ],
           "pitchCoord": [
@@ -20951,7 +20983,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.03,
             2.286
           ],
           "pitchCoord": [
@@ -21179,7 +21211,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.03,
             2.286
           ],
           "pitchCoord": [
@@ -21475,7 +21507,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.03,
             2.286
           ],
           "pitchCoord": [
@@ -21774,7 +21806,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.03,
             2.286
           ],
           "pitchCoord": [
@@ -29359,7 +29391,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.05,
             2.286
           ],
           "pitchCoord": [
@@ -29393,7 +29425,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.05,
             2.286
           ],
           "pitchCoord": [
@@ -29427,7 +29459,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.05,
             2.286
           ],
           "pitchCoord": [
@@ -29461,7 +29493,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.05,
             2.286
           ],
           "pitchCoord": [
@@ -29495,7 +29527,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.05,
             3.05
           ],
           "pitchCoord": [
@@ -29529,7 +29561,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.05,
             3.05
           ],
           "pitchCoord": [
@@ -29563,7 +29595,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.05,
             2.286
           ],
           "pitchCoord": [
@@ -29597,7 +29629,7 @@
           ],
           "through": true,
           "spanMm": [
-            1,
+            -3.05,
             2.286
           ],
           "pitchCoord": [
@@ -43469,7 +43501,7 @@
           ],
           "through": true,
           "spanMm": [
-            -5.35,
+            -9.4,
             -4.064
           ],
           "pitchCoord": [
@@ -43537,7 +43569,7 @@
           ],
           "through": true,
           "spanMm": [
-            -5.35,
+            -9.4,
             -3.3
           ],
           "pitchCoord": [
@@ -43571,7 +43603,7 @@
           ],
           "through": true,
           "spanMm": [
-            -5.35,
+            -9.4,
             -3.3
           ],
           "pitchCoord": [
@@ -62533,7 +62565,7 @@
           ],
           "through": true,
           "spanMm": [
-            -5.35,
+            -9.4,
             -3.3
           ],
           "pitchCoord": [
@@ -62601,7 +62633,7 @@
           ],
           "through": true,
           "spanMm": [
-            -5.35,
+            -9.4,
             -3.3
           ],
           "pitchCoord": [
@@ -62635,7 +62667,7 @@
           ],
           "through": true,
           "spanMm": [
-            -5.35,
+            -9.4,
             -4.064
           ],
           "pitchCoord": [
@@ -82640,13 +82672,74 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 0,
-        "pinHoles": 0,
+        "total": 2,
+        "pinHoles": 2,
         "shaftBores": 0,
         "pinPegs": 0,
         "shafts": 0
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "hole.+z.0_0_4",
+          "type": "pin_hole",
+          "origin": [
+            0,
+            0,
+            11.9
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            9.4,
+            11.9
+          ],
+          "pitchCoord": [
+            0,
+            0,
+            0.94
+          ],
+          "verified": true,
+          "shape": "round",
+          "faces": [
+            "+z"
+          ],
+          "kind": "hole"
+        },
+        {
+          "portId": "hole.-z.0_0_1",
+          "type": "pin_hole",
+          "origin": [
+            0,
+            0,
+            3.9
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            3.9,
+            6.4
+          ],
+          "pitchCoord": [
+            0,
+            0,
+            0.31
+          ],
+          "verified": true,
+          "shape": "round",
+          "faces": [
+            "-z"
+          ],
+          "kind": "hole"
+        }
+      ]
     },
     "6x-pitch-flywheel-75-g-228-2500-1402-264": {
       "id": "6x-pitch-flywheel-75-g-228-2500-1402-264",
@@ -115593,7 +115686,7 @@
           ],
           "through": true,
           "spanMm": [
-            2.286,
+            -3.11,
             16.428
           ],
           "pitchCoord": [
@@ -117542,7 +117635,7 @@
           "through": true,
           "spanMm": [
             -3.175,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0.5,
@@ -117576,7 +117669,7 @@
           "through": true,
           "spanMm": [
             -3.175,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0.5,
@@ -117610,7 +117703,7 @@
           "through": true,
           "spanMm": [
             -3.175,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -0.5,
@@ -117644,7 +117737,7 @@
           "through": true,
           "spanMm": [
             -3.175,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -0.5,
@@ -120233,7 +120326,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -0.5,
@@ -120267,7 +120360,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0.5,
@@ -120301,7 +120394,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0.5,
@@ -120335,7 +120428,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -0.5,
@@ -122763,7 +122856,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -1,
@@ -122797,7 +122890,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -0.5,
@@ -122831,7 +122924,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0,
@@ -122865,7 +122958,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -0.5,
@@ -122899,7 +122992,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0.5,
@@ -122933,7 +123026,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0.5,
@@ -122967,7 +123060,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             1,
@@ -123001,7 +123094,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0,
@@ -123987,7 +124080,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -0.5,
@@ -124021,7 +124114,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0,
@@ -124157,7 +124250,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0.5,
@@ -124259,7 +124352,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             1,
@@ -124293,7 +124386,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -1,
@@ -124361,7 +124454,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -1,
@@ -124429,7 +124522,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -0.5,
@@ -124497,7 +124590,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0.5,
@@ -124531,7 +124624,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             -1,
@@ -124565,7 +124658,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             1,
@@ -124599,7 +124692,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             0,
@@ -124633,7 +124726,7 @@
           "through": true,
           "spanMm": [
             -2.286,
-            2.286
+            5.46
           ],
           "pitchCoord": [
             1,
@@ -125560,8 +125653,8 @@
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 4,
-        "pinHoles": 2,
+        "total": 5,
+        "pinHoles": 3,
         "shaftBores": 0,
         "pinPegs": 2,
         "shafts": 0
@@ -125602,12 +125695,12 @@
           ]
         },
         {
-          "portId": "peg.thru.0_0_78739",
+          "portId": "peg.thru.0_0_0",
           "type": "pin_peg",
           "origin": [
             0,
             0,
-            249996.38
+            -1.28
           ],
           "axis": [
             0,
@@ -125615,8 +125708,8 @@
             1
           ],
           "spanMm": [
-            -7.239,
-            500000
+            -6.56,
+            4
           ],
           "verified": true,
           "shape": "round",
@@ -125626,6 +125719,7 @@
           ],
           "kind": "peg",
           "aliases": [
+            "peg.thru.0_0_78739",
             "peg_1"
           ]
         },
@@ -125684,6 +125778,36 @@
           "shape": "round",
           "faces": [
             "+x"
+          ],
+          "kind": "hole"
+        },
+        {
+          "portId": "hole.-z.0_0_-4",
+          "type": "pin_hole",
+          "origin": [
+            0,
+            0,
+            -11.81
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": false,
+          "spanMm": [
+            -11.81,
+            -6.56
+          ],
+          "pitchCoord": [
+            0,
+            0,
+            -0.93
+          ],
+          "verified": true,
+          "shape": "round",
+          "faces": [
+            "-z"
           ],
           "kind": "hole"
         }
@@ -129031,7 +129155,7 @@
           ],
           "through": true,
           "spanMm": [
-            2.286,
+            -2.29,
             6.525
           ],
           "pitchCoord": [
@@ -129065,7 +129189,7 @@
           ],
           "through": true,
           "spanMm": [
-            2.286,
+            -2.29,
             6.525
           ],
           "pitchCoord": [
@@ -129679,7 +129803,7 @@
           "through": true,
           "spanMm": [
             -6.226,
-            -0.889
+            4.38
           ],
           "pitchCoord": [
             0,
@@ -129740,7 +129864,7 @@
           "through": true,
           "spanMm": [
             -6.226,
-            -0.889
+            4.37
           ],
           "pitchCoord": [
             0,
@@ -129774,7 +129898,7 @@
           "through": true,
           "spanMm": [
             -6.226,
-            -0.889
+            4.37
           ],
           "pitchCoord": [
             0,
@@ -129808,7 +129932,7 @@
           "through": true,
           "spanMm": [
             -6.226,
-            -0.889
+            4.37
           ],
           "pitchCoord": [
             0,
@@ -136731,7 +136855,7 @@
           "through": true,
           "spanMm": [
             -5.462,
-            0.889
+            5.46
           ],
           "pitchCoord": [
             0,
@@ -145894,7 +146018,7 @@
           "through": true,
           "spanMm": [
             -105.593,
-            -2.05
+            0
           ],
           "pitchCoord": [
             -0.41,
@@ -145962,7 +146086,7 @@
           "through": true,
           "spanMm": [
             -101.6,
-            -2.05
+            0
           ],
           "pitchCoord": [
             -0.41,
@@ -145996,7 +146120,7 @@
           "through": true,
           "spanMm": [
             -101.6,
-            -2.05
+            0
           ],
           "pitchCoord": [
             -0.41,
@@ -146030,7 +146154,7 @@
           "through": true,
           "spanMm": [
             -10.407,
-            -2.05
+            0
           ],
           "pitchCoord": [
             -0.41,
@@ -146064,7 +146188,7 @@
           "through": true,
           "spanMm": [
             -101.6,
-            -2.05
+            0
           ],
           "pitchCoord": [
             -0.41,
@@ -146166,7 +146290,7 @@
           "through": true,
           "spanMm": [
             -10.407,
-            -2.05
+            0
           ],
           "pitchCoord": [
             -0.41,
@@ -147362,8 +147486,8 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
-            -0.125
+            -6.22,
+            3.17
           ],
           "pitchCoord": [
             -1.5,
@@ -147464,8 +147588,8 @@
           ],
           "through": true,
           "spanMm": [
-            -2.175,
-            -0.125
+            -6.22,
+            3.17
           ],
           "pitchCoord": [
             1.5,

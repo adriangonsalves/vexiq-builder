@@ -10,7 +10,7 @@ import {
   buildWorldMatrix,
   VEX_PITCH_MM
 } from '../mcp/assembly-engine.mjs';
-import { getLocalFeatures, measurePinEnds, SHAFT_FASTENER_TYPES } from '../src/utils/pinHoleAlignment.js';
+import { getLocalFeatures, measurePinEnds, SHAFT_FASTENER_TYPES, THIN_PART_MAX_MM } from '../src/utils/pinHoleAlignment.js';
 import {
   measureMotorHub,
   measureOpeningShape,
@@ -635,6 +635,7 @@ function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasu
 const FACE_TOL_MM = 0.3; // a hole's surfaces within this of a face of the part's box reach that face
 const QUARTER_PITCH_MM = VEX_PITCH_MM / 4;
 const MINI_STANDOFF_CONNECTOR = '228-2500-170';
+const MISSING_HOLE_MM = 2; // a through hole listed this far short of a face may run on to it
 const PEG_INTO_LINK_MAX_MM = 6; // an attachment's peg reaches at most this far into a tread link hole
 
 const signedAxisName = (axis, sign = 1) => {
@@ -712,6 +713,64 @@ function addFaceHoles(part, groups, ports, refPinBvh, partBvh) {
         foundFrom: 'face'
       });
     }
+  }
+}
+
+const lineOf = (origin, axis) => ({ axis, perpOrigin: origin.map((v, i) => v - along(origin, axis) * axis[i]) });
+
+/** A pin hole in an end of a pin or standoff part along its Z axis, where a pin goes in at least 2.5 mm between walls. */
+function addEndHoles(part, ports, refPinBvh, partBvh) {
+  if (part.category !== 'Pins & Standoffs') return;
+  const g = lineOf([0, 0, 0], [0, 0, 1]);
+  for (const [faceT, out] of [[part.bbox.max[2], 1], [part.bbox.min[2], -1]]) {
+    if (ports.some((p) => p.type === 'pin_hole' && isParallel(p.axis, g.axis) && perpDistance(p.origin, [0, 0, 0], g.axis) < 0.5 && Math.abs(along(p.origin, g.axis) - faceT) < 1)) continue;
+    const { depth, walled } = pinDepthFrom(g, faceT, out, refPinBvh, partBvh);
+    if (depth < 2.5 || !walled) continue;
+    // The part's own peg on this line ends where the hole begins
+    const holeEnd = faceT - out * depth;
+    for (const q of ports) {
+      if (q.type !== 'pin_peg' || !isParallel(q.axis, g.axis) || perpDistance(q.origin, [0, 0, 0], g.axis) >= 0.5) continue;
+      const span = (q.spanMm || [part.bbox.min[2], part.bbox.max[2]]).map((t) => Math.max(part.bbox.min[2], Math.min(part.bbox.max[2], t)));
+      if (out < 0) span[0] = Math.max(span[0], holeEnd);
+      else span[1] = Math.min(span[1], holeEnd);
+      q.spanMm = span.map((t) => Number(t.toFixed(3)));
+      q.origin = [0, 0, Number(((span[0] + span[1]) / 2).toFixed(3))];
+    }
+    ports.push({
+      portId: null,
+      type: 'pin_hole',
+      origin: [0, 0, Number(faceT.toFixed(3))],
+      axis: [0, 0, 1],
+      through: false,
+      spanMm: [faceT - out * depth, faceT].sort((a, b) => a - b).map((t) => Number(t.toFixed(3))),
+      pitchCoord: [0, 0, Number((faceT / VEX_PITCH_MM).toFixed(2))],
+      verified: true
+    });
+  }
+}
+
+/**
+ * A through hole whose listed length (from its STEP surfaces) stops short of one of the part's faces
+ * runs on to that face when a pin pushed in from the face reaches the listed part.
+ */
+function extendThroughHoles(part, ports, refPinBvh, partBvh) {
+  for (const p of ports) {
+    if (p.type !== 'pin_hole' || !p.through || !p.spanMm?.every((t) => Math.abs(t) < 1000)) continue;
+    // A peg on the same line (a corner connector's) fills the rest of it
+    if (ports.some((q) => q.type === 'pin_peg' && isParallel(q.axis, p.axis) && perpDistance(q.origin, p.origin, p.axis) < 0.5)) continue;
+    const g = lineOf(p.origin, p.axis);
+    const [lo, hi] = boxRangeAlong(part.bbox, p.axis);
+    // Through holes of thinner parts already run their whole thickness (getLocalFeatures)
+    if (hi - lo <= THIN_PART_MAX_MM) continue;
+    const span = [...p.spanMm];
+    for (const [faceT, out, k] of [[hi, 1, 1], [lo, -1, 0]]) {
+      // A short gap is the recess round a hole's rim, kept as it is
+      const gap = Math.abs(faceT - span[k]);
+      if (gap < MISSING_HOLE_MM) continue;
+      const { depth } = pinDepthFrom(g, faceT, out, refPinBvh, partBvh);
+      if (depth >= gap - FACE_TOL_MM) span[k] = Number(faceT.toFixed(3));
+    }
+    p.spanMm = span;
   }
 }
 
@@ -1175,6 +1234,10 @@ async function main() {
     if (part.partNumber === MINI_STANDOFF_CONNECTOR) {
       for (const port of ports) if (port.type === 'shaft_bore') port.type = 'pin_hole';
     }
+    // 5b. A pin hole in the end of a standoff part (the Standoff Extender's body end), and through
+    // holes whose listed length stops short of a face a pin goes in from (Cable Anchor)
+    addEndHoles(part, ports, refPinBvh, partBvh);
+    extendThroughHoles(part, ports, refPinBvh, partBvh);
     // 6. Intake flaps and grippers: the pegs that plug into a tread link's attachment holes
     addAttachmentPegs(part, ports);
 

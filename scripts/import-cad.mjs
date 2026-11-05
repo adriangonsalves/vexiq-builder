@@ -230,7 +230,8 @@ export async function placeItems(items, { clear = false, env } = {}) {
     for (let i = 0; i < items.length; i += BATCH) {
       const batch = items.slice(i, i + BATCH);
       const res = await mcp.call('place_parts', {
-        parts: batch.map(({ partQuery, label, position, rotation }) => ({ partQuery, label, position, rotation }))
+        parts: batch.map(({ partQuery, label, position, rotation }) => ({ partQuery, label, position, rotation })),
+        keepPoses: true
       });
       res.parts.forEach((p, k) => {
         const sub = batch[k].subassembly;

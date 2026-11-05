@@ -705,10 +705,19 @@ function findJoints(state) {
   // What each fastener is seated in; integral pegs (e.g. corner connector pegs) join parts directly
   const seatedIn = new Map(fasteners.map((f) => [f.inst.instanceId, new Map()])); // fastener -> partId -> [ports]
   const directJoints = []; // [holderId, otherId] from integral pegs and parts held on parts
+  // Fasteners plugged into each other (a standoff in a Standoff Extender): one stack, which joins
+  // every part any of its members is seated in
+  const fastenerIn = new Map(fasteners.map((f) => [f.inst.instanceId, new Map()])); // fastener -> fastener -> [ports]
   for (const p of seatedPairs) {
     const insertIsFastener = fastenerById.has(p.insertOwner);
     const openingIsFastener = fastenerById.has(p.openingOwner);
-    if (insertIsFastener && !openingIsFastener) {
+    if (insertIsFastener && openingIsFastener && p.insertOwner !== p.openingOwner) {
+      for (const [a, b] of [[p.insertOwner, p.openingOwner], [p.openingOwner, p.insertOwner]]) {
+        const m = fastenerIn.get(a);
+        if (!m.has(b)) m.set(b, []);
+        m.get(b).push(p.opening.featureId);
+      }
+    } else if (insertIsFastener && !openingIsFastener) {
       const ports = seatedIn.get(p.insertOwner);
       if (!ports.has(p.openingOwner)) ports.set(p.openingOwner, []);
       ports.get(p.openingOwner).push(p.opening.featureId);
@@ -752,11 +761,29 @@ function findJoints(state) {
     return out.sort((a, b) => a.lineMm + a.angleDeg * 0.2 - (b.lineMm + b.angleDeg * 0.2));
   };
 
+  // The parts a fastener's whole stack is seated in
+  const stackPartners = (id) => {
+    const seen = new Set([id]);
+    const queue = [id];
+    const parts = new Set();
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const partId of seatedIn.get(cur).keys()) parts.add(partId);
+      for (const next of fastenerIn.get(cur).keys()) if (!seen.has(next)) seen.add(next) && queue.push(next);
+    }
+    return [...parts];
+  };
+
   for (const f of fasteners) {
     const ports = seatedIn.get(f.inst.instanceId);
-    const partners = [...ports.keys()];
-    const seatedList = partners.map((id) => ({ part: labelOf(id), instanceId: id, ports: ports.get(id) }));
+    const own = [...ports.keys()];
+    const viaFasteners = [...fastenerIn.get(f.inst.instanceId)];
+    const seatedList = [
+      ...own.map((id) => ({ part: labelOf(id), instanceId: id, ports: ports.get(id) })),
+      ...viaFasteners.map(([id, ids]) => ({ part: labelOf(id), instanceId: id, ports: ids, fastener: true }))
+    ];
     joints.push({ instanceId: f.inst.instanceId, label: f.inst.label, seatedIn: seatedList });
+    const partners = viaFasteners.length ? stackPartners(f.inst.instanceId) : own;
     if (partners.length <= 1) {
       // Holes this fastener nearly sits in (a little off their line), so the report can say which and by how much
       const nearMiss = nearMissesFor(f, new Set(partners));
@@ -766,8 +793,8 @@ function findJoints(state) {
         halfSeatedFasteners.push({ instanceId: f.inst.instanceId, label: f.inst.label, seatedIn: seatedList, nearMiss });
       }
     } else {
+      for (const id of own) fastenerCountByPartInstance.set(id, (fastenerCountByPartInstance.get(id) || 0) + 1);
       for (let i = 0; i < partners.length; i++) {
-        fastenerCountByPartInstance.set(partners[i], (fastenerCountByPartInstance.get(partners[i]) || 0) + 1);
         for (let j = i + 1; j < partners.length; j++) link(partners[i], partners[j], false);
       }
     }
@@ -920,6 +947,7 @@ function findJoints(state) {
     labelOf,
     seatedPairs,
     seatedIn,
+    fastenerIn,
     fastenerCountByPartInstance,
     floatingFasteners,
     halfSeatedFasteners,
@@ -940,6 +968,7 @@ function findJoints(state) {
 function graphFromJoints(found, { pinnedOnly = false } = {}) {
   const edges = [];
   for (const [fastenerId, ports] of found.seatedIn) for (const partId of ports.keys()) edges.push([fastenerId, partId]);
+  for (const [a, others] of found.fastenerIn) for (const b of others.keys()) if (a < b) edges.push([a, b]);
   const seen = new Set();
   // Pinned only: a pin, shaft or peg in a hole; no gear meshes, battery bays or parts that only touch
   for (const [a, b] of pinnedOnly ? found.directJoints : found.directEdges) {
@@ -2360,7 +2389,11 @@ export function placeParts(state, items, options = {}) {
 
     working.push(inst);
     // The placement step: square fit, mesh, shaft groups, motor hubs (openspec gear-meshing)
-    const settled = settlePlacedInstance(inst, working, item.insert ? resolveInstance(item.insert.into)?.instanceId : null);
+    // keepPoses (poses taken from CAD): an absolute item stays exactly as given, not turned to mesh or fit
+    const settled =
+      options.keepPoses && !item.insert
+        ? { patches: [], messages: [] }
+        : settlePlacedInstance(inst, working, item.insert ? resolveInstance(item.insert.into)?.instanceId : null);
     const own = settled.patches.find((p) => p.instanceId === inst.instanceId);
     if (own) Object.assign(inst, own);
     const others = settled.patches.filter((p) => p.instanceId !== inst.instanceId);
