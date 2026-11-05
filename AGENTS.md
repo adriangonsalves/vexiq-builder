@@ -26,3 +26,9 @@ The MCP server sends the section between the markers below to every client when 
 - `mirror_subassembly` (or `place_parts` with `mirror`) builds the second side; still look at it, since a part whose left and right versions differ can only be turned to the closest pose.
 - Converting new parts: put the STEP file in `VEX-IQ-All-Parts/`, then `npm run convert` and `npm run index-metadata`. In a git worktree, link `VEX-IQ-All-Parts/` and `VEX-IQ-All-Control/` from the main checkout first, or the catalog is rewritten empty.
 - Checks: `node scripts/check-*.mjs` (each exits 1 on failure).
+
+## Importing VEX CAD
+
+- `node scripts/import-cad.mjs <instructions.online link or project id> --clear` builds an official VEX CAD robot through the MCP server; `--dry-run` only prints the report. Read the report: parts left out, duplicates dropped, and part types placed by an unchecked rule.
+- How each part sits in VEX's CAD is data in `public/cad-frames.json`, not code. For a new robot, run `node scripts/fit-cad-frames.mjs <project>` first: it compares every entry with VEX's own part meshes and adds `mesh` entries for part types the table lacks (`--write`). On Flop it found three wrong hand entries (the Long Intake Flap and two capped shafts), so trust it over a guess, then check the result on the robot (pins seated, no overlaps).
+- Imported parts that overlap stay where they are with a warning; tight fits (up to 0.5 mm, common in VEX CAD) aren't overlaps. Port ids are stable (`hole.+y.-2_8_-2`); old ids such as `hole_14` still work.

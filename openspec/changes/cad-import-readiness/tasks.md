@@ -41,5 +41,5 @@
 
 ## 5. Wrap-up
 
-- [ ] 5.1 Add a short "Importing VEX CAD" section to `AGENTS.md`, and the new behaviour to `features.md`.
-- [ ] 5.2 Run every `node scripts/check-*.mjs` and `npm run build`. Verify all pass.
+- [x] 5.1 Add a short "Importing VEX CAD" section to `AGENTS.md`, and the new behaviour to `features.md`.
+- [x] 5.2 Run every `node scripts/check-*.mjs` and `npm run build`. Verify all pass.
