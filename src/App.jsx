@@ -291,6 +291,9 @@ export default function App() {
   // The build being worked on (openspec build-library): { id, name }, shared through the saved state
   const [currentBuild, setCurrentBuild] = useState(null);
   const currentBuildRef = useRef(null);
+  // Parts the user is placing right now (a library drop, a drag, a hole-pick insert, a copy or
+  // clone): the only ones moved back, or removed, if they still overlap when the selection changes
+  const placingIdsRef = useRef(new Set());
   currentBuildRef.current = currentBuild;
   const lastPostedBuildIdRef = useRef(null); // the build the bridge last got from this tab
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -411,6 +414,7 @@ export default function App() {
   /** Takes parts (and history, when present) that came from the server: MCP, smart actions, startup. */
   const adoptServerState = useCallback((state) => {
     if (!state || !Array.isArray(state.instances)) return;
+    placingIdsRef.current = new Set();
     // Another tab or the assistant switched or renamed the current build
     if (state.build?.id && (state.build.id !== currentBuildRef.current?.id || state.build.name !== currentBuildRef.current?.name)) {
       lastPostedBuildIdRef.current = state.build.id;
@@ -446,6 +450,7 @@ export default function App() {
    */
   const afterHistoryMove = (b, moved) => {
     if (!moved) return b;
+    placingIdsRef.current = new Set(); // a part brought back by undo or redo stays where it is
     const ids = new Set();
     for (const stepId of [...moved.undone, ...moved.redone]) {
       for (const op of stepById(moved.history, stepId)?.ops || []) {
@@ -902,31 +907,41 @@ export default function App() {
     return starterById('sample').build(catalogList);
   }
 
-  // keep: an id or a list of ids left where they are (the parts being selected)
-  const resolveIntersectingInstances = (list, keep = null) => {
+  // Moves back (or removes, with no clean pose) the overlapping parts in `acting`, leaving every
+  // other flagged part where it is (openspec tight-fits). keep: an id or a list of ids left where
+  // they are (the parts being selected)
+  const resolveIntersectingInstances = (list, keep, acting) => {
     const kept = new Set(Array.isArray(keep) ? keep : keep ? [keep] : []);
+    const resolves = (inst) => inst.isIntersecting && acting.has(inst.instanceId) && !kept.has(inst.instanceId);
     // Nothing to move back: keep the same list, so a plain selection isn't treated as a build change
-    if (!list.some((inst) => inst.isIntersecting && !kept.has(inst.instanceId))) return list;
+    if (!list.some(resolves)) return list;
     const out = [];
     for (const inst of list) {
-      if (kept.has(inst.instanceId)) {
+      if (!resolves(inst)) {
         out.push(inst);
         continue;
       }
-      if (inst.isIntersecting) {
-        if (inst.lastValidPosition && inst.lastValidRotation) {
-          out.push({
-            ...inst,
-            position: [...inst.lastValidPosition],
-            rotation: [...inst.lastValidRotation],
-            isIntersecting: false
-          });
-        }
-      } else {
-        out.push(inst);
+      if (inst.lastValidPosition && inst.lastValidRotation) {
+        out.push({
+          ...inst,
+          position: [...inst.lastValidPosition],
+          rotation: [...inst.lastValidRotation],
+          isIntersecting: false
+        });
       }
     }
     return out;
+  };
+
+  const startPlacing = (ids) => {
+    placingIdsRef.current = new Set(ids);
+  };
+  // The parts being placed, to resolve now; those in `keep` stay being placed
+  const takePlacing = (keep = null) => {
+    const kept = new Set(Array.isArray(keep) ? keep : keep ? [keep] : []);
+    const acting = placingIdsRef.current;
+    placingIdsRef.current = new Set([...acting].filter((id) => kept.has(id)));
+    return acting;
   };
 
   /**
@@ -942,7 +957,8 @@ export default function App() {
         ? selectedIds.filter((id) => !picked.includes(id))
         : [...selectedIds.filter((id) => !picked.includes(id)), ...picked];
     }
-    setInstances((prev) => resolveIntersectingInstances(prev, next), { label: moveBackLabel });
+    const acting = takePlacing(next);
+    setInstances((prev) => resolveIntersectingInstances(prev, next, acting), { label: moveBackLabel });
     setSelectedIds(next);
   };
 
@@ -954,7 +970,8 @@ export default function App() {
   }, [instances, selectedIds, groups]);
 
   const changeSelection = (next) => {
-    setInstances((prev) => resolveIntersectingInstances(prev, next), { label: moveBackLabel });
+    const acting = takePlacing(next);
+    setInstances((prev) => resolveIntersectingInstances(prev, next, acting), { label: moveBackLabel });
     setSelectedIds(next);
   };
   const handleSelectAll = () => changeSelection(instances.filter((i) => i.visible !== false).map((i) => i.instanceId));
@@ -1068,6 +1085,7 @@ export default function App() {
   // One step for the whole set (also the viewport's drag of a set)
   const handleUpdateSet = (ids, patches, meta = {}) => {
     if (!patches.length) return;
+    for (const p of patches) if (p.fields?.isIntersecting === true) placingIdsRef.current.add(p.id);
     setInstances((prev) => applyGroupPatches(prev, patches), meta);
   };
   const setKey = selectedIds.join(',');
@@ -1145,7 +1163,7 @@ export default function App() {
 
   const handleRevertSelectedIntersection = () => {
     if (!selectedInstance) return;
-    setInstances((prev) => resolveIntersectingInstances(prev, null), { label: moveBackLabel });
+    setInstances((prev) => resolveIntersectingInstances(prev, null, new Set([selectedInstance.instanceId])), { label: moveBackLabel });
     if (!selectedInstance.lastValidPosition) {
       setSelectedId(null);
     }
@@ -1179,10 +1197,12 @@ export default function App() {
       locked: false
     };
 
-    setInstances((prev) => [...resolveIntersectingInstances(prev, null), newInst], {
+    const acting = takePlacing(null);
+    setInstances((prev) => [...resolveIntersectingInstances(prev, null, acting), newInst], {
       label: `Add ${newInst.label}`,
       ...meta
     });
+    startPlacing([newInst.instanceId]);
     setSelectedId(newInst.instanceId);
     return newInst;
   };
@@ -1304,6 +1324,8 @@ export default function App() {
   // motor hub turned to fit), recorded in the same history step
   const handleUpdateTransform = (instanceId, patch, meta = {}) => {
     const { extraPatches = [], ...stepMeta } = meta || {};
+    // The user moved it into an overlap: it is being placed until the selection changes
+    if (patch.isIntersecting === true) placingIdsRef.current.add(instanceId);
     setInstances(
       (prev) => applyPatches(prev.map((inst) => {
           if (inst.instanceId !== instanceId) return inst;
@@ -1322,7 +1344,9 @@ export default function App() {
     if (selectedIds.length > 1) {
       // A set: copies one pitch along X, keeping their places relative to one another; the copies are selected
       const copies = cloneSet(instances, selectedIds, [VEX_PITCH_MM, 0, 0]);
-      setInstances((prev) => [...resolveIntersectingInstances(prev, null), ...copies], { label: `Clone ${setName}` });
+      const acting = takePlacing(null);
+      setInstances((prev) => [...resolveIntersectingInstances(prev, null, acting), ...copies], { label: `Clone ${setName}` });
+      startPlacing(copies.map((c) => c.instanceId));
       setSelectedIds(copies.map((c) => c.instanceId));
       return;
     }
@@ -1341,9 +1365,11 @@ export default function App() {
       lastValidRotation: null,
       isIntersecting: false
     };
-    setInstances((prev) => [...resolveIntersectingInstances(prev, null), copy], {
+    const acting = takePlacing(null);
+    setInstances((prev) => [...resolveIntersectingInstances(prev, null, acting), copy], {
       label: `Duplicate ${selectedInstance.label}`
     });
+    startPlacing([copy.instanceId]);
     setSelectedId(copy.instanceId);
   };
 
@@ -1378,6 +1404,7 @@ export default function App() {
     setInstances((prev) => [...applyPatches(prev, extraPatches), copy], {
       label: withNotes(`Insert copy of ${source.label} into ${receivingLabel}`)
     });
+    startPlacing([copy.instanceId]);
     setActionFeedback({ message: withNotes(`Inserted ${copy.label} into ${receivingLabel}`), isError: false });
     return copy.instanceId;
   };
@@ -1671,7 +1698,8 @@ export default function App() {
           setBoxSelect(false);
           setSelectMode(false);
         } else {
-          setInstances((prev) => resolveIntersectingInstances(prev, null), { label: moveBackLabel });
+          const acting = takePlacing(null);
+          setInstances((prev) => resolveIntersectingInstances(prev, null, acting), { label: moveBackLabel });
           setSelectedId(null);
         }
       }
@@ -1751,6 +1779,7 @@ export default function App() {
     setPreview(null);
     setExplodeMode('off');
     setSelectedId(null);
+    placingIdsRef.current = new Set();
     setBuild({ instances: parts, history: loadHistory(hist, parts, { source: 'app', label: 'External change' }) });
     if (viewport) {
       if (viewport.transformMode) setTransformMode(viewport.transformMode);
@@ -1978,6 +2007,29 @@ export default function App() {
     }
     handleRunSmartAction('build_chain', { kind, attachment, attachmentEvery, slack, ...(route ? { route } : {}), instanceIds: selectedIds });
   };
+
+  // The selected part's overlaps and tight fits, for the Inspector (openspec tight-fits)
+  const [selectedContacts, setSelectedContacts] = useState(null);
+  const contactsSeqRef = useRef(0);
+  const selectedPose = selectedInstance ? `${selectedInstance.instanceId}|${selectedInstance.position}|${selectedInstance.rotation}|${selectedInstance.isIntersecting}` : '';
+  useEffect(() => {
+    const n = ++contactsSeqRef.current;
+    if (!selectedInstance) {
+      setSelectedContacts(null);
+      return undefined;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const data = await backend.runAction('contacts', { instances }, { instanceId: selectedInstance.instanceId });
+        if (n === contactsSeqRef.current) setSelectedContacts(data?.ok ? data : null);
+      } catch {
+        /* the next change tries again */
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPose, instances.length]);
+  const contactsOfSelected = selectedContacts?.instanceId === selectedInstance?.instanceId ? selectedContacts : null;
 
   const [auditFixNote, setAuditFixNote] = useState(null); // { text, isError, title } of the last Attempt Fix
   const auditIssueList = useMemo(() => auditIssues(auditData), [auditData]);
@@ -2498,7 +2550,8 @@ export default function App() {
               <div className="hud-pill hud-pill-warning">
                 <AlertTriangle size={14} />
                 <span>
-                  <strong>Intersecting Part (Not Placed)</strong> — Move to clear space / through a
+                  <strong>Overlapping part</strong>
+                  {contactsOfSelected?.overlaps?.length ? ` (into ${contactsOfSelected.overlaps.join(', ')})` : ''} — Move it clear or through a
                   hole, or
                 </span>
                 <button
@@ -3170,10 +3223,22 @@ export default function App() {
                         }}
                       >
                         {selectedInstance.isIntersecting
-                          ? 'Intersecting (Unplaced)'
+                          ? 'Overlapping'
                           : 'Placed (Clear)'}
                       </strong>
                     </div>
+                    {selectedInstance.isIntersecting && contactsOfSelected?.overlaps?.length > 0 && (
+                      <div className="metadata-row">
+                        <span>Overlaps</span>
+                        <strong style={{ color: '#fca5a5' }}>{contactsOfSelected.overlaps.join(', ')}</strong>
+                      </div>
+                    )}
+                    {contactsOfSelected?.tightFits?.length > 0 && (
+                      <div className="metadata-row" title="They touch by up to half a millimetre, as parts often do in VEX CAD. Not counted as an overlap.">
+                        <span>Tight fit</span>
+                        <strong style={{ color: '#fcd34d' }}>{contactsOfSelected.tightFits.join(', ')}</strong>
+                      </div>
+                    )}
                     <div className="metadata-row">
                       <span>Part Number</span>
                       <strong>{selectedPartMeta.partNumber}</strong>

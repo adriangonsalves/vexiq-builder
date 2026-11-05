@@ -6,10 +6,10 @@
 
 ## 2. Flagged parts stay put
 
-- [ ] 2.1 In `src/App.jsx`, track the ids of the current placing session (library drop, drag, hole-pick insert, copy, clone) and make `resolveIntersectingInstances` act only on those. Verify in headless Chrome:
+- [x] 2.1 In `src/App.jsx`, track the ids of the current placing session (library drop, drag, hole-pick insert, copy, clone) and make `resolveIntersectingInstances` act only on those. Verify in headless Chrome:
   - a part placed overlapping by `place_parts` survives clicking another part, with no "Cancel placement" step;
   - a library beam dropped onto another beam is still removed on the next click.
-- [ ] 2.2 Keep the Inspector's overlap warning for flagged MCP parts, and show tight fits as a separate note. Verify visually in the same run.
+- [x] 2.2 Keep the Inspector's overlap warning for flagged MCP parts, and show tight fits as a separate note. Verify visually in the same run.
 
 ## 3. Connection points
 

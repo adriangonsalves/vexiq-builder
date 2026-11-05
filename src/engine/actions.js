@@ -20,7 +20,7 @@ import {
 } from './core.js';
 import { fitSet, fixAssembly } from './fixAssembly.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'contacts'];
 
 export function runAction(action, state, params = {}) {
   const { catalogById } = getCatalog();
@@ -267,6 +267,15 @@ export function runAction(action, state, params = {}) {
   // A dragged set's release fit (openspec group-snapping): the fitted poses, nothing saved
   if (action === 'fit_set') {
     return fitSet(state, { ids: params.ids, poses: params.poses });
+  }
+
+  // What one part overlaps and what it only tight-fits against (the Inspector, openspec tight-fits)
+  if (action === 'contacts') {
+    const visible = state.instances.filter((i) => i.visible !== false);
+    const inst = visible.find((i) => i.instanceId === params.instanceId);
+    if (!inst) return { ok: false, error: `No visible part ${params.instanceId}` };
+    const col = checkCandidateCollision(inst, visible);
+    return { ok: true, instanceId: inst.instanceId, overlaps: col.collidingWith.map((c) => c.label), tightFits: col.tightFits.map((c) => c.label) };
   }
 
   // The audit alone (the Audit panel, refreshed as the build changes) and the blueprint alone
