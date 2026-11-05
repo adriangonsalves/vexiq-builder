@@ -6,7 +6,6 @@ The chain builder can't build the most common VEX IQ drive chain: a motor sprock
 
 - **A sprocket can be wrapped by both runs.** When both straight runs past a sprocket would cut through it (a bigger sprocket between two smaller ones in a line), the chain bends round its top on one run and its bottom on the other, without asking. Flop's drive chain builds in one step.
 - **"Both" as a route choice.** For a sprocket between two runs that could take one run or both, the over/under dialog and `build_chain`'s `route` offer **Both** as well.
-- **Teeth must turn one way.** A route that would touch one sprocket from inside the loop on one run and from outside on another is refused, naming the sprocket, because its teeth would be pushed opposite ways.
 - **Selected parts become obstacles.** Any selected part that isn't a sprocket or standoff (a bracket, connector, beam end) is an obstacle. The builder takes its outline where it crosses the chain's plane, and the chain bends round it, over or under as chosen, the way it bends round a standoff today.
 - **Parts in the way are named.** When a run would pass through an unselected part, the reply and the Build menu hover text name it, so it can be selected as an obstacle or the route changed.
 
@@ -18,7 +17,6 @@ The chain builder can't build the most common VEX IQ drive chain: a motor sprock
 ### Modified Capabilities
 - `chain-track-builder`:
   - a sprocket on both runs, and the "Both" route choice;
-  - the one-way-teeth rule;
   - selected parts of any kind as obstacles;
   - naming parts a run would pass through.
 

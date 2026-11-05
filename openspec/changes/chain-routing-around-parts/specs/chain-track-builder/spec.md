@@ -22,13 +22,6 @@ For an enclosed part or crossing sprocket that one run could pass by while the o
 - **WHEN** two 24 Tooth Sprockets and a 16 Tooth Sprocket on the line between their centres are selected, and the user picks Both for the 16 Tooth
 - **THEN** the top run dips to touch the 16 Tooth from above, the bottom run rises to touch it from below, and the 16 Tooth is turned to sit in both runs
 
-### Requirement: Teeth turn one way
-A route SHALL be refused when it would touch one sprocket from inside the loop on one run and from outside the loop on another run, because the chain would push its teeth opposite ways. The message SHALL name the sprocket and say the chain would turn it both ways. Touching a sprocket on several runs from the same side SHALL be allowed.
-
-#### Scenario: Inside on one run, outside on the other
-- **WHEN** a route would wrap a sprocket's top with the outer loop's top run and also bend the bottom run up over it from outside the loop
-- **THEN** nothing is built and the message names that sprocket and says the chain would turn it both ways
-
 ### Requirement: Selected parts as obstacles
 A selected part that is neither a sprocket nor a standoff, and whose solid crosses the chain's plane, SHALL be an obstacle. The builder SHALL take the part's outline where it crosses the plane, across the width of a link, and treat it as a shape the chain bends round, the same way it bends round a standoff:
 - an obstacle a straight run would pass through, or one inside the loop, SHALL be listed in the over-or-under dialog and in `needsRoute` over MCP;

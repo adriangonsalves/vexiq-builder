@@ -5,7 +5,6 @@
   - every recorded case gives identical poses;
   - Flop's 8T–16T–8T (centres at -206.4, -168.3, -28.6 mm on one line) gives a loop with the 16 Tooth twice.
 - [ ] 1.3 Move enclosed and crossing handling to stops; add the `both` route; make a sprocket cut by both straight runs wrapped on both without asking. Verify the motor-sprocket and Both-idler scenarios.
-- [ ] 1.4 Add the one-way teeth check with its message. Verify the inside-and-outside scenario is refused, naming the sprocket.
 
 ## 2. Obstacles
 

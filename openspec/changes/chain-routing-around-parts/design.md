@@ -30,8 +30,7 @@ The enclosed-part and crossing-sprocket logic moves from "the circle" to "the st
 - **Both** adds a stop on each run. A part that ends up with two inside stops is "wrapped by both runs".
 - A crossing sprocket that every straight run would cut through gets its stops from the wrap itself, so it is never asked about.
 
-### One-way teeth check
-After the route is applied, collect each sprocket's stop sides. Mixed `+1` (inside) and `-1` (outside) on one sprocket refuses the route with the sprocket's name. Standoffs and obstacles are exempt, since they don't turn.
+A part touched on several runs is always touched from the same side (inside or outside the loop). The other side would need the chain to pass through it or cross itself, and the existing refusals already cover both. So no separate rule is needed.
 
 ### Obstacles: convex outline of a slice, as rounded corner guides
 For a selected part that isn't a sprocket or standoff:
