@@ -442,7 +442,9 @@ export function checkSprocketsForChain(parts, { kind = 'chain', route = null, li
   if (route && kind !== 'track' && asked.length && asked.every((e) => ROUTE_CHOICES.includes(route[e.instanceId]))) {
     const routed = routeLoop(base, { kind, route });
     if (!routed.ok) return { ...routed, enclosed, crossing };
-    const valid = validateLoop(base, wrapContacts(circles, routed.nodes, linkHalfMm), linkHalfMm, routed.baseLoop);
+    const settled = settleContacts(base, routed.nodes, { route, sides: routed.sides, linkHalfMm });
+    if (!settled.ok) return { ...settled, enclosed, crossing };
+    const valid = validateLoop(base, settled.nodes, linkHalfMm, routed.baseLoop);
     if (!valid.ok) return { ...valid, enclosed, crossing };
   }
   return base;
@@ -606,6 +608,99 @@ function routeLoop(check, { kind, route }) {
  * nodes (the same array when nothing is met).
  */
 function wrapContacts(circles, nodes, linkHalfMm) {
+  return wrapContactsOnce(circles, nodes, linkHalfMm);
+}
+
+/**
+ * Selected obstacles a run, as routed, comes into contact with though the plain loop passed them
+ * (riding over a guide can lift a run into a bracket): each is asked over or under, as a crossing
+ * obstacle is, and wrapped on that run, round its outside (+1, the chain on the outer side of it) or
+ * from inside the loop (−1). Sprockets met are wrapped too (wrapContacts), until nothing more is met.
+ * `sides` gets each obstacle's answer. Returns { ok, nodes } or a refusal with `needsRoute`.
+ */
+/**
+ * `nodes` with every corner of a wrapped obstacle that a run next to it comes too close to (its
+ * corner circle) added on that run, on the same side: the corners first chosen are taken from the
+ * outline's points, so a run curving round one can cut past the next.
+ */
+function refineObstacles(circles, nodes) {
+  let out = nodes;
+  for (let pass = 0; pass < 24; pass++) {
+    const path = loopPath(circles, out);
+    if (!path.ok) return out;
+    const K = out.length;
+    let add = null;
+    path.edges.forEach((e, k) => {
+      if (add) return;
+      const ends = [out[k], out[(k + 1) % K]];
+      const unit = ends.map((nd) => circles[nd.c].obstacle).find((u) => u != null);
+      if (unit == null) return;
+      const s = ends.find((nd) => circles[nd.c].obstacle === unit).s;
+      circles.forEach((c, ci) => {
+        if (add || c.obstacle !== unit || out.some((nd) => nd.c === ci)) return;
+        if (segDist([c.x, c.y], e.ta, e.tb) < c.r - 0.05) add = { k, node: { c: ci, s } };
+      });
+    });
+    if (!add) return out;
+    out = [...out.slice(0, add.k + 1), add.node, ...out.slice(add.k + 1)];
+  }
+  return out;
+}
+
+function settleContacts(check, nodes, { route, sides, linkHalfMm }) {
+  const { circles, obstacles = [], up } = check;
+  let out = wrapContacts(circles, refineObstacles(circles, nodes), linkHalfMm);
+  const missing = new Map();
+  for (let pass = 0; pass < obstacles.length + circles.length; pass++) {
+    const path = loopPath(circles, out);
+    if (!path.ok) return { ok: true, nodes: out };
+    const K = out.length;
+    let met = null;
+    for (const ob of obstacles) {
+      if (out.some((nd) => ob.corners.includes(nd.c))) continue;
+      const k = path.edges.findIndex((e) => polySegDist(ob.poly, e.ta, e.tb) < linkHalfMm - OBSTACLE_TIGHT_MM);
+      if (k >= 0) {
+        met = { ob, k };
+        break;
+      }
+    }
+    if (!met) break;
+    const { ob, k } = met;
+    const e = path.edges[k];
+    const outside = e.m[0] * up[0] + e.m[1] * up[1] > 0 ? 'over' : 'under';
+    const answer = route?.[ob.instanceId];
+    if (!ROUTE_CHOICES.includes(answer)) {
+      missing.set(ob.instanceId, { instanceId: ob.instanceId, label: ob.label, kind: 'obstacle', outside });
+      // (asked for every one met before giving up: pass it on the inside for now)
+    }
+    const s = answer === outside ? 1 : -1;
+    // The corners the run rests on: on the side of the outline it passes, ordered along the run
+    const hull = convexHull([e.ta, e.tb, ...ob.poly]);
+    const at = (q) => hull.findIndex((h) => Math.hypot(h[0] - q[0], h[1] - q[1]) < 1e-9);
+    const ia = at(e.ta);
+    const ib = at(e.tb);
+    if (ia < 0 || ib < 0) return { ok: false, error: `The chain can't bend round ${ob.label} there.` };
+    const chain = [];
+    if (s > 0) for (let j = (ia + 1) % hull.length; j !== ib; j = (j + 1) % hull.length) chain.push(hull[j]);
+    else {
+      for (let j = (ib + 1) % hull.length; j !== ia; j = (j + 1) % hull.length) chain.push(hull[j]);
+      chain.reverse();
+    }
+    const corners = chain.map((q) => ob.corners[ob.poly.findIndex((c) => Math.hypot(c[0] - q[0], c[1] - q[1]) < 1e-9)]).filter((c) => c != null);
+    if (!corners.length) return { ok: false, error: `The chain can't bend round ${ob.label} there.` };
+    for (const c of ob.corners) sides.set(c, answer || outside);
+    out = [...out.slice(0, k + 1), ...corners.map((c) => ({ c, s })), ...out.slice(k + 1)];
+    out = wrapContacts(circles, refineObstacles(circles, out), linkHalfMm);
+    if (out.length > K + circles.length) break;
+  }
+  if (missing.size) {
+    const list = [...missing.values()];
+    return { ok: false, error: `Choose whether the chain goes over or under ${list.map((m) => m.label).join(', ')}.`, needsRoute: list };
+  }
+  return { ok: true, nodes: out };
+}
+
+function wrapContactsOnce(circles, nodes, linkHalfMm) {
   let out = nodes;
   for (let pass = 0; pass < circles.length; pass++) {
     const path = loopPath(circles, out);
@@ -728,6 +823,8 @@ function validateLoop(check, nodes, linkHalfMm, baseLoop = check.loop) {
   nodes.forEach((nd, k) => nodesOf.set(nd.c, [...(nodesOf.get(nd.c) || []), k]));
   for (let ci = 0; ci < circles.length; ci++) {
     const c = circles[ci];
+    // (an obstacle's corners are checked as its outline, below)
+    if (c.obstacle != null) continue;
     const ks = nodesOf.get(ci) || [];
     // (and the chain just leaving or reaching it, past an obstacle corner beside it)
     const own = (q) => ks.some((k) => q.node === k || q.node === (k - 1 + K) % K || q.node === (k + 1) % K || q.run === k || q.run === (k - 1 + K) % K) || (ks.length > 0 && c.kind === 'sprocket' && alongToOwn(pts, total, nodes, ci, q.at) < NOT_NEIGHBOURS_MM);
@@ -821,7 +918,9 @@ export function buildChainPath(parts, { kind = 'chain', grippers = false, attach
   const routed = routeLoop(check, { kind, route });
   if (!routed.ok) return routed;
   const { sides } = routed;
-  const nodes = wrapContacts(check.circles, routed.nodes, linkHalfMm);
+  const settled = settleContacts(check, routed.nodes, { route, sides, linkHalfMm });
+  if (!settled.ok) return settled;
+  const { nodes } = settled;
   const { normal: n, frame, circles, all } = check;
   if (nodes.filter((nd) => circles[nd.c].kind === 'sprocket').length < 2) {
     return { ok: false, error: `A ${kind} needs two or more sprockets on its outside.` };

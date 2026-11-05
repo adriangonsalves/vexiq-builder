@@ -94,5 +94,21 @@
    0
   ],
   "visible": true
+ },
+ {
+  "instanceId": "228-2500-067-4",
+  "label": "228-2500-067-4",
+  "partId": "2x-pitch-standoff-228-2500-067-92",
+  "position": [
+   -136.525,
+   33.879,
+   107.95
+  ],
+  "rotation": [
+   0,
+   0,
+   8.55
+  ],
+  "visible": true
  }
 ]

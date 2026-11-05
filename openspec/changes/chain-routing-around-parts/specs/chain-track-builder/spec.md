@@ -25,7 +25,7 @@ When a run of a chain, as bent round an enclosed part or an obstacle, would pass
 ### Requirement: Selected parts as obstacles
 A selected part that is neither a sprocket nor a standoff, and whose solid crosses the chain's plane, SHALL be an obstacle. The builder SHALL take the part's outline where it crosses the plane, across the width of a link, and treat it as a shape the chain bends round, the same way it bends round a standoff:
 - an obstacle a straight run would pass through (its outline within a link's half-height of the run) SHALL be listed in the over-or-under dialog and in `needsRoute` over MCP; **Over** takes the chain above it and **Under** below it, one of them round its outside;
-- an obstacle clear of every run, inside the loop or out, SHALL be left alone (the chain doesn't touch it) and named in the reply as not in the way;
+- an obstacle clear of every run, inside the loop or out, SHALL be left alone (the chain doesn't touch it) and named in the reply as not in the way; one that a run only meets once bent by the other answers SHALL be asked about the same way;
 - the links SHALL rest on the outline's corners with no link cutting into it by more than a tight contact (0.5 mm, as for tight fits), and the outline SHALL NOT be turned;
 - a link leaving or reaching a sprocket beside an obstacle's corner MAY pass close to that sprocket's teeth, as the chain just leaving it does.
 
@@ -34,6 +34,10 @@ A selected part that doesn't cross the chain's plane SHALL be ignored, and named
 #### Scenario: Chain past a crossbar
 - **WHEN** the three drive sprockets of the motor-sprocket scenario and Flop's 2x20 Beam, which crosses the top run just past the 16 Tooth, are selected, and the user picks Under for the beam
 - **THEN** the top run dips under the beam as it leaves the 16 Tooth, no link overlaps the beam, the chain still has 65 links and sits in all three sprockets, and Over is refused because the 16 Tooth would no longer touch the chain
+
+#### Scenario: A run lifted into an obstacle
+- **WHEN** Flop's drive sprockets, its 2x20 Beam, its chain guide (a 2x Pitch Standoff inside the loop) and the Double Offset Corner Connector are selected, with Under for the beam and Over for the guide
+- **THEN** the bottom run, lifted by the guide, would meet the connector the plain loop passed, so the connector is asked about (a dialog row, `needsRoute`), and Under builds the chain over the guide and under the connector and beam with no link overlapping any of them
 
 #### Scenario: Obstacle clear of the chain
 - **WHEN** a Double Offset Corner Connector inside the loop, a few millimetres clear of both runs, is selected with the same sprockets

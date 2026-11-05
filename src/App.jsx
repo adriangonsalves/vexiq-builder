@@ -2000,10 +2000,13 @@ export default function App() {
 
   // The parts Chain builder asks over or under about: enclosed parts, crossing sprockets and
   // obstacles in a run's way (the engine's plan, once it has come back)
-  const chainAsked = useMemo(
-    () => (freshChainPlan ? (freshChainPlan.asked.length ? freshChainPlan.asked : EMPTY_IDS) : chainCheck.ok ? [...(chainCheck.enclosed || []), ...(chainCheck.crossing || [])] : EMPTY_IDS),
-    [chainCheck, freshChainPlan]
-  );
+  // (plus any part a run only meets once bent by the answers given, as riding over a guide can lift it)
+  const chainAsked = useMemo(() => {
+    if (!freshChainPlan) return chainCheck.ok ? [...(chainCheck.enclosed || []), ...(chainCheck.crossing || [])] : EMPTY_IDS;
+    const met = (freshChainPlan.needsRoute || []).filter((n) => n.kind === 'obstacle' && !freshChainPlan.asked.some((a) => a.instanceId === n.instanceId));
+    const list = [...freshChainPlan.asked, ...met];
+    return list.length ? list : EMPTY_IDS;
+  }, [chainCheck, freshChainPlan]);
 
   // Chain builder first asks over or under for each enclosed part or crossing sprocket; then either builder asks where
   // noticeable slack goes (Track builder always asks, for its attachment). Chain builder builds at once

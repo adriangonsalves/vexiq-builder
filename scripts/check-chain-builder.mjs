@@ -1046,6 +1046,18 @@ function allInGaps(p, res) {
   }
   const over = planChainFor(state, { kind: 'chain', instanceIds: [...drive, beam.instanceId], route: { [beam.instanceId]: 'over' } });
   check('  Over is refused, naming the 16 Tooth that would lose the chain', Boolean(over.error) && over.error.includes('228-2500-233-1'), over.error);
+  // Riding over Flop's chain guide (a 2x Pitch Standoff inside the loop) lifts the bottom run into the
+  // corner connector the plain loop passed: it is then asked about, and Under clears it
+  const guide = '228-2500-067-4';
+  const all6 = [...drive, beam.instanceId, guide, '228-2500-277-2'];
+  const lifted = planChainFor(state, { kind: 'chain', instanceIds: all6, route: { [beam.instanceId]: 'under', [guide]: 'over' } });
+  check('A run lifted into an obstacle: the connector is asked about', lifted.needsRoute?.length === 1 && lifted.needsRoute[0].instanceId === '228-2500-277-2', lifted.error);
+  const guided = planChainFor(state, { kind: 'chain', instanceIds: all6, route: { [beam.instanceId]: 'under', [guide]: 'over', '228-2500-277-2': 'under' } });
+  check('  Under builds clear of the beam, the guide and the connector', !guided.error && guided.blockedBy.length === 0, guided.error || JSON.stringify(guided.blockedBy));
+  if (!guided.error) {
+    checkChain('Over the chain guide, under the connector', asInput(all6), guided.res);
+    check('  no link overlaps the connector', overlapping(guided.res.links, byId.get('228-2500-277-2')) === 0);
+  }
   const engine = buildChain(state, { kind: 'chain', instanceIds: drive });
   check('engine buildChain: still builds with a part in the way, and names it', !engine.error && engine.blockedBy?.length === 1 && /In the way: 228-2500-030-2/.test(engine.message), engine.error || engine.message);
 }
