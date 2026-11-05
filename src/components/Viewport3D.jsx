@@ -348,6 +348,27 @@ function gizmoScaleFactor(camera, position) {
 
 const SHADOW_MAP_SIZE = 4096; // shadow-map texels per side
 
+// Lighting, after VEX's own viewer (instructions.online): one strong light from over the viewer's
+// shoulder that turns with the camera, little light from all round, matte plastic. Faces turned
+// toward the viewer come out clearly brighter than the sides, so parts read as solid.
+const KEY_LIGHT_FROM_VIEW = new THREE.Vector3(0.35, 0.9, 1).normalize(); // camera frame: right, up, back
+const PLASTIC_REFLECTION_SHARE = 0.35; // plastic gets this much of the room reflection; metal all of it
+const PLASTIC_ROUGHNESS = 0.8;
+
+/** Gives a metal part's material the room reflection at the full chosen strength (none when off). */
+function setMetalReflection(material, scene) {
+  material.userData.metalReflection = true;
+  const on = Boolean(scene?.environment);
+  material.envMap = on ? scene.environment : null;
+  material.envMapIntensity = on && scene.environmentIntensity ? scene.environmentIntensity / PLASTIC_REFLECTION_SHARE : 0;
+  material.needsUpdate = true;
+}
+
+/** World direction toward the key light for `cam`: over its shoulder, whichever way it faces. */
+function keyLightDirection(cam, out = new THREE.Vector3()) {
+  return out.copy(KEY_LIGHT_FROM_VIEW).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()));
+}
+
 /** The 8 corners of a box. */
 function boxCorners(box) {
   const out = [];
@@ -3967,7 +3988,7 @@ export default function Viewport3D({
         renderer.setPixelRatio(1);
         renderer.setSize(width, height, false);
         renderer.setScissorTest(false); // the frame loop draws panes with a scissor
-        updateShadowsRef.current?.();
+        updateShadowsRef.current?.(shotCamera);
         renderer.render(scene, shotCamera);
         png = renderer.domElement.toDataURL('image/png').split(',')[1];
       } finally {
@@ -4214,26 +4235,33 @@ export default function Viewport3D({
     envTextureRef.current = envTexture;
     if (envReflectionsRef.current !== false) {
       scene.environment = envTexture;
-      scene.environmentIntensity = typeof reflectionIntensityRef.current === 'number' ? reflectionIntensityRef.current : 0.75;
+      scene.environmentIntensity = PLASTIC_REFLECTION_SHARE * (typeof reflectionIntensityRef.current === 'number' ? reflectionIntensityRef.current : 0.75);
     } else {
       scene.environment = null;
     }
     roomEnv.dispose();
     pmremGenerator.dispose();
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xe2e8f0, 0x1e293b, 0.65);
+    // Neutral greys: a coloured ground tint turns black and dark grey parts navy
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x777777, 0.3);
     hemiLight.position.set(0, 300, 0);
     scene.add(hemiLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.1);
-    dirLight1.position.set(180, 300, 220);
+    // The key light turns with the camera (keyLightDirection): aimed before each pane is drawn
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.8);
+    dirLight1.position.copy(KEY_LIGHT_FROM_VIEW);
     scene.add(dirLight1);
+    const keyLightDir = new THREE.Vector3();
+    const aimKeyLight = (cam) => {
+      keyLightDirection(cam, keyLightDir);
+      dirLight1.position.copy(dirLight1.target.position).addScaledVector(keyLightDir, dirLight1.position.distanceTo(dirLight1.target.position) || 1);
+      dirLight1.updateMatrixWorld();
+    };
     // Optional shadows from this key light (openspec: view-options, render-shadows). Only its share
     // of the light is blocked, and only partly, so shadowed faces stay readable.
-    const KEY_LIGHT_DIR = dirLight1.position.clone().normalize();
     dirLight1.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
     dirLight1.shadow.intensity = 0.75;
     scene.add(dirLight1.target);
@@ -4261,14 +4289,10 @@ export default function Viewport3D({
     scene.add(shadowGround);
     // With shadows on, a little less flat fill light and a little more key light, for contrast
     const LIGHT_LEVELS = {
-      off: { ambient: 0.65, hemi: 0.65, key: 1.1 },
-      on: { ambient: 0.5, hemi: 0.55, key: 1.35 }
+      off: { ambient: 0.25, hemi: 0.3, key: 1.8 },
+      on: { ambient: 0.2, hemi: 0.25, key: 2.1 }
     };
     renderer.shadowMap.autoUpdate = false; // drawn once per frame, however many panes there are
-
-    const dirLight2 = new THREE.DirectionalLight(0x93c5fd, 0.55);
-    dirLight2.position.set(-200, -120, -160);
-    scene.add(dirLight2);
 
     // VEX IQ Pitch Grid
     const gridGroup = createVexPitchGrid(24);
@@ -5761,6 +5785,8 @@ export default function Viewport3D({
 
     /** Draws `cam`'s view into one pane, optionally without the overlays; `slot` names the pane for AO. */
     const renderView = (rect, cam, { overlays = true, slot = 'main' } = {}) => {
+      // With shadows on, every pane keeps the main view's light, which the one shadow map was drawn for
+      if (!shadowsRef.current) aimKeyLight(cam);
       if (aoRef.current) {
         renderViewAO(rect, cam, slot, overlays);
         if (overlays) drawSelectionContour(rect, cam, slot);
@@ -5790,7 +5816,7 @@ export default function Viewport3D({
     const shadowBox = new THREE.Box3();
     const shadowSphere = new THREE.Sphere();
     const lightView = new THREE.OrthographicCamera(); // stands in for the shadow camera's pose
-    const updateShadows = () => {
+    const updateShadows = (viewCam = cameraRef.current) => {
       const on = shadowsRef.current;
       const levels = on ? LIGHT_LEVELS.on : LIGHT_LEVELS.off;
       ambientLight.intensity = levels.ambient;
@@ -5798,7 +5824,10 @@ export default function Viewport3D({
       dirLight1.intensity = levels.key;
       dirLight1.castShadow = on;
       shadowGround.visible = on;
-      if (!on) return;
+      if (!on) {
+        if (viewCam) aimKeyLight(viewCam);
+        return;
+      }
       shadowBox.makeEmpty();
       for (const g of meshMapRef.current.values()) if (g.visible) shadowBox.expandByObject(g);
       if (shadowBox.isEmpty()) {
@@ -5812,7 +5841,7 @@ export default function Viewport3D({
       shadowGround.scale.set(3.6 * r, 3.6 * r, 1);
       dirLight1.target.position.copy(center);
       dirLight1.target.updateMatrixWorld();
-      dirLight1.position.copy(center).addScaledVector(KEY_LIGHT_DIR, 2 * r);
+      dirLight1.position.copy(center).addScaledVector(keyLightDirection(viewCam, keyLightDir), 2 * r);
 
       // Everything that casts or receives: the build plus the floor patch under it
       const half = 1.8 * r;
@@ -6113,9 +6142,11 @@ export default function Viewport3D({
                 })
               : new THREE.MeshStandardMaterial({
                   color: new THREE.Color(baseColor),
-                  roughness: isMetal ? 0.22 : 0.38,
-                  metalness: isMetal ? 0.85 : 0.12
+                  roughness: isMetal ? 0.22 : PLASTIC_ROUGHNESS,
+                  metalness: isMetal ? 0.85 : 0
                 });
+            // Metal keeps the full room reflection; plastic only gets the scene's smaller share
+            if (isMetal) setMetalReflection(material, sceneRef.current);
 
             const fixedMaterials = new Map();
             for (const geo of geometries) {
@@ -6128,8 +6159,8 @@ export default function Viewport3D({
               } else if (geo.userData.fixedColor && !fixedMaterials.has(geo.userData.fixedColor)) {
                 fixedMaterials.set(geo.userData.fixedColor, new THREE.MeshStandardMaterial({
                   color: new THREE.Color(geo.userData.fixedColor),
-                  roughness: 0.38,
-                  metalness: 0.12
+                  roughness: PLASTIC_ROUGHNESS,
+                  metalness: 0
                 }));
               }
             }
@@ -6432,8 +6463,11 @@ export default function Viewport3D({
       scene.environment = null;
     } else {
       scene.environment = envTextureRef.current;
-      scene.environmentIntensity = typeof reflectionIntensity === 'number' ? reflectionIntensity : 0.75;
+      scene.environmentIntensity = PLASTIC_REFLECTION_SHARE * (typeof reflectionIntensity === 'number' ? reflectionIntensity : 0.75);
     }
+    partGroupRef.current?.traverse((o) => {
+      if (o.isMesh && o.material?.userData?.metalReflection) setMetalReflection(o.material, scene);
+    });
     renderFrameRef.current?.();
   }, [environmentReflections, reflectionIntensity]);
 
