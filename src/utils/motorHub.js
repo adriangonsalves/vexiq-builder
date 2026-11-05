@@ -76,3 +76,37 @@ export function subGeometry(source, triangles) {
   geo.computeBoundingSphere();
   return geo;
 }
+
+// A shaft on the drive socket's line, no deeper than the socket: the socket of VEX's current Smart
+// Motor model is 8.6 mm deep, deeper than the library's mesh (about 6 mm), so a shaft pushed home
+// meets solid plastic in the library model that isn't there on the real motor
+const SOCKET_LINE_MM = 0.3;
+const SOCKET_AXIS_DOT = Math.cos(THREE.MathUtils.degToRad(1));
+const SOCKET_DEPTH_SLACK_MM = 0.15;
+const _sockOrigin = new THREE.Vector3();
+const _sockAxis = new THREE.Vector3();
+const _end = new THREE.Vector3();
+
+/** True when one part is a Smart Motor and the other a shaft in its drive socket (world matrices given). */
+export function isShaftInMotorSocket(partA, matrixA, partB, matrixB) {
+  const socketOf = (p) => (p?.ports || []).find((q) => q.type === 'shaft_socket');
+  const shaftOf = (p) => (p?.ports || []).find((q) => q.type === 'shaft');
+  let motor, motorMatrix, shaft, shaftMatrix;
+  if (socketOf(partA) && shaftOf(partB)) [motor, motorMatrix, shaft, shaftMatrix] = [partA, matrixA, partB, matrixB];
+  else if (socketOf(partB) && shaftOf(partA)) [motor, motorMatrix, shaft, shaftMatrix] = [partB, matrixB, partA, matrixA];
+  else return false;
+  const socket = socketOf(motor);
+  const shaftPort = shaftOf(shaft);
+  _sockOrigin.set(...socket.origin).applyMatrix4(motorMatrix);
+  _sockAxis.set(...socket.axis).transformDirection(motorMatrix);
+  const shaftAxis = new THREE.Vector3(...shaftPort.axis).transformDirection(shaftMatrix);
+  if (Math.abs(shaftAxis.dot(_sockAxis)) < SOCKET_AXIS_DOT) return false;
+  // The shaft's end inside the motor: the one deeper along the socket (-axis is into the motor)
+  const ts = shaftPort.ends.map((e) => {
+    _end.set(...e).applyMatrix4(shaftMatrix).sub(_sockOrigin);
+    const t = _end.dot(_sockAxis);
+    return { t, across: _end.addScaledVector(_sockAxis, -t).length() };
+  });
+  const deep = ts[0].t < ts[1].t ? ts[0] : ts[1];
+  return deep.across <= SOCKET_LINE_MM && deep.t < 0 && deep.t >= -(socket.maxDepthMm ?? 0) - SOCKET_DEPTH_SLACK_MM;
+}

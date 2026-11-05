@@ -1194,7 +1194,9 @@ async function main() {
         origin: [-9.525, 0, 0],
         axis: [0, 1, 0],
         through: false,
-        maxDepthMm: 4.7,
+        // VEX's current Smart Motor model: the socket floor is 8.6 mm below its face (the library's
+        // 2013 mesh is shallower; isShaftInMotorSocket lets a shaft reach the real floor)
+        maxDepthMm: 8.6,
         pitchCoord: [-0.75, 0, 0],
         verified: true
       });

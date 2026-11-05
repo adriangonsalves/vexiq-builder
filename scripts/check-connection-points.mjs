@@ -207,8 +207,8 @@ const show = (ports) => JSON.stringify(ports.map((p) => [p.portId, p.origin, p.f
   const motor = part('VEX IQ Smart Motor');
   const socket = findPort(motor, 'motor_drive_socket');
   check(
-    'Smart Motor drive socket: a square socket opening on its front face (+Y), 4.7 mm deep',
-    socket?.kind === 'socket' && socket.shape === 'square' && socket.faces?.join() === '+y' && near(socket.depthMm, 4.7),
+    "Smart Motor drive socket: a square socket opening on its front face (+Y), 8.6 mm deep (as in VEX's current motor)",
+    socket?.kind === 'socket' && socket.shape === 'square' && socket.faces?.join() === '+y' && near(socket.depthMm, 8.6),
     JSON.stringify(socket)
   );
   const { catalog } = getCatalog();

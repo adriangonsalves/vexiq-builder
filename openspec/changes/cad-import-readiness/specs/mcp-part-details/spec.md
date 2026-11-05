@@ -13,7 +13,7 @@ Each connection point SHALL have its stable port id and any alias, kind (pin hol
 
 #### Scenario: Smart Motor
 - **WHEN** an agent asks for the VEX IQ Smart Motor's details
-- **THEN** the reply lists the drive socket (local axis +Y, 4.7 mm deep, square, front face), each face pin hole with its depth, hole_1 and hole_8 as blind from the front face and not open at the back, with no cylinder list, and the reply is under 8,000 characters
+- **THEN** the reply lists the drive socket (local axis +Y, 8.6 mm deep, square, front face), each face pin hole with its depth, hole_1 and hole_8 as blind from the front face and not open at the back, with no cylinder list, and the reply is under 8,000 characters
 
 #### Scenario: Corner connector pegs
 - **WHEN** an agent asks for the 1x Wide, 1x1 Corner Connector's details

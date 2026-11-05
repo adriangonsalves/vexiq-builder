@@ -13,7 +13,7 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { loadPartAsset, RUBBER_COLOR, isMetalPart, isClearPlasticPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
-import { hubMatrix } from '../utils/motorHub.js';
+import { hubMatrix, isShaftInMotorSocket } from '../utils/motorHub.js';
 import { isMeshingGear, meshTurn, worldToothed } from '../utils/gearMeshing.js';
 import { squareFitRoll } from '../utils/shaftGroups.js';
 import { settlePlacement } from '../utils/placementFit.js';
@@ -1668,6 +1668,7 @@ export default function Viewport3D({
       const partB = catalogMap.get(otherGroup.userData.partId);
       if (isTireOnHub(partA, targetGroup.matrixWorld, partB, otherGroup.matrixWorld)) continue;
       if (isChainFit(partA, targetGroup.matrixWorld, partB, otherGroup.matrixWorld)) continue;
+      if (isShaftInMotorSocket(partA, targetGroup.matrixWorld, partB, otherGroup.matrixWorld)) continue;
 
       matrixBtoA.multiplyMatrices(invMatrixA, otherGroup.matrixWorld);
       // A turned motor hub's collision piece is posed by its own local matrix inside its group

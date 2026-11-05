@@ -636,7 +636,7 @@ const TOOLS = [
         },
         dryRun: { type: 'boolean', default: false, description: 'Check only: same reply (with poses), nothing saved.' },
         rejectIntersecting: { type: 'boolean', default: false, description: 'Save nothing if any item overlaps another part.' },
-        keepPoses: { type: 'boolean', default: false, description: 'Place items given by position exactly as given: no turning to mesh gears or fit square holes (for poses taken from CAD).' },
+        keepPoses: { type: 'boolean', default: false, description: 'Place items given by position exactly as given: no turning to mesh gears or fit square holes (for poses taken from CAD). Smart Motor hubs still turn to fit their shafts.' },
         mirror: {
           type: 'object',
           description: 'Also place every item mirrored across this plane.',

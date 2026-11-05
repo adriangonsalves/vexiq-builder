@@ -244,6 +244,9 @@ export function measureOpeningDepths(partMeta, raycast, surfaces = null) {
 
   for (const f of getLocalFeatures(partMeta)) {
     if (OPENINGS_BY_INSERT[f.kind]) continue; // inserts keep their extent
+    // The Smart Motor's drive socket keeps its listed depth: VEX's current motor is deeper than the
+    // library's mesh (isShaftInMotorSocket in motorHub.js)
+    if (f.kind === 'shaft_socket') continue;
     const axis = new THREE.Vector3(...f.axis);
     const t0 = dot3(f.origin, f.axis);
     const [bLo, bHi] = bboxRangeAlong(bbox, f.axis);

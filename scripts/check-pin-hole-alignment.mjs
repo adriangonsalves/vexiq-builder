@@ -110,8 +110,8 @@ const placeAboveOpening = (name, kind, opening, openingTopZ, gapMm) => {
   );
   const socket = local('VEX IQ Smart Motor', 'shaft_socket');
   check(
-    'Smart Motor socket extent is [-4.7, 0.13] (face moved out to the motor surface)',
-    socket && near(socket.tMin, -4.7) && near(socket.tMax, 0.13),
+    'Smart Motor socket extent is [-8.6, 0.13] (face moved out to the motor surface)',
+    socket && near(socket.tMin, -8.6) && near(socket.tMax, 0.13),
     JSON.stringify(socket)
   );
   const collarFeatures = getLocalFeatures(part('Rubber Shaft Collar'));
@@ -545,8 +545,8 @@ const placeFull = (name, position = [0, 0, 0], rotation = [0, 0, 0]) => {
   const motorSocket = sid('VEX IQ Smart Motor', 'motor_drive_socket');
   const socket = motor.filter((f) => f.featureId.split('@')[0] === motorSocket);
   check(
-    'Smart Motor drive socket stays one blind opening about 4.7 mm deep',
-    socket.length === 1 && socket[0].featureId === motorSocket && !socket[0].through && Math.abs(spanLen(socket[0]) - 4.7) <= 0.6,
+    'Smart Motor drive socket stays one blind opening 8.6 mm deep',
+    socket.length === 1 && socket[0].featureId === motorSocket && !socket[0].through && Math.abs(spanLen(socket[0]) - 8.73) <= 0.1,
     show(socket)
   );
   const beamHole2 = sid('1x6 Beam', 'hole_2');

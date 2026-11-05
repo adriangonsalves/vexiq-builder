@@ -45,4 +45,4 @@ Each connection point SHALL give its kind, local position and axis, the face it 
 
 #### Scenario: Smart Motor socket
 - **WHEN** the Smart Motor's drive socket is listed
-- **THEN** it is a square socket opening on the front face, 4.7 mm deep
+- **THEN** it is a square socket opening on the front face, 8.6 mm deep, as in VEX's current Smart Motor model

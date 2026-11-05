@@ -293,8 +293,8 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   const conn = (port) => res.data.connections.find((c) => c.port === port || c.aliases?.includes(port));
   const socket = conn('motor_drive_socket');
   check(
-    'Smart Motor details: socket along +Y about 4.7 mm deep, hole_1/hole_8 blind from the front and closed at the back',
-    socket && socket.axis[1] === 1 && Math.abs(socket.depthMm - 4.7) <= 0.6 &&
+    'Smart Motor details: socket along +Y 8.6 mm deep, hole_1/hole_8 blind from the front and closed at the back',
+    socket && socket.axis[1] === 1 && Math.abs(socket.depthMm - 8.73) <= 0.1 &&
       ['hole_1', 'hole_8'].every((h) => conn(h) && !conn(h).through && conn(h).span[0] > -12 && !conn(`${h}@lo`)),
     JSON.stringify(res.data.connections.filter((c) => /socket|hole_1$|hole_8$|@/.test(c.port)))
   );
@@ -385,12 +385,12 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   a = (await call('audit_assembly')).data;
   const axle = res.data?.parts?.[0];
   const axleInst = readState().instances.find((i) => i.label === 'Axle');
-  // Capped shaft local z: plain end at -49.02, cap at 0; after insert its plain end should be at the socket bottom (y ≈ -4.7)
+  // Capped shaft local z: plain end at -49.02, cap at 0; after insert its plain end should be at the socket bottom (y ≈ -8.6)
   const { buildWorldMatrix } = await import('../mcp/assembly-engine.mjs');
   const plainEnd = axleInst && new THREE.Vector3(0, 0, -49.02).applyMatrix4(buildWorldMatrix(axleInst.position, axleInst.rotation));
   check(
     'Insert a 4x Pitch Capped Shaft into the motor socket: reaches the socket bottom, seated with the motor',
-    axle && axle.status === 'placed' && plainEnd && Math.abs(plainEnd.y + 4.7) < 0.6 && Math.abs(plainEnd.x + 9.525) < 0.01 && jointOf(a, 'Axle').includes('Motor'),
+    axle && axle.status === 'placed' && plainEnd && Math.abs(plainEnd.y + 8.6) < 0.6 && Math.abs(plainEnd.x + 9.525) < 0.01 && jointOf(a, 'Axle').includes('Motor'),
     JSON.stringify({ axle, plainEnd: plainEnd?.toArray(), joints: jointOf(a, 'Axle') })
   );
 

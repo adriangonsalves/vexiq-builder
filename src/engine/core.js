@@ -22,7 +22,7 @@ import {
   measureShaftProfiles,
   planMates
 } from '../utils/pinHoleAlignment.js';
-import { hubFrame, hubMatrix, splitHubTriangles } from '../utils/motorHub.js';
+import { hubFrame, hubMatrix, isShaftInMotorSocket, splitHubTriangles } from '../utils/motorHub.js';
 import { isMeshingGear, meshTurn, quaternionToEulerDeg, turnQuaternion, worldToothed } from '../utils/gearMeshing.js';
 import { groupOf, shaftGroups, squareFitRoll, turnGroup } from '../utils/shaftGroups.js';
 import { settlePlacement, turnAboutLine } from '../utils/placementFit.js';
@@ -322,6 +322,7 @@ export function checkCandidateCollision(candidate, instances) {
     if (!worldBoxA.intersectsBox(worldBoxB)) continue;
     if (isTireOnHub(partA, matA, partB, matB)) continue;
     if (isChainFit(partA, matA, partB, matB)) continue;
+    if (isShaftInMotorSocket(partA, matA, partB, matB)) continue;
 
     matBtoA.multiplyMatrices(invMatA, matB);
     let hit = meshesHit(piecesA, posedPieces(bvhB, other), matBtoA);
@@ -2389,11 +2390,18 @@ export function placeParts(state, items, options = {}) {
 
     working.push(inst);
     // The placement step: square fit, mesh, shaft groups, motor hubs (openspec gear-meshing)
-    // keepPoses (poses taken from CAD): an absolute item stays exactly as given, not turned to mesh or fit
+    // keepPoses (poses taken from CAD): an absolute item stays exactly as given, not turned to mesh or
+    // fit; only a Smart Motor's drive hub still turns to the shaft's square, as it does on the real motor
+    const settledFull = settlePlacedInstance(inst, working, item.insert ? resolveInstance(item.insert.into)?.instanceId : null);
     const settled =
       options.keepPoses && !item.insert
-        ? { patches: [], messages: [] }
-        : settlePlacedInstance(inst, working, item.insert ? resolveInstance(item.insert.into)?.instanceId : null);
+        ? {
+            patches: settledFull.patches
+              .filter((p) => 'socketAngleDeg' in p)
+              .map((p) => ({ instanceId: p.instanceId, socketAngleDeg: p.socketAngleDeg })),
+            messages: []
+          }
+        : settledFull;
     const own = settled.patches.find((p) => p.instanceId === inst.instanceId);
     if (own) Object.assign(inst, own);
     const others = settled.patches.filter((p) => p.instanceId !== inst.instanceId);

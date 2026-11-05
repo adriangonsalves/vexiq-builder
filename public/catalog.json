@@ -285106,7 +285106,7 @@
           0
         ],
         "through": false,
-        "maxDepthMm": 4.7,
+        "maxDepthMm": 8.6,
         "pitchCoord": [
           -0.75,
           0,
@@ -285118,7 +285118,7 @@
         "faces": [
           "+y"
         ],
-        "depthMm": 4.7,
+        "depthMm": 8.6,
         "kind": "socket",
         "aliases": [
           "motor_drive_socket"
