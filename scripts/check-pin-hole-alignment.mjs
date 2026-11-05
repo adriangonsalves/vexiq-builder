@@ -996,7 +996,7 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
 // ---------------------------------------------------------------------------
 {
   const GRID = 6.35;
-  const BRAIN = 'VEX IQ Robot Brain with Battery';
+  const BRAIN = 'VEX IQ Robot Brain Gen 1 with Battery';
   const matrixOf = (position, rotation) => buildWorldMatrix(position, rotation);
   const centerOf = (meta, matrix) => new THREE.Vector3(...meta.bbox.center).applyMatrix4(matrix);
   const pivotOf = (name, position, rotation = [0, 0, 0]) => {

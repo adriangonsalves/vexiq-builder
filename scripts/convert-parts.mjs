@@ -21,8 +21,12 @@ const BODY_ROLES = Object.fromEntries(
 );
 // Extra catalog entries made from the same file with every body kept (part number -> variants)
 const WHOLE_FILE_VARIANTS = {
-  '228-2540': [{ key: 'with-battery', name: 'VEX IQ Robot Brain with Battery', partNumber: '228-2540 + 228-2604' }]
+  '228-2540': [{ key: 'with-battery', name: 'VEX IQ Robot Brain Gen 1 with Battery', partNumber: '228-2540 + 228-2604' }]
 };
+// Catalog names that differ from the folder name (part number -> name); ids stay as they were
+const DISPLAY_NAMES = { '228-2540': 'VEX IQ Robot Brain Gen 1' };
+// Parts whose main body keeps its colour from the STEP file instead of the kit colour
+const FILE_COLOR_PART_NUMBERS = new Set(['228-6480', '228-7045']);
 // Parts with multiple colours in their STEP files that must retain multi-colour bodies
 const MULTI_COLOR_PART_NUMBERS = new Set([
   '228-2500-2234', // 2x Pitch Motor Shaft
@@ -37,13 +41,15 @@ const MULTI_COLOR_PART_NUMBERS = new Set([
   '228-2500-320',  // Ant Front Antenna
   '228-2500-321',  // Ant Rear Antenna
   '228-2560',      // Smart Motor
-  '228-2540',      // Robot Brain
+  '228-2540',      // Robot Brain Gen 1
+  '228-6480',      // Robot Brain Gen 2
+  '228-7045',      // Robot Battery Gen 2
   '228-2780',      // Cable Pack
   '228-3010',      // Touch Sensor
   '228-3011',      // Distance Sensor
   '228-3012',      // Color Sensor
   '228-3014',      // Gyro Sensor
-  '228-2540 + 228-2604' // Robot Brain with Battery
+  '228-2540 + 228-2604' // Robot Brain Gen 1 with Battery
 ]);
 const cacheKey = (file, variant) => (variant ? `${file}#${variant}` : file);
 
@@ -260,6 +266,7 @@ async function main() {
 
       stepFiles.forEach((fileName) => {
         const parsed = parseControlEntry(dirName, fileName, 500 + idx);
+        parsed.displayName = DISPLAY_NAMES[parsed.partNumber] ?? parsed.displayName;
         const stepPath = path.join(dirPath, fileName);
         allSourceEntries.push({
           ...parsed,
@@ -284,7 +291,7 @@ async function main() {
     const isMultiColorPart = MULTI_COLOR_PART_NUMBERS.has(entry.partNumber) || entry.partNumber in BODY_ROLES;
     if (cached && fs.existsSync(outGlbPath)) {
       if (!isMultiColorPart || cached.stepColors) {
-        catalog.push(cached);
+        catalog.push({ ...cached, name: entry.displayName });
         continue;
       }
     }
@@ -352,7 +359,7 @@ async function main() {
               name: task.displayName,
               partNumber: task.partNumber,
               category: task.category,
-              defaultColor: task.defaultColor,
+              defaultColor: (FILE_COLOR_PART_NUMBERS.has(task.partNumber) && msg.mainColor) || task.defaultColor,
               ...(task.isMetal ? { isMetal: true } : {}),
               file: task.filename,
               ...(task.variant ? { variant: task.variant } : {}),

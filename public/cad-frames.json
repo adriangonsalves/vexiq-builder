@@ -428,23 +428,6 @@
    "source": "pins",
    "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
   },
-  "228-6480": {
-   "library": "228-2540 + 228-2604",
-   "rule": "origin",
-   "turn": [
-    -90,
-    0,
-    0
-   ],
-   "offsetMm": [
-    0,
-    0,
-    0
-   ],
-   "note": "2nd gen brain; the library has the 1st gen brain with battery as a stand-in",
-   "source": "pins",
-   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
-  },
   "228-7711-711 Split Bodies": {
    "library": "228-2500-2711",
    "rule": "centre",
@@ -459,6 +442,28 @@
    "source": "default",
    "checkedOn": "4063-2026-2027_viqrc_herobot_flop",
    "note": "bent in the CAD, flat in the library: no turn or offset matches it"
+  },
+  "228-6480": {
+   "rule": "origin",
+   "offsetMm": [
+    0,
+    0,
+    -0.03
+   ],
+   "source": "mesh",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop",
+   "meanErrorMm": 0.064
+  },
+  "228-7045": {
+   "rule": "origin",
+   "offsetMm": [
+    0,
+    0,
+    0
+   ],
+   "source": "mesh",
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop",
+   "meanErrorMm": 0.005
   }
  }
 }

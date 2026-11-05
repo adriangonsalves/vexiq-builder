@@ -82,10 +82,63 @@ function getMeshColorKey(m) {
  * recolourable main body (primitive 0 with no material). Every other colour body keeps its colour:
  * near-black bodies get a "rubber" material and other colours get a "step:#rrggbb" material.
  */
+// STEP colours are linear (as glTF's baseColorFactor); the app's colour strings are sRGB
+function linearHexToSrgb(hex) {
+  const toSrgb = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
+  const ch = [1, 3, 5].map((i) => Math.round(toSrgb(parseInt(hex.slice(i, i + 2), 16) / 255) * 255));
+  return `#${ch.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * Splits a mesh whose colours are set per face (newer VEX STEP files) into one mesh per colour.
+ * A face with no colour takes the mesh's own colour. Meshes coloured as a whole are left as they are.
+ */
+function splitByFaceColor(m) {
+  const faces = m.brep_faces || [];
+  if (!faces.some((f) => Array.isArray(f.color))) return [m];
+  const byKey = new Map();
+  for (const f of faces) {
+    const color = Array.isArray(f.color) ? f.color : m.color;
+    const key = JSON.stringify(color ?? null);
+    if (!byKey.has(key)) byKey.set(key, { color, ranges: [] });
+    byKey.get(key).ranges.push([f.first, f.last]);
+  }
+  if (byKey.size === 1) return [{ ...m, color: [...byKey.values()][0].color }];
+  const pos = m.attributes.position.array;
+  const nrm = m.attributes.normal?.array;
+  const idx = m.index.array;
+  return [...byKey.values()].map(({ color, ranges }, i) => {
+    const remap = new Map();
+    const positions = [];
+    const normals = [];
+    const index = [];
+    for (const [first, last] of ranges) {
+      for (let t = first; t <= last; t++) {
+        for (let k = 0; k < 3; k++) {
+          const v = idx[t * 3 + k];
+          if (!remap.has(v)) {
+            remap.set(v, positions.length / 3);
+            positions.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]);
+            if (nrm) normals.push(nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]);
+          }
+          index.push(remap.get(v));
+        }
+      }
+    }
+    return {
+      name: `${m.name || 'body'}#${i}`,
+      color,
+      brep_faces: ranges.map(([first, last]) => ({ first, last })),
+      attributes: { position: { array: positions }, ...(nrm ? { normal: { array: normals } } : {}) },
+      index: { array: index }
+    };
+  });
+}
+
 function buildGlbFromOcctResult(result, bodyRoles) {
-  const allMeshes = (result.meshes || []).filter(
-    (m) => m.attributes?.position?.array?.length > 0 && m.index?.array?.length > 0
-  );
+  const allMeshes = (result.meshes || [])
+    .filter((m) => m.attributes?.position?.array?.length > 0 && m.index?.array?.length > 0)
+    .flatMap(splitByFaceColor);
 
   if (allMeshes.length === 0) {
     throw new Error('No valid geometry produced from STEP file');
@@ -171,6 +224,10 @@ function buildGlbFromOcctResult(result, bodyRoles) {
     const at = groups.findIndex((g) => g.meshes.some((m) => String(m.name || '').startsWith(bodyRoles.main)));
     if (at > 0) groups.unshift(...groups.splice(at, 1));
   }
+
+  // The main body's colour in the STEP file (null when it has none or is rubber)
+  const mainKey = groups[0].hex ?? (actualColors.size === 1 && [...actualColors][0] !== 'rubber' ? [...actualColors][0] : null);
+  const mainColor = mainKey ? linearHexToSrgb(mainKey) : null;
 
   const validMeshes = groups.flatMap((g) => g.meshes);
 
@@ -284,7 +341,7 @@ function buildGlbFromOcctResult(result, bodyRoles) {
         });
       } else {
         gltfMaterials.push({
-          name: `step:${g.hex}`,
+          name: `step:${linearHexToSrgb(g.hex)}`, // the app reads this name as an sRGB colour
           pbrMetallicRoughness: {
             baseColorFactor: g.baseColorFactor,
             metallicFactor: 0.1,
@@ -402,7 +459,8 @@ function buildGlbFromOcctResult(result, bodyRoles) {
     vertexCount: totalVertices,
     triangleCount: Math.floor(totalIndices / 3),
     glbBytes: totalGlbLength,
-    hasRubber: groups.length > 1 && groups.slice(1).some((g) => g.isRubber)
+    hasRubber: groups.length > 1 && groups.slice(1).some((g) => g.isRubber),
+    mainColor
   };
 }
 
@@ -429,7 +487,7 @@ parentPort.on('message', async (task) => {
     // Bodies that are catalog parts of their own (e.g. the battery inside the brain's file)
     result.meshes = (result.meshes || []).filter((m) => !excludeBodies.some((prefix) => String(m.name || '').startsWith(prefix)));
 
-    const { glb, bbox, vertexCount, triangleCount, glbBytes, hasRubber } = buildGlbFromOcctResult(result, bodyRoles);
+    const { glb, bbox, vertexCount, triangleCount, glbBytes, hasRubber, mainColor } = buildGlbFromOcctResult(result, bodyRoles);
     fs.writeFileSync(outGlbPath, glb);
 
     const stepText = fileBuffer.toString('latin1');
@@ -443,6 +501,7 @@ parentPort.on('message', async (task) => {
       triangleCount,
       glbBytes,
       hasRubber,
+      mainColor,
       connectorCount: cylinders.length,
       cylinders: cylinders.slice(0, 64) // store sample in catalog, full can be inspected
     });

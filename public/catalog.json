@@ -281600,8 +281600,388 @@
     "ports": []
   },
   {
+    "id": "vex-iq-robot-battery-gen-2-228-7045-512",
+    "name": "VEX IQ Robot Battery Gen 2",
+    "partNumber": "228-7045",
+    "category": "Electronics & Motion",
+    "defaultColor": "#55585a",
+    "file": "VEX-IQ-All-Control/228-7045 VEX IQ Robot Battery Gen 2/228-7045.step",
+    "modelUrl": "/models/vex-iq-robot-battery-gen-2-228-7045-512.glb",
+    "stepSizeBytes": 807938,
+    "glbSizeBytes": 174948,
+    "bbox": {
+      "min": [
+        -5.8,
+        -15.12,
+        -28.8
+      ],
+      "max": [
+        99.65,
+        8.78,
+        28.8
+      ],
+      "size": [
+        105.45,
+        23.9,
+        57.6
+      ],
+      "center": [
+        46.93,
+        -3.17,
+        0
+      ]
+    },
+    "vertexCount": 5773,
+    "triangleCount": 5762,
+    "stepColors": true,
+    "connectorCount": 20,
+    "cylinders": [
+      {
+        "origin": [
+          7.071,
+          -3.5,
+          -7
+        ],
+        "axis": [
+          -1,
+          0,
+          0
+        ],
+        "radius": 2.5
+      },
+      {
+        "origin": [
+          1.7,
+          -4.775,
+          23.6
+        ],
+        "axis": [
+          -1,
+          0,
+          0
+        ],
+        "radius": 4
+      },
+      {
+        "origin": [
+          76.568,
+          -12.125,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 3
+      },
+      {
+        "origin": [
+          78.3,
+          -5.056,
+          23.6
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "radius": 4
+      },
+      {
+        "origin": [
+          73.52,
+          -17.404,
+          -2.723
+        ],
+        "axis": [
+          -0.265,
+          -0.458,
+          0.848
+        ],
+        "radius": 3
+      },
+      {
+        "origin": [
+          75.356,
+          -14.225,
+          8.606
+        ],
+        "axis": [
+          0.265,
+          0.458,
+          0.848
+        ],
+        "radius": 3
+      },
+      {
+        "origin": [
+          99.6,
+          4.775,
+          24.8
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "radius": 4
+      },
+      {
+        "origin": [
+          17.544,
+          -22.538,
+          6.777
+        ],
+        "axis": [
+          0.265,
+          -0.458,
+          0.848
+        ],
+        "radius": 3
+      },
+      {
+        "origin": [
+          99.6,
+          -4.775,
+          -23.6
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "radius": 4
+      },
+      {
+        "origin": [
+          99.6,
+          4.775,
+          -24.8
+        ],
+        "axis": [
+          -1,
+          0,
+          0
+        ],
+        "radius": 4
+      },
+      {
+        "origin": [
+          14.58,
+          -17.404,
+          2.723
+        ],
+        "axis": [
+          -0.265,
+          0.458,
+          0.848
+        ],
+        "radius": 3
+      },
+      {
+        "origin": [
+          99.6,
+          -6.275,
+          -10.05
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "radius": 2.5
+      },
+      {
+        "origin": [
+          99.6,
+          -3.675,
+          23.7
+        ],
+        "axis": [
+          -1,
+          0,
+          0
+        ],
+        "radius": 5.1
+      },
+      {
+        "origin": [
+          -5.75,
+          -6.275,
+          10.05
+        ],
+        "axis": [
+          -1,
+          0,
+          0
+        ],
+        "radius": 2.5
+      },
+      {
+        "origin": [
+          93.6,
+          4.055,
+          2.885
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "radius": 1.68
+      },
+      {
+        "origin": [
+          93.6,
+          4.055,
+          -2.885
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "radius": 1.68
+      },
+      {
+        "origin": [
+          99.6,
+          -5.056,
+          -23.6
+        ],
+        "axis": [
+          -1,
+          0,
+          0
+        ],
+        "radius": 4
+      },
+      {
+        "origin": [
+          7.071,
+          -3.5,
+          -7
+        ],
+        "axis": [
+          -1,
+          0,
+          0
+        ],
+        "radius": 2.4
+      },
+      {
+        "origin": [
+          99.6,
+          -3.675,
+          -23.7
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "radius": 5.1
+      },
+      {
+        "origin": [
+          11.532,
+          -12.125,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 3
+      }
+    ],
+    "pitchSize": [
+      8.3,
+      1.88,
+      4.54
+    ],
+    "originType": "offset",
+    "gearSpecs": null,
+    "fastenerSpecs": null,
+    "mountingRules": {
+      "massClass": "heavy",
+      "minFastenersRequired": 4
+    },
+    "portCounts": {
+      "total": 2,
+      "pinHoles": 1,
+      "shaftBores": 1,
+      "pinPegs": 0,
+      "shafts": 0
+    },
+    "ports": [
+      {
+        "portId": "hole.-x.-2_-1_-2",
+        "type": "pin_hole",
+        "origin": [
+          -5.8,
+          -3.5,
+          -7
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "through": false,
+        "spanMm": [
+          7.071,
+          7.071
+        ],
+        "pitchCoord": [
+          -0.46,
+          -0.28,
+          -0.55
+        ],
+        "verified": true,
+        "shape": "round",
+        "faces": [
+          "-x"
+        ],
+        "kind": "hole"
+      },
+      {
+        "portId": "bore.+z.24_-4_0",
+        "type": "shaft_bore",
+        "origin": [
+          76.568,
+          -12.125,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "through": false,
+        "spanMm": [
+          0,
+          0
+        ],
+        "pitchCoord": [
+          6.03,
+          -0.95,
+          0
+        ],
+        "verified": true,
+        "shape": "round",
+        "faces": [
+          "+z"
+        ],
+        "kind": "bore"
+      }
+    ]
+  },
+  {
     "id": "vex-iq-robot-brain-228-2540-502",
-    "name": "VEX IQ Robot Brain",
+    "name": "VEX IQ Robot Brain Gen 1",
     "partNumber": "228-2540",
     "category": "Electronics & Motion",
     "defaultColor": "#4b5563",
@@ -282997,7 +283377,7 @@
   },
   {
     "id": "vex-iq-robot-brain-228-2540-502-with-battery",
-    "name": "VEX IQ Robot Brain with Battery",
+    "name": "VEX IQ Robot Brain Gen 1 with Battery",
     "partNumber": "228-2540 + 228-2604",
     "category": "Electronics & Motion",
     "defaultColor": "#4b5563",
@@ -284389,6 +284769,1138 @@
         "aliases": [
           "brain_right_mount_8"
         ]
+      }
+    ]
+  },
+  {
+    "id": "vex-iq-robot-brain-gen-2-228-6480-511",
+    "name": "VEX IQ Robot Brain Gen 2",
+    "partNumber": "228-6480",
+    "category": "Electronics & Motion",
+    "defaultColor": "#55585a",
+    "file": "VEX-IQ-All-Control/228-6480 VEX IQ Robot Brain Gen 2/228-6480.step",
+    "modelUrl": "/models/vex-iq-robot-brain-gen-2-228-6480-511.glb",
+    "stepSizeBytes": 4326993,
+    "glbSizeBytes": 347548,
+    "bbox": {
+      "min": [
+        -50.85,
+        -38.15,
+        -12.4
+      ],
+      "max": [
+        50.85,
+        38.15,
+        21.82
+      ],
+      "size": [
+        101.7,
+        76.3,
+        34.22
+      ],
+      "center": [
+        0,
+        0,
+        4.71
+      ]
+    },
+    "vertexCount": 11899,
+    "triangleCount": 10020,
+    "stepColors": true,
+    "connectorCount": 74,
+    "cylinders": [
+      {
+        "origin": [
+          19.05,
+          -35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          31.75,
+          -31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          31.75,
+          31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          -31.75,
+          -35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          -26.698,
+          -14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          -19.05,
+          31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          31.75,
+          -35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          -31.75,
+          35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          46.8,
+          -34.1,
+          20.5
+        ],
+        "axis": [
+          0,
+          0,
+          -1
+        ],
+        "radius": 4.05
+      },
+      {
+        "origin": [
+          -19.05,
+          -35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          -6.35,
+          -31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          -31.701,
+          -14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.695
+      },
+      {
+        "origin": [
+          26.699,
+          14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.695
+      },
+      {
+        "origin": [
+          -19.05,
+          35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          6.35,
+          35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          -44.45,
+          37.194,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 5.199
+      },
+      {
+        "origin": [
+          6.35,
+          31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          44.45,
+          35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          6.35,
+          -35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          -44.45,
+          -35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          31.75,
+          35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          -6.35,
+          35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          -31.75,
+          -31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          -6.35,
+          31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          19.05,
+          35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          19.05,
+          31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          26.699,
+          -14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          -44.45,
+          -31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          -31.701,
+          -14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          -44.45,
+          35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          -44.45,
+          -24.806,
+          -5.15
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "radius": 4.15
+      },
+      {
+        "origin": [
+          -17.801,
+          14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          -46.8,
+          -34.1,
+          20.5
+        ],
+        "axis": [
+          0,
+          0,
+          -1
+        ],
+        "radius": 4
+      },
+      {
+        "origin": [
+          44.45,
+          -35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          -44.45,
+          31.784,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 6.199
+      },
+      {
+        "origin": [
+          -6.35,
+          -35.908,
+          -6.199
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 3.1
+      },
+      {
+        "origin": [
+          31.701,
+          14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          44.45,
+          -31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          44.45,
+          31.784,
+          -6.201
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 6.199
+      },
+      {
+        "origin": [
+          -46.8,
+          -34.1,
+          20.5
+        ],
+        "axis": [
+          0,
+          0,
+          -1
+        ],
+        "radius": 4.05
+      },
+      {
+        "origin": [
+          17.802,
+          14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.695
+      },
+      {
+        "origin": [
+          44.45,
+          31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          44.45,
+          -37.194,
+          -6.201
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 5.199
+      },
+      {
+        "origin": [
+          -19.05,
+          -31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          44.45,
+          37.194,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 5.199
+      },
+      {
+        "origin": [
+          17.802,
+          14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          -17.801,
+          14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.695
+      },
+      {
+        "origin": [
+          -31.701,
+          14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.695
+      },
+      {
+        "origin": [
+          -17.801,
+          -14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          -44.45,
+          -31.784,
+          -6.199
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 6.199
+      },
+      {
+        "origin": [
+          17.802,
+          -14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          46.8,
+          34.1,
+          20.5
+        ],
+        "axis": [
+          0,
+          0,
+          -1
+        ],
+        "radius": 4
+      },
+      {
+        "origin": [
+          -26.698,
+          -14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.695
+      },
+      {
+        "origin": [
+          31.701,
+          -14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          -46.8,
+          34.1,
+          20.5
+        ],
+        "axis": [
+          0,
+          0,
+          -1
+        ],
+        "radius": 4.05
+      },
+      {
+        "origin": [
+          -31.75,
+          31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          6.35,
+          -31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          -17.801,
+          -14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.695
+      },
+      {
+        "origin": [
+          -44.45,
+          -37.194,
+          -6.199
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 5.199
+      },
+      {
+        "origin": [
+          -26.698,
+          14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          19.05,
+          -31.784,
+          -6.2
+        ],
+        "axis": [
+          0,
+          -1,
+          0
+        ],
+        "radius": 2.1
+      },
+      {
+        "origin": [
+          -26.698,
+          14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.695
+      },
+      {
+        "origin": [
+          -31.701,
+          14.302,
+          19.3
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 2.302
+      },
+      {
+        "origin": [
+          46.8,
+          34.1,
+          20.5
+        ],
+        "axis": [
+          0,
+          0,
+          -1
+        ],
+        "radius": 4.05
+      }
+    ],
+    "pitchSize": [
+      8.01,
+      6.01,
+      2.69
+    ],
+    "originType": "offset",
+    "gearSpecs": null,
+    "fastenerSpecs": null,
+    "mountingRules": {
+      "massClass": "heavy",
+      "minFastenersRequired": 4
+    },
+    "portCounts": {
+      "total": 8,
+      "pinHoles": 8,
+      "shaftBores": 0,
+      "pinPegs": 0,
+      "shafts": 0
+    },
+    "ports": [
+      {
+        "portId": "hole.-y.6_-12_-2",
+        "type": "pin_hole",
+        "origin": [
+          19.05,
+          -38.15,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "through": false,
+        "spanMm": [
+          -35.908,
+          35.908
+        ],
+        "pitchCoord": [
+          1.5,
+          -3,
+          -0.49
+        ],
+        "verified": true,
+        "shape": "round",
+        "faces": [
+          "-y"
+        ],
+        "kind": "hole"
+      },
+      {
+        "portId": "hole.-y.10_-12_-2",
+        "type": "pin_hole",
+        "origin": [
+          31.75,
+          -38.15,
+          -6.2
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "through": false,
+        "spanMm": [
+          -35.908,
+          35.908
+        ],
+        "pitchCoord": [
+          2.5,
+          -3,
+          -0.49
+        ],
+        "verified": true,
+        "shape": "round",
+        "faces": [
+          "-y"
+        ],
+        "kind": "hole"
+      },
+      {
+        "portId": "hole.-y.-10_-12_-2",
+        "type": "pin_hole",
+        "origin": [
+          -31.75,
+          -38.15,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "through": false,
+        "spanMm": [
+          -35.908,
+          35.908
+        ],
+        "pitchCoord": [
+          -2.5,
+          -3,
+          -0.49
+        ],
+        "verified": true,
+        "shape": "round",
+        "faces": [
+          "-y"
+        ],
+        "kind": "hole"
+      },
+      {
+        "portId": "hole.-y.-6_-12_-2",
+        "type": "pin_hole",
+        "origin": [
+          -19.05,
+          -38.15,
+          -6.2
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "through": false,
+        "spanMm": [
+          -35.908,
+          35.908
+        ],
+        "pitchCoord": [
+          -1.5,
+          -3,
+          -0.49
+        ],
+        "verified": true,
+        "shape": "round",
+        "faces": [
+          "-y"
+        ],
+        "kind": "hole"
+      },
+      {
+        "portId": "hole.-y.-2_-12_-2",
+        "type": "pin_hole",
+        "origin": [
+          -6.35,
+          -38.15,
+          -6.2
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "through": false,
+        "spanMm": [
+          -35.908,
+          35.908
+        ],
+        "pitchCoord": [
+          -0.5,
+          -3,
+          -0.49
+        ],
+        "verified": true,
+        "shape": "round",
+        "faces": [
+          "-y"
+        ],
+        "kind": "hole"
+      },
+      {
+        "portId": "hole.-y.2_-12_-2",
+        "type": "pin_hole",
+        "origin": [
+          6.35,
+          -38.15,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "through": false,
+        "spanMm": [
+          -35.908,
+          35.908
+        ],
+        "pitchCoord": [
+          0.5,
+          -3,
+          -0.49
+        ],
+        "verified": true,
+        "shape": "round",
+        "faces": [
+          "-y"
+        ],
+        "kind": "hole"
+      },
+      {
+        "portId": "hole.-y.-14_-12_-2",
+        "type": "pin_hole",
+        "origin": [
+          -44.45,
+          -38.15,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "through": false,
+        "spanMm": [
+          -37.194,
+          37.194
+        ],
+        "pitchCoord": [
+          -3.5,
+          -3,
+          -0.49
+        ],
+        "verified": true,
+        "shape": "round",
+        "faces": [
+          "-y"
+        ],
+        "kind": "hole"
+      },
+      {
+        "portId": "hole.-y.14_-12_-2",
+        "type": "pin_hole",
+        "origin": [
+          44.45,
+          -38.15,
+          -6.199
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "through": false,
+        "spanMm": [
+          -37.194,
+          37.194
+        ],
+        "pitchCoord": [
+          3.5,
+          -3,
+          -0.49
+        ],
+        "verified": true,
+        "shape": "round",
+        "faces": [
+          "-y"
+        ],
+        "kind": "hole"
       }
     ]
   },

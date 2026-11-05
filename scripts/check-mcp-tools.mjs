@@ -415,7 +415,7 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   );
 
   // e. Parts that fit more than one way list the others (otherFits), and flip picks one
-  const brain = mk('Brain', 'VEX IQ Robot Brain', [0, 69.9, 0]);
+  const brain = mk('Brain', 'VEX IQ Robot Brain Gen 1', [0, 69.9, 0]);
   const cornerItem = (insert = {}) => [{ partQuery: 'Double 2x Wide, 1x2 Corner Connector', label: 'Corner', insert: { sourcePort: 'peg_1', into: { instanceId: 'Brain', port: 'brain_right_mount_8@lo' }, ...insert } }];
   res = await fresh([brain], cornerItem(), { dryRun: true });
   const corner = res.data?.parts?.[0];
