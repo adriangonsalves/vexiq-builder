@@ -1,7 +1,7 @@
 /**
  * The audit's findings as one list of plain-language issues, for the Audit & Blueprint dialog.
  * `problem` issues are the ones that make the build "not mechanically sound"; `note` issues are
- * only worth a look (parts held by a single pin). Each issue names the part to select when clicked.
+ * only worth a look (parts held by a single pin, tight fits). Each issue names the part to select when clicked.
  * Pure (no React/DOM).
  */
 
@@ -62,6 +62,9 @@ export function auditIssues(audit) {
   }
   for (const p of audit.singlePinPivotParts || []) {
     add('single-pin', 'note', `${p.label} is held by one pin`, 'It can pivot on that pin. Add a second pin if it should stay fixed.', [part(p)]);
+  }
+  for (const t of audit.tightFits || []) {
+    add('tight-fit', 'note', `${t.label} is a tight fit with ${t.withLabel}`, 'They touch by up to half a millimetre, as parts often do in VEX CAD. It is not counted as an overlap.', [part(t), { instanceId: t.withInstanceId, label: t.withLabel }]);
   }
   return issues;
 }

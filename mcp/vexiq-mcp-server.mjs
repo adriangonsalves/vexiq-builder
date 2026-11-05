@@ -57,6 +57,8 @@ import {
 } from '../src/utils/buildHistory.js';
 
 // capture_screenshot's named views (src/components/Viewport3D.jsx frames them)
+// Tight fits (openspec tight-fits): contacts within TIGHT_FIT_MM, reported but not overlaps
+const tightFitsReply = (tightFits) => (tightFits?.length ? { tightFits: tightFits.map((c) => c.label) } : {});
 const SCREENSHOT_VIEWS = ['current', 'iso', 'iso-front-left', 'iso-back-right', 'iso-back-left', 'front', 'back', 'side', 'right', 'left', 'top', 'bottom'];
 
 const TOOLS = [
@@ -1215,7 +1217,7 @@ async function executeTool(name, args = {}) {
     const otherPatches = settled.patches.filter((p) => p.instanceId !== instanceId);
     const settledInstances = applyPosePatches(state.instances, otherPatches);
 
-    const { isIntersecting, collidingWith } = checkCandidateCollision(candidate, settledInstances);
+    const { isIntersecting, collidingWith, tightFits } = checkCandidateCollision(candidate, settledInstances);
     candidate.isIntersecting = isIntersecting;
     candidate.lastValidPosition = isIntersecting ? null : [...candidate.position];
     candidate.lastValidRotation = isIntersecting ? null : [...candidate.rotation];
@@ -1243,6 +1245,7 @@ async function executeTool(name, args = {}) {
       status: isIntersecting ? 'intersecting_transparent_grey_preview' : 'placed_solid',
       isIntersecting,
       collidingWith,
+      ...tightFitsReply(tightFits),
       instance: candidate,
       ...(settled.messages.length ? { notes: settled.messages } : {}),
       ...(ownPatch?.rotation ? { rotationReplaced: 'The given rotation was turned to fit a square hole or to mesh.' } : {}),
@@ -1285,7 +1288,7 @@ async function executeTool(name, args = {}) {
       locked: args.locked !== undefined ? Boolean(args.locked) : target.locked
     };
 
-    const { isIntersecting, collidingWith } = checkCandidateCollision(updated, state.instances);
+    const { isIntersecting, collidingWith, tightFits } = checkCandidateCollision(updated, state.instances);
     updated.isIntersecting = isIntersecting;
     if (!isIntersecting) {
       updated.lastValidPosition = [...position];
@@ -1306,6 +1309,7 @@ async function executeTool(name, args = {}) {
       status: isIntersecting ? 'intersecting_transparent_grey_preview' : 'placed_solid',
       isIntersecting,
       collidingWith,
+      ...tightFitsReply(tightFits),
       instance: updated
     };
   }
@@ -1648,7 +1652,7 @@ async function executeTool(name, args = {}) {
         color: args.color || existingInst.color,
         label: args.label || existingInst.label
       };
-      const { isIntersecting, collidingWith } = checkCandidateCollision(updated, state.instances);
+      const { isIntersecting, collidingWith, tightFits } = checkCandidateCollision(updated, state.instances);
       updated.isIntersecting = isIntersecting;
       if (!isIntersecting) {
         updated.lastValidPosition = [...mate.position];
@@ -1669,6 +1673,7 @@ async function executeTool(name, args = {}) {
         status: isIntersecting ? 'intersecting_transparent_grey_preview' : 'mated_solid',
         isIntersecting,
         collidingWith,
+        ...tightFitsReply(tightFits),
         matedPorts: {
           sourcePortId: mate.sourcePort.portId,
           targetPortId: mate.targetPort.portId
@@ -1691,7 +1696,7 @@ async function executeTool(name, args = {}) {
         locked: false
       };
 
-      const { isIntersecting, collidingWith } = checkCandidateCollision(newInst, state.instances);
+      const { isIntersecting, collidingWith, tightFits } = checkCandidateCollision(newInst, state.instances);
       newInst.isIntersecting = isIntersecting;
 
       const nextInstances = [...state.instances, newInst];
@@ -1706,6 +1711,7 @@ async function executeTool(name, args = {}) {
         status: isIntersecting ? 'intersecting_transparent_grey_preview' : 'mated_solid',
         isIntersecting,
         collidingWith,
+        ...tightFitsReply(tightFits),
         matedPorts: {
           sourcePortId: mate.sourcePort.portId,
           targetPortId: mate.targetPort.portId
@@ -1793,6 +1799,7 @@ async function executeTool(name, args = {}) {
       label: p.inst.label,
       status: p.inst.isIntersecting ? 'overlapping' : 'placed',
       ...(p.collidingWith.length ? { overlaps: p.collidingWith } : {}),
+      ...(p.tightFits?.length ? { tightFits: p.tightFits } : {}),
       ...(p.stoppedAgainst ? { stoppedAgainst: p.stoppedAgainst } : {}),
       ...(p.otherFits?.length
         ? {

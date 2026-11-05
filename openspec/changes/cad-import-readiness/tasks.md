@@ -1,8 +1,8 @@
 ## 1. Tight fits
 
-- [ ] 1.1 In `src/engine/core.js`, add the deeper (0.88 mm) collision mesh cache. Make `checkCandidateCollision` return `tightFits` beside `collidingWith`, testing the deeper mesh only for pairs that hit. Verify with a new `scripts/check-tight-fits.mjs`: a standoff 0.53 mm off a hole is a tight fit; a 2x12 Beam on top of another is an overlap.
-- [ ] 1.2 Pass `tightFits` through `place_part`, `place_parts` (`tightFits` per item; ignored by `rejectIntersecting`), `update_part`, `mate_parts` and Fix assembly replies. Verify by extending `scripts/check-mcp-tools.mjs`.
-- [ ] 1.3 Add tight fits to `audit_assembly` (own list and count, not unsound) and to the `place_parts` audit summary. Verify with `scripts/check-audit-issues.mjs`.
+- [x] 1.1 In `src/engine/core.js`, add the deeper (0.88 mm) collision mesh cache. Make `checkCandidateCollision` return `tightFits` beside `collidingWith`, testing the deeper mesh only for pairs that hit. Verify with a new `scripts/check-tight-fits.mjs`: a standoff 0.53 mm off a hole is a tight fit; a 2x12 Beam on top of another is an overlap.
+- [x] 1.2 Pass `tightFits` through `place_part`, `place_parts` (`tightFits` per item; ignored by `rejectIntersecting`), `update_part`, `mate_parts` and Fix assembly replies. Verify by extending `scripts/check-mcp-tools.mjs`.
+- [x] 1.3 Add tight fits to `audit_assembly` (own list and count, not unsound) and to the `place_parts` audit summary. Verify with `scripts/check-audit-issues.mjs`.
 
 ## 2. Flagged parts stay put
 

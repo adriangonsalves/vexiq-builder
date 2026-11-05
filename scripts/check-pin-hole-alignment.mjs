@@ -3,7 +3,7 @@
  * Run: node scripts/check-pin-hole-alignment.mjs   (exits 1 on any failure)
  */
 import * as THREE from 'three';
-import { auditAssembly, buildWorldMatrix, checkCandidateCollision, findPart, getPartCollisionBvh, getPartMeasurements, worldFeaturesFor } from '../mcp/assembly-engine.mjs';
+import { auditAssembly, buildWorldMatrix, checkCandidateCollision, touchesAny, findPart, getPartCollisionBvh, getPartMeasurements, worldFeaturesFor } from '../mcp/assembly-engine.mjs';
 import fs from 'node:fs';
 import {
   EXCLUDED_PART_NAMES,
@@ -922,7 +922,7 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   // Run it like mateSelected: step until contact (or travel), the part must end flush on the beam
   const at = (d) => ({ ...start, position: [start.position[0], start.position[1], start.position[2] - d] });
   let d = 0;
-  while (d < plans[0].sweepMm && !checkCandidateCollision(at(d + 0.05), [beam]).isIntersecting) d += 0.05;
+  while (d < plans[0].sweepMm && !touchesAny(at(d + 0.05), [beam])) d += 0.05;
   // Contact is found on the shrunk collision meshes (0.38 mm per part), so flat faces register within 0.76 mm, as for pin caps
   check('  stacking stops with the connector resting on the beam (5 mm down, within the 0.76 mm contact tolerance), not overlapping', d >= 5 - 0.06 && d <= 5.76 && !checkCandidateCollision(at(d), [beam]).isIntersecting, `${d.toFixed(2)} mm`);
   // A direction with both kinds of pair keeps the longer travel
@@ -1065,7 +1065,7 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
     [[38.127, 63.275, -44.45], [0, 90, 0]], [[38.127, 63.275, -31.75], [0, -90, 0]]
   ].map(([p, rot], i) => inst(`pin${i}`, '1x1 Connector Pin', p, rot));
   const brainAt = (x) => inst('brain', BRAIN, [x, 69.7, 0], [0, 90, 0]);
-  const clearAt = (x0) => (t) => !checkCandidateCollision(brainAt(x0 + t), pinParts).isIntersecting;
+  const clearAt = (x0) => (t) => !touchesAny(brainAt(x0 + t), pinParts);
   for (const x0 of [-0.475, 2.7]) {
     const d = clearSpotAlongLine(clearAt(x0), 3.175);
     const x = d === null ? null : x0 + d;

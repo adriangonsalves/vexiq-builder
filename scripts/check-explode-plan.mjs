@@ -181,7 +181,11 @@ for (const mode of ['all', 'x', 'y', 'z']) {
 for (const mode of ['all', 'y']) {
   const plan = plans[mode];
   const builtHits = new Set();
-  for (const inst of instances) for (const c of checkCandidateCollision(inst, instances).collidingWith) builtHits.add(`${inst.instanceId}|${c.instanceId}`);
+  // Pairs touching when built, tight fits included: sliding apart may press a tight fit a little deeper
+  for (const inst of instances) {
+    const col = checkCandidateCollision(inst, instances);
+    for (const c of [...col.collidingWith, ...col.tightFits]) builtHits.add(`${inst.instanceId}|${c.instanceId}`);
+  }
   const hits = [];
   for (let i = 1; i <= 20 && hits.length < 5; i++) {
     const t = i / 20;

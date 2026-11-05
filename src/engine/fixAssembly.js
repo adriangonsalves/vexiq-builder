@@ -6,7 +6,7 @@
  * slid along that line until it is seated without overlapping.
  */
 import * as THREE from 'three';
-import { buildWorldMatrix, checkCandidateCollision, getCatalog, jointGraph, worldFeaturesFor } from './core.js';
+import { buildWorldMatrix, checkCandidateCollision, getCatalog, jointGraph, touchesAny, worldFeaturesFor } from './core.js';
 import { clearSpotAlongLine, insertFitsOpening, worldPartBox } from '../utils/pinHoleAlignment.js';
 import { groupsOf } from '../utils/partGroups.js';
 import { quaternionToEulerDeg } from '../utils/gearMeshing.js';
@@ -396,7 +396,8 @@ function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, l
       const p = posed.get(i.instanceId);
       return { ...i, position: p.position.map((v, k) => v + axis.getComponent(k) * d), rotation: p.rotation };
     });
-  const isClearAt = (d, axis) => at(d, axis).every((c) => !checkCandidateCollision(c, others).isIntersecting);
+  // Moving onto the pins stops at first contact, so tight fits count as touching here
+  const isClearAt = (d, axis) => at(d, axis).every((c) => !touchesAny(c, others));
   const axis = pairs[0].f.axis.clone();
   const parallel = pairs.every((p) => Math.abs(p.f.axis.dot(axis)) >= PARALLEL_DOT);
   let slide = 0;
@@ -410,7 +411,10 @@ function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, l
     // else is met: a pin's collar often meets first, but its length isn't on the quarter-pitch steps
     const FASTENER_CATEGORIES = new Set(['Pins & Standoffs', 'Shafts, Spacers & Collars']);
     const touchingAt = (d) => {
-      const met = at(d, axis).flatMap((c) => checkCandidateCollision(c, others).collidingWith.map((w) => [c.instanceId, w.instanceId]));
+      const met = at(d, axis).flatMap((c) => {
+        const col = checkCandidateCollision(c, others);
+        return [...col.collidingWith, ...col.tightFits].map((w) => [c.instanceId, w.instanceId]);
+      });
       const isFastener = ([mId, fId]) => [mId, fId].some((id) => FASTENER_CATEGORIES.has(catalogById.get(byId.get(id).partId)?.category));
       const solid = met.filter((pair) => !isFastener(pair));
       return solid.length ? solid : met;
@@ -578,8 +582,10 @@ export function fixAssembly(state, { instanceId } = {}) {
   const movedParts = fit.movedParts.map((c) => ({ ...c, position: c.position.map((v) => Number(v.toFixed(3)) + 0) }));
   const movedById = new Map(movedParts.map((c) => [c.instanceId, c]));
   const nextInstances = instances.map((i) => movedById.get(i.instanceId) || i);
+  const tight = new Set();
   for (const c of movedParts) {
-    const { isIntersecting } = checkCandidateCollision(c, nextInstances);
+    const { isIntersecting, tightFits } = checkCandidateCollision(c, nextInstances);
+    for (const t of tightFits) tight.add(`${c.label} / ${t.label}`);
     c.isIntersecting = isIntersecting;
     if (!isIntersecting) {
       c.lastValidPosition = [...c.position];
@@ -606,6 +612,7 @@ export function fixAssembly(state, { instanceId } = {}) {
     stepLabel: `Fix assembly: ${movedName} onto ${onto}`,
     message,
     isIntersecting: overlapping.length > 0,
+    ...(tight.size ? { tightFits: [...tight] } : {}),
     moved: [...moving],
     pairs: lined,
     state: { ...state, instances: finalInstances, updatedAt: new Date().toISOString() }

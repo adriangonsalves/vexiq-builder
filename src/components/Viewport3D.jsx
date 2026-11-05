@@ -1620,8 +1620,10 @@ export default function Viewport3D({
   };
 
   // ignoreIds: parts moving together with the target (a set), which never count as overlapping it.
-  // hits: when given, every overlapped part's id is pushed to it (all of them, not just the first)
-  const checkGroupCollision = (targetGroup, useAssembledPositions = false, ignoreIds = null, hits = null) => {
+  // hits: when given, every overlapped part's id is pushed to it (all of them, not just the first).
+  // tightOk: a contact that only the normal collision mesh sees is a tight fit, not an overlap. Set
+  // it where the result marks a part overlapping; moves that stop at first contact leave it off
+  const checkGroupCollision = (targetGroup, useAssembledPositions = false, ignoreIds = null, hits = null, tightOk = false) => {
     if (!targetGroup || !targetGroup.visible) return false;
     const colGeosA = targetGroup.userData.collisionGeometries;
     const localBoxA = targetGroup.userData.localBox;
@@ -1685,6 +1687,21 @@ export default function Viewport3D({
           if (geoA.boundsTree.intersectsGeometry(geoB, m)) collided = true;
         });
       });
+      if (collided && tightOk && targetGroup.userData.deepCollisionGeometries && otherGroup.userData.deepCollisionGeometries) {
+        const deepA = targetGroup.userData.deepCollisionGeometries();
+        const deepB = otherGroup.userData.deepCollisionGeometries();
+        collided = deepA.some((geoA, i) =>
+          deepB.some((geoB, j) => {
+            let m = matrixBtoA;
+            if (localsA?.[i] || localsB?.[j]) {
+              m = _pieceMatrix.copy(matrixBtoA);
+              if (localsA?.[i]) m.premultiply(_pieceInverse.copy(localsA[i]).invert());
+              if (localsB?.[j]) m.multiply(localsB[j]);
+            }
+            return geoA.boundsTree.intersectsGeometry(geoB, m);
+          })
+        );
+      }
       // The shrunk meshes miss small overlaps, like a shaft's cap inside a hole it can't pass
       if (!collided && (isShaftGroup(targetGroup) || isShaftGroup(otherGroup))) {
         if (featuresA === undefined) featuresA = worldFeaturesOfGroup(targetGroup);
@@ -1977,7 +1994,7 @@ export default function Viewport3D({
     const settled = settle ? settleInstances(id, groupPose(group), { receivingId }) : { patches: [], messages: [] };
     const own = settled.patches.find((p) => p.instanceId === id);
     if (own?.position) poseGroup(group, own);
-    const isIntersecting = checkGroupCollision(group, false);
+    const isIntersecting = checkGroupCollision(group, false, null, null, true);
     group.userData.isIntersecting = isIntersecting;
     const extraPatches = settled.patches.filter((p) => p.instanceId !== id);
     const notes = settled.messages;
@@ -3502,7 +3519,7 @@ export default function Viewport3D({
   const markSetOverlaps = (members, ignore, edge = null) => {
     const overlaps = new Map();
     for (const { id, group, inst } of members) {
-      const isColliding = edge && !edge.has(id) ? false : checkGroupCollision(group, false, ignore);
+      const isColliding = edge && !edge.has(id) ? false : checkGroupCollision(group, false, ignore, null, true);
       group.userData.isIntersecting = isColliding;
       overlaps.set(id, isColliding);
       applyGroupAppearance(group, {
@@ -3708,7 +3725,7 @@ export default function Viewport3D({
 
     const inst = instancesRef.current.find((i) => i.instanceId === setup.instanceId);
     const partMeta = catalogMapRef.current.get(group.userData.partId);
-    const isColliding = checkGroupCollision(group, false);
+    const isColliding = checkGroupCollision(group, false, null, null, true);
     group.userData.isIntersecting = isColliding;
     applyGroupAppearance(group, {
       baseColor: resolvePartBaseColor(inst, partMeta),
@@ -3755,7 +3772,7 @@ export default function Viewport3D({
     }
     const group = gesture ? meshMapRef.current.get(gesture.instanceId) : null;
     if (!group) return;
-    const isColliding = checkGroupCollision(group, false);
+    const isColliding = checkGroupCollision(group, false, null, null, true);
     if (isColliding && !gesture.startOverlap) {
       group.position.copy(gesture.startPos);
       group.quaternion.copy(gesture.startQuat);
@@ -4479,7 +4496,7 @@ export default function Viewport3D({
         return;
       }
 
-      const isColliding = checkGroupCollision(obj, false);
+      const isColliding = checkGroupCollision(obj, false, null, null, true);
       obj.userData.isIntersecting = isColliding;
 
       applyGroupAppearance(obj, {
@@ -6068,9 +6085,10 @@ export default function Viewport3D({
 
         onLoadingChange?.(true);
         loadPartAsset(partMeta)
-          .then(({ geometries, collisionGeometries, localBox, hub }) => {
+          .then(({ geometries, collisionGeometries, deepCollisionGeometries, localBox, hub }) => {
             if (!meshMapRef.current.has(inst.instanceId)) return;
             group.userData.collisionGeometries = collisionGeometries;
+            group.userData.deepCollisionGeometries = deepCollisionGeometries;
             group.userData.renderGeometries = geometries;
             group.userData.localBox = localBox;
             group.userData.hub = hub ? { ...hub, objects: [] } : null;
@@ -6149,10 +6167,7 @@ export default function Viewport3D({
               (i) => i.instanceId === inst.instanceId
             );
             const isSelectedNow = selectLevel(selectedIdsRef.current, inst.instanceId);
-            const isColliding = checkGroupCollision(
-              group,
-              explodeModeRef.current !== 'off'
-            );
+            const isColliding = checkGroupCollision(group, explodeModeRef.current !== 'off', null, null, true);
             group.userData.isIntersecting = isColliding;
 
             applyGroupAppearance(group, {
@@ -6203,7 +6218,7 @@ export default function Viewport3D({
 
       const isSelected = selectedId === inst.instanceId;
       const isColliding = group.userData.collisionGeometries
-        ? checkGroupCollision(group, explodeMode !== 'off')
+        ? checkGroupCollision(group, explodeMode !== 'off', null, null, true)
         : Boolean(inst.isIntersecting);
       group.userData.isIntersecting = isColliding;
 
@@ -6314,7 +6329,7 @@ export default function Viewport3D({
       const inst = instancesRef.current.find((i) => i.instanceId === id);
       if (!group || !inst || !group.userData.collisionGeometries) continue;
       partGroupRef.current?.updateMatrixWorld(true);
-      const isColliding = checkGroupCollision(group, explodeModeRef.current !== 'off');
+      const isColliding = checkGroupCollision(group, explodeModeRef.current !== 'off', null, null, true);
       group.userData.isIntersecting = isColliding;
       const partMeta = catalogMapRef.current.get(inst.partId);
       applyGroupAppearance(group, {

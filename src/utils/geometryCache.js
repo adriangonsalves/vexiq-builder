@@ -40,7 +40,10 @@ const partAssetCache = new Map();
  * This shrinks outer pin/shaft snap lips and widens inner hole walls so pins and axles pass
  * cleanly through holes without false surface-grazing collisions while catching all solid overlaps.
  */
-function createErodedCollisionGeometry(srcGeo, clearanceMm = 0.38) {
+const COLLISION_CLEARANCE_MM = 0.38;
+const TIGHT_FIT_MM = 0.5;
+
+function createErodedCollisionGeometry(srcGeo, clearanceMm = COLLISION_CLEARANCE_MM) {
   const geo = srcGeo.clone();
   if (!geo.attributes.normal) {
     geo.computeVertexNormals();
@@ -140,12 +143,18 @@ export function loadPartAsset(part) {
                 hub.collisionIndices.push(collisionGeometries.length);
               }
               geometries.push(piece.geo);
-              collisionGeometries.push(createErodedCollisionGeometry(piece.geo, 0.38));
+              collisionGeometries.push(createErodedCollisionGeometry(piece.geo, COLLISION_CLEARANCE_MM));
             }
           }
         });
 
-        resolve({ geometries, collisionGeometries, localBox, hub: hub.renderIndices.length ? hub : null });
+        // Pulled in a further TIGHT_FIT_MM, built on first use: a contact the normal collision
+        // mesh sees but this one doesn't is a tight fit, not an overlap (engine/core.js)
+        let deep = null;
+        const deepCollisionGeometries = () =>
+          (deep ||= geometries.map((g) => createErodedCollisionGeometry(g, COLLISION_CLEARANCE_MM + TIGHT_FIT_MM)));
+
+        resolve({ geometries, collisionGeometries, deepCollisionGeometries, localBox, hub: hub.renderIndices.length ? hub : null });
       },
       undefined,
       (err) => reject(err)

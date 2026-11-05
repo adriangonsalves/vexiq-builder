@@ -1070,6 +1070,28 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
 }
 
 // ---------------------------------------------------------------------------
+// Tight fits (openspec tight-fits): Herobot Flop's tower pivot standoff, 0.53 mm off a beam hole
+{
+  await call('clear_assembly');
+  const beam = { partQuery: '228-2500-015', ref: 'beam', label: 'Pivot Beam', position: [-125.074, 57.616, -41.275], rotation: [0, 0, -20.863] };
+  const standoff = { partQuery: '228-2500-064', ref: 'standoff', label: 'Pivot Standoff', position: [-225.425, 96.15, -31.755], rotation: [0, 0, -169.284] };
+  let res = await call('place_parts', { parts: [beam, standoff], rejectIntersecting: true });
+  const item = res.data?.parts?.find((p) => p.ref === 'standoff');
+  check(
+    'place_parts: a tight-fit item is placed, saved under rejectIntersecting, with the beam in its tightFits',
+    res.data?.saved && item?.status === 'placed' && item.tightFits?.includes('Pivot Beam') && !item.overlaps,
+    JSON.stringify(res.data?.parts)
+  );
+  check('  the audit summary counts the tight fit, not an overlap', res.data?.audit?.collisionCount === 0 && res.data?.audit?.tightFitCount >= 1, JSON.stringify(res.data?.audit));
+  const id = item?.instanceId;
+  res = await call('update_part', { instanceId: id, position: standoff.position });
+  check('update_part: the reply lists the tight fit and the part is not overlapping', res.data?.ok && !res.data.isIntersecting && res.data.tightFits?.includes('Pivot Beam'), JSON.stringify(res.data?.tightFits));
+  await call('remove_part', { instanceId: id });
+  res = await call('place_part', { partQuery: '228-2500-064', label: 'Pivot Standoff', position: standoff.position, rotation: standoff.rotation });
+  check('place_part: placed solid with the tight fit listed', res.data?.placed && res.data.tightFits?.includes('Pivot Beam'), JSON.stringify({ placed: res.data?.placed, tightFits: res.data?.tightFits }));
+}
+
+// ---------------------------------------------------------------------------
 server.stdin.end();
 server.kill();
 await stopBridge().catch(() => {});

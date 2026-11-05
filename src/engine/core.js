@@ -38,6 +38,11 @@ export const VEX_PITCH_MM = 12.7;
 let catalogCache = null;
 let catalogById = null;
 const bvhCache = new Map(); // partId -> { colGeo, localBox }
+const deepBvhCache = new Map(); // partId -> the same, pulled in TIGHT_FIT_MM further
+
+export const COLLISION_CLEARANCE_MM = 0.38;
+// Contacts that only reach this much deeper than the collision mesh's clearance are tight fits
+export const TIGHT_FIT_MM = 0.5;
 
 /**
  * Where the engine gets the part catalog and each part's GLB file. Node reads them from public/
@@ -135,12 +140,20 @@ export function getPartRawGeometry(part) {
 }
 
 export function getPartCollisionBvh(part) {
-  if (bvhCache.has(part.id)) {
-    return bvhCache.get(part.id);
-  }
+  if (!bvhCache.has(part.id)) bvhCache.set(part.id, buildCollisionBvh(part, COLLISION_CLEARANCE_MM));
+  return bvhCache.get(part.id);
+}
 
+/** The collision mesh pulled in a further TIGHT_FIT_MM, to tell tight fits from overlaps. */
+export function getPartDeepCollisionBvh(part) {
+  if (!deepBvhCache.has(part.id)) {
+    deepBvhCache.set(part.id, buildCollisionBvh(part, COLLISION_CLEARANCE_MM + TIGHT_FIT_MM));
+  }
+  return deepBvhCache.get(part.id);
+}
+
+function buildCollisionBvh(part, clearanceMm) {
   const { pos, norm, idx } = readPartGlb(part);
-  const clearanceMm = 0.38;
   const weldedNormals = new Map();
   for (let i = 0; i < pos.length; i += 3) {
     const key = `${Math.round(pos[i] * 100)},${Math.round(pos[i + 1] * 100)},${Math.round(
@@ -194,9 +207,7 @@ export function getPartCollisionBvh(part) {
     }
   }
 
-  const entry = { colGeo, localBox: colGeo.boundingBox.clone(), pieces, hubFrame: frame };
-  bvhCache.set(part.id, entry);
-  return entry;
+  return { colGeo, localBox: colGeo.boundingBox.clone(), pieces, hubFrame: frame };
 }
 
 export function buildWorldMatrix(position, rotationDeg) {
@@ -212,10 +223,6 @@ export function buildWorldMatrix(position, rotationDeg) {
   return new THREE.Matrix4().compose(pos, quat, scale);
 }
 
-/**
- * Checks if a candidate instance (partId, position, rotation) intersects any other
- * visible instance in the assembly list. Returns { isIntersecting, collidingWith: [...] }.
- */
 /** Distance to a part's real surface along a ray in part-local mm, or null on a miss. */
 function rawRaycast(part) {
   const geo = getPartRawGeometry(part);
@@ -239,10 +246,28 @@ function posedPieces(bvh, instance) {
   });
 }
 
+const meshesHit = (piecesA, piecesB, matBtoA) => {
+  const pieceMat = new THREE.Matrix4();
+  return piecesA.some((a) =>
+    piecesB.some((b) => {
+      pieceMat.copy(matBtoA);
+      if (a.inverse) pieceMat.premultiply(a.inverse);
+      if (b.local) pieceMat.multiply(b.local);
+      return a.geo.boundsTree.intersectsGeometry(b.geo, pieceMat);
+    })
+  );
+};
+
+/**
+ * Checks if a candidate instance (partId, position, rotation) intersects any other
+ * visible instance in the assembly list. Returns { isIntersecting, collidingWith, tightFits }:
+ * a pair whose meshes meet but no longer do once pulled in a further TIGHT_FIT_MM is a tight
+ * fit, not an overlap.
+ */
 export function checkCandidateCollision(candidate, instances) {
   const { catalogById } = getCatalog();
   const partA = catalogById.get(candidate.partId);
-  if (!partA) return { isIntersecting: false, collidingWith: [] };
+  if (!partA) return { isIntersecting: false, collidingWith: [], tightFits: [] };
 
   const bvhA = getPartCollisionBvh(partA);
   const { localBox: boxA } = bvhA;
@@ -251,9 +276,10 @@ export function checkCandidateCollision(candidate, instances) {
   const worldBoxA = boxA.clone().applyMatrix4(matA);
   const invMatA = matA.clone().invert();
   const matBtoA = new THREE.Matrix4();
-  const pieceMat = new THREE.Matrix4();
 
   const collidingWith = [];
+  const tightFits = [];
+  let deepA = null;
   let featuresA = null; // only worked out when a shaft and a hole meet
 
   for (const other of instances) {
@@ -272,22 +298,22 @@ export function checkCandidateCollision(candidate, instances) {
     if (isChainFit(partA, matA, partB, matB)) continue;
 
     matBtoA.multiplyMatrices(invMatA, matB);
-    const piecesB = posedPieces(bvhB, other);
-    let hit = piecesA.some((a) =>
-      piecesB.some((b) => {
-        pieceMat.copy(matBtoA);
-        if (a.inverse) pieceMat.premultiply(a.inverse);
-        if (b.local) pieceMat.multiply(b.local);
-        return a.geo.boundsTree.intersectsGeometry(b.geo, pieceMat);
-      })
-    );
+    let hit = meshesHit(piecesA, posedPieces(bvhB, other), matBtoA);
+    let tight = false;
+    if (hit) {
+      deepA ||= posedPieces(getPartDeepCollisionBvh(partA), candidate);
+      tight = !meshesHit(deepA, posedPieces(getPartDeepCollisionBvh(partB), other), matBtoA);
+    }
     // The shrunk meshes miss small overlaps, like a shaft's cap inside a hole it can't pass
-    if (!hit && (isShaftPart(partA) || isShaftPart(partB))) {
+    if ((!hit || tight) && (isShaftPart(partA) || isShaftPart(partB))) {
       featuresA ||= worldFeaturesFor(candidate);
-      hit = findTooWideInserts(featuresA, worldFeaturesFor(other)).length > 0;
+      if (findTooWideInserts(featuresA, worldFeaturesFor(other)).length > 0) {
+        hit = true;
+        tight = false;
+      }
     }
     if (hit) {
-      collidingWith.push({
+      (tight ? tightFits : collidingWith).push({
         instanceId: other.instanceId,
         label: other.label,
         partNumber: partB.partNumber
@@ -297,8 +323,15 @@ export function checkCandidateCollision(candidate, instances) {
 
   return {
     isIntersecting: collidingWith.length > 0,
-    collidingWith
+    collidingWith,
+    tightFits
   };
+}
+
+/** True when the candidate meets any part, tight fits included: for moves that stop at first contact. */
+export function touchesAny(candidate, instances) {
+  const col = checkCandidateCollision(candidate, instances);
+  return col.isIntersecting || col.tightFits.length > 0;
 }
 
 export function buildDefaultStarterState() {
@@ -423,7 +456,7 @@ export function getWorldPortsForInstance(instance) {
   });
 }
 
-const COLLISION_EROSION_MM = 0.38; // getPartCollisionBvh erodes meshes inward by this much
+const COLLISION_EROSION_MM = COLLISION_CLEARANCE_MM; // getPartCollisionBvh erodes meshes inward by this much
 const measurementCache = new Map(); // partId -> { surfaces, pinEnds, depths }
 
 /**
@@ -1024,6 +1057,7 @@ export function auditAssembly(state) {
   } = found;
 
   const collisions = [];
+  const tightFits = []; // one entry per pair: contacts within TIGHT_FIT_MM, not overlaps
   for (const inst of visible) {
     const col = checkCandidateCollision(inst, visible);
     if (col.isIntersecting) {
@@ -1032,6 +1066,11 @@ export function auditAssembly(state) {
         label: inst.label,
         collidingWith: col.collidingWith.map((c) => c.label)
       });
+    }
+    for (const t of col.tightFits) {
+      if (inst.instanceId < t.instanceId || !visible.some((v) => v.instanceId === t.instanceId)) {
+        tightFits.push({ instanceId: inst.instanceId, label: inst.label, withInstanceId: t.instanceId, withLabel: t.label });
+      }
     }
   }
 
@@ -1254,6 +1293,8 @@ export function auditAssembly(state) {
       protrudingShafts.length === 0,
     collisionCount: collisions.length,
     collisions,
+    tightFitCount: tightFits.length,
+    tightFits,
     floatingFastenerCount: floatingFasteners.length,
     floatingFasteners,
     halfSeatedFastenerCount: halfSeatedFasteners.length,
@@ -2058,6 +2099,7 @@ export function summarizeAudit(audit) {
   return {
     isMechanicallySound: audit.isMechanicallySound,
     collisionCount: audit.collisionCount,
+    tightFitCount: audit.tightFitCount,
     floatingFastenerCount: audit.floatingFastenerCount,
     halfSeatedFastenerCount: audit.halfSeatedFastenerCount,
     unsecuredPartCount: audit.unsecuredPartCount,
@@ -2069,6 +2111,7 @@ export function summarizeAudit(audit) {
     problems: Object.fromEntries(
       Object.entries({
         collisions: audit.collisions.map((c) => `${c.label} x ${c.collidingWith.join(', ')}`),
+        tightFits: audit.tightFits.map((t) => `${t.label} x ${t.withLabel}`),
         floating: names(audit.floatingFasteners),
         halfSeated: names(audit.halfSeatedFasteners),
         unsecured: names(audit.unsecuredParts),
@@ -2311,11 +2354,12 @@ export function placeParts(state, items, options = {}) {
   }
 
   for (const p of placed) {
-    const { isIntersecting, collidingWith } = checkCandidateCollision(p.inst, working);
+    const { isIntersecting, collidingWith, tightFits } = checkCandidateCollision(p.inst, working);
     p.inst.isIntersecting = isIntersecting;
     p.inst.lastValidPosition = isIntersecting ? null : [...p.inst.position];
     p.inst.lastValidRotation = isIntersecting ? null : [...p.inst.rotation];
     p.collidingWith = collidingWith.map((c) => c.label);
+    p.tightFits = tightFits.map((c) => c.label);
   }
   for (const id of turnedIds) {
     const inst = working.find((w) => w.instanceId === id);
@@ -2486,7 +2530,12 @@ function insertIntoOpening(part, insert, target, others, instanceId) {
   const plan = planMates([pair], instanceId)[0];
 
   const pos = start.clone().add(plan.lateral);
-  const collidesAt = (vec) => checkCandidateCollision(placedAt(vec.toArray()), others);
+  // Moves stop at first contact, so a tight fit counts here too
+  const collidesAt = (vec) => {
+    const col = checkCandidateCollision(placedAt(vec.toArray()), others);
+    const touching = [...col.collidingWith, ...col.tightFits];
+    return { isIntersecting: touching.length > 0, collidingWith: touching };
+  };
   const startHit = collidesAt(pos);
   if (startHit.isIntersecting) {
     return { error: `the start pose outside ${port} already touches ${startHit.collidingWith.map((c) => c.label).join(', ')}` };
