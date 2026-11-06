@@ -10,7 +10,9 @@
  * lowest part rests on the floor, y = 0).
  *
  * Every library part is converted with public/cad-frames.json (src/engine/cadFrames.js), placed in
- * batches with place_parts (structural parts before pins), then grouped per top subassembly.
+ * batches with place_parts (structural parts before pins), then grouped per top subassembly. A sheet
+ * whose frame entry says `"bend": "pins"` is laid on the pins that hold it and bent through the rest
+ * (openspec shaped-parts-and-sheet-bending), and placed bent.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -203,7 +205,8 @@ export function convertParts(walked, { catalog, frames, liftMm = null, looksTheS
       position: [c.pose.position[0], Number((c.pose.position[1] + lift).toFixed(3)), c.pose.position[2]],
       rotation: c.pose.rotation,
       subassembly: c.sub,
-      isPin: c.lib.category === 'Pins & Standoffs'
+      isPin: c.lib.category === 'Pins & Standoffs',
+      ...(frameEntryFor(frames, c.w.cadPartNumber).bend === 'pins' ? { bendThroughPins: true } : {})
     };
   });
   // Structural parts first, pins after, so pins go into parts already there
@@ -265,7 +268,7 @@ export async function placeItems(items, { clear = false, env } = {}) {
     for (let i = 0; i < items.length; i += BATCH) {
       const batch = items.slice(i, i + BATCH);
       const res = await mcp.call('place_parts', {
-        parts: batch.map(({ partQuery, label, position, rotation }) => ({ partQuery, label, position, rotation })),
+        parts: batch.map(({ partQuery, label, position, rotation, shape }) => ({ partQuery, label, position, rotation, ...(shape ? { shape } : {}) })),
         keepPoses: true
       });
       res.parts.forEach((p, k) => {
@@ -283,6 +286,37 @@ export async function placeItems(items, { clear = false, env } = {}) {
   }
 }
 
+/**
+ * Sheets bent in VEX CAD (`bendThroughPins`), laid on the pins that hold them and bent through the rest
+ * with the engine, in item order so a later sheet stacks on an earlier one. Changes the sheet items'
+ * pose and adds their shape; returns [{ label, anchored, unanchored, error }] for the report.
+ */
+export async function bendImportedSheets(items) {
+  const { getCatalog } = await import('../mcp/assembly-engine.mjs');
+  const { bendSheetOnPins } = await import('../src/engine/sheetBending.js');
+  const { catalogById } = getCatalog();
+  const instances = items.map((it, k) => ({ instanceId: `import-${k}`, partId: it.partQuery, label: it.label, position: it.position, rotation: it.rotation, visible: true }));
+  const sheets = items.map((it, k) => (it.bendThroughPins ? k : -1)).filter((k) => k >= 0);
+  const others = new Set(sheets);
+  let state = { instances: instances.filter((_, k) => !others.has(k)) };
+  const results = [];
+  for (const k of sheets) {
+    const it = items[k];
+    const pinIds = instances
+      .filter((inst, j) => items[j].subassembly === it.subassembly && /Sheet Pin/.test(catalogById.get(inst.partId)?.name || ''))
+      .map((inst) => inst.instanceId);
+    const r = bendSheetOnPins(state, { sheetPartId: it.partQuery, label: it.label, pinIds });
+    if (r.error) {
+      results.push({ label: it.label, error: r.error });
+      continue;
+    }
+    Object.assign(it, { position: r.position, rotation: r.rotation, ...(r.shape ? { shape: r.shape } : {}) });
+    state = { instances: [...state.instances, { ...instances[k], position: r.position, rotation: r.rotation, shape: r.shape }] };
+    results.push({ label: it.label, anchored: r.anchored, unanchored: r.unanchored });
+  }
+  return results;
+}
+
 /** The report as plain lines. */
 export function reportLines(r) {
   const lines = [];
@@ -294,6 +328,15 @@ export function reportLines(r) {
   lines.push(`Duplicates dropped ${r.duplicates.length}${r.duplicates.length ? ':' : '.'}`);
   for (const d of r.duplicates) lines.push(`  ${d.path} (same place as ${d.sameAs})`);
   lines.push(r.unchecked.length ? `Placed by the unchecked box-centre rule: ${r.unchecked.join(', ')}` : 'Every part type has a checked frame entry.');
+  for (const b of r.bentSheets || []) {
+    if (b.error) {
+      lines.push(`Sheet placed flat: ${b.error}.`);
+      continue;
+    }
+    const rows = b.anchored.map((a) => `row ${a.row} on ${a.on}${a.stretchMm ? ` (stretched ${a.stretchMm.toFixed(2)} mm)` : ''}`);
+    lines.push(`Bent ${b.label}: ${rows.join(', ') || 'held rows only'}.`);
+    for (const u of b.unanchored) lines.push(`  not anchored on ${u.on}: ${u.reason}`);
+  }
   if (r.audit) {
     const a = r.audit;
     lines.push(`Audit: ${a.collisionCount} overlapping, ${a.tightFitCount} tight fits, ${a.floatingFastenerCount} floating and ${a.halfSeatedFastenerCount} half-seated fasteners, ${a.unsecuredPartCount} unsecured parts.`);
@@ -317,6 +360,7 @@ async function main(argv) {
   const lift = value('--lift');
   const { looksTheSame } = await import('../mcp/assembly-engine.mjs');
   const converted = convertParts(walkAssembly(project), { catalog, frames, liftMm: lift === null ? null : Number(lift), looksTheSame });
+  converted.bentSheets = await bendImportedSheets(converted.items);
   const result = flag('--dry-run') ? converted : { ...converted, ...(await placeItems(converted.items, { clear: flag('--clear') })) };
   for (const line of reportLines(result)) console.log(line);
   if (value('--report')) fs.writeFileSync(value('--report'), JSON.stringify(result, null, 2));

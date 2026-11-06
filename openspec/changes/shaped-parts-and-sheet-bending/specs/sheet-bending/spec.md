@@ -29,7 +29,8 @@ Given a sheet and a target part, the app SHALL list every way a later row of the
 - the sheet's held rows are its rows that already have pins in them or line up with another part's holes; with none, it SHALL say to pin one row of the sheet first;
 - the bend lines are parallel to the held rows; when the held holes are a single hole, both directions are tried;
 - a choice is a sheet row past the held rows (or past the last anchored row), a line of the target's holes parallel to that row to within 3°, every sheet hole in the row that lands on the target lining up with a target hole to within 1 mm along the row, and the face of the target the sheet would lie on;
-- the row must be within reach: its straight distance from the previous row at most the sheet's length between them plus 1 mm;
+- the row must be within reach: a smooth curve (no tighter than 3 mm radius) must fit in the sheet's length between the rows plus at most 1 mm of stretch;
+- only the sheet up to the anchored row must be clear of other parts; what the rest of the sheet past that row runs into is noted with the choice (a later anchor bends it clear);
 - choices whose sheet would pass through the target or another part SHALL be left out, with a count of how many were left out and why.
 
 Each choice SHALL be named by the sheet row and the target and face, for example "sheet row 4 → 1x12 Beam, upper face", and say how far off it is when it is not exact.
@@ -63,6 +64,17 @@ When another sheet already lies on the target face where the row lands, the new 
 #### Scenario: Sheet over a sheet
 - **WHEN** a 6x6 sheet is anchored at its row 6 on a 1x6 Beam where a 6x12 sheet's row already lies
 - **THEN** the 6x6 lies on the 6x12 with a 0.1 mm gap, the overlap check reports nothing between the two sheets, and one sheet pin per hole goes through both
+
+### Requirement: Sheets flex where they press
+A plastic sheet that presses into another part SHALL count as a tight fit, not an overlap, when the sheet would have to flex at most 1.5 mm along its own normal to clear that part; deeper SHALL be an overlap. Two sheets pinned through the same holes (stacked) SHALL count their contact as a tight fit. This applies everywhere overlaps are checked (placing, the audit, Bend sheet's clearance), for flat and bent sheets alike.
+
+#### Scenario: Sheet edge on a plate
+- **WHEN** a bent sheet's edge passes 1 mm into the end of a side plate
+- **THEN** the overlap check lists the plate as a tight fit and reports no overlap
+
+#### Scenario: Sheet through a beam
+- **WHEN** a sheet is bent so it would pass through the middle of a beam
+- **THEN** the overlap check reports the beam as an overlap, and Bend sheet leaves that choice out naming the beam
 
 ### Requirement: Bend sheet tool
 The Tools menu SHALL have Bend sheet, available when a plastic sheet and one other part are selected. It SHALL:

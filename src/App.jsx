@@ -44,6 +44,7 @@ import ExplodePanel from './components/ExplodePanel.jsx';
 import SelectMenu from './components/SelectMenu.jsx';
 import { ChainBuilderDialog, ChainRouteDialog } from './components/BuildMenu.jsx';
 import ToolsMenu from './components/ToolsMenu.jsx';
+import BendSheetDialog from './components/BendSheetDialog.jsx';
 import AuditPanel from './components/AuditPanel.jsx';
 import { auditIssues, problemCount } from './utils/auditIssues.js';
 import { buildChainPath, checkSprocketsForChain } from './utils/chainPath.js';
@@ -92,6 +93,8 @@ import {
   wholeGroupOf
 } from './utils/partGroups.js';
 import { connectedFrom, layersFrom } from './utils/jointLayers.js';
+import { describeShape, shapedPart } from './utils/shapedParts.js';
+import { isPlasticSheet } from './utils/sheetBend.js';
 import {
   applyOps,
   createHistory,
@@ -134,7 +137,7 @@ const EXPLODE_PLAY_MS = 2500; // the slider's play from 0% to 100% when Explode 
 const clamp01 = (n) => Math.min(1, Math.max(0, Number(n) || 0));
 // What an explode plan depends on: the visible parts and where they are (openspec explode-view)
 const explodeSignature = (parts) =>
-  JSON.stringify(parts.filter((i) => i.visible !== false).map((i) => [i.instanceId, i.partId, i.position, i.rotation, i.groupId || null, i.socketAngleDeg || 0]));
+  JSON.stringify(parts.filter((i) => i.visible !== false).map((i) => [i.instanceId, i.partId, i.position, i.rotation, i.groupId || null, i.socketAngleDeg || 0, i.shape || null]));
 const PROJECTIONS = ['perspective', 'orthographic'];
 const VIEW_LAYOUTS = ['single', 'four', 'stereo'];
 const VIEW_DIRECTIONS = ['+x', '-x', '+y', '-y', '+z', '-z'];
@@ -883,7 +886,7 @@ export default function App() {
   );
 
   const selectedPartMeta = useMemo(
-    () => (selectedInstance ? catalogMap.get(selectedInstance.partId) : null),
+    () => (selectedInstance ? shapedPart(catalogMap.get(selectedInstance.partId), selectedInstance.shape) : null),
     [selectedInstance, catalogMap]
   );
 
@@ -1074,7 +1077,7 @@ export default function App() {
     return instances.filter((i) => wanted.has(i.instanceId));
   }, [instances, selectedIds]);
   const setCentre = useMemo(
-    () => (isSet ? setPivot(instances, selectedIds, setWorldBoxes(instances, selectedIds, (i) => catalogMap.get(i.partId)?.bbox)) : null),
+    () => (isSet ? setPivot(instances, selectedIds, setWorldBoxes(instances, selectedIds, (i) => shapedPart(catalogMap.get(i.partId), i.shape)?.bbox)) : null),
     [isSet, instances, selectedIds, catalogMap]
   );
   const setMoveBlocked = () => {
@@ -1107,7 +1110,7 @@ export default function App() {
   // About a point on the set's hole grid, so quarter turns keep its holes on that grid
   const handleTurnSet90 = (axis) => {
     if (setMoveBlocked()) return;
-    const pivot = setGridPivot(setWorldFeatures(instances, selectedIds, (i) => catalogMap.get(i.partId)), setCentre).toArray();
+    const pivot = setGridPivot(setWorldFeatures(instances, selectedIds, (i) => shapedPart(catalogMap.get(i.partId), i.shape)), setCentre).toArray();
     handleUpdateSet(selectedIds, applySetTransform(instances, selectedIds, pivot, { deltaQuat: axisTurn('XYZ'[axis], 90) }), {
       label: `Turn ${setName}`
     });
@@ -1180,7 +1183,7 @@ export default function App() {
     const basePos =
       customPos ||
       viewSpotRef.current?.(part.bbox) ||
-      spotBesideBuild(instances, part.bbox, (i) => catalogMap.get(i.partId)?.bbox, VEX_PITCH_MM) ||
+      spotBesideBuild(instances, part.bbox, (i) => shapedPart(catalogMap.get(i.partId), i.shape)?.bbox, VEX_PITCH_MM) ||
       [0, VEX_PITCH_MM, 0];
 
     const newInst = {
@@ -1379,14 +1382,15 @@ export default function App() {
     const { extraPatches = [], notes = [] } = pose;
     if (previewRef.current) return null;
     const source = instances.find((i) => i.instanceId === sourceId);
-    const part = source ? catalogMap.get(source.partId) : null;
+    const part = source ? shapedPart(catalogMap.get(source.partId), source.shape) : null;
     if (!source || !part) return null;
     const labels = new Set(instances.map((i) => i.label));
-    let n = instances.filter((i) => i.partId === part.id).length + 1;
+    let n = instances.filter((i) => i.partId === source.partId).length + 1;
     while (labels.has(`${part.name} #${n}`)) n++;
     const copy = {
       instanceId: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      partId: part.id,
+      partId: source.partId,
+      ...(source.shape ? { shape: source.shape } : {}),
       label: `${part.name} #${n}`,
       position: pose.position,
       rotation: pose.rotation,
@@ -1896,7 +1900,7 @@ export default function App() {
   );
 
   const mateTargetPartMeta = useMemo(
-    () => (mateTargetInst ? catalogMap.get(mateTargetInst.partId) : null),
+    () => (mateTargetInst ? shapedPart(catalogMap.get(mateTargetInst.partId), mateTargetInst.shape) : null),
     [mateTargetInst, catalogMap]
   );
 
@@ -1961,11 +1965,51 @@ export default function App() {
     return selectedIds
       .map((id) => byId.get(id))
       .filter((i) => i && i.visible !== false)
-      .map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogMap.get(i.partId), position: i.position, rotation: i.rotation }));
+      .map((i) => ({ instanceId: i.instanceId, label: i.label, meta: shapedPart(catalogMap.get(i.partId), i.shape), position: i.position, rotation: i.rotation }));
   }, [instances, selectedIds, catalogMap]);
   // The parts alone decide whether the Build items are available; a route that can't work is caught in
   // the route dialog, so the same parts can always be asked again with other answers
   const chainCheck = useMemo(() => checkSprocketsForChain(chainParts), [chainParts]);
+
+  // Bend sheet (openspec shaped-parts-and-sheet-bending): a plastic sheet and the part to anchor it to,
+  // or a bent sheet alone (to flatten it)
+  const bendCheck = useMemo(() => {
+    const byId = new Map(instances.map((i) => [i.instanceId, i]));
+    const chosen = selectedIds.map((id) => byId.get(id)).filter(Boolean);
+    const isSheet = (i) => isPlasticSheet(catalogMap.get(i.partId));
+    const sheets = chosen.filter(isSheet);
+    if (chosen.length === 2 && sheets.length >= 1) {
+      // The sheet picked first is bent when both are sheets
+      const sheet = sheets.length === 2 ? chosen[0] : sheets[0];
+      const target = chosen.find((i) => i !== sheet);
+      return { ok: true, sheet, target };
+    }
+    if (chosen.length === 1 && sheets.length === 1 && chosen[0].shape) return { ok: true, sheet: chosen[0], target: null };
+    return { ok: false, error: 'Select a plastic sheet and the part to anchor it to (or a bent sheet alone to flatten it).' };
+  }, [instances, selectedIds, catalogMap]);
+  const [bendDialog, setBendDialog] = useState(null); // { sheetId, sheetLabel, targetId, targetLabel, bent }
+  const [bendPreview, setBendPreview] = useState(null); // { sheetId, shape, targetId, portIds }
+  const closeBendDialog = useCallback(() => {
+    setBendDialog(null);
+    setBendPreview(null);
+  }, []);
+  const previewBend = useCallback(
+    (choice) => setBendPreview((prev) => (choice && bendDialogRef.current ? { sheetId: bendDialogRef.current.sheetId, shape: choice.shape, targetId: bendDialogRef.current.targetId, portIds: choice.targetPorts || [] } : prev && !choice ? null : prev)),
+    []
+  );
+  const bendDialogRef = useRef(null);
+  bendDialogRef.current = bendDialog;
+  const openBendSheet = () => {
+    if (!bendCheck.ok) return;
+    const { sheet, target } = bendCheck;
+    setBendDialog({ sheetId: sheet.instanceId, sheetLabel: sheet.label, targetId: target?.instanceId ?? null, targetLabel: target?.label ?? null, bent: Boolean(sheet.shape) });
+  };
+  // What the 3D view shows: the sheet bent as the pointed-at choice, and that choice's target holes
+  const shownInstances = useMemo(
+    () => (bendPreview ? instances.map((i) => (i.instanceId === bendPreview.sheetId ? { ...i, shape: bendPreview.shape } : i)) : instances),
+    [instances, bendPreview]
+  );
+  const markedHoles = useMemo(() => (bendPreview?.targetId && bendPreview.portIds.length ? [{ instanceId: bendPreview.targetId, portIds: bendPreview.portIds }] : EMPTY_IDS), [bendPreview]);
 
   // The engine's plan for the selection (openspec chain-routing-around-parts): what it asks about,
   // obstacles included, and the parts the chain would pass through with the remembered route
@@ -2230,6 +2274,8 @@ export default function App() {
               onExplode={toggleExplode}
               onChain={() => openChainBuilder('chain')}
               onTrack={() => openChainBuilder('track')}
+              bendReason={bendCheck.ok ? null : bendCheck.error}
+              onBendSheet={openBendSheet}
             />
           </div>
 
@@ -2490,11 +2536,12 @@ export default function App() {
           )}
           <Viewport3D
             onCubeMenu={setViewMenuAt}
-            instances={preview ? preview.parts : instances}
+            instances={preview ? preview.parts : shownInstances}
             catalogMap={catalogMap}
             selectedId={preview ? null : selectedId}
             selectedIds={preview ? EMPTY_IDS : selectedIds}
             attentionIds={preview ? EMPTY_IDS : attentionIds}
+            markedHoles={preview ? EMPTY_IDS : markedHoles}
             selectMode={selectMode}
             boxSelect={boxSelect && !preview}
             onBoxSelect={handleBoxSelect}
@@ -2873,6 +2920,18 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* A copy with its own shape: a bent sheet (openspec shaped-parts-and-sheet-bending) */}
+                {selectedInstance.shape && (
+                  <div className="field-group">
+                    <div className="field-label">
+                      <span>Shape</span>
+                    </div>
+                    <p className="settings-note inspector-shape" style={{ margin: 0 }} title="Tools → Bend sheet anchors more rows or flattens it">
+                      {describeShape(selectedInstance.shape)}
+                    </p>
+                  </div>
+                )}
+
                 {/* Part Color Swatches */}
                 <div className="field-group">
                   <div className="field-label">
@@ -2944,7 +3003,7 @@ export default function App() {
                           .filter(
                             (i) =>
                               i.instanceId !== selectedInstance.instanceId &&
-                              catalogMap.get(i.partId)?.category !== 'Pins & Standoffs'
+                              shapedPart(catalogMap.get(i.partId), i.shape)?.category !== 'Pins & Standoffs'
                           )
                           .map((inst) => (
                             <option key={inst.instanceId} value={inst.instanceId}>
@@ -3137,7 +3196,7 @@ export default function App() {
                             .filter(
                               (i) =>
                                 i.instanceId !== selectedInstance.instanceId &&
-                                catalogMap.get(i.partId)?.category === 'Beams & Plates'
+                                shapedPart(catalogMap.get(i.partId), i.shape)?.category === 'Beams & Plates'
                             )
                             .map((inst) => (
                               <option key={inst.instanceId} value={inst.instanceId}>
@@ -3270,7 +3329,7 @@ export default function App() {
                       </div>
                     )}
                     {contactsOfSelected?.tightFits?.length > 0 && (
-                      <div className="metadata-row" title="They touch by up to half a millimetre, as parts often do in VEX CAD. Not counted as an overlap.">
+                      <div className="metadata-row" title="They touch by up to half a millimetre, as parts often do in VEX CAD, or a plastic sheet flexes against them. Not counted as an overlap.">
                         <span>Tight fit</span>
                         <strong style={{ color: '#fcd34d' }}>{contactsOfSelected.tightFits.join(', ')}</strong>
                       </div>
@@ -3403,6 +3462,26 @@ export default function App() {
             slack: slackMm != null ? slack : 'lower',
             route
           });
+        }}
+      />
+      <BendSheetDialog
+        open={Boolean(bendDialog)}
+        sheetLabel={bendDialog?.sheetLabel}
+        targetLabel={bendDialog?.targetLabel}
+        bent={Boolean(bendDialog?.bent)}
+        loadChoices={() => backend.runAction('sheet_bend_choices', { instances }, { sheetId: bendDialog.sheetId, targetId: bendDialog.targetId })}
+        onPreview={previewBend}
+        onClose={closeBendDialog}
+        onApply={async (choice) => {
+          setBendPreview(null);
+          const data = await handleRunSmartAction('bend_sheet', { sheetId: bendDialog.sheetId, targetId: bendDialog.targetId, choice: choice.name });
+          if (!data?.ok) return data?.error || 'The sheet couldn’t be bent.';
+          closeBendDialog();
+        }}
+        onFlatten={async () => {
+          setBendPreview(null);
+          const data = await handleRunSmartAction('bend_sheet', { sheetId: bendDialog.sheetId, flatten: true });
+          if (data?.ok) closeBendDialog();
         }}
       />
       <ChainRouteDialog

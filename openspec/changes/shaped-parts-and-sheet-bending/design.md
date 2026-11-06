@@ -70,7 +70,7 @@ The collision mesh is the existing eroded mesh built from the bent mesh. Sheets 
 In the engine, shared by the app (through the backend's `runAction`) and the MCP server:
 
 1. **Held rows.** Sheet holes with a pin seated in them or lined up with another part's hole (existing `findMatchingPinHoles` / joint graph) give the held rows; for a bent sheet, its `held` and anchored rows. Their direction gives `across` and `from`; a single held hole tries both directions.
-2. **Target lines.** The target's holes (pin holes and pegs) grouped into lines parallel to the sheet's bend line (within 3°), each with the face it opens on (from the hole's faces and `getPartMeasurements` surfaces); each face is its own candidate.
+2. **Target lines.** The target's pin holes grouped into lines parallel to the sheet's bend line (within 3°). Each line has two faces, found by rays along the hole's axis round it (out to half a pitch) to the outermost surface on each side, since a flat sheet rests on a beam's raised rails, not in the recess round the hole; neither the part's box (wrong for L-shaped corner connectors) nor the measured opening ends (they run through both layers of a 2x wide connector) give the face. Each face is its own candidate.
 3. **Rows.** For each sheet row past the last held or anchored row: in the plane across the bend, the target point is the hole line plus `(face offset + 0.125 + layers·(0.25 + 0.1))` along the face normal, where `layers` is the number of sheets already lying on that face at those holes. Check the sheet's holes in that row against the target's along the bend line (within 1 mm, at least one pair, and every sheet hole that lands on the target paired); check reach (straight distance ≤ length + 1 mm); work out the curve and the miss (`stretch = max(0, chord-based shortfall)`, measured as the length needed beyond the sheet's).
 4. **Clearance.** Pose the shaped sheet and run `checkCandidateCollision` against the build, leaving out pins in the sheet's holes and the stacked sheets under it; drop clashing choices with a count and the first part hit.
 5. Sort by miss, then by bending; name each "sheet row N → <target label>, <face>".
@@ -85,7 +85,7 @@ A Tools menu item, enabled when the selection is one plastic sheet plus one othe
 
 ### 9. CAD import
 
-A `cad-frames.json` entry can say `"bend": "pins"` for a CAD sheet part that VEX bends (the test robot's are 228-7711-711 and -712; other robots add their own entries). For such a sheet the import:
+Laying a sheet flat on two rows of pins uses the face most of those pins' holders agree on (one pin in a thin flange can mislead), and the direction across the rows square to the rows' own line. A `cad-frames.json` entry can say `"bend": "pins"` for a CAD sheet part that VEX bends (the test robot's are 228-7711-711 and -712; other robots add their own entries). For such a sheet the import:
 1. collects the sheet pins and other pinned parts whose pins sit within the sheet body's box;
 2. groups the pins into rows (pins sharing a line parallel to the sheet's long or short side) and orders the rows along a chain from one end;
 3. the end whose first two rows are flat and coplanar on their parts is the held end; the sheet's flat pose comes from those rows' holes;
@@ -98,11 +98,18 @@ The sheet is then placed with its shape in the same batch. The report lists stre
 
 `bend_sheet { sheetId, targetId?, choice?, sheetRow?, targetPortIds?, face?, moveTarget?, flatten? }`: without a choice it returns the choices; with one it applies it, runs the usual post-placement check and reports overlaps. `get_assembly` / `get_part_details` include `shape` with `describe()` text ("bent: held rows 1–2, row 4 on 1x12 Beam ..., row 6 stretched 0.6 mm").
 
+### 11. Sheets flex where they press (found while building)
+
+VEX's own bent sheets press 1.3–1.4 mm into the ends of the test robot's side plates, so a strict overlap rule would refuse the real shape. In `checkCandidateCollision`, a sheet that hits a non-sheet part is a tight fit when it would have to flex at most 1.5 mm to clear it: the sheet's real mesh is sampled about every millimetre, and for each sample inside the other part (behind its nearest face, so open meshes work, and more than 0.1 mm in, so touching faces don't count) the distance along the sheet's normal to the far side of the part, either way, is measured. Eroding the other part's collision mesh by 1.5 mm was tried first and fails: thin walls turn inside out and grow. Distance to the nearest surface was tried next and fails on hollow parts such as beams (it stays near 1 mm even through the middle). Two sheets pinned through the same holes (stacked) count their contact as a tight fit, because the upper one curves onto the lower one's last few millimetres.
+
+Reach is the extra length a smooth curve needs (`reachPiece`), not the straight distance between the rows: turning uses length, so a row 0.6 mm too far in a straight line needed 0.72 mm of stretch on the test robot. A piece's handles are kept to at least a quarter of the gap so the curve can't turn sharply right at a row.
+
 ## Risks / Trade-offs
 
 - [Every instance lookup must switch to `partOf`; one missed spot shows or collides the flat sheet] → a check script poses a bent sheet and compares world holes, box, overlap and the audit against the shaped mesh; grep for `catalogById.get(` on instances in review.
 - [Shaped meshes are heavier (≈25k triangles per sheet)] → cached per bend; only sheets are shaped; strips are cut only across the bend direction.
 - [Parts held only by a sheet in VEX CAD may sit a little off what a real sheet allows, because VEX's bent sheets are stretched (on the test robot, 0.6 mm at one row)] → the stretch rule covers up to 1 mm; the report says how much.
+- [Stacked sheets' contact counts as a tight fit everywhere, so two stacked sheets that cross far from their shared holes would not show as an overlap] → acceptable for now; a later change can limit it to near the shared holes.
 - [Stacking at a 0.1 mm gap is below the collision erosion, so a slightly wrong stack would not show as an overlap] → the stack offset is computed, not searched; the check script measures the gap between the two stacked sheets directly.
 - [Mirror: a bend stored in the sheet's frame must flip with the part's mirror pose] → the kind's `mirror()` flips `from` or the sign of `v` per mirror axis; a check mirrors a bent sheet and compares holes with the mirrored originals.
 - [Static site and saved builds from before this change] → no `shape` means flat, so old builds load unchanged; builds with a shape opened in an older app show the sheet flat (acceptable).

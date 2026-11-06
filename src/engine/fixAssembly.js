@@ -6,7 +6,7 @@
  * slid along that line until it is seated without overlapping.
  */
 import * as THREE from 'three';
-import { buildWorldMatrix, checkCandidateCollision, getCatalog, jointGraph, touchesAny, worldFeaturesFor } from './core.js';
+import { buildWorldMatrix, checkCandidateCollision, getCatalog, jointGraph, partOf, touchesAny, worldFeaturesFor } from './core.js';
 import { clearSpotAlongLine, insertFitsOpening, worldPartBox } from '../utils/pinHoleAlignment.js';
 import { groupsOf } from '../utils/partGroups.js';
 import { quaternionToEulerDeg } from '../utils/gearMeshing.js';
@@ -341,7 +341,7 @@ function setName(ids, byId, groups) {
   }
   const { catalogById } = getCatalog();
   const size = (id) => {
-    const b = catalogById.get(byId.get(id).partId)?.bbox;
+    const b = partOf(byId.get(id))?.bbox;
     return b ? (b.max[0] - b.min[0]) * (b.max[1] - b.min[1]) * (b.max[2] - b.min[2]) : 0;
   };
   const biggest = [...ids].sort((a, b) => size(b) - size(a))[0];
@@ -415,14 +415,14 @@ function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, l
         const col = checkCandidateCollision(c, others);
         return [...col.collidingWith, ...col.tightFits].map((w) => [c.instanceId, w.instanceId]);
       });
-      const isFastener = ([mId, fId]) => [mId, fId].some((id) => FASTENER_CATEGORIES.has(catalogById.get(byId.get(id).partId)?.category));
+      const isFastener = ([mId, fId]) => [mId, fId].some((id) => FASTENER_CATEGORIES.has(partOf(byId.get(id))?.category));
       const solid = met.filter((pair) => !isFastener(pair));
       return solid.length ? solid : met;
     };
     const onQuarter = (d, back, touching) => {
       const candidates = [];
       const boxSpan = (inst, matrix) => {
-        const box = catalogById.get(inst.partId).bbox;
+        const box = partOf(inst).bbox;
         let lo = Infinity;
         for (const x of [box.min[0], box.max[0]]) for (const y of [box.min[1], box.max[1]]) for (const z of [box.min[2], box.max[2]]) lo = Math.min(lo, new THREE.Vector3(x, y, z).applyMatrix4(matrix).dot(axis));
         return lo;
@@ -511,7 +511,7 @@ export function fixAssembly(state, { instanceId } = {}) {
   const selected = byId.get(instanceId);
   if (!selected) return { ok: false, error: 'Select a part first.' };
   if (selected.visible === false) return { ok: false, error: `${selected.label} is hidden.` };
-  const selectedPart = catalogById.get(selected.partId);
+  const selectedPart = partOf(selected);
   if (!selectedPart) return { ok: false, error: `${selected.label} isn't in the part library.` };
 
   const graph = jointGraph(state);
@@ -527,7 +527,7 @@ export function fixAssembly(state, { instanceId } = {}) {
   const ownBlock = blocks.get(instanceId);
   const blockIds = (block) => visible.filter((i) => blocks.get(i.instanceId) === block).map((i) => i.instanceId);
   const nearby = visible.filter((i) => {
-    const part = catalogById.get(i.partId);
+    const part = partOf(i);
     return part && worldPartBox(part, buildWorldMatrix(i.position, i.rotation))?.intersectsBox(region);
   });
 
@@ -633,7 +633,7 @@ export function fitSet(state, { ids = [], poses = {} } = {}) {
   const moving = new Set(ids.filter((id) => byId.has(id) && byId.get(id).visible !== false));
   if (moving.size === 0) return { ok: false, reason: 'none', error: 'Nothing to fit.' };
   const boxOf = (i) => {
-    const part = catalogById.get(i.partId);
+    const part = partOf(i);
     return part ? worldPartBox(part, buildWorldMatrix(i.position, i.rotation)) : null;
   };
   const region = new THREE.Box3();

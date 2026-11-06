@@ -433,15 +433,17 @@
    "rule": "centre",
    "onlyName": "Split Bodies-1$",
    "source": "pins",
-   "checkedOn": "4063-2026-2027_viqrc_herobot_flop"
+   "checkedOn": "4063-2026-2027_viqrc_herobot_flop",
+   "bend": "pins"
   },
   "228-7711-712 Split Bodies": {
    "library": "228-2500-2712",
    "rule": "centre",
    "onlyName": "Split Bodies-1$",
-   "source": "default",
+   "source": "pins",
    "checkedOn": "4063-2026-2027_viqrc_herobot_flop",
-   "note": "bent in the CAD, flat in the library: no turn or offset matches it"
+   "note": "bent in the CAD, flat in the library: laid on the pins that hold it and bent through the rest (bend: pins)",
+   "bend": "pins"
   },
   "228-6480": {
    "rule": "origin",

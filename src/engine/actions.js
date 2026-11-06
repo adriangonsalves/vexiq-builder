@@ -18,11 +18,13 @@ import {
   getCatalog,
   jointGraph,
   mirrorSubassembly,
+  partOf,
   planChainFor
 } from './core.js';
 import { fitSet, fixAssembly } from './fixAssembly.js';
+import { bendSheet, sheetBendChoices } from './sheetBending.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'contacts', 'chain_plan'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet'];
 
 export function runAction(action, state, params = {}) {
   const { catalogById } = getCatalog();
@@ -36,7 +38,7 @@ export function runAction(action, state, params = {}) {
       ? state.instances.filter((i) => i.instanceId === params.instanceIdB)
       : state.instances.filter((i) => {
           if (i.instanceId === instA.instanceId || i.visible === false) return false;
-          const p = catalogById.get(i.partId);
+          const p = partOf(i);
           return p && p.category !== 'Pins & Standoffs';
         });
 
@@ -115,7 +117,7 @@ export function runAction(action, state, params = {}) {
     const existingInst = state.instances.find((i) => i.instanceId === params.sourceInstanceId);
     if (!targetInst || !existingInst) return { ok: false, error: 'Source or target part instance not found.' };
 
-    const sourcePart = catalogById.get(existingInst.partId);
+    const sourcePart = partOf(existingInst);
     const mate = computeMateTransform(
       sourcePart,
       params.sourcePortId,
@@ -288,6 +290,25 @@ export function runAction(action, state, params = {}) {
       obstacles: plan.res?.obstacles || [],
       wrapped: plan.res?.wrapped || []
     };
+  }
+
+  // Bend sheet (openspec shaped-parts-and-sheet-bending): where the sheet can be anchored to the other
+  // part, nothing changed; and bending it (or flattening it) as one step
+  if (action === 'sheet_bend_choices') {
+    const found = sheetBendChoices(state, { sheetId: params.sheetId, targetId: params.targetId });
+    if (!found.ok) return found;
+    return { ...found, choices: found.choices.map(({ id, name, row, face, missMm, stretchMm, layers, note, shape, targetPorts }) => ({ id, name, row, face, missMm, stretchMm, layers, note, shape, targetPorts })) };
+  }
+  if (action === 'bend_sheet') {
+    return bendSheet(state, {
+      sheetId: params.sheetId,
+      targetId: params.targetId ?? null,
+      choice: params.choice ?? null,
+      sheetRow: params.sheetRow ?? null,
+      face: params.face ?? null,
+      moveTarget: Boolean(params.moveTarget),
+      flatten: Boolean(params.flatten)
+    });
   }
 
   // What one part overlaps and what it only tight-fits against (the Inspector, openspec tight-fits)

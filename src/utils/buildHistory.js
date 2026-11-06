@@ -25,7 +25,8 @@ export const MERGE_WINDOW_MS = 1000;
 // Fields that make up the build. isIntersecting / lastValid* are bookkeeping the viewport recomputes.
 // socketAngleDeg: a Smart Motor's drive hub angle (openspec square-shaft-fit)
 // groupId / groupName: the part's group (openspec outliner-part-groups); missing = no group
-export const BUILD_FIELDS = ['position', 'rotation', 'color', 'label', 'visible', 'locked', 'socketAngleDeg', 'groupId', 'groupName'];
+// shape: the copy's own shape, e.g. a bent sheet (openspec shaped-parts-and-sheet-bending); missing = none
+export const BUILD_FIELDS = ['position', 'rotation', 'color', 'label', 'visible', 'locked', 'socketAngleDeg', 'groupId', 'groupName', 'shape'];
 const GROUP_FIELDS = new Set(['groupId', 'groupName']);
 export const SOURCES = ['app', 'mcp', 'assistant', 'action'];
 
@@ -36,7 +37,7 @@ const normalizeField = (field, value) => {
   if (field === 'visible') return value !== false;
   if (field === 'locked') return value === true;
   if (field === 'socketAngleDeg') return Number(value) || 0;
-  if (GROUP_FIELDS.has(field)) return value || null;
+  if (GROUP_FIELDS.has(field) || field === 'shape') return value || null;
   return value;
 };
 
@@ -45,6 +46,7 @@ const sameValue = (a, b) => {
     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
     return a.every((v, i) => Number(v) === Number(b[i]));
   }
+  if (a && b && typeof a === 'object' && typeof b === 'object') return JSON.stringify(a) === JSON.stringify(b);
   return a === b;
 };
 
@@ -85,7 +87,7 @@ export function diffParts(before = [], after = []) {
     for (const field of BUILD_FIELDS) {
       if (!sameField(field, prev[field], part[field])) {
         // A missing hub angle means 0 and a missing group null; recorded that way so the value survives saving (JSON drops undefined)
-        const stored = (value) => (field === 'socketAngleDeg' || GROUP_FIELDS.has(field) ? normalizeField(field, value) : value);
+        const stored = (value) => (field === 'socketAngleDeg' || field === 'shape' || GROUP_FIELDS.has(field) ? normalizeField(field, value) : value);
         fieldsBefore[field] = clone(stored(prev[field]));
         fieldsAfter[field] = clone(stored(part[field]));
       }
@@ -106,7 +108,7 @@ export function diffParts(before = [], after = []) {
 const setFields = (part, fields) => {
   const next = { ...part };
   for (const [field, value] of Object.entries(fields)) {
-    if (value === undefined || (value === null && GROUP_FIELDS.has(field))) delete next[field];
+    if (value === undefined || (value === null && (GROUP_FIELDS.has(field) || field === 'shape'))) delete next[field];
     else next[field] = clone(value);
   }
   // A pose restored from history is the part's new known pose
@@ -264,6 +266,7 @@ const updateVerb = (op, app) => {
   const pick = (pair) => (app ? pair[1] : pair[0]);
   if (fields.length === 1 && fields[0] === 'visible') return pick(op.after.visible === false ? VERBS.visible : ['show', 'Show']);
   if (fields.length === 1 && fields[0] === 'locked') return pick(op.after.locked ? VERBS.locked : ['unlock', 'Unlock']);
+  if (fields.includes('shape')) return pick(op.after.shape ? ['bend', 'Bend'] : ['flatten', 'Flatten']);
   if (fields.every((f) => f === 'position' || f === 'rotation' || f === 'socketAngleDeg')) {
     return pick(fields.includes('position') ? VERBS.position : VERBS.rotation);
   }

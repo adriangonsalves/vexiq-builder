@@ -3,6 +3,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshBVH } from 'three-mesh-bvh';
 import { hubFrame, splitHubTriangles, subGeometry } from './motorHub.js';
 import { assetUrl } from './assetUrl.js';
+import { baseOf, isDerivedPartId, shapeMeshArrays } from './shapedParts.js';
+import { bendCurve, bendPoint } from './sheetBend.js';
 
 const loader = new GLTFLoader();
 export const RUBBER_MATERIAL_NAME = 'rubber';
@@ -112,7 +114,9 @@ export function loadPartAsset(part) {
 
         gltf.scene.traverse((child) => {
           if (child.isMesh && child.geometry) {
-            const renderGeo = child.geometry.clone();
+            let renderGeo = child.geometry.clone();
+            // A shaped copy (openspec shaped-parts-and-sheet-bending): the catalog model in its shape
+            if (part.basePartId) renderGeo = shapedGeometry(part, renderGeo);
             // Black rubber bodies (omni wheel rollers) keep their own colour (convert-worker.mjs)
             if (child.material?.name === RUBBER_MATERIAL_NAME) renderGeo.userData.rubber = true;
             if (child.material?.name?.startsWith('step:')) {
@@ -162,5 +166,69 @@ export function loadPartAsset(part) {
   });
 
   partAssetCache.set(part.id, promise);
+  // Shaped parts come and go as bends change: keep only the most recent ones
+  const shaped = [...partAssetCache.keys()].filter(isDerivedPartId);
+  if (shaped.length > SHAPED_ASSETS_MAX) partAssetCache.delete(shaped[0]);
+  return promise;
+}
+
+const SHAPED_ASSETS_MAX = 60;
+
+// A catalog geometry turned into the shaped part's (positions and normals; materials stay)
+function shapedGeometry(part, geo) {
+  const pos = geo.attributes.position.array;
+  const norm = geo.attributes.normal?.array || new Float32Array(pos.length);
+  const idx = geo.index ? geo.index.array : Uint32Array.from({ length: pos.length / 3 }, (_, i) => i);
+  const shaped = shapeMeshArrays(part, pos, norm, idx);
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(shaped.pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(shaped.norm, 3));
+  out.setIndex(new THREE.BufferAttribute(shaped.idx, 1));
+  Object.assign(out.userData, geo.userData);
+  return out;
+}
+
+// The printed lattice on clear plastic sheets (public/sheet-patterns.json, from scripts/extract-sheet-patterns.mjs)
+let sheetPatterns = null;
+const patternGeometryCache = new Map(); // part id (shaped parts too) -> Promise<BufferGeometry | null>
+const PATTERN_STEP_MM = 1; // longer lines are cut so they follow a bend
+
+/**
+ * A clear sheet's printed pattern as line segments in its own frame, bent with the sheet when it is a
+ * shaped part; null for parts without one.
+ */
+export function loadSheetPattern(part) {
+  if (!isClearPlasticPart(part)) return Promise.resolve(null);
+  if (patternGeometryCache.has(part.id)) return patternGeometryCache.get(part.id);
+  const promise = (async () => {
+    sheetPatterns ||= fetch(assetUrl('/sheet-patterns.json')).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    const base = baseOf(part);
+    const entry = (await sheetPatterns)[base.id];
+    if (!entry?.segments?.length) return null;
+    const src = entry.segments;
+    const curve = part.shape ? bendCurve(base, part.shape) : null;
+    const out = [];
+    for (let i = 0; i < src.length; i += 6) {
+      const a = [src[i], src[i + 1], src[i + 2]];
+      const b = [src[i + 3], src[i + 4], src[i + 5]];
+      const n = curve ? Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[2] - a[2]) / PATTERN_STEP_MM)) : 1;
+      let prev = curve ? bendPoint(curve, a) : a;
+      for (let k = 1; k <= n; k++) {
+        const t = k / n;
+        const q = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+        const next = curve ? bendPoint(curve, q) : q;
+        out.push(...prev, ...next);
+        prev = next;
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+    return geo;
+  })();
+  patternGeometryCache.set(part.id, promise);
+  if (isDerivedPartId(part.id)) {
+    const shaped = [...patternGeometryCache.keys()].filter(isDerivedPartId);
+    if (shaped.length > SHAPED_ASSETS_MAX) patternGeometryCache.delete(shaped[0]);
+  }
   return promise;
 }

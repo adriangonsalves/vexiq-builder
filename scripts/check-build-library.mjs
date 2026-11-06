@@ -46,7 +46,7 @@ check('the Clawbot starter has its 193 parts', clawbot.length === 193, String(cl
 
 const flop = starterById('flop').build(catalog);
 const flopGroups = new Set(flop.map((p) => p.groupName));
-check('the Flop starter has its 593 parts in 5 groups', flop.length === 593 && flopGroups.size === 5, `${flop.length} parts, ${[...flopGroups].join(', ')}`);
+check('the Flop starter has its 594 parts in 5 groups', flop.length === 594 && flopGroups.size === 5, `${flop.length} parts, ${[...flopGroups].join(', ')}`);
 const flopOverlapping = flop.filter((inst) => checkCandidateCollision(inst, flop).isIntersecting).map((p) => p.label);
 check('  none of its parts overlap', flopOverlapping.length === 0, flopOverlapping.join(', '));
 

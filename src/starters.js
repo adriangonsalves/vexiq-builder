@@ -427,7 +427,7 @@ function clawbotStarter(catalog) {
 function flopStarter(catalog) {
   const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
   const groupIds = new Map();
-  return FLOP.flatMap(([number, label, position, rotation, color, groupName, socketAngleDeg], i) => {
+  return FLOP.flatMap(([number, label, position, rotation, color, groupName, socketAngleDeg, shape], i) => {
     const p = byNumber.get(number);
     if (!p) return [];
     const inst = { ...part(p, `inst-flop-${i + 1}`, position, rotation, color || p.defaultColor), label };
@@ -436,6 +436,7 @@ function flopStarter(catalog) {
       Object.assign(inst, { groupId: groupIds.get(groupName), groupName });
     }
     if (socketAngleDeg) inst.socketAngleDeg = socketAngleDeg;
+    if (shape) inst.shape = shape;
     return [inst];
   });
 }

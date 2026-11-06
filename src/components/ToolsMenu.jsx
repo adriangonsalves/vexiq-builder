@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ChevronDown, ClipboardCheck, Expand, Link2, Magnet, Ruler, Wrench } from 'lucide-react';
+import { ChevronDown, ClipboardCheck, Expand, Link2, Magnet, Ruler, Spline, Wrench } from 'lucide-react';
 import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.jsx';
 
 /**
@@ -11,8 +11,9 @@ import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.j
  * toolbar button) is now two items: Audit opens or closes the Audit panel that slides up in the 3D
  * view (ticked while open), and Blueprint shows the 3-view drawing on its own. Explode
  * (formerly a toolbar button; shortcut X) opens or closes the Explode panel and shows a tick while it is open.
+ * Bend sheet (openspec shaped-parts-and-sheet-bending) curves a plastic sheet onto another part's holes.
  */
-export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack }) {
+export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, bendReason = null, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack, onBendSheet }) {
   const buttonRef = useRef(null);
   const [at, setAt] = useState(null);
   const close = useCallback(() => setAt(null), []);
@@ -92,6 +93,14 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, aud
           </MenuItem>
           <MenuItem disabled={Boolean(chainOff)} onSelect={choose(onTrack)} title={chainOff || `Wrap a tank track round the selected sprockets, with rubber grippers if you like.${inTheWay}`}>
             Track builder…
+          </MenuItem>
+          <MenuItem
+            icon={Spline}
+            disabled={Boolean(disabledReason || bendReason)}
+            onSelect={choose(onBendSheet)}
+            title={disabledReason || bendReason || 'Curve the selected plastic sheet onto a row of holes on the other selected part. Its pinned rows stay flat.'}
+          >
+            Bend sheet…
           </MenuItem>
           {disabledReason && <div className="popover-note">{disabledReason}</div>}
         </PopoverMenu>

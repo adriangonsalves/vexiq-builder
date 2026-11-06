@@ -19,6 +19,7 @@ import {
   getCatalog,
   jointGraph,
   mirrorSubassembly,
+  partOf,
   summarizeAudit,
   applyPosePatches,
   placeParts,
@@ -28,6 +29,8 @@ import {
   readAssemblyState,
   writeAssemblyState
 } from './assembly-engine.mjs';
+import { bendSheet, sheetBendChoices } from '../src/engine/sheetBending.js';
+import { describeShape } from '../src/utils/shapedParts.js';
 import { MCP_OFF_MESSAGE } from '../src/utils/appSettings.js';
 import {
   applyPatches,
@@ -104,7 +107,7 @@ const TOOLS = [
   {
     name: 'get_part_details',
     description:
-      'Get a VEX IQ part\'s size and connection points in its own frame: every pin hole, shaft bore, socket, collar hole, pin/peg and shaft with its position, axis, usable span along the axis (t = dot(point, axis), mm), real depth measured on the 3D model, whether it goes through, and which ends of each peg stick out. Pass verbose for the raw catalog record (cylinders, ports, mesh counts).',
+      'Get a VEX IQ part\'s size and connection points in its own frame (or, with instanceId, a part in the build, in its own shape): every pin hole, shaft bore, socket, collar hole, pin/peg and shaft with its position, axis, usable span along the axis (t = dot(point, axis), mm), real depth measured on the 3D model, whether it goes through, and which ends of each peg stick out. Pass verbose for the raw catalog record (cylinders, ports, mesh counts).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -116,9 +119,12 @@ const TOOLS = [
           type: 'boolean',
           default: false,
           description: 'Also return the full catalog record: raw ports, cylinders, vertex/triangle/connector counts.'
+        },
+        instanceId: {
+          type: 'string',
+          description: 'A part in the build instead of partQuery: that copy\'s details, in its own shape when it has one (a bent sheet\'s holes follow the bend), with its shape and a description of it.'
         }
-      },
-      required: ['partQuery']
+      }
     }
   },
   {
@@ -600,6 +606,7 @@ const TOOLS = [
               ref: { type: 'string', description: 'Name later items in this call can use in insert.into.ref.' },
               label: { type: 'string' },
               color: { type: 'string' },
+              shape: { type: 'object', description: 'The copy\'s own shape, as get_assembly reports it (a bent sheet: { kind: "sheet-bend", ... }); bend sheets with bend_sheet.' },
               position: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3, description: 'World [x, y, z] mm (absolute placement).' },
               rotation: { type: 'array', items: { type: 'number' }, minItems: 3, maxItems: 3, description: 'Euler [rx, ry, rz] degrees (absolute placement).' },
               insert: {
@@ -727,6 +734,24 @@ const TOOLS = [
     }
   },
   {
+    name: 'bend_sheet',
+    description:
+      'Bend a plastic sheet (2x12, 6x6 or 6x12 Plastic Sheet) onto a row of holes on another part, as the app\'s Tools → Bend sheet does. The rows of the sheet that already have pins (or another part\'s holes) in them stay flat; the sheet bends along lines parallel to those rows (never twisting) and follows one smooth curve to the chosen row, exactly as long as the sheet between the two rows, leaving each row in line with the sheet; past the last anchored row it runs straight. Call it again with another target to anchor a further row. Without choice or sheetRow it changes nothing and lists the choices: [{ id, name, row, face, layers, missMm, stretchMm, note }] (name like "sheet row 4 → 1x12 Beam, upper face"; note names parts the rest of the sheet past that row still runs into) and reasons for rows it refused (would twist, out of reach by N mm, would bend too tightly, would pass through a part). A row up to 1 mm out of reach is offered with the sheet stretched that much between the two rows, so its pins seat. Where another sheet already lies on that face, the sheet goes on top of it 0.1 mm out (layers). Pass choice (an id or name from the list), or sheetRow (and face, e.g. "upper"), to bend it; pins in the moving rows move with the sheet. With moveTarget and sheetRow, a target held only by this sheet that is out of reach is moved to the nearest spot the row reaches. flatten removes the bend. A sheet pressing up to 1.5 mm into a part, or on a sheet it is stacked on, flexes: that is a tight fit, not an overlap. One undo step.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sheetId: { type: 'string', description: 'The plastic sheet to bend.' },
+        targetId: { type: 'string', description: 'The part whose holes the sheet is anchored to (not needed with flatten).' },
+        choice: { type: 'string', description: 'A choice id or name from a listing call.' },
+        sheetRow: { type: 'number', description: 'The sheet row to anchor (rows count from the held edge, 1 = the first).' },
+        face: { type: 'string', description: 'With sheetRow: the target face to lie on, e.g. "upper", "lower", "front", "back".' },
+        moveTarget: { type: 'boolean', description: 'With sheetRow: move a target only this sheet holds onto the sheet when it is out of reach.' },
+        flatten: { type: 'boolean', description: 'Remove the bend.' }
+      },
+      required: ['sheetId']
+    }
+  },
+  {
     name: 'ungroup_parts',
     description: 'Dissolve a group (groupId), or every group the given parts are in (instanceIds). The parts stay where they are. One undo step.',
     inputSchema: {
@@ -810,7 +835,7 @@ function groupList(instances, catalogById) {
     id: g.id,
     name: g.name,
     instanceIds: g.ids,
-    centre: setPivot(instances, g.ids, setWorldBoxes(instances, g.ids, (i) => catalogById.get(i.partId)?.bbox)).map((v) => Number(v.toFixed(3)))
+    centre: setPivot(instances, g.ids, setWorldBoxes(instances, g.ids, (i) => partOf(i)?.bbox)).map((v) => Number(v.toFixed(3)))
   }));
 }
 
@@ -873,7 +898,10 @@ async function executeTool(name, args = {}) {
   }
 
   if (name === 'get_part_details') {
-    const part = findPart(args.partQuery);
+    const copy = args.instanceId ? readAssemblyState().instances.find((i) => i.instanceId === args.instanceId) : null;
+    if (args.instanceId && !copy) return { isError: true, error: `Not in the build: ${args.instanceId}` };
+    if (!copy && !args.partQuery) return { isError: true, error: 'Give a partQuery or an instanceId.' };
+    const part = copy ? partOf(copy) : findPart(args.partQuery);
     if (!part) {
       return { isError: true, error: `Part not found for query: "${args.partQuery}"` };
     }
@@ -891,6 +919,7 @@ async function executeTool(name, args = {}) {
       ...(part.hubSpecs ? { hubSpecs: part.hubSpecs } : {}),
       ...(part.chainSpecs ? { chainSpecs: part.chainSpecs } : {}),
       ...cadFrameEntries(part),
+      ...(copy?.shape ? { instanceId: copy.instanceId, shape: copy.shape, shapeDescription: describeShape(copy.shape) } : {}),
       connections: describePartConnections(part)
     };
     if (!args.verbose) return compact;
@@ -921,14 +950,16 @@ async function executeTool(name, args = {}) {
       instanceCount: state.instances.length,
       groups: groupList(state.instances, catalogById),
       instances: state.instances.map((inst) => {
-        const part = catalogById.get(inst.partId);
+        const part = partOf(inst);
         return {
           ...inst,
           partName: part?.name || inst.partId,
           partNumber: part?.partNumber || 'UNKNOWN',
           pitchPosition: inst.position.map((c) => Number((c / VEX_PITCH_MM).toFixed(2))),
           // A Smart Motor's drive hub angle (missing in older saves means 0)
-          ...(part?.hubSpecs ? { socketAngleDeg: Number(inst.socketAngleDeg) || 0 } : {})
+          ...(part?.hubSpecs ? { socketAngleDeg: Number(inst.socketAngleDeg) || 0 } : {}),
+          // A copy with its own shape, such as a bent sheet
+          ...(inst.shape ? { shapeDescription: describeShape(inst.shape) } : {})
         };
       })
     };
@@ -1024,6 +1055,36 @@ async function executeTool(name, args = {}) {
     };
   }
 
+  if (name === 'bend_sheet') {
+    const state = readAssemblyState();
+    const listing = !args.flatten && args.choice === undefined && args.sheetRow === undefined;
+    if (listing) {
+      const found = sheetBendChoices(state, { sheetId: args.sheetId, targetId: args.targetId });
+      if (!found.ok) return { isError: true, error: found.error };
+      return {
+        ok: true,
+        choices: found.choices.map(({ id, name, row, face, layers, missMm, stretchMm, note }) => ({ id, name, row, face, layers, missMm, stretchMm, ...(note ? { note } : {}) })),
+        reasons: found.reasons
+      };
+    }
+    const bent = bendSheet(state, { sheetId: args.sheetId, targetId: args.targetId ?? null, choice: args.choice ?? null, sheetRow: args.sheetRow ?? null, face: args.face ?? null, moveTarget: Boolean(args.moveTarget), flatten: Boolean(args.flatten) });
+    if (!bent.ok) return { isError: true, error: bent.error, ...(bent.choices ? { choices: bent.choices } : {}) };
+    await writeAssemblyState(bent.state, { stepLabel: bent.stepLabel });
+    const after = readAssemblyState();
+    const sheet = after.instances.find((i) => i.instanceId === args.sheetId) || after.instances.find((i) => i.instanceId === args.targetId);
+    const contacts = checkCandidateCollision(sheet, after.instances);
+    return {
+      ok: true,
+      message: bent.message,
+      shape: sheet?.shape || null,
+      shapeDescription: sheet?.shape ? describeShape(sheet.shape) : null,
+      moved: bent.movedIds,
+      overlaps: contacts.collidingWith.map((c) => c.label),
+      tightFits: contacts.tightFits.map((c) => c.label),
+      audit: summarizeAudit(auditAssembly(after))
+    };
+  }
+
   if (name === 'ungroup_parts') {
     const state = readAssemblyState();
     let ids = Array.isArray(args.instanceIds) ? args.instanceIds : [];
@@ -1098,7 +1159,7 @@ async function executeTool(name, args = {}) {
     }
 
     const moves = args.moveBy !== undefined || args.moveCentreTo !== undefined || args.turn !== undefined;
-    const boxesOf = (list) => setWorldBoxes(list, ids, (i) => catalogById.get(i.partId)?.bbox);
+    const boxesOf = (list) => setWorldBoxes(list, ids, (i) => partOf(i)?.bbox);
     if (moves) {
       if (instances.some((i) => wanted.has(i.instanceId) && i.locked)) return { isError: true, error: 'Part is locked' };
       if (args.turn !== undefined) {
@@ -1342,7 +1403,7 @@ async function executeTool(name, args = {}) {
         error: `Target instance "${args.targetInstanceId}" not found in assembly.`
       };
     }
-    const targetPart = catalogById.get(targetInst.partId);
+    const targetPart = partOf(targetInst);
     if (!targetPart || !targetPart.cylinders?.length) {
       return {
         isError: true,
@@ -1631,7 +1692,7 @@ async function executeTool(name, args = {}) {
           error: `Source instance "${args.sourceInstanceId}" not found in assembly.`
         };
       }
-      sourcePart = catalogById.get(existingInst.partId);
+      sourcePart = partOf(existingInst);
     } else if (args.partQuery) {
       sourcePart = findPart(args.partQuery);
       if (!sourcePart) {

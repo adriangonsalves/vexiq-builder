@@ -6,7 +6,7 @@ import { ATTACHMENT_EVERY_MAX, UPPER_BLOCKED } from '../utils/chainPath.js';
  * Lets a modal <dialog> be dragged by the element these props go on (its header). The offset is kept
  * while the page is open, so the dialog opens where it was left; it stays at least partly on screen.
  */
-function useDialogDrag(ref) {
+export function useDialogDrag(ref) {
   const offset = useRef({ x: 0, y: 0 });
   const place = () => {
     if (ref.current) ref.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px)`;

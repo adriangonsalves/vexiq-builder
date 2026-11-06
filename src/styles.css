@@ -1566,6 +1566,16 @@ body,
   backdrop-filter: none;
 }
 
+.bend-sheet-choice {
+  cursor: pointer;
+  border-radius: 6px;
+  padding-left: 8px;
+}
+
+.bend-sheet-choice.active {
+  outline: 2px solid var(--accent);
+}
+
 .chain-route-error {
   color: var(--danger, #f87171);
   margin-top: 8px;

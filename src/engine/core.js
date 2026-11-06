@@ -32,6 +32,9 @@ import { areChainNeighbours, isChainFit, isChainPart, isGripperOnLink, isLink, i
 import { applyPatches, groupParts } from '../utils/partGroups.js';
 import { CHAIN_LINK_PART_NUMBER, TREAD_LINK_PART_NUMBER, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName } from '../utils/chainPath.js';
 import { sliceOutline } from '../utils/chainObstacles.js';
+import { mirrorShape, normalizeShape, shapeError, shapeMeshArrays, shapedPart } from '../utils/shapedParts.js';
+import { SHEET_PRESS_MM, isPlasticSheet } from '../utils/sheetBend.js';
+import { sheetFlexDepth, sheetsStacked } from '../utils/sheetContact.js';
 import { EXPLODE_GAP_MM, SPREAD_ABOVE_PARTS, SPREAD_BELOW_SHARE, buildExplodePlan, explodedOffsets, partsMovedBy, spreadExplodePlan } from '../utils/explodePlan.js';
 
 export const VEX_PITCH_MM = 12.7;
@@ -111,6 +114,16 @@ export function unknownPortError(part, label, id) {
   return `"${label}" has no port "${id}". Its ports: ${shown || 'none'}`;
 }
 
+/**
+ * The part a copy is drawn and checked as (openspec shaped-parts-and-sheet-bending): its catalog
+ * part, or for a copy with a `shape` the derived part with that shape's holes, box and mesh.
+ * Works on anything with a `partId` (and maybe a `shape`): instances, poses to place.
+ */
+export function partOf(inst) {
+  const part = inst ? getCatalog().catalogById.get(inst.partId) : null;
+  return inst?.shape ? shapedPart(part, inst.shape) : part;
+}
+
 export function findPart(query) {
   const { catalog, catalogById } = getCatalog();
   if (!query) return null;
@@ -130,8 +143,20 @@ export function findPart(query) {
  * inward-eroded MeshBVH (0.38mm clearance) so pins/shafts pass cleanly through holes
  * while solid intersections are detected accurately.
  */
-// A part's GLB triangles as stored (positions, normals, indices)
+const shapedMeshCache = new Map(); // derived part id -> its shaped { pos, norm, idx }
+const SHAPED_MESH_CACHE_MAX = 100;
+
+// A part's GLB triangles as stored (positions, normals, indices); a shaped part's in its shape
 function readPartGlb(part) {
+  if (part.basePartId) {
+    if (shapedMeshCache.has(part.id)) return shapedMeshCache.get(part.id);
+    const base = getCatalog().catalogById.get(part.basePartId);
+    const flat = readPartGlb(base);
+    const shaped = shapeMeshArrays(part, flat.pos, flat.norm, flat.idx);
+    if (shapedMeshCache.size >= SHAPED_MESH_CACHE_MAX) shapedMeshCache.delete(shapedMeshCache.keys().next().value);
+    shapedMeshCache.set(part.id, shaped);
+    return shaped;
+  }
   const data = meshSource(part);
   if (!data) throw new MissingMeshError(part);
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
@@ -169,6 +194,20 @@ export function getPartRawGeometry(part) {
 export function getPartCollisionBvh(part) {
   if (!bvhCache.has(part.id)) bvhCache.set(part.id, buildCollisionBvh(part, COLLISION_CLEARANCE_MM));
   return bvhCache.get(part.id);
+}
+
+// Two sheets with a hole each on one line, a few sheet thicknesses apart (stacked)
+const sheetsShareAHole = (a, b) => sheetsStacked(getWorldPortsForInstance(a), getWorldPortsForInstance(b));
+
+// How far a plastic sheet would have to flex to clear another part (src/utils/sheetContact.js)
+function sheetPressDepth(sheetPart, sheetInst, otherPart, otherInst, limit) {
+  return sheetFlexDepth(
+    getPartRawGeometry(sheetPart),
+    buildWorldMatrix(sheetInst.position, sheetInst.rotation),
+    getPartRawGeometry(otherPart),
+    buildWorldMatrix(otherInst.position, otherInst.rotation),
+    limit
+  );
 }
 
 /** The collision mesh pulled in a further TIGHT_FIT_MM, to tell tight fits from overlaps. */
@@ -293,7 +332,7 @@ const meshesHit = (piecesA, piecesB, matBtoA) => {
  */
 export function checkCandidateCollision(candidate, instances) {
   const { catalogById } = getCatalog();
-  const partA = catalogById.get(candidate.partId);
+  const partA = partOf(candidate);
   if (!partA) return { isIntersecting: false, collidingWith: [], tightFits: [] };
 
   const bvhA = getPartCollisionBvh(partA);
@@ -312,7 +351,7 @@ export function checkCandidateCollision(candidate, instances) {
   for (const other of instances) {
     if (other.instanceId === candidate.instanceId) continue;
     if (other.visible === false) continue;
-    const partB = catalogById.get(other.partId);
+    const partB = partOf(other);
     if (!partB) continue;
 
     const bvhB = getPartCollisionBvh(partB);
@@ -331,6 +370,15 @@ export function checkCandidateCollision(candidate, instances) {
     if (hit) {
       deepA ||= posedPieces(getPartDeepCollisionBvh(partA), candidate);
       tight = !meshesHit(deepA, posedPieces(getPartDeepCollisionBvh(partB), other), matBtoA);
+    }
+    // Two sheets pinned through the same holes (stacked) press together where they meet: a tight fit
+    if (hit && !tight && isPlasticSheet(partA) && isPlasticSheet(partB)) tight = sheetsShareAHole(candidate, other);
+    // A plastic sheet flexes: pressed up to SHEET_PRESS_MM into another part is a tight fit
+    if (hit && !tight && isPlasticSheet(partA) !== isPlasticSheet(partB)) {
+      const depth = isPlasticSheet(partA)
+        ? sheetPressDepth(partA, candidate, partB, other, SHEET_PRESS_MM)
+        : sheetPressDepth(partB, other, partA, candidate, SHEET_PRESS_MM);
+      tight = depth <= SHEET_PRESS_MM;
     }
     // The shrunk meshes miss small overlaps, like a shaft's cap inside a hole it can't pass
     if ((!hit || tight) && (isShaftPart(partA) || isShaftPart(partB))) {
@@ -453,7 +501,7 @@ export function buildDefaultStarterState() {
  */
 export function getWorldPortsForInstance(instance) {
   const { catalogById } = getCatalog();
-  const part = catalogById.get(instance.partId);
+  const part = partOf(instance);
   if (!part || !Array.isArray(part.ports)) return [];
 
   const mat = buildWorldMatrix(instance.position, instance.rotation);
@@ -524,7 +572,7 @@ export function getPartMeasurements(part) {
 
 /** World pins/shafts/openings of a placed instance, with measured faces, pin ends and depths. */
 export function worldFeaturesFor(instance) {
-  const part = getCatalog().catalogById.get(instance.partId);
+  const part = partOf(instance);
   if (!part) return [];
   return collectWorldFeatures(
     part,
@@ -658,7 +706,7 @@ function findJoints(state) {
   const featuresById = new Map();
 
   for (const inst of visible) {
-    const part = catalogById.get(inst.partId);
+    const part = partOf(inst);
     if (!part) continue;
 
     const mat = buildWorldMatrix(inst.position, inst.rotation);
@@ -1016,7 +1064,7 @@ function tooWideBlocks(insert, opening) {
 
 /** Collision meshes of a placed part in its own frame: [{ geo, local }] (a turned motor hub has a local matrix). */
 export function collisionPiecesFor(instance) {
-  const part = getCatalog().catalogById.get(instance.partId);
+  const part = partOf(instance);
   if (!part) return [];
   return posedPieces(getPartCollisionBvh(part), instance).map((p) => ({ geo: p.geo, local: p.local || null }));
 }
@@ -1031,7 +1079,7 @@ export function explodeInputs(state) {
   const found = findJoints(state);
   const parts = [];
   for (const inst of found.visible) {
-    const part = catalogById.get(inst.partId);
+    const part = partOf(inst);
     const box = found.rawWorldBoxes.get(inst.instanceId);
     if (!part || !box) continue;
     const type = part.fastenerSpecs?.fastenerType;
@@ -1550,7 +1598,7 @@ export function computeMateTransform(
   if (typeof targetPortId === 'number') {
     tPort = targetPorts[Math.min(Math.max(targetPortId, 0), targetPorts.length - 1)];
   } else if (typeof targetPortId === 'string' && targetPortId.trim()) {
-    const targetPart = getCatalog().catalogById.get(targetInst.partId);
+    const targetPart = partOf(targetInst);
     const id = findPort(targetPart, targetPortId)?.portId;
     tPort = id && targetPorts.find((p) => p.portId === id);
     if (!tPort) return { error: unknownPortError(targetPart, targetInst.label, targetPortId) };
@@ -1654,7 +1702,7 @@ export function buildMeshedGearTrain(state, options = {}) {
 
   // Pick start port
   let currentPort =
-    (startPortId && beamPorts.find((p) => p.portId === findPort(getCatalog().catalogById.get(beamInst.partId), startPortId)?.portId)) || beamPorts[0];
+    (startPortId && beamPorts.find((p) => p.portId === findPort(partOf(beamInst), startPortId)?.portId)) || beamPorts[0];
 
   const holeAxis = new THREE.Vector3(...currentPort.worldAxis).normalize();
 
@@ -1745,7 +1793,7 @@ export function buildMeshedGearTrain(state, options = {}) {
     });
     let chosenMate = { ...mate, rollDeg: 0 };
     const prevGear = placedGears[placedGears.length - 1]?.instance;
-    const toothedOf = (inst) => worldToothed(getCatalog().catalogById.get(inst.partId), inst.position, inst.rotation, inst.instanceId);
+    const toothedOf = (inst) => worldToothed(partOf(inst), inst.position, inst.rotation, inst.instanceId);
     const meshed = prevGear ? meshTurn(worldToothed(gearPart, mate.position, mate.rotation), [toothedOf(prevGear)]) : null;
     if (meshed && Math.abs(meshed.turnDeg) >= 0.005) {
       chosenMate = {
@@ -1892,7 +1940,10 @@ export function mirrorSubassembly(state, options = {}) {
     const src = sourceInstances[idx];
     const part = catalogById.get(src.partId);
     if (!part) continue;
-    const pose = mirrorPose(part, src, axisIdx, planeOffsetMm);
+    // A shaped copy: the flat part's mirror pose, and its shape flipped across the same local axis
+    const { shape: srcShape, ...flatSrc } = src;
+    const pose = mirrorPose(part, flatSrc, axisIdx, planeOffsetMm);
+    const shape = srcShape ? mirrorShape(srcShape, pose.localAxis, part) : null;
     const mirroredInst = {
       instanceId: `inst-${Date.now()}-mir-${idx + 1}`,
       partId: src.partId,
@@ -1903,6 +1954,7 @@ export function mirrorSubassembly(state, options = {}) {
       visible: src.visible,
       locked: false,
       ...(src.socketAngleDeg !== undefined ? { socketAngleDeg: src.socketAngleDeg } : {}),
+      ...(shape ? { shape } : {}),
       ...(pose.exact ? {} : { mirrorApproximate: true })
     };
     const { isIntersecting } = checkCandidateCollision(mirroredInst, workingInstances);
@@ -1939,7 +1991,7 @@ export function generateOrthographicViews(state) {
   let chassisMinY = Infinity;
 
   for (const inst of visible) {
-    const part = catalogById.get(inst.partId);
+    const part = partOf(inst);
     if (!part) continue;
 
     const mat = buildWorldMatrix(inst.position, inst.rotation);
@@ -2282,7 +2334,7 @@ export function chainAskedFor(state, { kind = 'chain', instanceIds = null } = {}
   const chosen = ids.map((id) => byId.get(id)).filter((i) => i && i.visible !== false);
   const link = catalog.find((p) => p.partNumber === (kind === 'track' ? TREAD_LINK_PART_NUMBER : CHAIN_LINK_PART_NUMBER));
   const chk = checkSprocketsForChain(
-    chosen.map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogById.get(i.partId), position: i.position, rotation: i.rotation })),
+    chosen.map((i) => ({ instanceId: i.instanceId, label: i.label, meta: partOf(i), position: i.position, rotation: i.rotation })),
     { kind, outlineOf: chainOutlineOf, ...(link?.bbox ? { linkHalfMm: Math.abs(link.bbox.min[1]), bandHalfMm: link.bbox.size[0] / 2 } : {}) }
   );
   if (!chk.ok) return { ok: false, error: chk.error };
@@ -2305,7 +2357,7 @@ export function planChainFor(state, { kind = 'chain', instanceIds = null, route 
   if (unknown.length) return { error: `Not in the build: ${unknown.join(', ')}` };
   const chosen = ids.map((id) => byId.get(id)).filter((i) => i.visible !== false);
   const res = buildChainPath(
-    chosen.map((i) => ({ instanceId: i.instanceId, label: i.label, meta: catalogById.get(i.partId), position: i.position, rotation: i.rotation })),
+    chosen.map((i) => ({ instanceId: i.instanceId, label: i.label, meta: partOf(i), position: i.position, rotation: i.rotation })),
     {
       kind,
       route,
@@ -2346,7 +2398,7 @@ export function buildChain(state, { kind = 'chain', instanceIds = null, route = 
   let instances = state.instances;
   const visible = instances.filter((i) => i.visible !== false);
   const groups = shaftGroups(
-    visible.map((i) => ({ instanceId: i.instanceId, features: worldFeaturesFor(i), hasHub: Boolean(catalogById.get(i.partId)?.hubSpecs) }))
+    visible.map((i) => ({ instanceId: i.instanceId, features: worldFeaturesFor(i), hasHub: Boolean(partOf(i)?.hubSpecs) }))
   );
   const turned = new Set();
   for (const t of res.sprocketTurns) {
@@ -2374,7 +2426,7 @@ export function buildChain(state, { kind = 'chain', instanceIds = null, route = 
   const stamp = Date.now().toString(36);
   const counts = new Map();
   const newInstances = [...res.links, ...res.grippers].map((pose, i) => {
-    const part = catalogById.get(pose.partId);
+    const part = partOf(pose);
     const n = (counts.get(part.id) ?? instances.filter((x) => x.partId === part.id).length) + 1;
     counts.set(part.id, n);
     return {
@@ -2426,7 +2478,7 @@ export function settlePlacedInstance(placed, instances, receivingId = null) {
     placedId: placed.instanceId,
     instances,
     receivingId,
-    partOf: (i) => catalogById.get(i.partId),
+    partOf: (i) => partOf(i),
     featuresOf: worldFeaturesFor
   });
 }
@@ -2486,6 +2538,12 @@ export function placeParts(state, items, options = {}) {
       visible: true,
       locked: false
     };
+    // A copy with its own shape, such as a bent sheet (openspec shaped-parts-and-sheet-bending)
+    if (item.shape) {
+      const wrong = shapeError(part, item.shape);
+      if (wrong) return fail(index, item.ref, wrong);
+      inst.shape = normalizeShape(item.shape);
+    }
     let stoppedAgainst;
     let preTurned = false;
     let otherFits = [];
@@ -2700,7 +2758,7 @@ function insertIntoOpening(part, insert, target, others, instanceId) {
   const measured = getPartMeasurements(part);
   const local = collectWorldFeatures(part, new THREE.Matrix4(), instanceId, measured);
   const targetFeatures = worldFeaturesFor(target);
-  const targetPart = getCatalog().catalogById.get(target.partId);
+  const targetPart = partOf(target);
   const port = featureIdFor(targetPart, insert.into?.port);
 
   const sideArg = insert.fromSide === '-' ? -1 : insert.fromSide === '+' ? 1 : null;
@@ -2886,9 +2944,9 @@ function mirrorPose(part, inst, axisIdx, offsetMm) {
     const rotation = [e.x, e.y, e.z].map((r) => Number(THREE.MathUtils.radToDeg(r).toFixed(2)) + 0);
     const ports = portsMatch(position, rotation);
     const score = shapeOverlap(target, shapeCells(part, buildWorldMatrix(position, rotation)));
-    if (!best || (ports && !best.ports) || (ports === best.ports && score > best.score)) best = { position, rotation, ports, score };
+    if (!best || (ports && !best.ports) || (ports === best.ports && score > best.score)) best = { position, rotation, ports, score, k };
   }
-  return { position: best.position, rotation: best.rotation, exact: best.ports };
+  return { position: best.position, rotation: best.rotation, exact: best.ports, localAxis: best.k };
 }
 
 /** Swaps Left/Right and a standalone L/R in a label (keeping case), or adds " (mirror)" when it has neither. */
@@ -2917,7 +2975,7 @@ function mirrorPlacedParts(placed, mirror) {
   const items = [];
   const stamp = Date.now();
   for (const p of placed) {
-    const part = catalogById.get(p.inst.partId);
+    const part = partOf(p.inst);
     const pose = mirrorPose(part, p.inst, axisIdx, offsetMm);
     const mirroredInst = { ...p.inst, instanceId: `inst-${stamp}-m${items.length.toString(36)}-${Math.random().toString(36).slice(2, 6)}`, position: pose.position, rotation: pose.rotation };
     // New parts are added outside any group

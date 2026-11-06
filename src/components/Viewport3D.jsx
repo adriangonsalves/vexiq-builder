@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { explodedOffsets } from '../utils/explodePlan.js';
 import { MeshBVH } from 'three-mesh-bvh';
@@ -12,7 +12,10 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { loadPartAsset, RUBBER_COLOR, isMetalPart, isClearPlasticPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
+import { loadPartAsset, loadSheetPattern, RUBBER_COLOR, isMetalPart, isClearPlasticPart, METAL_SHAFT_COLOR } from '../utils/geometryCache.js';
+import { derivedPartById, shapedPart } from '../utils/shapedParts.js';
+import { SHEET_PRESS_MM, isPlasticSheet } from '../utils/sheetBend.js';
+import { sheetFlexDepth, sheetsStacked } from '../utils/sheetContact.js';
 import { hubMatrix, isShaftInMotorSocket } from '../utils/motorHub.js';
 import { isMeshingGear, meshTurn, worldToothed } from '../utils/gearMeshing.js';
 import { squareFitRoll } from '../utils/shaftGroups.js';
@@ -60,6 +63,9 @@ import {
 
 const VEX_PITCH_MM = 12.7; // 1x VEX IQ Pitch = 0.5 inch = 12.7 mm
 const HOLE_HIGHLIGHT_COLOR = 0xf97316; // orange: distinct from Axes overlay, selection, collision & gizmo colors
+const CLEAR_PLASTIC_EDGE_COLOR = 0xd5dbe3; // a clear sheet's hole rims and outline (light grey rings)
+const CLEAR_PLASTIC_EDGE_OPACITY = 0.85;
+const SHEET_PATTERN_OPACITY = 0.55; // the printed lattice on clear sheets
 const COLLISION_EROSION_MM = 0.38; // collision meshes are eroded inward by this much (see geometryCache.js)
 const _pieceMatrix = new THREE.Matrix4();
 const _pieceInverse = new THREE.Matrix4();
@@ -238,6 +244,34 @@ function createConnectorAxesGroup(partMeta) {
   }
 
   return group;
+}
+
+// A part's holes in world space, from its group (a shaped copy's group carries the shaped part)
+function groupWorldPorts(group, part) {
+  const q = new THREE.Quaternion();
+  group.matrixWorld.decompose(new THREE.Vector3(), q, new THREE.Vector3());
+  return (part?.ports || []).map((p) => ({
+    type: p.type,
+    worldOrigin: new THREE.Vector3(...p.origin).applyMatrix4(group.matrixWorld).toArray(),
+    worldAxis: new THREE.Vector3(...p.axis).applyQuaternion(q).toArray()
+  }));
+}
+
+// Is a meeting between a plastic sheet and another part a tight fit: two stacked sheets, or a sheet
+// that only has to flex SHEET_PRESS_MM to clear the part
+function sheetContactIsTight(groupA, partA, groupB, partB) {
+  const sheetA = isPlasticSheet(partA);
+  const sheetB = isPlasticSheet(partB);
+  if (sheetA && sheetB) return sheetsStacked(groupWorldPorts(groupA, partA), groupWorldPorts(groupB, partB));
+  const [sheetGroup, otherGroup] = sheetA ? [groupA, groupB] : [groupB, groupA];
+  const withBvh = (geo) => {
+    if (!geo.boundsTree) geo.boundsTree = new MeshBVH(geo);
+    return geo;
+  };
+  const sheetGeos = sheetGroup.userData.renderGeometries || [];
+  const otherGeos = otherGroup.userData.renderGeometries || [];
+  if (!sheetGeos.length || !otherGeos.length) return false;
+  return sheetGeos.every((sg) => otherGeos.every((og) => sheetFlexDepth(withBvh(sg), sheetGroup.matrixWorld, withBvh(og), otherGroup.matrixWorld, SHEET_PRESS_MM) <= SHEET_PRESS_MM));
 }
 
 /**
@@ -1410,6 +1444,7 @@ export default function Viewport3D({
   selectedId,
   selectedIds = EMPTY_IDS,
   attentionIds = EMPTY_IDS,
+  markedHoles = EMPTY_IDS,
   selectMode = false,
   boxSelect = false,
   onBoxSelect,
@@ -1524,8 +1559,13 @@ export default function Viewport3D({
   const instancesRef = useRef(instances);
   instancesRef.current = instances;
 
-  const catalogMapRef = useRef(catalogMap);
-  catalogMapRef.current = catalogMap;
+  // The catalog plus the shaped parts of copies with a shape (openspec shaped-parts-and-sheet-bending):
+  // a group's userData.partId is the shaped part's id for such a copy
+  const shapedCatalogMap = useMemo(() => ({ base: catalogMap, get: (id) => catalogMap.get(id) || derivedPartById(id) || undefined, has: (id) => catalogMap.has(id) || Boolean(derivedPartById(id)) }), [catalogMap]);
+  const catalogMapRef = useRef(shapedCatalogMap);
+  catalogMapRef.current = shapedCatalogMap;
+  // A copy's part: shaped when it has a shape; a group's userData (partId may be a shaped part's id) works too
+  const partFor = (inst) => (!inst ? null : inst.shape ? shapedPart(catalogMapRef.current.base.get(inst.partId), inst.shape) : catalogMapRef.current.get(inst.partId));
 
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
@@ -1535,6 +1575,10 @@ export default function Viewport3D({
   // Highlighted parts for a modal question (openspec chain-over-under), separate from selection
   const attentionIdsRef = useRef(attentionIds);
   attentionIdsRef.current = attentionIds;
+  // Holes another tool marks ([{ instanceId, portIds }], Bend sheet's choices): shown instead of the
+  // selected part's lined-up openings while set
+  const markedHolesRef = useRef(markedHoles);
+  markedHolesRef.current = markedHoles;
   const prevAttentionIdsRef = useRef(EMPTY_IDS);
   const selectModeRef = useRef(selectMode);
   selectModeRef.current = selectMode;
@@ -1590,7 +1634,7 @@ export default function Viewport3D({
    */
   /** World pins/shafts/openings of a part's group, with mesh measurements. */
   const worldFeaturesOfGroup = (group) => {
-    const partMeta = catalogMapRef.current.get(group.userData.partId);
+    const partMeta = partFor(group.userData);
     if (!partMeta) return [];
     group.updateMatrixWorld(true);
     return collectWorldFeatures(partMeta, group.matrixWorld, group.userData.instanceId, getMeshMeasurements(group, partMeta));
@@ -1598,7 +1642,7 @@ export default function Viewport3D({
 
   /** A shaft part (straight or capped), whose width along its length is measured. */
   const isShaftGroup = (group) => {
-    const partMeta = catalogMapRef.current.get(group.userData.partId);
+    const partMeta = partFor(group.userData);
     return Boolean(partMeta && getMeshMeasurements(group, partMeta)?.profiles?.size);
   };
 
@@ -1724,6 +1768,8 @@ export default function Viewport3D({
           })
         );
       }
+      // Plastic sheets flex where they press, and stacked sheets press together (src/utils/sheetContact.js)
+      if (collided && tightOk && (isPlasticSheet(partA) || isPlasticSheet(partB))) collided = !sheetContactIsTight(targetGroup, partA, otherGroup, partB);
       // The shrunk meshes miss small overlaps, like a shaft's cap inside a hole it can't pass
       if (!collided && (isShaftGroup(targetGroup) || isShaftGroup(otherGroup))) {
         if (featuresA === undefined) featuresA = worldFeaturesOfGroup(targetGroup);
@@ -1824,7 +1870,7 @@ export default function Viewport3D({
     const entries = [];
     for (const [instId, group] of meshMapRef.current.entries()) {
       if ((exclude ? exclude.has(instId) : instId === selectedIdRef.current) || !group.visible) continue;
-      const partMeta = catalogMapRef.current.get(group.userData.partId);
+      const partMeta = partFor(group.userData);
       if (!partMeta) continue;
       group.updateMatrixWorld();
       const measured = getMeshMeasurements(group, partMeta);
@@ -1875,7 +1921,7 @@ export default function Viewport3D({
     const list = [];
     for (const [id, g] of meshMapRef.current.entries()) {
       if (id === excludeId || !g.visible) continue;
-      const toothed = worldToothed(catalogMapRef.current.get(g.userData.partId), g.position, g.quaternion, id);
+      const toothed = worldToothed(partFor(g.userData), g.position, g.quaternion, id);
       if (toothed) list.push(toothed);
     }
     return list;
@@ -1951,9 +1997,9 @@ export default function Viewport3D({
       placedId: id,
       instances: list,
       receivingId,
-      partOf: (i) => catalogMapRef.current.get(i.partId),
+      partOf: (i) => partFor(i),
       featuresOf: (i) => {
-        const meta = catalogMapRef.current.get(i.partId);
+        const meta = partFor(i);
         const g = meshMapRef.current.get(i.instanceId === '__copy__' ? copyOf : i.instanceId);
         const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...i.rotation.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ'));
         const matrix = new THREE.Matrix4().compose(new THREE.Vector3(...i.position), q, new THREE.Vector3(1, 1, 1));
@@ -1988,7 +2034,7 @@ export default function Viewport3D({
     const STEP_MM = 1.5;
     const travel = Math.max(0, travelMm);
     let chosen = null;
-    if (isMeshingGear(catalogMapRef.current.get(group.userData.partId))) {
+    if (isMeshingGear(partFor(group.userData))) {
       // The whole push: it goes on past the travel limit while still in an opening
       const reach = Math.max(travel, sweepMm ?? 0);
       for (let d = 0; d <= reach && !chosen; d += Math.max(STEP_MM, reach / 40)) {
@@ -2117,10 +2163,28 @@ export default function Viewport3D({
     const overlay = holeOverlayRef.current;
     if (!overlay) return;
 
+    if (markedHolesRef.current.length > 0) {
+      const marked = [];
+      for (const { instanceId, portIds } of markedHolesRef.current) {
+        const g = meshMapRef.current.get(instanceId);
+        const meta = g ? partFor(g.userData) : null;
+        if (!meta) continue;
+        g.updateMatrixWorld();
+        for (const f of collectWorldFeatures(meta, g.matrixWorld, instanceId, getMeshMeasurements(g, meta))) {
+          if (!f.radiusMm || !portIds.includes(f.featureId.replace(/@(lo|hi)$/, ''))) continue;
+          const outward = f.start.clone().sub(f.end).normalize();
+          marked.push({ face: f.start, farFace: f.end, outward, radiusMm: f.radiusMm });
+        }
+      }
+      lastAlignedRef.current = [];
+      overlay.show(marked);
+      return;
+    }
+
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     const selectedInst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
-    const partMeta = group ? catalogMapRef.current.get(group.userData.partId) : null;
+    const partMeta = group ? partFor(group.userData) : null;
     lastAlignedRef.current = [];
     if (
       !group ||
@@ -2443,7 +2507,7 @@ export default function Viewport3D({
   const buildPickSession = (kind, extra = {}) => {
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
-    const partMeta = group ? catalogMapRef.current.get(group.userData.partId) : null;
+    const partMeta = group ? partFor(group.userData) : null;
     if (!group || !partMeta) return null;
     const insertKinds = [...new Set(getLocalFeatures(partMeta).filter((f) => f.kind === 'pin' || f.kind === 'shaft').map((f) => f.kind))];
     // A bore part (gear, hub, pulley, motor) is picked onto axle ends and hole faces instead
@@ -2874,7 +2938,7 @@ export default function Viewport3D({
    * and a brain it fits, so the double-click does its usual job.
    */
   const batteryFitsBrain = (batteryId, brainId) => {
-    const partOf = (id) => catalogMapRef.current.get(instancesRef.current.find((i) => i.instanceId === id)?.partId);
+    const partOf = (id) => partFor(instancesRef.current.find((i) => i.instanceId === id));
     return Boolean(brainId && batteryBayPose(partOf(batteryId), partOf(brainId), new THREE.Matrix4()));
   };
 
@@ -2886,7 +2950,7 @@ export default function Viewport3D({
     const brainInst = instancesRef.current.find((i) => i.instanceId === brainId);
     if (!group || !brain || !inst || !brainInst || explodeModeRef.current !== 'off') return false;
     brain.updateMatrixWorld(true);
-    const pose = batteryBayPose(catalogMapRef.current.get(inst.partId), catalogMapRef.current.get(brainInst.partId), brain.matrixWorld);
+    const pose = batteryBayPose(partFor(inst), partFor(brainInst), brain.matrixWorld);
     if (!pose) return false;
     const feedback = (message, isError = false) => onMateFeedbackRef.current?.(message, isError);
     if (inst.locked) {
@@ -2920,7 +2984,7 @@ export default function Viewport3D({
     const plans = planMates(lastAlignedRef.current, selId);
     // Only its holes line up (hole to hole) while its own pins/shafts line up with nothing: offer the
     // stacking arrow and hole picking for the pins together, instead of stacking straight away
-    const partMeta = catalogMapRef.current.get(group.userData.partId);
+    const partMeta = partFor(group.userData);
     const hasInserts = getLocalFeatures(partMeta).some((f) => f.kind === 'pin' || f.kind === 'shaft');
     let action = mateAction(plans, hasInserts);
     // A bore part with nothing lined up picks an axle or hole to go onto
@@ -3027,7 +3091,7 @@ export default function Viewport3D({
   /** Every member's world pins and holes, as posed in the scene. */
   const setMemberFeatures = (members) =>
     members.flatMap(({ id, group }) => {
-      const meta = catalogMapRef.current.get(group.userData.partId);
+      const meta = partFor(group.userData);
       if (!meta) return [];
       group.updateMatrixWorld();
       return collectWorldFeatures(meta, group.matrixWorld, id, getMeshMeasurements(group, meta));
@@ -3545,7 +3609,7 @@ export default function Viewport3D({
       group.userData.isIntersecting = isColliding;
       overlaps.set(id, isColliding);
       applyGroupAppearance(group, {
-        baseColor: resolvePartBaseColor(inst, catalogMapRef.current.get(inst.partId)),
+        baseColor: resolvePartBaseColor(inst, partFor(inst)),
         isSelected: selectLevel(selectedIdsRef.current, id),
         isIntersecting: isColliding
       });
@@ -3562,7 +3626,7 @@ export default function Viewport3D({
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
-    const partMeta = group ? catalogMapRef.current.get(group.userData.partId) : null;
+    const partMeta = group ? partFor(group.userData) : null;
     const prev = rotateSetupRef.current;
 
     const clear = (message = '') => {
@@ -3746,7 +3810,7 @@ export default function Viewport3D({
     angleLabelsRef.current?.setAngle(ring, totalDeg);
 
     const inst = instancesRef.current.find((i) => i.instanceId === setup.instanceId);
-    const partMeta = catalogMapRef.current.get(group.userData.partId);
+    const partMeta = partFor(group.userData);
     const isColliding = checkGroupCollision(group, false, null, null, true);
     group.userData.isIntersecting = isColliding;
     applyGroupAppearance(group, {
@@ -3802,7 +3866,7 @@ export default function Viewport3D({
       group.userData.isIntersecting = false;
       const inst = instancesRef.current.find((i) => i.instanceId === gesture.instanceId);
       applyGroupAppearance(group, {
-        baseColor: resolvePartBaseColor(inst, catalogMapRef.current.get(group.userData.partId)),
+        baseColor: resolvePartBaseColor(inst, partFor(group.userData)),
         isSelected: selectLevel(selectedIdsRef.current, gesture.instanceId),
         isIntersecting: false
       });
@@ -3973,7 +4037,7 @@ export default function Viewport3D({
         const inst = instancesRef.current.find((i) => i.instanceId === id);
         if (g && inst) {
           applyGroupAppearance(g, {
-            baseColor: resolvePartBaseColor(inst, catalogMapRef.current.get(g.userData.partId)),
+            baseColor: resolvePartBaseColor(inst, partFor(g.userData)),
             isSelected: 0,
             isAttention: attIds.includes(id),
             attentionPulse: 1,
@@ -4002,7 +4066,7 @@ export default function Viewport3D({
           const inst = instancesRef.current.find((i) => i.instanceId === id);
           if (g && inst) {
             applyGroupAppearance(g, {
-              baseColor: resolvePartBaseColor(inst, catalogMapRef.current.get(g.userData.partId)),
+              baseColor: resolvePartBaseColor(inst, partFor(g.userData)),
               isSelected: selectLevel(selIds, id),
               isAttention: attentionIdsRef.current.includes(id),
               isIntersecting: Boolean(g.userData.isIntersecting)
@@ -4056,7 +4120,7 @@ export default function Viewport3D({
       for (const group of meshMapRef.current.values()) {
         if (!group.visible) continue;
         group.updateMatrixWorld();
-        const box = worldPartBox(catalogMapRef.current.get(group.userData.partId), group.matrixWorld);
+        const box = worldPartBox(partFor(group.userData), group.matrixWorld);
         if (box) boxes.push(box);
       }
       const corner = new THREE.Vector3();
@@ -4378,7 +4442,7 @@ export default function Viewport3D({
       }
       const instId = obj.userData.instanceId;
       const inst = instancesRef.current.find((i) => i.instanceId === instId);
-      const partMeta = inst ? catalogMapRef.current.get(inst.partId) : null;
+      const partMeta = inst ? partFor(inst) : null;
 
       if (transformModeRef.current === 'translate') {
         const rawPos = obj.position.clone();
@@ -5901,7 +5965,7 @@ export default function Viewport3D({
         for (const id of attentionIdsRef.current) {
           const group = meshMapRef.current.get(id);
           const inst = instancesRef.current.find((i) => i.instanceId === id);
-          const partMeta = inst ? catalogMapRef.current.get(inst.partId) : null;
+          const partMeta = inst ? partFor(inst) : null;
           if (!group || !inst || !partMeta) continue;
           applyGroupAppearance(group, {
             baseColor: resolvePartBaseColor(inst, partMeta),
@@ -6061,7 +6125,7 @@ export default function Viewport3D({
       for (const id of new Set([...lastSync.selectedIds, ...selectedIds])) {
         const inst = id ? byId.get(id) : null;
         const group = id ? meshMapRef.current.get(id) : null;
-        const partMeta = inst ? catalogMap.get(inst.partId) : null;
+        const partMeta = inst ? partFor(inst) : null;
         if (!inst || !group || !partMeta) continue;
         const isSelected = id === selectedId;
         applyGroupAppearance(group, {
@@ -6088,7 +6152,7 @@ export default function Viewport3D({
     // Remove deleted instances or instances whose partId changed
     for (const [instId, group] of meshMapRef.current.entries()) {
       const currentInst = currentById.get(instId);
-      if (!currentInst || group.userData.partId !== currentInst.partId) {
+      if (!currentInst || group.userData.partId !== (partFor(currentInst)?.id ?? currentInst.partId)) {
         if (transform.object === group) {
           transform.detach();
         }
@@ -6102,14 +6166,14 @@ export default function Viewport3D({
 
     // First pass: create/update groups and set transforms
     instances.forEach((inst) => {
-      const partMeta = catalogMap.get(inst.partId);
+      const partMeta = partFor(inst);
       if (!partMeta) return;
 
       let group = meshMapRef.current.get(inst.instanceId);
       if (!group) {
         group = new THREE.Group();
         group.userData.instanceId = inst.instanceId;
-        group.userData.partId = inst.partId;
+        group.userData.partId = partMeta.id;
         meshMapRef.current.set(inst.instanceId, group);
         partsRoot.add(group);
 
@@ -6182,16 +6246,31 @@ export default function Viewport3D({
               group.add(mesh);
 
               const edgesGeo = new THREE.EdgesGeometry(geo, 32);
+              // A clear sheet's hole rims and outline are light rings, as VEX's viewer draws them
               const edgesMat = new THREE.LineBasicMaterial({
-                color: 0x0f172a,
+                color: isClear ? CLEAR_PLASTIC_EDGE_COLOR : 0x0f172a,
                 transparent: true,
-                opacity: isMetal ? 0.18 : 0.28
+                opacity: isClear ? CLEAR_PLASTIC_EDGE_OPACITY : isMetal ? 0.18 : 0.28
               });
               const edges = new THREE.LineSegments(edgesGeo, edgesMat);
               edges.name = '__cad_edges__';
               group.add(edges);
               if (hub?.renderIndices.includes(index)) group.userData.hub.objects.push(mesh, edges);
             });
+            // A clear sheet's printed lattice, as VEX's model shows it (bent with the sheet)
+            if (isClear) {
+              loadSheetPattern(partMeta).then((patternGeo) => {
+                if (!patternGeo || !meshMapRef.current.has(inst.instanceId)) return;
+                const pattern = new THREE.LineSegments(
+                  patternGeo,
+                  new THREE.LineBasicMaterial({ color: CLEAR_PLASTIC_EDGE_COLOR, transparent: true, opacity: SHEET_PATTERN_OPACITY })
+                );
+                pattern.name = '__sheet_pattern__';
+                pattern.raycast = () => {};
+                group.add(pattern);
+                renderFrameRef.current?.();
+              });
+            }
             const loadedInst = instancesRef.current.find((i) => i.instanceId === inst.instanceId);
             applyHubAngle(group, loadedInst?.socketAngleDeg);
 
@@ -6244,7 +6323,7 @@ export default function Viewport3D({
 
     // Second pass: evaluate collision (at assembled coordinates) & update appearance
     instances.forEach((inst) => {
-      const partMeta = catalogMap.get(inst.partId);
+      const partMeta = partFor(inst);
       const group = meshMapRef.current.get(inst.instanceId);
       if (!partMeta || !group) return;
 
@@ -6336,7 +6415,7 @@ export default function Viewport3D({
     window.addEventListener('pointercancel', released);
     let cancelled = false;
     const inst = instancesRef.current.find((i) => i.instanceId === placeRequest.instanceId);
-    const partMeta = inst ? catalogMapRef.current.get(inst.partId) : null;
+    const partMeta = inst ? partFor(inst) : null;
     if (partMeta) {
       loadPartAsset(partMeta).then(() =>
         requestAnimationFrame(() => {
@@ -6363,7 +6442,7 @@ export default function Viewport3D({
       partGroupRef.current?.updateMatrixWorld(true);
       const isColliding = checkGroupCollision(group, explodeModeRef.current !== 'off', null, null, true);
       group.userData.isIntersecting = isColliding;
-      const partMeta = catalogMapRef.current.get(inst.partId);
+      const partMeta = partFor(inst);
       applyGroupAppearance(group, {
         baseColor: resolvePartBaseColor(inst, partMeta),
         isSelected: selectLevel(selectedIdsRef.current, id),
@@ -6387,7 +6466,7 @@ export default function Viewport3D({
     for (const id of changed) {
       const inst = id ? byId.get(id) : null;
       const group = id ? meshMapRef.current.get(id) : null;
-      const partMeta = inst ? catalogMapRef.current.get(inst.partId) : null;
+      const partMeta = inst ? partFor(inst) : null;
       if (!inst || !group || !partMeta) continue;
       applyGroupAppearance(group, {
         baseColor: resolvePartBaseColor(inst, partMeta),
@@ -6470,6 +6549,13 @@ export default function Viewport3D({
     });
     renderFrameRef.current?.();
   }, [environmentReflections, reflectionIntensity]);
+
+  // Holes another tool marks (Bend sheet's choices)
+  useEffect(() => {
+    updateAlignedHoleHighlights();
+    renderFrameRef.current?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markedHoles]);
 
   // Perspective or orthographic main view (stereo always draws in perspective)
   useEffect(() => {
