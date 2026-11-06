@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
 import { ROOT_DIR, checkCandidateCollision, explodeInputs, explodePlanFor, getCatalog } from '../mcp/assembly-engine.mjs';
-import { EXPLODE_GAP_MM, buildPieces, explodedOffsets } from '../src/utils/explodePlan.js';
+import { EXPLODE_GAP_MM, buildPieces, explodedOffsets, partsMovedBy } from '../src/utils/explodePlan.js';
 import { batteryBayPose } from '../src/utils/batteryBay.js';
 import { buildWorldMatrix } from '../mcp/assembly-engine.mjs';
 import { starterById } from '../src/starters.js';
@@ -221,6 +221,25 @@ for (const mode of ['all', 'y']) {
     len(off) > 10 && brainAxes.some((ax) => parallel(ax, off.map((v) => v / len(off)))) && plan.unplaced.length === 0,
     `offset ${off.map((v) => v.toFixed(1)).join(', ')}`
   );
+}
+
+// --- Spread out: the Flop starter (593 parts, all in groups) -----------------------------------
+{
+  const flop = { instances: starterById('flop').build(catalog) };
+  const t0 = Date.now();
+  const plan = explodePlanFor(flop, 'all');
+  const ms = Date.now() - t0;
+  const groupOf = new Map(flop.instances.map((i) => [i.instanceId, i.groupName]));
+  check('flop: more than 300 parts, so spread out without planning, in under 5 s', plan.spread === true && ms < 5000, `${ms} ms`);
+  check('flop: every part moves', partsMovedBy(plan) === flop.instances.length, `${partsMovedBy(plan)} of ${flop.instances.length}`);
+  // Up to 40% the groups move whole: as many different moves as groups (a piece across two groups,
+  // like a pin, goes with the group most of its parts are in)
+  const at40 = explodedOffsets(plan, 0.4);
+  const moves = new Set([...at40.values()].map((o) => o.map((v) => v.toFixed(3)).join()));
+  const groups = new Set(groupOf.values()).size;
+  check('flop: at 40% each group has moved whole, not yet apart', moves.size === groups, `${moves.size} different moves for ${groups} groups`);
+  const lowest = Math.min(...[...explodedOffsets(plan, 1).values()].map((o) => o[1]));
+  check('flop: nothing moves down through the floor', lowest >= 0, String(lowest));
 }
 
 if (failures) {

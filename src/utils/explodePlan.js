@@ -2069,6 +2069,78 @@ function mirroredPlan(input, mode, options, mirror, center) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Spread out: for builds the planner can't take apart (parts locked in from more than one side, as
+// on Flop) or too big to plan quickly. Every piece moves straight out from the middle, further the
+// further out it starts, sideways or up but never down, without checking what it passes through. With groups, the groups move
+// apart first (up to SPREAD_GROUP_STAGE of the slider), then each group's pieces spread from the
+// group's own middle.
+
+export const SPREAD_ABOVE_PARTS = 300; // bigger builds are spread out without planning
+export const SPREAD_BELOW_SHARE = 0.5; // a plan that moves fewer than this share of parts is spread out instead
+const SPREAD_FACTOR = 1; // a piece goes out as far again as it starts from the middle
+const SPREAD_GROUP_STAGE = 0.4;
+const SPREAD_ROOT = 'spread';
+
+/** Like buildExplodePlan, without collision meshes: the spread-out plan. */
+export function spreadExplodePlan(input, mode = 'all') {
+  const t0 = Date.now();
+  const boxes = new Map(input.parts.map((p) => [p.id, boxOf(p.box)]));
+  const groupOf = new Map(input.parts.map((p) => [p.id, p.groupId || null]));
+  // Pieces as the planner makes them, groups aside: a pin with its part, a tire on its hub, a whole chain
+  const { pieces } = buildPieces({ ...input, parts: input.parts.map(({ groupId, ...p }) => p) });
+  const boxOfIds = (ids) => ids.reduce((b, id) => b.union(boxes.get(id)), new THREE.Box3());
+  const all = boxOfIds(input.parts.map((p) => p.id));
+  const middle = all.getCenter(new THREE.Vector3());
+  const axis = MODE_AXIS[mode];
+  const away = (from, box) => {
+    const d = box.getCenter(new THREE.Vector3()).sub(from);
+    if (axis !== undefined) for (let k = 0; k < 3; k++) if (k !== axis) d.setComponent(k, 0);
+    d.y = Math.max(d.y, 0); // never down through the floor: the lower parts spread sideways
+    const dist = d.length();
+    return dist < 1e-3 ? { dir: [1, 0, 0], travel: 0 } : { dir: d.divideScalar(dist).toArray().map((x) => round(x, 6)), travel: round(SPREAD_FACTOR * dist + EXPLODE_GAP_MM, 3) };
+  };
+  // A piece belongs to the group most of its parts are in (a pin may sit in a part of another group)
+  const units = new Map(); // group id or piece id -> piece ids
+  for (const piece of pieces.values()) {
+    const votes = new Map();
+    for (const m of piece.members) if (groupOf.get(m)) votes.set(groupOf.get(m), (votes.get(groupOf.get(m)) || 0) + 1);
+    const group = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const key = group ? `g:${group}` : `p:${piece.id}`;
+    if (!units.has(key)) units.set(key, []);
+    units.get(key).push(piece.id);
+  }
+  const grouped = [...units.values()].some((ids) => ids.length > 1);
+  const out = [{ id: SPREAD_ROOT, members: [], parent: null, depth: 0, dir: null, travel: 0, start: 0, end: 0 }];
+  for (const [key, ids] of units) {
+    const members = ids.flatMap((id) => pieces.get(id).members);
+    const box = boxOfIds(members);
+    if (ids.length === 1 || !grouped) {
+      // A piece on its own moves over the whole slider
+      out.push({ id: ids[0], members, parent: SPREAD_ROOT, depth: 1, ...away(middle, box), start: 0, end: 1 });
+      continue;
+    }
+    // A group: moves off whole, then its pieces spread from its middle
+    out.push({ id: key, members: [], parent: SPREAD_ROOT, depth: 1, ...away(middle, box), start: 0, end: SPREAD_GROUP_STAGE });
+    const groupMiddle = box.getCenter(new THREE.Vector3());
+    for (const id of ids) out.push({ id, members: pieces.get(id).members, parent: key, depth: 2, ...away(groupMiddle, boxOfIds(pieces.get(id).members)), start: SPREAD_GROUP_STAGE, end: 1 });
+  }
+  return {
+    mode,
+    base: SPREAD_ROOT,
+    spread: true,
+    pieces: out,
+    order: out.slice(1).map((p) => p.id),
+    unplaced: [],
+    stats: { parts: input.parts.length, pieces: pieces.size, moving: out.filter((p) => p.travel > 0).length, spread: true, ms: Date.now() - t0 }
+  };
+}
+
+/** How many parts a plan moves at all. */
+export function partsMovedBy(plan) {
+  return [...explodedOffsets(plan, 1).values()].filter((o) => Math.hypot(o[0], o[1], o[2]) > 1e-6).length;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Positions
 
 /**

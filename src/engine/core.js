@@ -32,7 +32,7 @@ import { areChainNeighbours, isChainFit, isChainPart, isGripperOnLink, isLink, i
 import { applyPatches, groupParts } from '../utils/partGroups.js';
 import { CHAIN_LINK_PART_NUMBER, TREAD_LINK_PART_NUMBER, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName } from '../utils/chainPath.js';
 import { sliceOutline } from '../utils/chainObstacles.js';
-import { buildExplodePlan } from '../utils/explodePlan.js';
+import { SPREAD_ABOVE_PARTS, SPREAD_BELOW_SHARE, buildExplodePlan, partsMovedBy, spreadExplodePlan } from '../utils/explodePlan.js';
 
 export const VEX_PITCH_MM = 12.7;
 
@@ -1089,6 +1089,8 @@ export const explodeKey = (instances, mode) =>
 
 export function explodePlanFor(state, mode = 'all', options = {}) {
   const input = explodeInputs(state);
+  // A big build is spread out straight away: planning it would take minutes
+  if (input.parts.length > SPREAD_ABOVE_PARTS && !options.planned) return spreadExplodePlan(input, mode);
   const byId = new Map((state.instances || []).map((i) => [i.instanceId, i]));
   for (const p of input.parts) p.meshes = collisionPiecesFor(byId.get(p.id));
   // The shrunk meshes miss a shaft section inside a hole too narrow for it (as the audit does)
@@ -1099,7 +1101,10 @@ export function explodePlanFor(state, mode = 'all', options = {}) {
     return features.get(id).map((f) => ({ ...f, origin: f.origin.clone().add(shift), start: f.start.clone().add(shift), end: f.end.clone().add(shift) }));
   };
   input.tooWide = (a, b, oa, ob) => findTooWideInserts(featuresAt(a, oa), featuresAt(b, ob)).length > 0;
-  return buildExplodePlan(input, mode, options);
+  const plan = buildExplodePlan(input, mode, options);
+  // Parts locked in from more than one side leave most of the build where it is: spread it out instead
+  if (!options.planned && mode === 'all' && input.parts.length > 1 && partsMovedBy(plan) < SPREAD_BELOW_SHARE * input.parts.length) return spreadExplodePlan(input, mode);
+  return plan;
 }
 
 export function auditAssembly(state) {
