@@ -1,7 +1,7 @@
 # viewport-lighting Specification
 
 ## Purpose
-TBD - created by archiving change explode-spread-and-lighting. Update Purpose after archive.
+How the 3D view is lit and how shiny parts look, so parts read as solid shapes from any angle, as in VEX's own viewer (instructions.online).
 
 ## Requirements
 
