@@ -43,11 +43,12 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, aud
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={Boolean(at)}
+        aria-label="Tools"
         title="Check the build, fix how parts fit together, or build a chain or track round sprockets"
       >
         <Wrench size={14} />
-        Tools
-        <ChevronDown size={12} />
+        <span className="btn-text">Tools</span>
+        <ChevronDown size={12} className="btn-caret" />
       </button>
       {at && (
         <PopoverMenu at={at} onClose={close} label="Tools">

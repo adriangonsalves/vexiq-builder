@@ -2238,3 +2238,361 @@ body,
   background: rgba(251, 191, 36, 0.22);
   box-shadow: 0 0 0 1px #fbbf24 inset;
 }
+
+/* ===== Medium (tablet) and small (phone) layouts (openspec responsive-layout) ===== */
+
+.compact-only,
+.inspector-back,
+.drawer-pin,
+.drawer-bar,
+.drawer-buttons {
+  display: none;
+}
+
+.popover-menu {
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+
+/* Icon-only toolbar with 44 px buttons */
+.app-shell:not([data-layout="large"]) .topbar .brand,
+.app-shell:not([data-layout="large"]) .topbar .btn-text,
+.app-shell:not([data-layout="large"]) .topbar .btn-caret,
+.app-shell:not([data-layout="large"]) .shortcuts-bar {
+  display: none;
+}
+
+.app-shell:not([data-layout="large"]) .topbar .compact-only {
+  display: inline-block;
+}
+
+.app-shell:not([data-layout="large"]) .topbar .btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+}
+
+.app-shell:not([data-layout="large"]) .topbar .btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* The toolbar's sections give way so all its groups line up (and wrap) as one row */
+.app-shell:not([data-layout="large"]) .topbar > div:not(.brand) {
+  display: contents !important;
+}
+
+/* Medium: floating toolbar over the 3D view, one side panel split Library / Outline */
+.app-shell[data-layout="medium"] {
+  --side-width: 320px;
+  position: relative;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app-shell[data-layout="medium"] .topbar {
+  position: absolute;
+  z-index: 30;
+  top: 10px;
+  /* Centred without a transform, which would carry the fixed-position submenus with it */
+  left: calc(var(--side-width) + 12px);
+  right: 12px;
+  width: fit-content;
+  margin-inline: auto;
+  min-height: 0;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.app-shell[data-layout="medium"] .topbar > * {
+  flex: 0 0 auto;
+}
+
+/* Too narrow for the floating row: dock across the top and scroll sideways, as on a phone */
+.app-shell[data-layout="medium"][data-toolbar="docked"] {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.app-shell[data-layout="medium"][data-toolbar="docked"] .topbar {
+  position: static;
+  width: auto;
+  margin: 0;
+  justify-content: flex-start;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 6px 8px;
+  border: none;
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.app-shell[data-layout="medium"]:has(.panels-hidden) .topbar {
+  left: 12px;
+}
+
+.app-shell[data-layout="medium"] .workspace-grid {
+  grid-template-columns: var(--side-width) 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "tabs view" "side view";
+}
+
+.app-shell[data-layout="medium"] .workspace-grid.panels-hidden {
+  grid-template-columns: 1fr;
+  grid-template-areas: "view" "view";
+}
+
+.app-shell[data-layout="medium"] .panel-left,
+.app-shell[data-layout="medium"] .panel-right {
+  grid-area: side;
+  border-left: none;
+  border-right: 1px solid var(--border-strong);
+}
+
+.app-shell[data-layout="medium"] .tab-library .panel-right,
+.app-shell[data-layout="medium"] .tab-outline .panel-left {
+  display: none;
+}
+
+.side-tabs {
+  display: none;
+}
+
+.app-shell[data-layout="medium"] .side-tabs {
+  grid-area: tabs;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.side-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.side-tab.active {
+  color: var(--text-primary);
+  background: var(--bg-panel-elevated);
+  border-color: var(--border-strong);
+}
+
+.app-shell[data-layout="medium"] .viewport-container {
+  grid-area: view;
+}
+
+.app-shell[data-layout="medium"][data-toolbar="floating"] .viewport-hud-top,
+.app-shell[data-layout="medium"][data-toolbar="floating"] .explode-panel {
+  top: 84px;
+}
+
+/* Medium and small: the Outline and properties take turns, with Back */
+.app-shell:not([data-layout="large"]) .panel-right .outliner-section {
+  flex: 1;
+  min-height: 0;
+  border-bottom: none;
+}
+
+.app-shell:not([data-layout="large"]) .side-outline .panel-right .inspector-section,
+.app-shell:not([data-layout="large"]) .side-properties .panel-right .outliner-section {
+  display: none;
+}
+
+.app-shell:not([data-layout="large"]) .inspector-back {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-bottom: 8px;
+  min-height: 36px;
+}
+
+/* Small: fixed top toolbar that scrolls sideways, 3D view, drawers and their buttons */
+.app-shell[data-layout="small"] {
+  height: 100dvh;
+}
+
+.app-shell[data-layout="small"] .topbar {
+  justify-content: flex-start;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 6px 8px;
+  gap: 8px;
+}
+
+.app-shell[data-layout="small"] .topbar > * {
+  flex: 0 0 auto;
+}
+
+.app-shell[data-layout="small"] .wide-toggle {
+  display: none;
+}
+
+.app-shell[data-layout="small"] .workspace-grid {
+  position: relative;
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "view" "buttons";
+}
+
+.app-shell[data-layout="small"] .workspace-grid.drawer-pinned {
+  grid-template-rows: minmax(0, 1fr) 45% auto;
+  grid-template-areas: "view" "drawer" "buttons";
+}
+
+.app-shell[data-layout="small"] .viewport-container {
+  grid-area: view;
+}
+
+.app-shell[data-layout="small"] .panel-left,
+.app-shell[data-layout="small"] .panel-right {
+  display: none;
+}
+
+.app-shell[data-layout="small"] .drawer-library .panel-left,
+.app-shell[data-layout="small"] .drawer-outline .panel-right {
+  display: flex;
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  bottom: 56px;
+  height: 60%;
+  border: none;
+  border-top: 1px solid var(--border-strong);
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.5);
+  animation: drawer-up 0.18s ease-out;
+}
+
+.app-shell[data-layout="small"] .drawer-pinned.drawer-library .panel-left,
+.app-shell[data-layout="small"] .drawer-pinned.drawer-outline .panel-right {
+  position: static;
+  grid-area: drawer;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes drawer-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+.app-shell[data-layout="small"] .drawer-pin {
+  display: inline-flex;
+  min-width: 36px;
+  min-height: 36px;
+  margin-left: auto;
+}
+
+.app-shell[data-layout="small"] .drawer-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.app-shell[data-layout="small"] .drawer-buttons {
+  grid-area: buttons;
+  display: flex;
+  gap: 8px;
+  height: 56px;
+  padding: 6px 8px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border-strong);
+}
+
+.app-shell[data-layout="small"] .drawer-buttons .btn {
+  flex: 1;
+  font-size: 13px;
+}
+
+/* Overlays fit narrow screens and scroll inside themselves */
+.app-shell:not([data-layout="large"]) .explode-panel {
+  max-width: calc(100% - 24px);
+}
+
+.app-shell[data-layout="small"] .audit-panel,
+.app-shell[data-layout="small"] .history-timeline {
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  max-height: 60%;
+  overflow-y: auto;
+}
+
+.settings-dialog,
+.library-dialog,
+.audit-dialog {
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+}
+
+/* Medium and small: category filters fold behind one button; the grid view keeps 3 columns */
+.filters-toggle {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 36px;
+  margin-top: 8px;
+}
+
+.filters-toggle-current {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filters-toggle .flip {
+  transform: rotate(180deg);
+}
+
+.app-shell:not([data-layout="large"]) .category-pills {
+  margin-top: 8px;
+}
+
+.category-pills.collapsed {
+  display: none;
+}
+
+.app-shell:not([data-layout="large"]) .catalog-list.grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.app-shell[data-layout="small"] .panel-left .panel-title-row {
+  gap: 8px;
+}
+
+.app-shell[data-layout="small"] .panel-left .panel-title-row > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell[data-layout="small"] .panel-left .drawer-pin {
+  margin-left: 0;
+}

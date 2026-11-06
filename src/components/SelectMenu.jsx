@@ -45,6 +45,7 @@ export default function SelectMenu({
         onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={Boolean(at)}
+        aria-label="Select"
         title={
           boxSelect
             ? 'Box select is on: drag a box around parts (Esc to leave)'
@@ -54,8 +55,8 @@ export default function SelectMenu({
         }
       >
         {boxSelect ? <BoxSelect size={14} /> : <MousePointerClick size={14} />}
-        {boxSelect ? 'Box select' : selectMode ? 'Select mode' : 'Select'}
-        <ChevronDown size={12} />
+        <span className="btn-text">{boxSelect ? 'Box select' : selectMode ? 'Select mode' : 'Select'}</span>
+        <ChevronDown size={12} className="btn-caret" />
       </button>
       {at && (
         <PopoverMenu at={at} onClose={close} label="Select">

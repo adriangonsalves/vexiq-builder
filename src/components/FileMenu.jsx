@@ -28,9 +28,10 @@ export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport,
   };
   return (
     <>
-      <button ref={buttonRef} type="button" className={`btn ${at ? 'active' : ''}`} onClick={toggle} aria-haspopup="menu" aria-expanded={Boolean(at)} title="New, starters, your saved builds, export">
-        File
-        <ChevronDown size={12} />
+      <button ref={buttonRef} type="button" className={`btn ${at ? 'active' : ''}`} onClick={toggle} aria-haspopup="menu" aria-expanded={Boolean(at)} title="New, starters, your saved builds, export" aria-label="File">
+        <FolderOpen size={14} className="compact-only" />
+        <span className="btn-text">File</span>
+        <ChevronDown size={12} className="btn-caret" />
       </button>
       {at && (
         <PopoverMenu at={at} onClose={close} label="File">

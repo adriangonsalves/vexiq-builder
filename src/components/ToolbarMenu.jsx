@@ -30,11 +30,12 @@ export default function ToolbarMenu({ label, icon: Icon, options, value, onChang
         title={title}
         aria-haspopup="menu"
         aria-expanded={Boolean(at)}
+        aria-label={`${label}: ${current?.label ?? 'none'}`}
       >
         {Icon && <Icon size={14} />}
-        <span className="toolbar-menu-label">{label}:</span>
-        <span>{current?.label ?? '—'}</span>
-        <ChevronDown size={12} />
+        <span className="toolbar-menu-label btn-text">{label}:</span>
+        <span className="btn-text">{current?.label ?? '—'}</span>
+        <ChevronDown size={12} className="btn-caret" />
       </button>
       {at && (
         <PopoverMenu at={at} onClose={close} label={label}>

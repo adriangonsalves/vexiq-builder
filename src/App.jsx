@@ -3,9 +3,16 @@ import {
   AlertTriangle,
   Box,
   CloudCheck,
+  ArrowLeft,
   Columns2,
   Cuboid,
+  ChevronDown,
   Glasses,
+  SlidersHorizontal,
+  Library as LibraryIcon,
+  ListTree,
+  Pin,
+  PinOff,
   LayoutGrid,
   Square,
   Sun,
@@ -40,6 +47,7 @@ import { loadRecent, recordUse, saveRecent } from './utils/recentParts.js';
 import HistoryTimeline from './components/HistoryTimeline.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
+import { useLayoutSize } from './utils/layoutSize.js';
 import ExplodePanel from './components/ExplodePanel.jsx';
 import SelectMenu from './components/SelectMenu.jsx';
 import { ChainBuilderDialog, ChainRouteDialog } from './components/BuildMenu.jsx';
@@ -142,6 +150,7 @@ const PROJECTIONS = ['perspective', 'orthographic'];
 const VIEW_LAYOUTS = ['single', 'four', 'stereo'];
 const VIEW_DIRECTIONS = ['+x', '-x', '+y', '-y', '+z', '-z'];
 const PANELS_HIDDEN_KEY = 'vexiq.panelsHidden';
+const DRAWER_PINNED_KEY = 'vexiq.drawerPinned.';
 const LIBRARY_VIEW_KEY = 'vexiq.libraryView';
 const RECENT_CATEGORY = 'Recent';
 const TILE_TIP_DELAY_MS = 250;
@@ -234,6 +243,80 @@ export default function App() {
       // storage unavailable: the choice just isn't remembered
     }
   }, [panelsHidden]);
+  // Medium and small layouts (openspec responsive-layout)
+  const layoutSize = useLayoutSize();
+  const compactLayout = layoutSize !== 'large';
+  // The side panel's lower half shows the Outline or the chosen item's properties
+  const [sidePanelView, setSidePanelView] = useState('outline');
+  const outlineScrollRef = useRef(0);
+  const showOutline = useCallback(() => {
+    setSidePanelView('outline');
+    // Back to where the list was scrolled
+    requestAnimationFrame(() => {
+      const list = document.querySelector('.panel-right .instance-list');
+      if (list) list.scrollTop = outlineScrollRef.current;
+    });
+  }, []);
+  const showProperties = useCallback(() => {
+    const list = document.querySelector('.panel-right .instance-list');
+    if (list) outlineScrollRef.current = list.scrollTop;
+    setSidePanelView('properties');
+  }, []);
+  // Small layout: Library or Outline drawer, each can be pinned open (remembered per browser)
+  const [openDrawer, setOpenDrawer] = useState(null);
+  const [drawerPinned, setDrawerPinned] = useState(() => {
+    const read = (name) => {
+      try {
+        return window.localStorage.getItem(DRAWER_PINNED_KEY + name) === '1';
+      } catch {
+        return false;
+      }
+    };
+    return { library: read('library'), outline: read('outline') };
+  });
+  const toggleDrawerPin = (name) => {
+    setDrawerPinned((pins) => {
+      const next = { ...pins, [name]: !pins[name] };
+      try {
+        window.localStorage.setItem(DRAWER_PINNED_KEY + name, next[name] ? '1' : '0');
+      } catch {
+        // storage unavailable: the pin just isn't remembered
+      }
+      return next;
+    });
+  };
+  const closeUnpinnedDrawer = () => {
+    if (openDrawer && !drawerPinned[openDrawer]) setOpenDrawer(null);
+  };
+  // Medium and small layouts: the library's category filters fold away
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Medium layout: Library or Outline tab in the side panel
+  const [sideTab, setSideTab] = useState('library');
+  // Medium layout: the floating toolbar docks across the top when its one row doesn't fit beside the panel
+  const topbarRef = useRef(null);
+  const [toolbarDocked, setToolbarDocked] = useState(false);
+  useEffect(() => {
+    const bar = topbarRef.current;
+    if (layoutSize !== 'medium' || !bar || typeof ResizeObserver === 'undefined') {
+      setToolbarDocked(false);
+      return undefined;
+    }
+    const check = () => {
+      const panel = panelsHidden ? 0 : document.querySelector('.panel-left, .panel-right')?.offsetWidth || 320;
+      const room = window.innerWidth - panel - 24;
+      // A margin either way so it doesn't flicker at the boundary
+      setToolbarDocked((docked) => (docked ? bar.scrollWidth + 16 > room : bar.scrollWidth > room));
+    };
+    const observer = new ResizeObserver(check);
+    observer.observe(bar);
+    observer.observe(document.documentElement);
+    check();
+    return () => observer.disconnect();
+  }, [layoutSize, panelsHidden]);
+  // Clearing the selection while properties show goes back to the Outline
+  useEffect(() => {
+    if (selectedIds.length === 0 && sidePanelView === 'properties') showOutline();
+  }, [selectedIds.length, sidePanelView, showOutline]);
   // Library list or grid: a per-browser preference, not part of the build
   const [libraryView, setLibraryView] = useState(() => {
     try {
@@ -1228,6 +1311,7 @@ export default function App() {
     if (suppressLibraryClickRef.current) return;
     const added = handleAddPart(part);
     if (added) recordLibraryUse(part.id);
+    if (added && layoutSize === 'small') closeUnpinnedDrawer();
   };
 
   // Dragging a library part into the 3D view places it (openspec easier-placing-and-fix-assembly):
@@ -2169,9 +2253,9 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-layout={layoutSize} data-toolbar={toolbarDocked ? 'docked' : 'floating'}>
       {/* Top Modeler Toolbar */}
-      <header className="topbar">
+      <header ref={topbarRef} className="topbar">
         <div className="brand">
           <span className="brand-badge">VEX IQ</span>
           <span>3D Robot Modeler</span>
@@ -2285,23 +2369,26 @@ export default function App() {
               className={`btn ${transformMode === 'translate' ? 'active' : ''}`}
               onClick={() => setTransformMode('translate')}
               title="Move Tool (Shortcut: W)"
+              aria-label="Move"
             >
               <Move size={14} />
-              Move
+              <span className="btn-text">Move</span>
             </button>
             <button
               type="button"
               className={`btn ${transformMode === 'rotate' ? 'active' : ''}`}
               onClick={() => setTransformMode('rotate')}
               title="Rotate Tool (Shortcut: E)"
+              aria-label="Rotate"
             >
               <RotateCw size={14} />
-              Rotate
+              <span className="btn-text">Rotate</span>
             </button>
           </div>
 
           <div className="toolbar-group" role="group" aria-label="Snap and Explode">
             <ToolbarMenu
+              icon={Magnet}
               label="Snap"
               title="How far a drag moves in one step (VEX pitch = 12.7 mm)"
               value={snapPitchFactor}
@@ -2321,18 +2408,20 @@ export default function App() {
               className="btn"
               onClick={() => setFocusTrigger((c) => c + 1)}
               title="Frame Selected or All Parts (Shortcut: F)"
+              aria-label="Focus"
             >
               <Maximize2 size={14} />
-              Focus
+              <span className="btn-text">Focus</span>
             </button>
             <button
               type="button"
-              className={`btn ${panelsHidden ? 'active' : ''}`}
+              className={`btn wide-toggle ${panelsHidden ? 'active' : ''}`}
+              aria-label={panelsHidden ? 'Show panels' : 'Wide view'}
               onClick={() => setPanelsHidden((v) => !v)}
               title={panelsHidden ? 'Show the parts library and Inspector' : 'Hide the side panels for a wide view'}
             >
               {panelsHidden ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-              {panelsHidden ? 'Panels' : 'Wide'}
+              <span className="btn-text">{panelsHidden ? 'Panels' : 'Wide'}</span>
             </button>
             {viewLayout === 'stereo' && (
               <button
@@ -2348,9 +2437,10 @@ export default function App() {
                 }}
                 title="View options (the view cube's menu, which is hidden in Stereo)"
                 aria-haspopup="menu"
+                aria-label="View"
               >
                 <Glasses size={14} />
-                View
+                <span className="btn-text">View</span>
               </button>
             )}
           </div>
@@ -2379,7 +2469,18 @@ export default function App() {
       </header>
 
       {/* Main 3-Column Modeler Layout */}
-      <div className={`workspace-grid${panelsHidden ? ' panels-hidden' : ''}`}>
+      <div
+        className={[
+          'workspace-grid',
+          panelsHidden && layoutSize !== 'small' ? 'panels-hidden' : '',
+          `side-${sidePanelView}`,
+          `tab-${sideTab}`,
+          openDrawer ? `drawer-${openDrawer}` : '',
+          openDrawer && drawerPinned[openDrawer] ? 'drawer-pinned' : ''
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
         {/* Left Sidebar: 478-Part VEX IQ Catalog with 3D Thumbnails */}
         <aside className="panel panel-left">
           <div className="panel-header">
@@ -2410,6 +2511,7 @@ export default function App() {
                   </button>
                 </span>
               </span>
+              {layoutSize === 'small' && <DrawerPin name="library" pinned={drawerPinned.library} onToggle={toggleDrawerPin} />}
             </div>
 
             <div className="search-box">
@@ -2433,13 +2535,29 @@ export default function App() {
               )}
             </div>
 
-            <div className="category-pills">
+            {compactLayout && (
+              <button
+                type="button"
+                className={`btn btn-outline filters-toggle ${filtersOpen ? 'active' : ''}`}
+                onClick={() => setFiltersOpen((open) => !open)}
+                aria-expanded={filtersOpen}
+                aria-controls="library-filters"
+              >
+                <SlidersHorizontal size={14} />
+                <span className="filters-toggle-current">{activeCategory}</span>
+                <ChevronDown size={14} className={filtersOpen ? 'flip' : ''} />
+              </button>
+            )}
+            <div id="library-filters" className={`category-pills${compactLayout && !filtersOpen ? ' collapsed' : ''}`}>
               {[[RECENT_CATEGORY, recentParts.length], ...categories].map(([cat, count]) => (
                 <button
                   key={cat}
                   type="button"
                   className={`category-pill ${activeCategory === cat ? 'active' : ''}`}
-                  onClick={() => setActiveCategory(cat)}
+                  onClick={() => {
+                    setActiveCategory(cat);
+                    if (compactLayout) setFiltersOpen(false);
+                  }}
                 >
                   {cat} ({count})
                 </button>
@@ -2528,7 +2646,11 @@ export default function App() {
         </aside>
 
         {/* Center 3D Viewport */}
-        <main ref={viewportAreaRef} className={`viewport-container layout-${viewLayout}`}>
+        <main
+          ref={viewportAreaRef}
+          className={`viewport-container layout-${viewLayout}`}
+          onPointerDown={layoutSize === 'small' ? closeUnpinnedDrawer : undefined}
+        >
           {actionFeedback && (
             <div className={`message-strip ${actionFeedback.isError ? 'error' : ''}`} role="status" aria-live="polite">
               {actionFeedback.message}
@@ -2735,6 +2857,12 @@ export default function App() {
 
         {/* Right Sidebar: Scene Assembly Outliner + Precision Inspector */}
         <aside className="panel panel-right">
+          {layoutSize === 'small' && (
+            <div className="drawer-bar">
+              <span>Outline</span>
+              <DrawerPin name="outline" pinned={drawerPinned.outline} onToggle={toggleDrawerPin} />
+            </div>
+          )}
           {/* Scene Outliner */}
           <AssemblyOutliner
             instances={instances}
@@ -2743,7 +2871,10 @@ export default function App() {
             selectedIds={selectedIds}
             primaryId={primaryId}
             selectMode={selectMode}
-            onSelectIds={changeSelection}
+            onSelectIds={(ids, ...rest) => {
+              changeSelection(ids, ...rest);
+              if (compactLayout && ids.length > 0) showProperties();
+            }}
             onTogglePart={(id, patch) => handleUpdateTransform(id, patch)}
             onSetGroupFlag={handleSetGroupFlag}
             onClearAll={() => {
@@ -2756,6 +2887,12 @@ export default function App() {
           {/* Part Inspector */}
           <section className="inspector-section scroller">
             <div className="panel-header" style={{ padding: '10px 14px' }}>
+              {compactLayout && (
+                <button type="button" className="btn btn-outline inspector-back" onClick={showOutline} aria-label="Back to Outline">
+                  <ArrowLeft size={14} />
+                  Outline
+                </button>
+              )}
               <div className="panel-title-row">
                 {selectionTitle ? (
                   <div className="inspector-title">
@@ -3417,6 +3554,49 @@ export default function App() {
             )}
           </section>
         </aside>
+
+        {/* Medium layout: Library and Outline tabs over the side panel */}
+        {layoutSize === 'medium' && !panelsHidden && (
+          <div className="side-tabs" role="tablist" aria-label="Side panel">
+            {[
+              { name: 'library', label: 'Library', Icon: LibraryIcon },
+              { name: 'outline', label: 'Outline', Icon: ListTree }
+            ].map(({ name, label, Icon }) => (
+              <button
+                key={name}
+                type="button"
+                role="tab"
+                className={`side-tab ${sideTab === name ? 'active' : ''}`}
+                aria-selected={sideTab === name}
+                onClick={() => setSideTab(name)}
+              >
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Small layout: buttons that open the Library and Outline drawers */}
+        {layoutSize === 'small' && (
+          <nav className="drawer-buttons" aria-label="Panels">
+            {[
+              { name: 'library', label: 'Library', Icon: LibraryIcon },
+              { name: 'outline', label: 'Outline', Icon: ListTree }
+            ].map(({ name, label, Icon }) => (
+              <button
+                key={name}
+                type="button"
+                className={`btn ${openDrawer === name ? 'active' : ''}`}
+                aria-pressed={openDrawer === name}
+                onClick={() => setOpenDrawer((open) => (open === name ? null : name))}
+              >
+                <Icon size={18} />
+                {label}
+              </button>
+            ))}
+          </nav>
+        )}
       </div>
 
       {viewMenuAt && (
@@ -3622,5 +3802,21 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+/** The pin on a small-layout drawer: pinned, the drawer stays open beside the 3D view. */
+function DrawerPin({ name, pinned, onToggle }) {
+  return (
+    <button
+      type="button"
+      className={`btn drawer-pin ${pinned ? 'active' : ''}`}
+      onClick={() => onToggle(name)}
+      aria-pressed={pinned}
+      aria-label={pinned ? 'Unpin drawer' : 'Pin drawer open'}
+      title={pinned ? 'Unpin: the drawer closes when you tap the view or add a part' : 'Pin: keep the drawer open beside the view'}
+    >
+      {pinned ? <PinOff size={14} /> : <Pin size={14} />}
+    </button>
   );
 }
