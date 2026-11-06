@@ -396,8 +396,8 @@ function vexiqMcpBridgePlugin() {
 }
 
 // The static site (openspec static-lite-site) takes only these from public/: no saved build,
-// settings or blueprint
-const STATIC_PUBLIC_FILES = ['catalog.json', 'part-metadata.json', 'models'];
+// settings or blueprint (sheet-patterns.json is the printed lattice on clear plastic sheets)
+const STATIC_PUBLIC_FILES = ['catalog.json', 'part-metadata.json', 'sheet-patterns.json', 'models'];
 
 /** Copies STATIC_PUBLIC_FILES into the static build (in place of all of public/). */
 function copyStaticPublicFilesPlugin() {
