@@ -32,7 +32,7 @@ import { areChainNeighbours, isChainFit, isChainPart, isGripperOnLink, isLink, i
 import { applyPatches, groupParts } from '../utils/partGroups.js';
 import { CHAIN_LINK_PART_NUMBER, TREAD_LINK_PART_NUMBER, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName } from '../utils/chainPath.js';
 import { sliceOutline } from '../utils/chainObstacles.js';
-import { SPREAD_ABOVE_PARTS, SPREAD_BELOW_SHARE, buildExplodePlan, partsMovedBy, spreadExplodePlan } from '../utils/explodePlan.js';
+import { EXPLODE_GAP_MM, SPREAD_ABOVE_PARTS, SPREAD_BELOW_SHARE, buildExplodePlan, explodedOffsets, partsMovedBy, spreadExplodePlan } from '../utils/explodePlan.js';
 
 export const VEX_PITCH_MM = 12.7;
 
@@ -1090,7 +1090,7 @@ export const explodeKey = (instances, mode) =>
 export function explodePlanFor(state, mode = 'all', options = {}) {
   const input = explodeInputs(state);
   // A big build is spread out straight away: planning it would take minutes
-  if (input.parts.length > SPREAD_ABOVE_PARTS && !options.planned) return spreadExplodePlan(input, mode);
+  if (input.parts.length > SPREAD_ABOVE_PARTS && !options.planned) return settleSpread(spreadExplodePlan(input, mode), state, input, options);
   const byId = new Map((state.instances || []).map((i) => [i.instanceId, i]));
   for (const p of input.parts) p.meshes = collisionPiecesFor(byId.get(p.id));
   // The shrunk meshes miss a shaft section inside a hole too narrow for it (as the audit does)
@@ -1103,7 +1103,71 @@ export function explodePlanFor(state, mode = 'all', options = {}) {
   input.tooWide = (a, b, oa, ob) => findTooWideInserts(featuresAt(a, oa), featuresAt(b, ob)).length > 0;
   const plan = buildExplodePlan(input, mode, options);
   // Parts locked in from more than one side leave most of the build where it is: spread it out instead
-  if (!options.planned && mode === 'all' && input.parts.length > 1 && partsMovedBy(plan) < SPREAD_BELOW_SHARE * input.parts.length) return spreadExplodePlan(input, mode);
+  if (!options.planned && mode === 'all' && input.parts.length > 1 && partsMovedBy(plan) < SPREAD_BELOW_SHARE * input.parts.length) {
+    return settleSpread(spreadExplodePlan(input, mode), state, input, options);
+  }
+  return plan;
+}
+
+const SETTLE_ROUNDS = 60;
+
+/**
+ * A spread-out plan with no overlaps once fully apart: a piece still meeting another at 100% goes
+ * further out along its way (the one of the two whose way leads away from the other), a little more
+ * each time, until nothing meets. On the way out pieces may still pass through each other.
+ */
+function settleSpread(plan, state, input, { log = null, progress = null } = {}) {
+  const t0 = Date.now();
+  const insts = (state.instances || []).filter((i) => i.visible !== false);
+  const leaves = plan.pieces.filter((p) => p.members.length);
+  const pieceOf = new Map();
+  for (const p of leaves) for (const m of p.members) pieceOf.set(m, p);
+  const builtBox = new Map(input.parts.map((p) => [p.id, new THREE.Box3(new THREE.Vector3(...p.box.min), new THREE.Vector3(...p.box.max))]));
+  const step = new Map();
+  let check = insts.map((i) => i.instanceId);
+  let round = 0;
+  for (; round < SETTLE_ROUNDS && check.length; round++) {
+    progress?.(round / SETTLE_ROUNDS);
+    const offs = explodedOffsets(plan, 1);
+    const at = (id) => offs.get(id) || [0, 0, 0];
+    const posed = insts.map((i) => ({ ...i, position: i.position.map((v, k) => v + at(i.instanceId)[k]) }));
+    const posedById = new Map(posed.map((i) => [i.instanceId, i]));
+    const centre = (piece) => {
+      const box = new THREE.Box3();
+      for (const m of piece.members) box.union(builtBox.get(m).clone().translate(new THREE.Vector3(...at(m))));
+      return box.getCenter(new THREE.Vector3());
+    };
+    const push = new Map(); // piece -> the piece it meets
+    for (const id of check) {
+      const a = pieceOf.get(id);
+      if (!a || !posedById.has(id)) continue;
+      for (const hit of checkCandidateCollision(posedById.get(id), posed).collidingWith) {
+        const b = pieceOf.get(hit.instanceId);
+        if (!b || b === a) continue;
+        const away = centre(a).sub(centre(b));
+        const lead = (p, d) => (p.travel > 0 ? new THREE.Vector3(...p.dir).dot(d) : -Infinity);
+        const [mover, other] = lead(a, away) >= lead(b, away.clone().negate()) ? [a, b] : [b, a];
+        if (!push.has(mover)) push.set(mover, other);
+      }
+    }
+    if (!push.size) break;
+    for (const [p, other] of push) {
+      if (!(p.travel > 0)) {
+        // A piece left in the middle takes the way away from what it meets (never down)
+        const d = centre(p).sub(centre(other));
+        d.y = Math.max(d.y, 0);
+        p.dir = (d.lengthSq() > 1e-9 ? d.normalize() : new THREE.Vector3(0, 1, 0)).toArray();
+      }
+      const s = step.get(p.id) || EXPLODE_GAP_MM;
+      p.travel += s;
+      step.set(p.id, s * 1.5);
+    }
+    check = [...push.keys()].flatMap((p) => p.members);
+  }
+  progress?.(1);
+  const left = check.length && round === SETTLE_ROUNDS;
+  log?.(`explode: spread settled in ${round} round(s), ${Date.now() - t0} ms${left ? ' (some pieces still meet)' : ''}`);
+  plan.stats = { ...plan.stats, settleRounds: round, settleMs: Date.now() - t0 };
   return plan;
 }
 

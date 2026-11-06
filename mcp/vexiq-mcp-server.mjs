@@ -346,7 +346,7 @@ const TOOLS = [
           type: 'string',
           enum: ['off', 'all'],
           description:
-            "Explode panel: 'off' closes it (parts back together); 'all' opens it. Parts slide out every way they come apart, in a real order with no parts passing through each other; a build of more than 300 parts, or one whose parts are locked in from several sides (Flop), is spread out instead: groups move apart first, then every piece moves straight out from the middle (sideways or up), without the clash check."
+            "Explode panel: 'off' closes it (parts back together); 'all' opens it. Parts slide out every way they come apart, in a real order with no parts passing through each other; a build of more than 300 parts, or one whose parts are locked in from several sides (Flop), is spread out instead: groups move apart first, then every piece moves straight out from the middle (sideways or up); nothing overlaps once fully apart, though parts may pass through each other on the way."
         },
         explodeAmount: {
           type: 'number',

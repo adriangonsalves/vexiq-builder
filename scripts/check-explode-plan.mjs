@@ -230,7 +230,7 @@ for (const mode of ['all', 'y']) {
   const plan = explodePlanFor(flop, 'all');
   const ms = Date.now() - t0;
   const groupOf = new Map(flop.instances.map((i) => [i.instanceId, i.groupName]));
-  check('flop: more than 300 parts, so spread out without planning, in under 5 s', plan.spread === true && ms < 5000, `${ms} ms`);
+  check('flop: more than 300 parts, so spread out without planning, in under 15 s', plan.spread === true && ms < 15000, `${ms} ms`);
   check('flop: every part moves', partsMovedBy(plan) === flop.instances.length, `${partsMovedBy(plan)} of ${flop.instances.length}`);
   // Up to 40% the groups move whole: as many different moves as groups (a piece across two groups,
   // like a pin, goes with the group most of its parts are in)
@@ -240,6 +240,10 @@ for (const mode of ['all', 'y']) {
   check('flop: at 40% each group has moved whole, not yet apart', moves.size === groups, `${moves.size} different moves for ${groups} groups`);
   const lowest = Math.min(...[...explodedOffsets(plan, 1).values()].map((o) => o[1]));
   check('flop: nothing moves down through the floor', lowest >= 0, String(lowest));
+  const end = explodedOffsets(plan, 1);
+  const apart = flop.instances.map((i) => ({ ...i, position: i.position.map((v, k) => v + (end.get(i.instanceId) || [0, 0, 0])[k]) }));
+  const meet = apart.flatMap((i) => checkCandidateCollision(i, apart).collidingWith.map((c) => `${i.label} / ${c.label}`));
+  check('flop: fully apart, no two parts overlap', meet.length === 0, meet.slice(0, 5).join('; '));
 }
 
 if (failures) {
