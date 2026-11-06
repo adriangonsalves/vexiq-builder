@@ -1,7 +1,7 @@
 /**
- * Node check for src/utils/explodePlan.js (openspec explode-view) on the saved Clawbot build in
- * public/assembly-state.json: pieces, slide directions, the slider timeline and no overlaps at any
- * slider value, for All and each axis.
+ * Node check for src/utils/explodePlan.js (openspec explode-view) on the Clawbot starter
+ * (src/starters.js): pieces, slide directions, the slider timeline and no overlaps at any slider
+ * value, for All and each axis. A fixed build, so the check doesn't depend on what the app has open.
  * Run: node scripts/check-explode-plan.mjs   (exits 1 on any failure)
  */
 import fs from 'node:fs';
@@ -11,6 +11,7 @@ import { ROOT_DIR, checkCandidateCollision, explodeInputs, explodePlanFor, getCa
 import { EXPLODE_GAP_MM, buildPieces, explodedOffsets } from '../src/utils/explodePlan.js';
 import { batteryBayPose } from '../src/utils/batteryBay.js';
 import { buildWorldMatrix } from '../mcp/assembly-engine.mjs';
+import { starterById } from '../src/starters.js';
 
 let failures = 0;
 const check = (label, ok, detail = '') => {
@@ -18,7 +19,8 @@ const check = (label, ok, detail = '') => {
   if (!ok) failures += 1;
 };
 
-const state = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'public', 'assembly-state.json'), 'utf8'));
+const catalog = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'public', 'catalog.json'), 'utf8'));
+const state = { instances: starterById('clawbot').build(catalog) };
 const { catalogById } = getCatalog();
 const instances = state.instances.filter((i) => i.visible !== false);
 const label = new Map(instances.map((i) => [i.instanceId, i.label]));
