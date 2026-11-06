@@ -12,13 +12,14 @@ Gives an agent the part facts it needs to plan a placement in a short `get_part_
 - size and local bounding box in mm;
 - what the local origin is;
 - gear and fastener specs when present;
+- the part's CAD frame table entry, when it has one (see cad-import);
 - a list of connection points.
 
-Each connection point SHALL have its port id, kind (pin hole, shaft bore, shaft socket, collar hole, pin/peg, shaft), local position, local axis direction, and its usable span along that axis in mm. For openings the span SHALL be the measured depth (see "Hole depth comes from the 3D model" in mcp-fit-audit), with whether it goes through. For pegs it SHALL say which end or ends stick out of the part. The reply SHALL NOT include the raw cylinder list, mesh counts or connector counts unless `verbose: true` is given, which SHALL return the current full reply plus the connection points.
+Each connection point SHALL have its stable port id and any alias, kind (pin hole, square hole, shaft bore, shaft socket, collar hole, pin/peg, shaft), shape, the face or faces it opens on, local position, local axis direction, and its usable span along that axis in mm. For openings the span SHALL be the measured depth (see "Hole depth comes from the 3D model" in mcp-fit-audit), with whether it goes through. For pegs it SHALL say which end or ends stick out of the part. For a shaft it SHALL give both ends and which end has a cap or stop ring. The reply SHALL NOT include the raw cylinder list, mesh counts or connector counts unless `verbose: true` is given, which SHALL return the current full reply plus the connection points.
 
 #### Scenario: Smart Motor
 - **WHEN** an agent asks for the VEX IQ Smart Motor's details
-- **THEN** the reply lists the drive socket (local axis +Y, 4.7 mm deep), each face pin hole with its depth, hole_1 and hole_8 as blind from the front face and not open at the back, with no cylinder list, and the reply is under 8,000 characters
+- **THEN** the reply lists the drive socket (local axis +Y, 8.6 mm deep, square, front face), each face pin hole with its depth, hole_1 and hole_8 as blind from the front face and not open at the back, with no cylinder list, and the reply is under 8,000 characters
 
 #### Scenario: Corner connector pegs
 - **WHEN** an agent asks for the 1x Wide, 1x1 Corner Connector's details
@@ -27,3 +28,7 @@ Each connection point SHALL have its port id, kind (pin hole, shaft bore, shaft 
 #### Scenario: Full data on request
 - **WHEN** an agent asks with `verbose: true`
 - **THEN** the reply also contains the cylinder list and the other fields returned today
+
+#### Scenario: Stable id and alias
+- **WHEN** an agent asks for the 2x20 Beam's details
+- **THEN** each hole is listed by its stable id with its old `hole_N` id as an alias

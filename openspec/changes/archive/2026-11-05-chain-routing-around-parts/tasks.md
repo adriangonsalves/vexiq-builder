@@ -31,4 +31,4 @@
 
 - [x] 5.1 Add all spec scenarios to `scripts/check-chain-builder.mjs`, and verify it exits 0.
 - [x] 5.2 Update `features.md` and the chain line in `AGENTS.md` (both runs, a bent run wrapping a sprocket it meets, obstacles, `blockedBy`).
-- [ ] 5.3 Run every `node scripts/check-*.mjs` and `npm run build`. Verify all pass.
+- [x] 5.3 Run every `node scripts/check-*.mjs` and `npm run build`. Verify all pass.
