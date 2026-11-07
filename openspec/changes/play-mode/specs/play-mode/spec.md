@@ -45,7 +45,7 @@ Each shaft group (a square shaft with every part whose square bore fits it, and 
 - **THEN** Play mode warns that the gear doesn't fit the shaft and the gear is not driven by it
 
 ### Requirement: Gears and chains link by tooth ratio
-Two gears that mesh SHALL turn in opposite directions with speeds in the inverse ratio of their tooth counts. A gear meshing a rack SHALL move the rack along its length by the gear's pitch travel. Two sprockets joined by a chain or track SHALL turn the same direction in the inverse ratio of their tooth counts. Chain and track links SHALL stay where they are.
+Two gears that mesh SHALL turn in opposite directions with speeds in the inverse ratio of their tooth counts. A gear meshing a rack SHALL move the rack along its length by the gear's pitch travel. Two sprockets joined by a chain or track SHALL turn the same direction in the inverse ratio of their tooth counts. Chain and track links SHALL move with the body that holds their sprockets, and a track on a single sprocket SHALL also run round its loop in the direction the sprocket turns, one link per tooth, with its flaps and grippers; the links of a chain on several sprockets SHALL NOT run round.
 
 #### Scenario: 12 to 36 tooth reduction
 - **WHEN** a motor turns a 12 Tooth Gear at 120 rpm that meshes a 36 Tooth Gear
@@ -53,7 +53,11 @@ Two gears that mesh SHALL turn in opposite directions with speeds in the inverse
 
 #### Scenario: Chain drive
 - **WHEN** an 8 Tooth sprocket turns, chained to a 16 Tooth sprocket
-- **THEN** the 16 Tooth sprocket turns the same way at half the speed and the chain links don't move
+- **THEN** the 16 Tooth sprocket turns the same way at half the speed and the chain links stay where they are on the frame
+
+#### Scenario: Intake track on one sprocket
+- **WHEN** the intake motor turns the sprocket carrying a track of 8 tread links, and the tower lifts the intake
+- **THEN** the track runs round its loop with the sprocket, and goes up with the intake instead of staying behind
 
 ### Requirement: Motor throttles
 The Play panel SHALL list every Smart Motor with a throttle that runs from full reverse through stop to full forward. A throttle's position SHALL set the motor's target speed, up to 120 rpm either way, with torque limited to the Smart Motor's stall torque. Releasing or centring a throttle SHALL stop that motor. Selecting a motor's row SHALL highlight that motor in the view.
@@ -63,11 +67,15 @@ The Play panel SHALL list every Smart Motor with a throttle that runs from full 
 - **THEN** its shaft turns backward at about 60 rpm, if nothing blocks it
 
 ### Requirement: Collisions block motion and stall motors
-Solid parts in different bodies SHALL NOT pass through each other. When a collision stops a driven body, everything linked to it (shaft group, meshed gears, chained sprockets, the motor) SHALL stop too. A motor commanded to turn that has stayed below a small fraction of its target speed for a short time SHALL be shown as stalled on its throttle row and on the motor in the view, and SHALL clear when it turns again. Parts already touching or in a tight fit on entry SHALL NOT count as blocking.
+Solid parts in different bodies SHALL NOT pass through each other. When a collision stops a driven body, everything linked to it (shaft group, meshed gears, chained sprockets, the motor) SHALL stop too. A motor commanded to turn that has stayed below a small fraction of its target speed for a short time SHALL be shown as stalled on its throttle row and on the motor in the view, and SHALL clear when it turns again. Parts whose outlines already overlap on entry (a tight fit, a shaft in a hole) SHALL NOT count as blocking; parts that merely touch SHALL.
 
 #### Scenario: Arm hits the frame
 - **WHEN** a motor raises an arm until the arm presses on the chassis
 - **THEN** the arm stops, the motor's row and the motor are marked stalled, and reversing the throttle moves the arm back and clears the mark
+
+#### Scenario: Linkage beams meet
+- **WHEN** a motor raises an arm whose upper and lower beams come together before it reaches anything else
+- **THEN** the motor stops as soon as the beams press into each other, shows as stalled, and the arm does not swing on through them
 
 ### Requirement: Unsupported parts reported
 On entry, Play mode SHALL list what it could not set up (a gear whose square doesn't fit its shaft, a part joined by nothing, a gear mesh too far off to link), and SHALL still run the rest.
@@ -75,3 +83,10 @@ On entry, Play mode SHALL list what it could not set up (a gear whose square doe
 #### Scenario: Loose part
 - **WHEN** a gear sits on no shaft
 - **THEN** Play mode lists it as loose and holds it still
+
+### Requirement: What holds still
+With no floor, the largest piece of the robot (parts joined by hinges), and every piece with a Smart Motor driving a shaft, SHALL hold one of its bodies still: the one carrying the most such motors, else the largest. A piece joined to none of those SHALL stay still, SHALL NOT block other parts, and SHALL be listed.
+
+#### Scenario: Tower not joined to the base
+- **WHEN** a tower carrying the arm motor isn't detected as joined to the base
+- **THEN** the tower holds still and the arm moves, not the other way round

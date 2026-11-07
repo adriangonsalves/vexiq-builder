@@ -1455,6 +1455,7 @@ export default function Viewport3D({
   onFitSet,
   onRegisterFlushMover,
   onRegisterScreenshot,
+  onRegisterPartPoints,
   onRegisterViewSpot,
   placeRequest = null,
   onCancelPlace,
@@ -1466,6 +1467,8 @@ export default function Viewport3D({
   explodeMode = 'off',
   explodeAmount = 1,
   explodePlan = null,
+  playing = false,
+  playFrame = null,
   focusTrigger,
   onLoadingChange,
   onMateFeedback,
@@ -1575,6 +1578,9 @@ export default function Viewport3D({
   // Highlighted parts for a modal question (openspec chain-over-under), separate from selection
   const attentionIdsRef = useRef(attentionIds);
   attentionIdsRef.current = attentionIds;
+  // Play mode (openspec play-mode): called every frame with the part groups to move them
+  const playFrameRef = useRef(playFrame);
+  playFrameRef.current = playing ? playFrame : null;
   // Holes another tool marks ([{ instanceId, portIds }], Bend sheet's choices): shown instead of the
   // selected part's lined-up openings while set
   const markedHolesRef = useRef(markedHoles);
@@ -4090,6 +4096,45 @@ export default function Viewport3D({
     onRegisterScreenshot(shoot);
   }, [onRegisterScreenshot]);
 
+  // Play mode's collision shapes (openspec play-mode): a shown part's mesh points in its own frame (mm)
+  useEffect(() => {
+    if (!onRegisterPartPoints) return;
+    onRegisterPartPoints((instanceId) => {
+      const group = meshMapRef.current.get(instanceId);
+      if (!group) return null;
+      group.updateMatrixWorld(true);
+      const toGroup = group.matrixWorld.clone().invert();
+      const chunks = [];
+      const rel = new THREE.Matrix4();
+      const v = new THREE.Vector3();
+      // The part's own meshes, not the overlays added to it (named __like_this__)
+      const visit = (o) => {
+        if (o.name?.startsWith('__')) return;
+        o.children.forEach(visit);
+        const pos = o.isMesh ? o.geometry?.attributes?.position : null;
+        if (!pos) return;
+        rel.multiplyMatrices(toGroup, o.matrixWorld);
+        const out = new Float32Array(pos.count * 3);
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(rel);
+          out[i * 3] = v.x;
+          out[i * 3 + 1] = v.y;
+          out[i * 3 + 2] = v.z;
+        }
+        chunks.push(out);
+      };
+      visit(group);
+      if (!chunks.length) return null;
+      const all = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+      let at = 0;
+      for (const c of chunks) {
+        all.set(c, at);
+        at += c.length;
+      }
+      return all;
+    });
+  }, [onRegisterPartPoints]);
+
   // Where a part added from the library goes (openspec easier-placing-and-fix-assembly):
   // `viewSpot(bbox, pointer?)` returns the part's position (mm). With a pointer (client px), the point
   // under it on the plane through the orbit target facing the camera; without, the clear spot nearest
@@ -5880,6 +5925,7 @@ export default function Viewport3D({
     const shadowBox = new THREE.Box3();
     const shadowSphere = new THREE.Sphere();
     const lightView = new THREE.OrthographicCamera(); // stands in for the shadow camera's pose
+    let playFloorY = null; // held steady while Play mode turns wheels and arms
     const updateShadows = (viewCam = cameraRef.current) => {
       const on = shadowsRef.current;
       const levels = on ? LIGHT_LEVELS.on : LIGHT_LEVELS.off;
@@ -5901,7 +5947,8 @@ export default function Viewport3D({
       shadowBox.getBoundingSphere(shadowSphere);
       const r = Math.max(shadowSphere.radius, 20);
       const center = shadowSphere.center;
-      shadowGround.position.set(center.x, shadowBox.min.y - 0.05, center.z);
+      if (playFloorY === null || !playFrameRef.current) playFloorY = shadowBox.min.y - 0.05;
+      shadowGround.position.set(center.x, playFloorY, center.z);
       shadowGround.scale.set(3.6 * r, 3.6 * r, 1);
       dirLight1.target.position.copy(center);
       dirLight1.target.updateMatrixWorld();
@@ -6016,8 +6063,9 @@ export default function Viewport3D({
     renderFrameRef.current = renderFrame;
 
     let animFrameId;
-    const animate = () => {
+    const animate = (now) => {
       animFrameId = requestAnimationFrame(animate);
+      playFrameRef.current?.(meshMapRef.current, now);
       orbit.update();
       renderFrame();
     };
@@ -6112,14 +6160,15 @@ export default function Viewport3D({
     // Only the selection changed: nothing moved, so skip the per-part overlap checks and just
     // re-light the parts that were and are selected
     const lastSync = lastSceneSyncRef.current;
-    lastSceneSyncRef.current = { instances, catalogMap, showConnectors, explodeMode, explodePlan, selectedId, selectedIds };
+    lastSceneSyncRef.current = { instances, catalogMap, showConnectors, explodeMode, explodePlan, playing, selectedId, selectedIds };
     if (
       lastSync &&
       lastSync.instances === instances &&
       lastSync.catalogMap === catalogMap &&
       lastSync.showConnectors === showConnectors &&
       lastSync.explodeMode === explodeMode &&
-      lastSync.explodePlan === explodePlan
+      lastSync.explodePlan === explodePlan &&
+      lastSync.playing === playing
     ) {
       const byId = new Map(instances.map((i) => [i.instanceId, i]));
       for (const id of new Set([...lastSync.selectedIds, ...selectedIds])) {
@@ -6357,7 +6406,7 @@ export default function Viewport3D({
     // Move gizmo or rotate rings (none while exploded, to prevent offset confusion)
     syncGizmos();
     updateAlignedHoleHighlights();
-  }, [instances, selectedId, selectedIds, catalogMap, showConnectors, explodeMode, explodePlan]);
+  }, [instances, selectedId, selectedIds, catalogMap, showConnectors, explodeMode, explodePlan, playing]);
 
   // Moving the Explode slider (or its play) only moves the parts
   useEffect(() => {

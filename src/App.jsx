@@ -49,6 +49,9 @@ import SettingsPanel from './components/SettingsPanel.jsx';
 import ToolbarMenu from './components/ToolbarMenu.jsx';
 import { useLayoutSize } from './utils/layoutSize.js';
 import ExplodePanel from './components/ExplodePanel.jsx';
+import PlayPanel from './components/PlayPanel.jsx';
+import { createKinematic } from './sim/kinematic.js';
+import { createPlayRunner } from './sim/playRunner.js';
 import SelectMenu from './components/SelectMenu.jsx';
 import { ChainBuilderDialog, ChainRouteDialog } from './components/BuildMenu.jsx';
 import ToolsMenu from './components/ToolsMenu.jsx';
@@ -137,6 +140,8 @@ const VEX_COLORS = [
 const TIMELINE_KEY = 'vexiq_history_timeline_visible';
 // This tab's id: its own saves come back over SSE and are skipped; other tabs' saves are taken
 const EMPTY_IDS = [];
+const PREVIEW_LOCK = "This is a preview of an earlier point. Go to a step's end to edit.";
+const PLAY_LOCK = 'Play mode is on. Close it to edit the build.';
 const TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const EXPLODE_MODES = ['off', 'x', 'y', 'z', 'all'];
 /** Explode always takes the robot apart every way: an older saved X, Y or Z direction opens as All. */
@@ -444,6 +449,13 @@ export default function App() {
   const [pickStatus, setPickStatus] = useState(null); // { text, tone } while picking a hole
   const previewRef = useRef(null);
   previewRef.current = preview;
+  // Play mode (openspec play-mode): { ready, error, graph, runner, mode } while on
+  const [play, setPlay] = useState(null);
+  const playRef = useRef(null);
+  playRef.current = play;
+  // Why the build can't be edited right now (a past point shown, or Play mode on), or null
+  const lockedRef = useRef(null);
+  lockedRef.current = preview ? PREVIEW_LOCK : play ? PLAY_LOCK : null;
   const handlePreview = useCallback((parts, info) => setPreview(parts ? { parts, info } : null), []);
   const noop = useCallback(() => {}, []);
 
@@ -452,9 +464,9 @@ export default function App() {
    * e.g. the viewport updating overlap flags). meta: { label, source ('app' | 'assistant'), mergeKey }.
    */
   const setInstances = useCallback((updater, meta = {}) => {
-    // A past point on the timeline is read-only
-    if (previewRef.current) {
-      setActionFeedback({ message: "This is a preview of an earlier point. Go to a step's end to edit.", isError: true });
+    // A past point on the timeline, and Play mode, are read-only
+    if (lockedRef.current) {
+      setActionFeedback({ message: lockedRef.current, isError: true });
       return;
     }
     const source = meta.source || 'app';
@@ -548,15 +560,18 @@ export default function App() {
   };
 
   const handleUndo = useCallback(() => {
+    if (playRef.current) return;
     setBuild((b) => afterHistoryMove(b, undoHistory(b.history, b.instances)));
   }, []);
 
   const handleRedo = useCallback(() => {
+    if (playRef.current) return;
     setBuild((b) => afterHistoryMove(b, redoHistory(b.history, b.instances)));
   }, []);
 
   // Timeline: make any step (null = the start) the current one
   const handleMoveTo = useCallback((stepId) => {
+    if (playRef.current) return;
     setBuild((b) => afterHistoryMove(b, moveHistoryTo(b.history, b.instances, stepId)));
   }, []);
 
@@ -597,6 +612,11 @@ export default function App() {
   }, []);
   const handleRegisterScreenshot = useCallback((fn) => {
     screenshotRef.current = fn;
+  }, []);
+  // A shown part's mesh points in its own frame, for Play mode's collision shapes
+  const partPointsRef = useRef(null);
+  const handleRegisterPartPoints = useCallback((fn) => {
+    partPointsRef.current = fn;
   }, []);
 
   // Fallback for browsers without <dialog closedby="any"> support
@@ -1086,6 +1106,73 @@ export default function App() {
   };
   const toggleExplode = () => (explodeMode === 'off' ? openExplode() : closeExplode());
 
+  // --- Play mode (openspec play-mode) ------------------------------------------------------------
+  const playSeqRef = useRef(0);
+  const [playThrottles, setPlayThrottles] = useState(() => new Map());
+  const [playStatus, setPlayStatus] = useState({});
+  const [playHover, setPlayHover] = useState(null);
+  /** Works out how the shown parts move, then hands the motors to the Play panel. */
+  const openPlay = async () => {
+    const n = ++playSeqRef.current;
+    if (explodeMode !== 'off') closeExplode();
+    setPlayThrottles(new Map());
+    setPlayStatus({});
+    setPlay({ ready: false });
+    const parts = instances.filter((i) => i.visible !== false);
+    try {
+      const data = await backend.runAction('play_setup', { instances: parts });
+      if (!data?.ok || !data.graph) throw new Error(data?.error || 'nothing came back');
+      if (n !== playSeqRef.current) return;
+      // Physics when its library loads (on demand, it's large); else gear ratios alone
+      let engine = null;
+      let mode = 'physics';
+      try {
+        const { createPhysics } = await import('./sim/physics.js');
+        engine = await createPhysics(data.graph, parts, { points: (id) => partPointsRef.current?.(id) || null });
+      } catch (err) {
+        console.error('Play mode physics failed to start', err);
+        engine = createKinematic(data.graph);
+        mode = 'kinematic';
+      }
+      if (n !== playSeqRef.current) return engine.dispose?.();
+      const runner = createPlayRunner(data.graph, parts, engine);
+      setPlay({ ready: true, graph: data.graph, runner, mode });
+    } catch (err) {
+      if (n === playSeqRef.current) setPlay({ ready: false, error: `Couldn't set up Play mode: ${err.message}` });
+    }
+  };
+  /** Stops every motor and puts the parts back where they are in the build. */
+  const closePlay = () => {
+    playSeqRef.current += 1;
+    playRef.current?.runner?.dispose();
+    setPlay(null);
+    setPlayHover(null);
+  };
+  const togglePlay = () => (play ? closePlay() : openPlay());
+  const handlePlayThrottle = useCallback((id, value) => {
+    playRef.current?.runner?.setThrottle(id, value);
+    setPlayThrottles((prev) => {
+      const next = new Map(prev);
+      if (value) next.set(id, value);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  // The panel's speeds and stalls, read from the motion ten times a second
+  useEffect(() => {
+    const runner = play?.runner;
+    if (!runner) return undefined;
+    const timer = setInterval(() => setPlayStatus(runner.status()), 100);
+    return () => clearInterval(timer);
+  }, [play?.runner]);
+  const playFrame = useCallback((meshMap, now) => playRef.current?.runner?.frame(meshMap, now), []);
+  // Lit up in the view: the motor under the pointer in the panel, and stalled motors
+  const playAttention = useMemo(() => {
+    const ids = Object.entries(playStatus).filter(([, s]) => s.stalled).map(([id]) => id);
+    if (playHover && !ids.includes(playHover)) ids.push(playHover);
+    return ids.length ? ids : EMPTY_IDS;
+  }, [playStatus, playHover]);
+
   const partCount = (n) => `${n} part${n === 1 ? '' : 's'}`;
 
   const handleSelectConnected = async () => {
@@ -1256,8 +1343,8 @@ export default function App() {
   };
 
   const handleAddPart = (part, customPos = null, customColor = null, meta = {}) => {
-    if (previewRef.current) {
-      setActionFeedback({ message: "This is a preview of an earlier point. Go to a step's end to edit.", isError: true });
+    if (lockedRef.current) {
+      setActionFeedback({ message: lockedRef.current, isError: true });
       return null;
     }
     if (explodeMode !== 'off') setExplodeMode('off');
@@ -1464,7 +1551,7 @@ export default function App() {
   // step, keeping the original selected. Returns the copy's id.
   const handleInsertCopy = (sourceId, pose, receivingLabel) => {
     const { extraPatches = [], notes = [] } = pose;
-    if (previewRef.current) return null;
+    if (lockedRef.current) return null;
     const source = instances.find((i) => i.instanceId === sourceId);
     const part = source ? shapedPart(catalogMap.get(source.partId), source.shape) : null;
     if (!source || !part) return null;
@@ -1719,6 +1806,12 @@ export default function App() {
       // A dialog (Settings, Audit) takes the keys while it is open: Esc closes it, nothing else
       if (document.querySelector('dialog[open]')) return;
       const key = e.key.toLowerCase();
+      // Play mode: Esc leaves it, the view keys below still work, nothing edits
+      if (playRef.current && e.key === 'Escape') {
+        e.preventDefault();
+        closePlay();
+        return;
+      }
       // Undo: Ctrl/Cmd+Z. Redo: Shift+Ctrl/Cmd+Z or Ctrl+Y
       const mod = e.metaKey || e.ctrlKey;
       if (mod && key === 'z') {
@@ -1745,8 +1838,8 @@ export default function App() {
           return;
         }
       }
-      // Nothing else edits or selects while a past point is shown
-      if (previewRef.current) return;
+      // Nothing else edits or selects while a past point is shown or Play mode is on
+      if (lockedRef.current) return;
       if (mod && key === 'a') {
         e.preventDefault();
         handleSelectAll();
@@ -2088,6 +2181,8 @@ export default function App() {
     const { sheet, target } = bendCheck;
     setBendDialog({ sheetId: sheet.instanceId, sheetLabel: sheet.label, targetId: target?.instanceId ?? null, targetLabel: target?.label ?? null, bent: Boolean(sheet.shape) });
   };
+  // A past point shown, or Play mode on: the 3D view selects and edits nothing
+  const locked = Boolean(preview || play);
   // What the 3D view shows: the sheet bent as the pointed-at choice, and that choice's target holes
   const shownInstances = useMemo(
     () => (bendPreview ? instances.map((i) => (i.instanceId === bendPreview.sheetId ? { ...i, shape: bendPreview.shape } : i)) : instances),
@@ -2160,8 +2255,8 @@ export default function App() {
   };
 
   const handleBuildChain = (kind, { attachment = 'none', attachmentEvery = 1, slack = 'lower', route = null } = {}) => {
-    if (previewRef.current) {
-      setActionFeedback({ message: "This is a preview of an earlier point. Go to a step's end to edit.", isError: true });
+    if (lockedRef.current) {
+      setActionFeedback({ message: lockedRef.current, isError: true });
       return;
     }
     if (!chainCheck.ok) {
@@ -2345,7 +2440,10 @@ export default function App() {
               onUngroup={handleUngroupSelected}
             />
             <ToolsMenu
-              disabledReason={preview ? "This is a preview of an earlier point. Go to a step's end to edit." : isRunningAction ? 'Working…' : null}
+              disabledReason={preview ? PREVIEW_LOCK : play ? PLAY_LOCK : isRunningAction ? 'Working…' : null}
+              playing={Boolean(play)}
+              playReason={preview ? PREVIEW_LOCK : instances.length === 0 ? 'Add some parts first.' : null}
+              onPlay={togglePlay}
               fixReason={primaryId ? null : 'Select a part first: the part, or a part it should fit onto.'}
               chainCheck={chainCheck}
               chainInTheWay={chainInTheWay}
@@ -2660,22 +2758,23 @@ export default function App() {
             onCubeMenu={setViewMenuAt}
             instances={preview ? preview.parts : shownInstances}
             catalogMap={catalogMap}
-            selectedId={preview ? null : selectedId}
-            selectedIds={preview ? EMPTY_IDS : selectedIds}
-            attentionIds={preview ? EMPTY_IDS : attentionIds}
-            markedHoles={preview ? EMPTY_IDS : markedHoles}
+            selectedId={locked ? null : selectedId}
+            selectedIds={locked ? EMPTY_IDS : selectedIds}
+            attentionIds={preview ? EMPTY_IDS : play ? playAttention : attentionIds}
+            markedHoles={locked ? EMPTY_IDS : markedHoles}
             selectMode={selectMode}
-            boxSelect={boxSelect && !preview}
+            boxSelect={boxSelect && !locked}
             onBoxSelect={handleBoxSelect}
-            onSelect={preview ? noop : handleSelectInstance}
-            onExpandSelection={preview ? noop : handleExpandSelection}
-            onUpdateTransform={preview ? noop : handleUpdateTransform}
+            onSelect={locked ? noop : handleSelectInstance}
+            onExpandSelection={locked ? noop : handleExpandSelection}
+            onUpdateTransform={locked ? noop : handleUpdateTransform}
             onUpdateSet={
-              preview ? noop : (ids, patches, { kind, note, label }) => handleUpdateSet(ids, patches, { label: label || `${kind === 'turn' ? 'Turn' : 'Move'} ${setName}${note ? `. ${note}` : ''}` })
+              locked ? noop : (ids, patches, { kind, note, label }) => handleUpdateSet(ids, patches, { label: label || `${kind === 'turn' ? 'Turn' : 'Move'} ${setName}${note ? `. ${note}` : ''}` })
             }
-            onFitSet={preview ? null : handleFitSet}
+            onFitSet={locked ? null : handleFitSet}
             onRegisterFlushMover={handleRegisterFlushMover}
             onRegisterScreenshot={handleRegisterScreenshot}
+            onRegisterPartPoints={handleRegisterPartPoints}
             onRegisterViewSpot={handleRegisterViewSpot}
             placeRequest={placeRequest}
             onCancelPlace={handleCancelPlace}
@@ -2697,14 +2796,31 @@ export default function App() {
             explodeMode={explodeMode}
             explodeAmount={explodeAmount}
             explodePlan={explodePlan && explodePlan.plan.mode === explodeMode ? explodePlan.plan : null}
+            playing={Boolean(play?.runner)}
+            playFrame={playFrame}
             focusTrigger={focusTrigger}
             onLoadingChange={setIsLoadingMesh}
             onMateFeedback={(message, isError) => setActionFeedback({ message, isError })}
-            onToggleRotateRequest={preview ? noop : handleToggleRotateRequest}
-            collisionRecheck={preview ? undefined : build.recheck}
+            onToggleRotateRequest={locked ? noop : handleToggleRotateRequest}
+            collisionRecheck={locked ? undefined : build.recheck}
             onPickStatus={setPickStatus}
-            onInsertCopy={preview ? noop : handleInsertCopy}
+            onInsertCopy={locked ? noop : handleInsertCopy}
           />
+
+          {play && (
+            <PlayPanel
+              ready={play.ready}
+              error={play.error}
+              mode={play.mode}
+              motors={play.graph?.motors}
+              throttles={playThrottles}
+              status={playStatus}
+              warnings={play.graph?.warnings}
+              onThrottle={handlePlayThrottle}
+              onHover={setPlayHover}
+              onClose={closePlay}
+            />
+          )}
 
           {explodeMode !== 'off' && (
             <ExplodePanel
@@ -2733,7 +2849,7 @@ export default function App() {
               )}
             </div>
 
-            {selectedIds.length > 0 && !preview && (
+            {selectedIds.length > 0 && !locked && (
               <div className="hud-pill hud-pill-selection" role="status" aria-live="polite">
                 <span>
                   <strong>{selectedIds.length === 1 ? '1 part' : `${selectedIds.length} parts`}</strong> selected

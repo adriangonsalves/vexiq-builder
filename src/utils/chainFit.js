@@ -13,6 +13,7 @@ import * as THREE from 'three';
 
 const AXIS_DOT_MIN = 0.999;
 const PIVOT_TOL_MM = 0.5;
+const HALF_TURN_Y = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
 const PLANE_TOL_MM = 1.0;
 const SPROCKET_TEETH = [8, 16, 24, 32, 40];
 const LINK_PLATE_HALF_MM = 2.2; // a link's plates reach this far either side of its pivots
@@ -124,8 +125,12 @@ export function isGripperOnLink(gripperPart, gripperMatrix, linkPart, linkMatrix
   if (!isGripper(gripperPart) || linkPart?.chainSpecs?.role !== 'tread_link') return false;
   const { pivot, quaternion } = gripperLinkPose(gripperPart, gripperMatrix);
   const linkPos = new THREE.Vector3().setFromMatrixPosition(linkMatrix);
+  if (pivot.distanceTo(linkPos) >= PIVOT_TOL_MM) return false;
   _q.setFromRotationMatrix(linkMatrix);
-  return pivot.distanceTo(linkPos) < PIVOT_TOL_MM && Math.abs(quaternion.dot(_q)) > 0.9999;
+  if (Math.abs(quaternion.dot(_q)) > 0.9999) return true;
+  // A tread link is the same turned half a turn about its own Y axis, so a flap can sit on the other
+  // side of the link's pivot (VEX's Flop has half its intake flaps on that side)
+  return Math.abs(quaternion.dot(_q.multiply(HALF_TURN_Y))) > 0.9999;
 }
 
 /**

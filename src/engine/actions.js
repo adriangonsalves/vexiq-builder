@@ -19,12 +19,14 @@ import {
   jointGraph,
   mirrorSubassembly,
   partOf,
-  planChainFor
+  planChainFor,
+  playInputs
 } from './core.js';
+import { buildBodyGraph } from '../sim/bodyGraph.js';
 import { fitSet, fixAssembly } from './fixAssembly.js';
 import { bendSheet, sheetBendChoices } from './sheetBending.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet', 'play_setup'];
 
 export function runAction(action, state, params = {}) {
   const { catalogById } = getCatalog();
@@ -259,6 +261,11 @@ export function runAction(action, state, params = {}) {
   }
 
   // The joints between parts, for Select Connected and expanding the selection (openspec outliner-part-groups)
+  // Play mode (openspec play-mode): the moving model of the build
+  if (action === 'play_setup') {
+    return { ok: true, graph: buildBodyGraph(playInputs(state)) };
+  }
+
   if (action === 'joint_graph') {
     return { ok: true, graph: jointGraph(state, { pinnedOnly: Boolean(params.pinnedOnly) }) };
   }

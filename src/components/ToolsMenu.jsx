@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ChevronDown, ClipboardCheck, Expand, Link2, Magnet, Ruler, Spline, Wrench } from 'lucide-react';
+import { ChevronDown, ClipboardCheck, Expand, Link2, Magnet, Play, Ruler, Spline, Wrench } from 'lucide-react';
 import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.jsx';
 
 /**
@@ -12,8 +12,10 @@ import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.j
  * view (ticked while open), and Blueprint shows the 3-view drawing on its own. Explode
  * (formerly a toolbar button; shortcut X) opens or closes the Explode panel and shows a tick while it is open.
  * Bend sheet (openspec shaped-parts-and-sheet-bending) curves a plastic sheet onto another part's holes.
+ * Play mode (openspec play-mode) runs the Smart Motors and shows how the build moves; ticked while on,
+ * and the way out, so it stays clickable while the other tools are greyed out.
  */
-export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, bendReason = null, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack, onBendSheet }) {
+export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, bendReason = null, playing = false, playReason = null, onPlay, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack, onBendSheet }) {
   const buttonRef = useRef(null);
   const [at, setAt] = useState(null);
   const close = useCallback(() => setAt(null), []);
@@ -81,11 +83,21 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, aud
           <MenuItem
             icon={Expand}
             checked={exploded}
+            disabled={playing}
             shortcut="X"
             onSelect={choose(onExplode)}
             title={exploded ? 'Close the Explode panel and put every part back (Shortcut: X)' : 'Take the robot apart with a slider (Shortcut: X)'}
           >
             Explode
+          </MenuItem>
+          <MenuItem
+            icon={Play}
+            checked={playing}
+            disabled={!playing && Boolean(playReason)}
+            onSelect={choose(onPlay)}
+            title={playing ? 'Stop playing and put every part back (Esc)' : playReason || 'Run the Smart Motors with throttles and watch the gears, shafts and arms move'}
+          >
+            Play mode
           </MenuItem>
           <MenuDivider />
           <MenuHeading>Build</MenuHeading>

@@ -11742,7 +11742,7 @@
     "gearSpecs": {
       "gearType": "spur",
       "teeth": 23,
-      "pitchRadiusMm": 12.171,
+      "pitchRadiusMm": 12.7,
       "phaseOffsetDeg": 7.826,
       "boreAxis": [
         0,

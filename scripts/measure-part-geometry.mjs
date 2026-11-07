@@ -172,7 +172,7 @@ export function measureSpurGear(part, teeth) {
     tipRadiusMm: round(tip),
     rootRadiusMm: round(root),
     moduleMm: round(moduleMm, 4),
-    pitchRadiusMm: round((teeth * moduleMm) / 2),
+    pitchRadiusMm: round(dp === 34 ? (teeth * moduleMm) / 2 : tip - moduleMm),
     toothSpacingMm: round(Math.PI * moduleMm),
     toothPhaseDeg: round(phaseDeg, 2),
     faceSpanMm: [round(faceLo, 2), round(faceHi, 2)]

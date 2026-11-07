@@ -5,7 +5,11 @@
  */
 import * as THREE from 'three';
 import { checkCandidateCollision, placeParts, buildWorldMatrix, jointGraph, worldFeaturesFor } from '../mcp/assembly-engine.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { ROOT_DIR } from '../mcp/assembly-engine.mjs';
 import { runAction } from '../src/engine/actions.js';
+import { starterById } from '../src/starters.js';
 
 let failures = 0;
 const check = (label, ok, detail = '') => {
@@ -185,6 +189,32 @@ for (const from of ['Beam', 'Pin 1', 'Plate']) {
   check('fit_set: 30° off is too far', !far.ok && ['too-far', 'none'].includes(far.reason), JSON.stringify(far));
   const seated = runAction('fit_set', { instances: grouped }, { ids: setIds, poses: drop(0, 0) });
   check('fit_set: already seated gives "done"', !seated.ok && seated.reason === 'done', JSON.stringify(seated));
+}
+
+// --- A fix that would make an overlap moves the other side instead (Clawbot's right claw) -------------
+{
+  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'public', 'catalog.json'), 'utf8'));
+  const state = { instances: starterById('clawbot').build(catalog) };
+  const named = (label) => state.instances.find((i) => i.label === label);
+  const arm = named('Claw Crank Arm R');
+  const overlapsOf = (instances, ids) => ids.filter((x) => checkCandidateCollision(instances.find((i) => i.instanceId === x), instances).isIntersecting);
+  const claw = ['Claw 3x3 Beam R', 'Claw 1x4 Beam R', 'Claw Tip R', 'Traction Link #4', 'Claw R Pin 1', 'Claw R Pin 2', 'Claw R Pin 3', 'Claw R Pin 4'].map((l) => named(l).instanceId);
+  const r = runAction('fix_assembly', JSON.parse(JSON.stringify(state)), { instanceId: arm.instanceId });
+  check('Clawbot: Fix assembly on the right crank arm works', r.ok, JSON.stringify(r));
+  if (r.ok) {
+    const after = new Map(r.state.instances.map((i) => [i.instanceId, i]));
+    const moved = r.moved ?? [];
+    check('  moves the right claw (7 parts), not the arm or its shaft', moved.length === claw.length && claw.every((c) => moved.includes(c)) && !moved.includes(arm.instanceId), JSON.stringify(moved.map((m) => named2(m))));
+    const armMove = poseError(after.get(arm.instanceId), arm);
+    check('  the arm stays where it was', JSON.stringify(after.get(arm.instanceId).position) === JSON.stringify(arm.position) && JSON.stringify(after.get(arm.instanceId).rotation) === JSON.stringify(arm.rotation), JSON.stringify(armMove));
+    check('  nothing overlaps afterwards', overlapsOf(r.state.instances, r.state.instances.map((i) => i.instanceId)).length === 0, overlapsOf(r.state.instances, r.state.instances.map((i) => i.instanceId)).join(', '));
+    check('  the pins are now in the arm', jointGraph(r.state).edges.some(([a, b]) => [a, b].includes(named('Claw R Pin 1').instanceId) && [a, b].includes(arm.instanceId)));
+    check('  the message says why the other side moved', /would have overlapped/.test(r.message), r.message);
+    check('  one history step, named for the claw', r.record && /Fix assembly: Claw/.test(r.stepLabel), r.stepLabel);
+  }
+  function named2(m) {
+    return state.instances.find((i) => i.instanceId === m)?.label;
+  }
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll fix-assembly checks passed');

@@ -6,7 +6,8 @@
  * slid along that line until it is seated without overlapping.
  */
 import * as THREE from 'three';
-import { buildWorldMatrix, checkCandidateCollision, getCatalog, jointGraph, partOf, touchesAny, worldFeaturesFor } from './core.js';
+import { buildWorldMatrix, checkCandidateCollision, getCatalog, jointGraph, partOf, playInputs, touchesAny, worldFeaturesFor } from './core.js';
+import { buildBodyGraph } from '../sim/bodyGraph.js';
 import { clearSpotAlongLine, insertFitsOpening, worldPartBox } from '../utils/pinHoleAlignment.js';
 import { groupsOf } from '../utils/partGroups.js';
 import { quaternionToEulerDeg } from '../utils/gearMeshing.js';
@@ -501,6 +502,23 @@ function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, l
 }
 
 /**
+ * The overlaps a move would make: `movedParts` (the moving side at its new poses) against everything
+ * else, leaving out what they already overlapped before. A Set of "moved part / part it hits".
+ */
+function newOverlaps(instances, byId, movedParts) {
+  const movedById = new Map(movedParts.map((c) => [c.instanceId, c]));
+  const next = instances.map((i) => movedById.get(i.instanceId) || i);
+  const hits = new Set();
+  for (const c of movedParts) {
+    const was = new Set(checkCandidateCollision(byId.get(c.instanceId), instances).collidingWith.map((w) => w.instanceId));
+    for (const w of checkCandidateCollision(c, next).collidingWith) {
+      if (!was.has(w.instanceId) && !movedById.has(w.instanceId)) hits.add(`${c.label} / ${w.label}`);
+    }
+  }
+  return hits;
+}
+
+/**
  * Lines up the selected part's block with the block it is nearly mated to (see file comment).
  * Returns { ok, state, record, stepLabel, message, moved: [ids], pairs } or { ok: false, error }.
  */
@@ -572,10 +590,39 @@ export function fixAssembly(state, { instanceId } = {}) {
   let moving = sideS.size <= sideP.size ? sideS : sideP;
   if (locked(moving)) moving = moving === sideS ? sideP : sideS;
   if (locked(moving)) return { ok: false, error: 'Both blocks have a locked part, so neither can be moved.' };
-  const fixed = moving === sideS ? sideP : sideS;
+  let fixed = moving === sideS ? sideP : sideS;
 
-  const fit = fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, label: selected.label });
+  let fit = fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, label: selected.label });
   if (!fit.ok) return { ok: false, error: fit.error };
+
+  // A fix that makes parts overlap that didn't before: try moving the other side (with the parts
+  // joined to it) instead, and keep whichever side leaves fewer new overlaps
+  let swapped = null; // { was: names of the side first tried, hits: its new overlaps }
+  const hitsOf = (f) => newOverlaps(instances, byId, f.movedParts);
+  const firstHits = hitsOf(fit);
+  if (firstHits.size > 0) {
+    // The other side's pieces: the parts held rigidly together with each part the pairs lined up with
+    // (a claw, not the whole robot it hangs on), never one with a locked part. The piece that leaves
+    // the fewest new overlaps wins, when that is fewer than moving the first side does.
+    const bodies = buildBodyGraph(playInputs(state)).bodies;
+    const tried = new Set();
+    let best = null;
+    for (const id of new Set(fit.pairs.map((p) => p.f.instanceId))) {
+      const body = bodies.find((b) => b.parts.includes(id));
+      const piece = new Set(body?.parts.filter((p) => fixed.has(p)));
+      if (!body || tried.has(body.id) || piece.size === 0 || piece.size >= fixed.size || locked(piece)) continue;
+      tried.add(body.id);
+      const rest = new Set([...moving, ...[...fixed].filter((p) => !piece.has(p))]);
+      const other = fitMoving({ byId, catalogById, visible, moving: piece, fixed: rest, featuresOfSet, label: selected.label });
+      if (!other.ok) continue;
+      const hits = hitsOf(other).size;
+      if (hits < firstHits.size && (!best || hits < best.hits || (hits === best.hits && piece.size < best.piece.size))) best = { piece, rest, other, hits };
+    }
+    if (best) {
+      swapped = { was: setName([...moving], byId, groupsOf(instances)), hits: [...firstHits] };
+      [moving, fixed, fit] = [best.piece, best.rest, best.other];
+    }
+  }
   const { pairs } = fit;
 
   // 6. One step with the moved parts' overlap flags
@@ -604,6 +651,7 @@ export function fixAssembly(state, { instanceId } = {}) {
   const overlapping = movedParts.filter((c) => c.isIntersecting).map((c) => c.label);
   const message =
     `Lined up ${lined} pin${lined === 1 ? '' : 's'} and hole${lined === 1 ? '' : 's'}: moved ${movedName} onto ${onto}` +
+    (swapped ? ` (moving ${swapped.was} would have overlapped ${swapped.hits[0].split(' / ')[1]})` : '') +
     (overlapping.length ? ` (still overlapping: ${overlapping.join(', ')})` : '') +
     '.';
   return {

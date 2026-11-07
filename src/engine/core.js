@@ -23,7 +23,7 @@ import {
   planMates
 } from '../utils/pinHoleAlignment.js';
 import { hubFrame, hubMatrix, isShaftInMotorSocket, splitHubTriangles } from '../utils/motorHub.js';
-import { isMeshingGear, meshTurn, quaternionToEulerDeg, turnQuaternion, worldToothed } from '../utils/gearMeshing.js';
+import { isMeshingGear, meshRelation, meshTurn, quaternionToEulerDeg, turnQuaternion, worldToothed } from '../utils/gearMeshing.js';
 import { groupOf, shaftGroups, squareFitRoll, turnGroup } from '../utils/shaftGroups.js';
 import { settlePlacement, turnAboutLine } from '../utils/placementFit.js';
 import { isTireOnHub } from '../utils/tireFit.js';
@@ -877,6 +877,7 @@ function findJoints(state) {
   // away from one counts as mounted; one left bending in mid-air (a sprocket moved) does not.
   const chainBends = [];
   const chainJoins = []; // [a, b]: links that are neighbours, or a gripper and its link
+  const chainOnSprocket = []; // [linkId, sprocketId]
   const chainParts = nonFasteners.filter((n) => isChainPart(n.part));
   if (chainParts.length) {
     const sprockets = nonFasteners.filter((n) => n.part.gearSpecs?.gearType === 'sprocket');
@@ -903,6 +904,7 @@ function findJoints(state) {
       for (const s of sprockets) {
         if (!isLinkOnSprocket(a.part, a.mat, s.part, s.mat)) continue;
         link(a.inst.instanceId, s.inst.instanceId);
+        chainOnSprocket.push([a.inst.instanceId, s.inst.instanceId]);
         held.add(a.inst.instanceId);
       }
     }
@@ -1008,6 +1010,7 @@ function findJoints(state) {
     pegJoints,
     batteryBays,
     chainBends,
+    chainOnSprocket,
     chainJoins,
     placedGears,
     meshedGearPairs
@@ -1038,6 +1041,157 @@ function graphFromJoints(found, { pinnedOnly = false } = {}) {
  */
 export function jointGraph(state, { pinnedOnly = false } = {}) {
   return graphFromJoints(findJoints(state), { pinnedOnly });
+}
+
+/**
+ * What Play mode (openspec play-mode) needs to make the build move, as plain data for
+ * src/sim/bodyGraph.js: every visible part, the seated pins, pegs and shafts with their lines, the
+ * shaft groups with how well each square fits, meshing gears and racks, and chained sprockets.
+ */
+export function playInputs(state) {
+  const found = findJoints(state);
+  const fastenerIds = new Set(found.fasteners.map((f) => f.inst.instanceId));
+  // Chain and track parts stay where they are, but only those in a chain or track: a Traction Link
+  // pinned on a claw is an ordinary part
+  const inChain = new Set([...found.chainJoins.flat(), ...found.chainOnSprocket.flat()]);
+  const parts = [];
+  for (const inst of found.visible) {
+    const part = partOf(inst);
+    if (!part) continue;
+    parts.push({
+      id: inst.instanceId,
+      label: inst.label || part.name,
+      fastener: fastenerIds.has(inst.instanceId),
+      standoff: part.fastenerSpecs?.fastenerType === 'standoff',
+      chain: isChainPart(part) && inChain.has(inst.instanceId),
+      motor: Boolean(part.hubSpecs),
+      gear: part.gearSpecs ? { teeth: part.gearSpecs.teeth, type: part.gearSpecs.gearType } : null,
+      rack: Boolean(part.rackSpecs?.measured)
+    });
+  }
+  const vec = (v) => v.toArray().map((x) => Math.round(x * 1000) / 1000);
+  const seated = found.seatedPairs.map((p) => ({
+    insert: p.insertOwner,
+    opening: p.openingOwner,
+    insertKind: p.insert.kind,
+    openingKind: p.opening.kind,
+    axis: vec(p.insert.axis),
+    point: vec(p.opening.origin)
+  }));
+  const groups = shaftGroups(
+    found.visible.map((i) => ({ instanceId: i.instanceId, features: found.featuresById.get(i.instanceId) || [], hasHub: Boolean(partOf(i)?.hubSpecs) }))
+  ).map((g) => {
+    // How far each square opening on the shaft sits off the shaft's flats (0 = fits)
+    const shafts = g.shaftIds.flatMap((id) => (found.featuresById.get(id) || []).filter((f) => f.kind === 'shaft' && f.flatDir));
+    const members = g.members.map((m) => {
+      // A Smart Motor's hub turns to take the shaft at any angle (square-shaft-fit)
+      if (m.hub) return { id: m.instanceId, hub: true, offDeg: 0 };
+      if (g.shaftIds.includes(m.instanceId)) return { id: m.instanceId, hub: false, offDeg: 0 };
+      const openings = (found.featuresById.get(m.instanceId) || []).filter((f) => f.flatDir && (f.kind === 'shaft_bore' || f.kind === 'shaft_socket'));
+      let offDeg = 0;
+      for (const shaft of shafts) {
+        for (const pair of findSeatedPairs([shaft], openings)) {
+          offDeg = Math.max(offDeg, Math.abs(squareFitRoll(pair.insert, pair.opening)));
+        }
+      }
+      return { id: m.instanceId, hub: false, offDeg: Math.round(offDeg * 10) / 10 };
+    });
+    return { axis: vec(g.axis), point: vec(g.point), shaftIds: g.shaftIds, members };
+  });
+  // Meshing gears and gear-rack pairs, measured as the gear tools measure them
+  const toothed = found.visible
+    .map((i) => worldToothed(partOf(i), i.position, i.rotation, i.instanceId))
+    .filter(Boolean);
+  const meshes = [];
+  for (const g of toothed) {
+    if (g.kind !== 'gear') continue;
+    for (const o of toothed) {
+      if (o === g || (o.kind === 'gear' && o.instanceId < g.instanceId)) continue;
+      if (!meshRelation(g, o)) {
+        // Gears side by side, a little too near or far to mesh, are reported
+        if (o.kind !== 'gear' || Math.abs(g.axis.dot(o.axis)) < 0.999) continue;
+        const d = new THREE.Vector3().subVectors(o.center, g.center);
+        const along = d.dot(g.axis);
+        const apart = Math.sqrt(Math.max(0, d.lengthSq() - along * along));
+        const off = Math.abs(apart - g.pitchRadiusMm - o.pitchRadiusMm);
+        if (Math.abs(along) < 3 && off <= 3) meshes.push({ a: g.instanceId, b: o.instanceId, kind: 'near', offMm: Math.round(off * 10) / 10 });
+        continue;
+      }
+      if (o.kind === 'gear') {
+        meshes.push({ a: g.instanceId, b: o.instanceId, kind: 'gear', teethA: g.teeth, teethB: o.teeth, axisA: vec(g.axis), axisB: vec(o.axis) });
+      } else {
+        // Rack travel per radian of the gear about its own axis: the pitch point's speed along the rack
+        const mmPerRad = new THREE.Vector3().crossVectors(g.axis, o.normal.clone().negate()).dot(o.direction) * g.pitchRadiusMm;
+        meshes.push({ a: g.instanceId, b: o.instanceId, kind: 'rack', axisA: vec(g.axis), direction: vec(o.direction), mmPerRad: Math.round(mmPerRad * 1000) / 1000 });
+      }
+    }
+  }
+  // Sprockets sharing one chain or track (its links joined end to end)
+  const parent = new Map();
+  const find = (id) => {
+    while (parent.has(id) && parent.get(id) !== id) id = parent.get(id);
+    return id;
+  };
+  for (const [a, b] of found.chainJoins) parent.set(find(a), find(b));
+  const byChain = new Map();
+  for (const [link, sprocket] of found.chainOnSprocket) {
+    const root = find(link);
+    if (!byChain.has(root)) byChain.set(root, new Set());
+    byChain.get(root).add(sprocket);
+  }
+  const chains = [...byChain.values()].filter((s) => s.size >= 2).map((s) => [...s]);
+  // Tracks: each chain or track with its links in order round the loop (null when they don't close into
+  // one loop), its grippers and the links they sit on, and the sprockets it runs on
+  const chainPartIds = new Set(parts.filter((p) => p.chain).map((p) => p.id));
+  const linkIds = new Set(found.nonFasteners.filter((n) => isLink(n.part)).map((n) => n.inst.instanceId));
+  const trackOf = new Map(); // root -> { ids, sprockets }
+  for (const id of chainPartIds) {
+    const root = find(id);
+    if (!trackOf.has(root)) trackOf.set(root, { ids: [], sprockets: new Set() });
+    trackOf.get(root).ids.push(id);
+  }
+  for (const [link, sprocket] of found.chainOnSprocket) trackOf.get(find(link))?.sprockets.add(sprocket);
+  const neighbours = new Map();
+  const grippersOf = [];
+  for (const [a, b] of found.chainJoins) {
+    if (linkIds.has(a) && linkIds.has(b)) {
+      if (!neighbours.has(a)) neighbours.set(a, []);
+      if (!neighbours.has(b)) neighbours.set(b, []);
+      neighbours.get(a).push(b);
+      neighbours.get(b).push(a);
+    } else if (linkIds.has(a) !== linkIds.has(b)) {
+      grippersOf.push(linkIds.has(a) ? [b, a] : [a, b]); // [gripper, its link]
+    }
+  }
+  const tracks = [...trackOf.values()].map(({ ids, sprockets }) => {
+    const links = ids.filter((id) => linkIds.has(id));
+    const order = [];
+    for (let cur = links[0], prev = null; cur && !order.includes(cur); ) {
+      order.push(cur);
+      const next = (neighbours.get(cur) || []).filter((n) => n !== prev && !order.includes(n));
+      prev = cur;
+      cur = next[0];
+    }
+    const closes = order.length === links.length && links.length > 2 && (neighbours.get(order[order.length - 1]) || []).includes(order[0]);
+    return {
+      links: closes ? order : null,
+      linkIds: links,
+      grippers: grippersOf.filter(([g]) => ids.includes(g)),
+      sprockets: [...sprockets]
+    };
+  });
+  const sprocketAxes = {};
+  for (const id of new Set([...chains.flat(), ...tracks.flatMap((t) => t.sprockets)])) {
+    const inst = found.visible.find((i) => i.instanceId === id);
+    sprocketAxes[id] = vec(new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion().setFromRotationMatrix(buildWorldMatrix(inst.position, inst.rotation))));
+  }
+  const bays = found.batteryBays.map((b) => [b.batteryId, b.brainId]);
+  for (const a of found.nonFasteners) {
+    for (const b of found.nonFasteners) {
+      if (a !== b && isTireOnHub(a.part, a.mat, b.part, b.mat) && /tire/i.test(a.part.name)) bays.push([a.inst.instanceId, b.inst.instanceId]);
+    }
+  }
+  return { parts, seated, groups, meshes, chains, tracks, sprocketAxes, bays };
 }
 
 const SHAFT_TYPES = new Set(['straight_shaft', 'capped_shaft', 'motor_shaft']);
