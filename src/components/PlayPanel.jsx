@@ -3,13 +3,37 @@ import { AlertTriangle, X } from 'lucide-react';
 
 /**
  * The Play panel (openspec play-mode): one throttle per Smart Motor, from full reverse through stop
- * to full forward. A throttle springs back to stop when let go, unless Hold is ticked. Each row shows
- * the motor's speed, or Stalled when a collision or a jammed train stops it; hovering a row lights
- * the motor up in the view. Below, what Play mode couldn't set up.
+ * to full forward. A throttle springs back to stop when let go, unless that motor's Hold is ticked.
+ * Each row shows the motor's speed, or Stalled when a collision or a jammed train stops it; hovering
+ * a row lights the motor up in the view. Below, a global option to limit speed by load and any warnings.
  */
-export default function PlayPanel({ ready, error, mode, motors = [], throttles, status = {}, warnings = [], onThrottle, onHover, onClose }) {
-  const [hold, setHold] = useState(false);
+export default function PlayPanel({
+  ready,
+  error,
+  mode,
+  motors = [],
+  throttles,
+  status = {},
+  warnings = [],
+  limitSpeedByLoad = false,
+  onLimitSpeedByLoad,
+  simulateGravity = false,
+  onSimulateGravity,
+  onThrottle,
+  onHover,
+  onClose
+}) {
+  const [holds, setHolds] = useState(() => new Set());
   const [showWarnings, setShowWarnings] = useState(false);
+  const toggleHold = (id, checked) => {
+    setHolds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+    if (!checked && throttles.get(id)) onThrottle(id, 0);
+  };
   return (
     <div className="explode-panel play-panel" role="group" aria-label="Play mode">
       <div className="explode-panel-row">
@@ -34,6 +58,7 @@ export default function PlayPanel({ ready, error, mode, motors = [], throttles, 
           {motors.map((m) => {
             const value = Math.round((throttles.get(m.id) || 0) * 100);
             const s = status[m.id];
+            const held = holds.has(m.id);
             return (
               <div
                 key={m.id}
@@ -43,6 +68,10 @@ export default function PlayPanel({ ready, error, mode, motors = [], throttles, 
               >
                 <div className="explode-panel-row">
                   <span className="play-motor-name" title={m.label}>{m.label}</span>
+                  <label className="play-motor-hold" title="Keep this motor's throttle where you let go of it (double-click the slider to stop it)">
+                    <input type="checkbox" checked={held} onChange={(e) => toggleHold(m.id, e.target.checked)} />
+                    Hold
+                  </label>
                   <span className="play-motor-speed" role="status">
                     {s?.stalled ? 'Stalled' : `${Math.round(Math.abs(s?.rpm || 0))} rpm`}
                   </span>
@@ -57,17 +86,25 @@ export default function PlayPanel({ ready, error, mode, motors = [], throttles, 
                   aria-label={`${m.label} throttle`}
                   aria-valuetext={value === 0 ? 'stopped' : `${Math.abs(value)}% ${value > 0 ? 'forward' : 'reverse'}`}
                   onChange={(e) => onThrottle(m.id, Number(e.target.value) / 100)}
-                  onPointerUp={() => !hold && onThrottle(m.id, 0)}
-                  onPointerCancel={() => !hold && onThrottle(m.id, 0)}
+                  onPointerUp={() => !held && onThrottle(m.id, 0)}
+                  onPointerCancel={() => !held && onThrottle(m.id, 0)}
                   onDoubleClick={() => onThrottle(m.id, 0)}
                 />
               </div>
             );
           })}
-          <label className="play-hold" title="Keep each throttle where you let go of it (double-click a throttle to stop it)">
-            <input type="checkbox" checked={hold} onChange={(e) => setHold(e.target.checked)} />
-            Hold throttles
-          </label>
+          {mode !== 'kinematic' && (
+            <>
+              <label className="play-hold" title="Cap motor speed above 1.4 W mechanical power ((1.4 / loadTorque) × 9.55 rpm, up to 0.414 N·m stall torque)">
+                <input type="checkbox" checked={limitSpeedByLoad} onChange={(e) => onLimitSpeedByLoad?.(e.target.checked)} />
+                Limit speed by load
+              </label>
+              <label className="play-hold" title="Let unanchored or single-pinned parts fall under gravity and add gravitational weight to motor torque required">
+                <input type="checkbox" checked={simulateGravity} onChange={(e) => onSimulateGravity?.(e.target.checked)} />
+                Simulate gravity
+              </label>
+            </>
+          )}
         </>
       )}
       {warnings.length > 0 && (

@@ -6,8 +6,10 @@ import * as THREE from 'three';
  * place in the brain's own CAD file (the converter leaves it out of the brain's model).
  */
 export const BATTERY_BAYS = [
-  // Robot Brain (228-2540) and Robot Battery (228-2604)
-  { battery: '228-2604', brain: '228-2540', position: [-0.75, -1.15, 0], rotation: [0, -90, 0] }
+  // Robot Brain Gen 1 (228-2540) and Robot Battery (228-2604)
+  { battery: '228-2604', brain: '228-2540', position: [-0.75, -1.15, 0], rotation: [0, -90, 0] },
+  // Robot Brain Gen 2 (228-6480) and Robot Battery Li-Ion 2000 mAh (228-7045)
+  { battery: '228-7045', brain: '228-6480', position: [-50.11, -0.03, -9.71], rotation: [90, 0, 0] }
 ];
 
 const POSITION_TOL_MM = 1;

@@ -1976,8 +1976,20 @@ body,
 }
 
 .play-motor-speed {
+  min-width: 52px;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
+}
+
+.play-motor-hold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
 }
 
 .play-motor.stalled .play-motor-speed {

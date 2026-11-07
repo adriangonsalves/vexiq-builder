@@ -132,10 +132,14 @@ for (const mode of ['all', 'x', 'y', 'z']) {
       if (list.length < 2) continue;
       stacks += 1;
       const d = axis.map((v) => v * sign);
+      const onShaft = (p) => {
+        const matching = p.members.filter((m) => input.pairs.some((pr) => pr.insertOwner === shaft.id && pr.openingOwner === m));
+        return matching.length ? matching : p.members;
+      };
       const range = (p, offset) => {
         let lo = Infinity;
         let hi = -Infinity;
-        for (const m of p.members) {
+        for (const m of onShaft(p)) {
           const box = input.parts.find((q) => q.id === m).box;
           for (const x of [box.min[0], box.max[0]]) for (const y of [box.min[1], box.max[1]]) for (const z of [box.min[2], box.max[2]]) {
             const v = dot([x + offset[0], y + offset[1], z + offset[2]], d);

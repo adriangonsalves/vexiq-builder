@@ -1048,7 +1048,7 @@ export function jointGraph(state, { pinnedOnly = false } = {}) {
  * src/sim/bodyGraph.js: every visible part, the seated pins, pegs and shafts with their lines, the
  * shaft groups with how well each square fits, meshing gears and racks, and chained sprockets.
  */
-export function playInputs(state) {
+export function playInputs(state, { braceTolerance = true } = {}) {
   const found = findJoints(state);
   const fastenerIds = new Set(found.fasteners.map((f) => f.inst.instanceId));
   // Chain and track parts stay where they are, but only those in a chain or track: a Traction Link
@@ -1078,6 +1078,30 @@ export function playInputs(state) {
     axis: vec(p.insert.axis),
     point: vec(p.opening.origin)
   }));
+  // Diagonal braces across non-Pythagorean pitch triangles (e.g. Flop's 1x18 beams at 6.5x2.5 = 6.964P
+  // vs 7P) flex a pin by ~0.53 mm inside the hole; in play mode count parallel overlapping pins within 0.75 mm as seated.
+  if (braceTolerance) {
+    for (let i = 0; i < found.visible.length; i++) {
+      const a = found.visible[i];
+      const boxA = found.rawWorldBoxes.get(a.instanceId);
+      if (!boxA) continue;
+      for (let j = i + 1; j < found.visible.length; j++) {
+        const b = found.visible[j];
+        const boxB = found.rawWorldBoxes.get(b.instanceId);
+        if (!boxB || !boxA.clone().expandByScalar(1).intersectsBox(boxB)) continue;
+        for (const pair of findNearSeatedPairs(found.featuresById.get(a.instanceId), found.featuresById.get(b.instanceId), { maxLineMm: 0.75, maxAngleDeg: 2 })) {
+          seated.push({
+            insert: pair.insert.instanceId,
+            opening: pair.opening.instanceId,
+            insertKind: pair.insert.kind,
+            openingKind: pair.opening.kind,
+            axis: vec(pair.insert.axis),
+            point: vec(pair.opening.origin)
+          });
+        }
+      }
+    }
+  }
   const groups = shaftGroups(
     found.visible.map((i) => ({ instanceId: i.instanceId, features: found.featuresById.get(i.instanceId) || [], hasHub: Boolean(partOf(i)?.hubSpecs) }))
   ).map((g) => {

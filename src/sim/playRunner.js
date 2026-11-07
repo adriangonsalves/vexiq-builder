@@ -48,15 +48,16 @@ function trackState(track, byId) {
 
 export function createPlayRunner(graph, instances, engine) {
   const byId = new Map(instances.map((i) => [i.instanceId, i]));
+  const looseSet = new Set(graph.loose || []);
   const moving = []; // { id, body, start }
   for (const b of graph.bodies) {
-    if (graph.fixed.includes(b.id) && !(graph.sliders || []).includes(b.id)) continue;
+    if (graph.fixed.includes(b.id) && !(graph.sliders || []).includes(b.id) && !looseSet.has(b.id)) continue;
     for (const id of b.parts) {
       const inst = byId.get(id);
       if (inst) moving.push({ id, body: b.id, start: startMatrix(inst) });
     }
   }
-  const fixedOnly = (body) => graph.fixed.includes(body) && !(graph.sliders || []).includes(body);
+  const fixedOnly = (body) => graph.fixed.includes(body) && !(graph.sliders || []).includes(body) && !looseSet.has(body);
   const tracks = (graph.tracks || [])
     .filter((t) => t.frame && (t.drive || !fixedOnly(t.frame)))
     .map((t) => trackState(t, byId));
@@ -72,6 +73,12 @@ export function createPlayRunner(graph, instances, engine) {
     setThrottle(id, value) {
       if (value) throttles.set(id, value);
       else throttles.delete(id);
+    },
+    setLimitSpeedByLoad(on) {
+      engine.setLimitSpeedByLoad?.(on);
+    },
+    setSimulateGravity(on) {
+      engine.setSimulateGravity?.(on);
     },
     frame(meshMap, now = performance.now()) {
       const dt = last === null ? 0 : Math.min(MAX_DT, (now - last) / 1000);

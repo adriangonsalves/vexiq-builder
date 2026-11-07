@@ -60,18 +60,44 @@ Two gears that mesh SHALL turn in opposite directions with speeds in the inverse
 - **THEN** the track runs round its loop with the sprocket, and goes up with the intake instead of staying behind
 
 ### Requirement: Motor throttles
-The Play panel SHALL list every Smart Motor with a throttle that runs from full reverse through stop to full forward. A throttle's position SHALL set the motor's target speed, up to 120 rpm either way, with torque limited to the Smart Motor's stall torque. Releasing or centring a throttle SHALL stop that motor. Selecting a motor's row SHALL highlight that motor in the view.
+The Play panel SHALL list every Smart Motor with a throttle that runs from full reverse through stop to full forward. A throttle's position SHALL set the motor's target speed, up to 120 rpm either way, with torque limited to the Smart Motor's stall torque. Releasing or centring a throttle SHALL stop that motor unless that motor's Hold option is enabled. Selecting a motor's row SHALL highlight that motor in the view. Each motor SHALL have an independent Hold checkbox so the user can hold individual motor throttles at their set values.
 
 #### Scenario: Half throttle reverse
 - **WHEN** the user drags a motor's throttle halfway toward reverse
 - **THEN** its shaft turns backward at about 60 rpm, if nothing blocks it
 
+#### Scenario: Per-motor Hold checkbox
+- **WHEN** the user checks Hold on a motor's row and releases its throttle slider
+- **THEN** that motor keeps running at the chosen speed while other motors without Hold spring back to stop
+
+### Requirement: Limit speed by load
+The Play panel SHALL provide a global toggle to limit motor speed by mechanical load. When enabled, maximum motor speed SHALL drop above 1.4 W mechanical power draw according to $(1.4 / \tau_\text{load}) \times 9.55\text{ rpm}$, tapering smoothly to 0 at the motor's stall torque of 0.414 N·m. Mechanical load torque calculation SHALL account for gravitational weight along the mechanism's kinematic chain, internal joint friction, and drivetrain rolling load proportional to the robot's total weight.
+
+#### Scenario: Lifting heavy arm vs lowering
+- **WHEN** Limit speed by load is enabled and the user raises an arm against gravity
+- **THEN** the arm motor speed decreases proportionally to the gravitational load torque, and lowering the arm with gravity encounters lower load torque and runs faster
+
+#### Scenario: Drivetrain motor loaded by robot weight
+- **WHEN** Limit speed by load is enabled and drivetrain motors turn the wheels
+- **THEN** the motor speeds reflect the load imposed by supporting and rolling the robot's weight
+
+### Requirement: Simulate gravity
+The Play panel SHALL provide a global toggle to simulate gravity. When enabled, unanchored parts and unsupported cantilever bodies SHALL fall under gravitational acceleration onto a ground plane collider at the robot's base. Mechanisms lifting masses SHALL experience opposing gravitational torque, while lowering mechanisms SHALL be assisted by gravity. Batteries correctly positioned in brain battery bays (both Gen 1 and Gen 2) SHALL be held rigidly by their bay latch and SHALL NOT fall out.
+
+#### Scenario: Unanchored parts fall to the floor
+- **WHEN** Simulate gravity is turned on and a build contains a loose part
+- **THEN** the loose part drops onto the floor below the robot rather than staying suspended in mid-air
+
+#### Scenario: Battery mated in brain
+- **WHEN** Simulate gravity is turned on and a battery is seated in its brain's battery bay
+- **THEN** the battery remains latched to the brain and moves rigidly with it
+
 ### Requirement: Collisions block motion and stall motors
-Solid parts in different bodies SHALL NOT pass through each other. When a collision stops a driven body, everything linked to it (shaft group, meshed gears, chained sprockets, the motor) SHALL stop too. A motor commanded to turn that has stayed below a small fraction of its target speed for a short time SHALL be shown as stalled on its throttle row and on the motor in the view, and SHALL clear when it turns again. Parts whose outlines already overlap on entry (a tight fit, a shaft in a hole) SHALL NOT count as blocking; parts that merely touch SHALL.
+Solid parts in different bodies SHALL NOT pass through each other. When a collision stops a driven body, everything linked to it (shaft group, meshed gears, chained sprockets, the motor) SHALL stop too. When a moving linkage impacts a hard stop, it SHALL display an inertia-scaled elastic wobble that naturally damps according to the moving assembly's mass rather than stopping abruptly. A motor commanded to turn that has stayed below a small fraction of its target speed for a short time SHALL be shown as stalled on its throttle row and on the motor in the view, and SHALL clear when it turns again. Parts whose outlines already overlap on entry (a tight fit, a shaft in a hole) SHALL NOT count as blocking; parts that merely touch SHALL.
 
 #### Scenario: Arm hits the frame
 - **WHEN** a motor raises an arm until the arm presses on the chassis
-- **THEN** the arm stops, the motor's row and the motor are marked stalled, and reversing the throttle moves the arm back and clears the mark
+- **THEN** the arm stops with an elastic wobble, the motor's row and the motor are marked stalled, and reversing the throttle moves the arm back and clears the mark
 
 #### Scenario: Linkage beams meet
 - **WHEN** a motor raises an arm whose upper and lower beams come together before it reaches anything else

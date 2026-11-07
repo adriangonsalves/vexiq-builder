@@ -604,7 +604,7 @@ export function fixAssembly(state, { instanceId } = {}) {
     // The other side's pieces: the parts held rigidly together with each part the pairs lined up with
     // (a claw, not the whole robot it hangs on), never one with a locked part. The piece that leaves
     // the fewest new overlaps wins, when that is fewer than moving the first side does.
-    const bodies = buildBodyGraph(playInputs(state)).bodies;
+    const bodies = buildBodyGraph(playInputs(state, { braceTolerance: false })).bodies;
     const tried = new Set();
     let best = null;
     for (const id of new Set(fit.pairs.map((p) => p.f.instanceId))) {

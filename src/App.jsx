@@ -1111,6 +1111,8 @@ export default function App() {
   const [playThrottles, setPlayThrottles] = useState(() => new Map());
   const [playStatus, setPlayStatus] = useState({});
   const [playHover, setPlayHover] = useState(null);
+  const [playLimitSpeedByLoad, setPlayLimitSpeedByLoad] = useState(false);
+  const [playSimulateGravity, setPlaySimulateGravity] = useState(false);
   /** Works out how the shown parts move, then hands the motors to the Play panel. */
   const openPlay = async () => {
     const n = ++playSeqRef.current;
@@ -1128,7 +1130,12 @@ export default function App() {
       let mode = 'physics';
       try {
         const { createPhysics } = await import('./sim/physics.js');
-        engine = await createPhysics(data.graph, parts, { points: (id) => partPointsRef.current?.(id) || null });
+        engine = await createPhysics(
+          data.graph,
+          parts,
+          { points: (id) => partPointsRef.current?.(id) || null },
+          { limitSpeedByLoad: playLimitSpeedByLoad, simulateGravity: playSimulateGravity }
+        );
       } catch (err) {
         console.error('Play mode physics failed to start', err);
         engine = createKinematic(data.graph);
@@ -1157,6 +1164,14 @@ export default function App() {
       else next.delete(id);
       return next;
     });
+  }, []);
+  const handlePlayLimitSpeedByLoad = useCallback((on) => {
+    setPlayLimitSpeedByLoad(on);
+    playRef.current?.runner?.setLimitSpeedByLoad(on);
+  }, []);
+  const handlePlaySimulateGravity = useCallback((on) => {
+    setPlaySimulateGravity(on);
+    playRef.current?.runner?.setSimulateGravity(on);
   }, []);
   // The panel's speeds and stalls, read from the motion ten times a second
   useEffect(() => {
@@ -2816,6 +2831,10 @@ export default function App() {
               throttles={playThrottles}
               status={playStatus}
               warnings={play.graph?.warnings}
+              limitSpeedByLoad={playLimitSpeedByLoad}
+              onLimitSpeedByLoad={handlePlayLimitSpeedByLoad}
+              simulateGravity={playSimulateGravity}
+              onSimulateGravity={handlePlaySimulateGravity}
               onThrottle={handlePlayThrottle}
               onHover={setPlayHover}
               onClose={closePlay}
