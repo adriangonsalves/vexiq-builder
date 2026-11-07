@@ -144,8 +144,8 @@ const shaftInputs = (offDeg) => ({
   const state = { instances: starterById('clawbot').build(catalog) };
   const g = buildBodyGraph(playInputs(state));
   const labels = new Map(state.instances.map((i) => [i.instanceId, i.label]));
-  check('Clawbot: Smart Motors driving hinges', g.motors.filter((m) => m.hinge).length >= 3, JSON.stringify(g.motors));
-  check('Clawbot: arm gears meshed 12 to 36', g.links.some((l) => l.kind === 'gear' && Math.abs(l.ratio - 1 / 3) < 1e-9));
+  check('Clawbot: four Smart Motors, each driving a hinge', g.motors.length === 4 && g.motors.every((m) => g.hinges.some((h) => h.id === m.hinge && h.motor === m.id)), JSON.stringify(g.motors));
+  check('Clawbot: arm gears meshed 12 to 36 and claw crank arms meshed 1 to 1', g.links.some((l) => l.kind === 'gear' && Math.abs(l.ratio - 1 / 3) < 1e-9) && g.links.some((l) => l.kind === 'gear' && Math.abs(l.ratio - 1) < 1e-9));
   const k = createKinematic(g);
   for (let i = 0; i < 10; i++) k.step(0.05, new Map(g.motors.map((m) => [m.id, 1])));
   const st = k.status();

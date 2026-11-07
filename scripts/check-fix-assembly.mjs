@@ -195,6 +195,22 @@ for (const from of ['Beam', 'Pin 1', 'Plate']) {
 {
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'public', 'catalog.json'), 'utf8'));
   const state = { instances: starterById('clawbot').build(catalog) };
+  // Nudge the right claw 0.3 mm off (as the starter originally had it) to test that fixing from the crank arm moves the claw onto it:
+  const unaligned = {
+    'Claw Drive Shaft': [183.57, 181.675, -12.7],
+    'Claw Idler Shaft': [183.57, 181.675, 12.7],
+    'Claw 3x3 Beam R': [227.653, 181.203, 38.395],
+    'Claw R Pin 1': [205.657, 178.028, 25.695],
+    'Claw R Pin 2': [216.655, 178.028, 32.045],
+    'Claw R Pin 3': [238.652, 178.028, 32.044],
+    'Claw R Pin 4': [249.652, 178.028, 25.692],
+    'Claw 1x4 Beam R': [255.15, 174.853, 22.519],
+    'Claw Tip R': [271.648, 171.758, 12.994],
+    'Traction Link #4': [271.691, 183.608, 12.298]
+  };
+  for (const i of state.instances) {
+    if (unaligned[i.label]) i.position = unaligned[i.label];
+  }
   const named = (label) => state.instances.find((i) => i.label === label);
   const arm = named('Claw Crank Arm R');
   const overlapsOf = (instances, ids) => ids.filter((x) => checkCandidateCollision(instances.find((i) => i.instanceId === x), instances).isIntersecting);
