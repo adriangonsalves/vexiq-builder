@@ -1,7 +1,7 @@
 # edit-responsiveness Specification
 
 ## Purpose
-TBD - created by archiving change faster-edits-on-big-builds. Update Purpose after archive.
+Edits that don't move parts (hide, show, colour, select) stay quick on big builds, and having parts selected doesn't slow the view.
 
 ## Requirements
 
