@@ -1110,6 +1110,9 @@ export default function App() {
   const playSeqRef = useRef(0);
   const [playThrottles, setPlayThrottles] = useState(() => new Map());
   const [playStatus, setPlayStatus] = useState({});
+  const [playDropReport, setPlayDropReport] = useState(null);
+  const [playDropSlowMotion, setPlayDropSlowMotion] = useState(1); // 1 = real time, 2/4/8 = that many times slower
+  const [playHighlightLoose, setPlayHighlightLoose] = useState(false);
   const [playHover, setPlayHover] = useState(null);
   const [playLimitSpeedByLoad, setPlayLimitSpeedByLoad] = useState(false);
   const [playSimulateGravity, setPlaySimulateGravity] = useState(false);
@@ -1119,6 +1122,7 @@ export default function App() {
     if (explodeMode !== 'off') closeExplode();
     setPlayThrottles(new Map());
     setPlayStatus({});
+    setPlayDropReport(null);
     setPlay({ ready: false });
     const parts = instances.filter((i) => i.visible !== false);
     try {
@@ -1142,7 +1146,10 @@ export default function App() {
         mode = 'kinematic';
       }
       if (n !== playSeqRef.current) return engine.dispose?.();
+      // A dev server started before the drop test's joints existed sends a graph without them
+      if (!Array.isArray(data.graph.joints)) console.warn('Play mode: the server sent no joints; restart the dev server for the drop test');
       const runner = createPlayRunner(data.graph, parts, engine);
+      runner.setDropTimeScale(1 / playDropSlowMotion);
       setPlay({ ready: true, graph: data.graph, runner, mode });
     } catch (err) {
       if (n === playSeqRef.current) setPlay({ ready: false, error: `Couldn't set up Play mode: ${err.message}` });
@@ -1153,6 +1160,7 @@ export default function App() {
     playSeqRef.current += 1;
     playRef.current?.runner?.dispose();
     setPlay(null);
+    setPlayDropReport(null);
     setPlayHover(null);
   };
   const togglePlay = () => (play ? closePlay() : openPlay());
@@ -1173,20 +1181,39 @@ export default function App() {
     setPlaySimulateGravity(on);
     playRef.current?.runner?.setSimulateGravity(on);
   }, []);
+  const handlePlayDrop = useCallback((heightM, landing) => {
+    const rep = playRef.current?.runner?.drop(heightM, landing);
+    if (rep) setPlayDropReport({ ...rep });
+  }, []);
+  const handlePlayDropSlowMotion = useCallback((times) => {
+    setPlayDropSlowMotion(times);
+    playRef.current?.runner?.setDropTimeScale?.(1 / times);
+  }, []);
+  const handlePlayResetDrop = useCallback(() => {
+    playRef.current?.runner?.resetDrop();
+    setPlayDropReport(null);
+  }, []);
   // The panel's speeds and stalls, read from the motion ten times a second
   useEffect(() => {
     const runner = play?.runner;
     if (!runner) return undefined;
-    const timer = setInterval(() => setPlayStatus(runner.status()), 100);
+    const timer = setInterval(() => {
+      setPlayStatus(runner.status());
+      const rep = runner.dropReport?.();
+      if (rep?.active || rep?.impacted) setPlayDropReport({ ...rep });
+    }, 100);
     return () => clearInterval(timer);
   }, [play?.runner]);
   const playFrame = useCallback((meshMap, now) => playRef.current?.runner?.frame(meshMap, now), []);
-  // Lit up in the view: the motor under the pointer in the panel, and stalled motors
+  // Lit up in the view: the motor under the pointer in the panel, stalled motors, and (when asked for)
+  // the parts a drop knocked loose
+  const playLooseKey = playHighlightLoose ? [...(playDropReport?.detachedParts || []), ...(playDropReport?.swingingParts || [])].map((p) => p.id).join(',') : '';
   const playAttention = useMemo(() => {
     const ids = Object.entries(playStatus).filter(([, s]) => s.stalled).map(([id]) => id);
+    for (const id of playLooseKey ? playLooseKey.split(',') : []) if (!ids.includes(id)) ids.push(id);
     if (playHover && !ids.includes(playHover)) ids.push(playHover);
     return ids.length ? ids : EMPTY_IDS;
-  }, [playStatus, playHover]);
+  }, [playStatus, playHover, playLooseKey]);
 
   const partCount = (n) => `${n} part${n === 1 ? '' : 's'}`;
 
@@ -2835,6 +2862,14 @@ export default function App() {
               onLimitSpeedByLoad={handlePlayLimitSpeedByLoad}
               simulateGravity={playSimulateGravity}
               onSimulateGravity={handlePlaySimulateGravity}
+              dropReport={playDropReport}
+              dropUnavailable={Boolean(play?.graph && !Array.isArray(play.graph.joints))}
+              dropSlowMotion={playDropSlowMotion}
+              onDropSlowMotion={handlePlayDropSlowMotion}
+              highlightLoose={playHighlightLoose}
+              onHighlightLoose={setPlayHighlightLoose}
+              onDrop={handlePlayDrop}
+              onResetDrop={handlePlayResetDrop}
               onThrottle={handlePlayThrottle}
               onHover={setPlayHover}
               onClose={closePlay}

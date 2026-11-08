@@ -115,6 +115,20 @@ function vexiqMcpBridgePlugin() {
   return {
     name: 'vexiq-mcp-bridge',
     configureServer(server) {
+      // The smart actions (Play mode's joints among them) run here, in the server, from the engine code
+      // and catalog it loaded when it started; the browser's hot reload doesn't reach them. When any of
+      // that code or data changes, restart the server so it runs what's on disk.
+      const serverSide = [/[\\/]src[\\/]engine[\\/]/, /[\\/]src[\\/]utils[\\/]/, /[\\/]src[\\/]sim[\\/](bodyGraph|fastenerStrength)\.js$/, /[\\/]mcp[\\/]assembly-engine\.mjs$/, /[\\/]public[\\/](catalog|part-metadata)\.json$/];
+      server.watcher.add([path.join(__dirname, 'public/catalog.json'), path.join(__dirname, 'public/part-metadata.json'), path.join(__dirname, 'mcp/assembly-engine.mjs')]);
+      let restartTimer = null;
+      server.watcher.on('change', (file) => {
+        if (!serverSide.some((re) => re.test(file))) return;
+        clearTimeout(restartTimer);
+        restartTimer = setTimeout(() => {
+          server.config.logger.info(`${path.relative(__dirname, file)} changed: restarting so the server's actions use it`, { timestamp: true });
+          server.restart();
+        }, 300);
+      });
       // When the server restarts (vite.config.js changed) or stops: stop the explode worker, and end
       // the open event streams so the tabs reconnect to the new server instead of hanging on this one
       server.httpServer?.once('close', () => {

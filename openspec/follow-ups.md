@@ -22,3 +22,24 @@ Low-priority items left open when a change was closed. Pick one up by proposing 
 6. **`fix-assembly` spec doesn't yet say Fix assembly tries the other side when the first move would make an overlap** (built, in `src/engine/fixAssembly.js` and `features.md`, with a check in `scripts/check-fix-assembly.mjs`). Add a requirement the next time that spec changes. Also not built yet: turning a shaft to fit a square bore that sits off its flats (the Clawbot's crank arms, 30°); turning the shaft alone works (tried in Node), but the shaft group counts the arm as a member, so only the shaft and the parts that already fit may be turned.
 7. **Flop's battery** is a loose piece in Play mode (not joined to anything), so nothing collides with it; the Clawbot's right claw is loose for the same reason. Loose pieces block nothing because treating them as walls stopped the Clawbot's own arm on its unpinned claw. Joining them properly (a pin hole that doesn't line up, a battery not seated in its bay) would fix both.
 8. **Intake flaps and tread links run round on screen but collide where they started** on their frame, so a flap swinging past a standoff is judged at its start position on the loop.
+
+## From drop-load-network (2026-11-08)
+
+1. **TODO: measure real forces.** Every value in `src/sim/fastenerStrength.js` is assumed. With a luggage scale that holds its peak reading (0.1 N steps), pull slowly, 5 times each, and record the median and spread; set `source: 'measured'` with the date.
+   1. A 1x1 pin pulled out of a 2x beam, fully seated (snap ridge + friction).
+   2. A 1x1 pin seated about half depth (a spacer limits it): friction per mm.
+   3. The long end of a 1x2 pin through two beams: pull the outer beam off, then the inner one with the outer removed.
+   4. A capped (0x2) pin joining two plates: pull the plain-end plate off, then try the capped plate.
+   5. A Triple 2x Wide 2x2 Corner Connector peg out of a beam (the Clawbot's weak spot in the model).
+   6. A Rubber Shaft Collar slid along a square shaft.
+   7. Prying: a 2x8 beam on one pin, weight hung 50 mm out, add weight until it pops.
+   8. A standoff pin end out of a beam.
+   9. Stiffness: a 2x8 and a 2x16 beam clamped at one end, 100 g at the free end, deflection measured (sets the section factor).
+   10. Weights: Brain, battery, Smart Motor, 2x8 beam, 4x8 plate, wheel with tire.
+   11. End to end: drop a real Clawbot flat from 5, 15, 30 and 50 cm on a hard floor and note what comes loose, to compare with the app.
+2. **Flop pries two pins loose at 30 cm flat** with today's assumed values: two 1x1 pins near its Brain (nothing comes off). The Clawbot is intact at 15 and 30 cm and Flop at 15 cm. Recheck once the measurements above are in; if real pins hold about what the table says, the model overstates the prying on those pins.
+3. **The speed and gravity rules under load:** with only "Simulate gravity" on, a motor lowering an arm runs 20% faster than its top speed; drive wheels carry 62% of the robot's weight as rolling load even off the floor; turning gravity on adds 25% to weight. None have a stated reason.
+4. **Only the first impact is worked out.** A corner landing that then slaps down flat underrates the slap; bounces and tumbles don't break anything more.
+5. **A drop runs well below real time.** The frame with the impact holds the screen still for about 1 s on the Clawbot and 1.2 s on Flop (the solve, the split into pieces and setting up their collisions). After it, Flop's frames take about 65 ms each, because Rapier gets 12 passes per step during a drop so loose pieces don't sink into each other. Fewer passes (8) would be quicker, with a little more sinking in.
+6. **Loose pieces can still sit 3–4 mm into each other after a hard drop.** Each part collides as a simplified outline that fills in its holes and gaps, so touching parts look slightly embedded. Closer outlines (split into a few convex pieces) would fix it at some cost.
+

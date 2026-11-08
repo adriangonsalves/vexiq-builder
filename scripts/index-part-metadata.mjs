@@ -476,6 +476,55 @@ function inferGearSpecs(part) {
   };
 }
 
+const PIN_BLOCK_RADIUS_MM = 2.8; // wider than this about the pin's axis, a ring can't pass through a pin hole
+
+/**
+ * Where a connector pin or standoff can't slide through a hole (play mode's drop test, openspec
+ * drop-load-network): `blockersZ`, the z spans of its mesh wider than PIN_BLOCK_RADIUS_MM about its
+ * axis (a 1x1's middle shoulder, a 0x2's end cap, a standoff's body), and `tipsZ`, its two ends.
+ */
+function addPinBlockers(part, fastenerSpecs, rawRaycast) {
+  if (!fastenerSpecs || (fastenerSpecs.fastenerType !== 'connector_pin' && fastenerSpecs.fastenerType !== 'standoff')) return;
+  const raycast = rawRaycast();
+  const reach = Math.max(-part.bbox.min[0], part.bbox.max[0], -part.bbox.min[1], part.bbox.max[1]) + 2;
+  const STEP = 0.2;
+  const [zMin, zMax] = [part.bbox.min[2], part.bbox.max[2]];
+  const blockers = [];
+  for (let z = zMin + STEP / 2; z < zMax; z += STEP) {
+    // Widest of four sides: a pin's split leaves gaps one side, a cap is round all the way
+    let r = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const hit = raycast([dx * reach, dy * reach, z], [-dx, -dy, 0]);
+      if (hit !== null) r = Math.max(r, reach - hit);
+    }
+    if (r <= PIN_BLOCK_RADIUS_MM) continue;
+    const last = blockers[blockers.length - 1];
+    if (last && z - last[1] <= STEP * 1.5) last[1] = z;
+    else blockers.push([z, z]);
+  }
+  fastenerSpecs.blockersZ = blockers.map(([lo, hi]) => [Number((lo - STEP / 2).toFixed(2)), Number((hi + STEP / 2).toFixed(2))]);
+  fastenerSpecs.tipsZ = [Number(zMin.toFixed(2)), Number(zMax.toFixed(2))];
+}
+
+/** A peg's span never reaches past its own part (a few pins' cylinder groups ran far off the mesh). */
+function clampPegSpans(part, ports) {
+  if (part.category !== 'Pins & Standoffs') return;
+  for (const p of ports) {
+    if (p.type !== 'pin_peg' || !p.spanMm) continue;
+    const ts = [];
+    for (const x of [part.bbox.min[0], part.bbox.max[0]])
+      for (const y of [part.bbox.min[1], part.bbox.max[1]])
+        for (const z of [part.bbox.min[2], part.bbox.max[2]]) ts.push(x * p.axis[0] + y * p.axis[1] + z * p.axis[2]);
+    const lo = Math.max(p.spanMm[0], Math.min(...ts));
+    const hi = Math.min(p.spanMm[1], Math.max(...ts));
+    if (lo === p.spanMm[0] && hi === p.spanMm[1]) continue;
+    // The point sits on the axis at the middle of the span
+    const offAxis = p.origin.map((v, i) => v - (p.origin[0] * p.axis[0] + p.origin[1] * p.axis[1] + p.origin[2] * p.axis[2]) * p.axis[i]);
+    p.spanMm = [Number(lo.toFixed(3)), Number(hi.toFixed(3))];
+    p.origin = offAxis.map((v, i) => Number((v + ((lo + hi) / 2) * p.axis[i]).toFixed(3)));
+  }
+}
+
 /**
  * Infers fastener / standoff / shaft shoulder & engagement metadata.
  */
@@ -1253,6 +1302,8 @@ async function main() {
     const originType = classifyOriginType(part);
     const gearSpecs = inferGearSpecs(part);
     const fastenerSpecs = inferFastenerSpecs(part);
+    addPinBlockers(part, fastenerSpecs, rawRaycast);
+    clampPegSpans(part, ports);
     const mountingRules = classifyMountingRules(part);
     const { rackSpecs, hubSpecs } = measureShapes(part, ports, gearSpecs, fastenerSpecs, rawCylinders, unmeasured);
     // 7. Shafts: their axis, ends, cross-section and cap or stop ring

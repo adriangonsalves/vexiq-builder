@@ -16,6 +16,7 @@
  * are solid posts, standoffs, and so collide), tracks: [{ links (in order round
  * the loop, or null), linkIds, grippers: [[gripperId, linkId]], frame: bodyId, drive: { body, axis, teeth } | null }], warnings: [{ partId, text }] }.
  */
+import { gapStrengths, jointSpec, seatGrip, snapGrip } from './fastenerStrength.js';
 
 export const SQUARE_FIT_DEG = 45;
 const LINE_MM = 0.5; // two joins this close to one line count as the same line
@@ -69,6 +70,7 @@ export function buildBodyGraph(inputs) {
   const misfit = new Set(); // "shaftGroupIndex|partId" left out
   const shaftOf = new Map(); // partId -> group index
   const motorSockets = []; // { motor, group }
+  const shaftPairs = []; // [[shaftId, memberId]]
   groups.forEach((g, gi) => {
     for (const m of g.members) {
       if (m.offDeg > SQUARE_FIT_DEG) {
@@ -81,29 +83,87 @@ export function buildBodyGraph(inputs) {
         continue;
       }
       uf.union(g.shaftIds[0], m.id);
+      if (g.shaftIds[0] !== m.id) shaftPairs.push([g.shaftIds[0], m.id]);
       shaftOf.set(m.id, gi);
     }
   });
 
-  // Joins on a line between two parts: pins and standoffs join every part they sit in
+  // Joins on a line between two parts: pins and standoffs join every part they sit in. `joints` are the
+  // same joins part by part with what holds them (openspec drop-load-network), for the drop test
   const joins = []; // { a, b, axis, point }
-  const pinParts = new Map(); // pin -> [{ part, axis, point }]
+  const pinParts = new Map(); // pin -> [{ part, axis, point, depthMm }]
+  const joints = []; // { id, kind, a, b, axis, point, pinIds, ...jointSpec }
+  const addJoint = (kind, a, b, axis, point, extra = {}) => {
+    if (!a || !b || a === b) return;
+    const { pullN, depthMm, travelMm, ...rest } = extra;
+    joints.push({ id: `j${joints.length}`, kind, a, b, axis, point, pinIds: [], ...jointSpec(kind, { pullN, depthMm, travelMm }), ...(depthMm !== undefined ? { depthMm } : {}), ...rest });
+  };
   for (const s of seated) {
     if (stillSet.has(s.insert) || stillSet.has(s.opening)) continue;
     if (pinLike.has(s.insert) || pinLike.has(s.opening)) {
       const pin = pinLike.has(s.insert) ? s.insert : s.opening;
       const other = pin === s.insert ? s.opening : s.insert;
       if (!pinParts.has(pin)) pinParts.set(pin, []);
-      pinParts.get(pin).push({ part: other, axis: s.axis, point: s.point });
+      pinParts.get(pin).push({ part: other, axis: s.axis, point: s.point, depthMm: s.overlapMm ?? 5 });
       continue;
     }
     // A square shaft in an opening that fits it is already one body; one that doesn't fit turns
     const gi = groups.findIndex((g) => g.shaftIds.includes(s.insert));
     const fitted = gi >= 0 && shaftOf.get(s.opening) === gi;
     const hubbed = gi >= 0 && motorSockets.some((m) => m.motor === s.opening && m.group === gi);
+    const shaftLike = gi >= 0 || s.insertKind === 'shaft';
+    if (s.openingKind === 'collar_hole') {
+      // A collar comes off only by sliding the shaft inside it, and any shaft past it, off the shaft's nearer end
+      const ends = byId.get(s.insert)?.shaftEnds;
+      const t = dot(s.point, s.axis);
+      const rest = ends ? Math.min(...ends.map((e) => Math.abs(dot(e, s.axis) - t))) : 0;
+      addJoint('collar', s.insert, s.opening, s.axis, s.point, { travelMm: Math.max(1, s.overlapMm ?? 5, rest) });
+    }
+    else if (hubbed) addJoint('socket', s.insert, s.opening, s.axis, s.point);
+    else if (fitted) addJoint('square', s.insert, s.opening, s.axis, s.point);
+    else if (shaftLike) addJoint('bearing', s.insert, s.opening, s.axis, s.point);
+    else {
+      // An integral peg (a corner connector's) in a hole: its grip there plus its snap ridge
+      const weak = Boolean(byId.get(s.insert)?.weak);
+      const depthMm = s.overlapMm ?? 5;
+      // Its axis points the way the peg sticks out of its part, so the hole's part moving that way is a pull
+      const pull = seatGrip({ depthMm, peg: true, weak }) + snapGrip({ peg: true, weak });
+      if (s.out) addJoint('peg', s.insert, s.opening, s.out, s.point, { pullN: pull, depthMm });
+      else addJoint('peg', s.insert, s.opening, s.axis, s.point, { pullN: pull, depthMm, orient: 'centres' });
+    }
     if (fitted || hubbed) continue;
     joins.push({ a: s.insert, b: s.opening, axis: s.axis, point: s.point });
   }
+  /**
+   * One joint for each gap between neighbouring parts along a pin or pin stack, holding what the
+   * slide-off rule says: the parts on one side slide off their end, past no shoulder, cap or standoff body.
+   */
+  const addPinJoints = (pins, holds) => {
+    const first = pins.map((id) => byId.get(id)).find((p) => p?.pin) || null;
+    const axis = first?.pin?.zAxis || holds[0].axis;
+    const tOf = (point) => dot(point, axis);
+    const blockers = [];
+    for (const id of pins) {
+      const pin = byId.get(id)?.pin;
+      if (!pin) continue;
+      const base = dot(pin.origin, axis);
+      const sign = Math.sign(dot(pin.zAxis, axis)) || 1;
+      for (const [lo, hi] of pin.blockersZ || []) {
+        const ends = [base + sign * lo, base + sign * hi];
+        blockers.push([Math.min(...ends), Math.max(...ends)]);
+      }
+    }
+    const weak = pins.some((id) => byId.get(id)?.weak);
+    const seats = holds.map((h) => ({ part: h.part, t: tOf(h.point), depthMm: h.depthMm, point: h.point }));
+    const pointOf = new Map();
+    for (const s of seats) if (!pointOf.has(s.part)) pointOf.set(s.part, s.point);
+    for (const gap of gapStrengths({ seats, blockers, weak })) {
+      const pa = pointOf.get(gap.a);
+      const pb = pointOf.get(gap.b);
+      addJoint('pin', gap.a, gap.b, axis, pa.map((v, k) => (v + pb[k]) / 2), { pullN: gap.pullN, depthMm: gap.depthMm, way: gap.way });
+      joints[joints.length - 1].pinIds = [...pins];
+    }
+  };
   // Pins plugged into pins (a standoff stack) count as one pin
   const pinUf = unionFind([...pinLike]);
   for (const s of seated) if (pinLike.has(s.insert) && pinLike.has(s.opening)) pinUf.union(s.insert, s.opening);
@@ -125,8 +185,33 @@ export function buildBodyGraph(inputs) {
     }
     for (const pin of pins) pinHome.set(pin, partsHeld[0] || null);
     if (!partsHeld.length) for (const pin of pins) warnings.push({ partId: pin, text: `${labelOf(pin)} isn't in any part, so it stays still.` });
+    else addPinJoints(pins, holds);
   }
-  for (const [battery, brain] of bays) uf.union(brain, battery);
+  // The bays: a Gen 1 battery in its brain and a tire on its hub, each held all round as one piece
+  for (const [battery, brain] of bays) {
+    uf.union(brain, battery);
+    addJoint(/Tire/i.test(byId.get(battery)?.name || '') ? 'tire' : 'bay', battery, brain, null, null);
+  }
+  // Parts on one shaft press on their neighbours along it (a wheel on a spacer on a plate), and a
+  // capped or motor shaft's cap or stop ring presses on the part it rests against
+  groups.forEach((g) => {
+    const axis = g.axis;
+    const items = [];
+    for (const s of seated) {
+      if (!g.shaftIds.includes(s.insert) || stillSet.has(s.opening)) continue;
+      items.push({ part: s.opening, t: dot(s.point, axis), point: s.point });
+    }
+    for (const id of g.shaftIds) {
+      const stop = byId.get(id)?.shaftStop;
+      if (stop) items.push({ part: id, t: dot(stop, axis), point: stop });
+    }
+    items.sort((x, y) => x.t - y.t || (x.part < y.part ? -1 : 1));
+    for (let i = 0; i + 1 < items.length; i++) {
+      const [x, y] = [items[i], items[i + 1]];
+      if (x.part === y.part) continue;
+      addJoint('push', x.part, y.part, axis, x.point.map((v, k) => (v + y.point[k]) / 2));
+    }
+  });
 
   // Merge bodies joined on two or more lines, until nothing changes
   for (let changed = true; changed; ) {
@@ -365,6 +450,10 @@ export function buildBodyGraph(inputs) {
     sliders,
     hinges,
     hingePairs,
+    joints: joints.map((j) => ({ ...j, bodyA: bodyOf(j.a), bodyB: bodyOf(j.b) })),
+    partInfo: Object.fromEntries(parts.map((p) => [p.id, { label: p.label, name: p.name, partNumber: p.partNumber, category: p.category, box: p.box, weak: Boolean(p.weak), fastener: p.fastener, motor: p.motor, chain: p.chain }])),
+    bays,
+    shaftPairs,
     links,
     motors,
     still,

@@ -1043,6 +1043,45 @@ export function jointGraph(state, { pinnedOnly = false } = {}) {
   return graphFromJoints(findJoints(state), { pinnedOnly });
 }
 
+const playVec = (v) => v.toArray().map((x) => Math.round(x * 1000) / 1000);
+
+/**
+ * What Play mode's drop test (openspec drop-load-network) needs about one part, beyond how it moves:
+ * its name, part number, category and box (in its own frame, mm); `weak` for "(Weak)" pins and
+ * standoffs; for a pin or standoff, `pin`: where it is and points (`origin`, `zAxis`, world) and the
+ * spans along its own z that no part can slide past (`blockersZ`: shoulder, cap, standoff body) and its
+ * two ends (`tipsZ`); for a shaft, `shaftEnds` (world); for a capped or motor shaft, `shaftStop`: the world
+ * point of its cap or stop ring.
+ */
+function dropInfo(inst, part, isFastener) {
+  const mat = buildWorldMatrix(inst.position, inst.rotation);
+  const specs = part.fastenerSpecs;
+  const info = {
+    name: part.name,
+    partNumber: part.partNumber,
+    category: part.category,
+    box: part.bbox ? { min: [...part.bbox.min], max: [...part.bbox.max] } : null,
+    weak: /\(Weak\)/i.test(part.name)
+  };
+  if (isFastener && specs?.blockersZ) {
+    info.pin = {
+      origin: playVec(new THREE.Vector3().setFromMatrixPosition(mat)),
+      zAxis: playVec(new THREE.Vector3(0, 0, 1).transformDirection(mat)),
+      blockersZ: specs.blockersZ,
+      tipsZ: specs.tipsZ
+    };
+  }
+  // A shaft's two ends (world), for how far a collar can slide along it before it comes off
+  const shaftPort = (part.ports || []).find((p) => p.type === 'shaft' && p.ends);
+  if (shaftPort) info.shaftEnds = shaftPort.ends.map((e) => playVec(new THREE.Vector3(...e).applyMatrix4(mat)));
+  const stop = (part.ports || []).find((p) => p.type === 'shaft' && p.stop)?.stop;
+  if (stop) {
+    const z = (stop.spanMm[0] + stop.spanMm[1]) / 2;
+    info.shaftStop = playVec(new THREE.Vector3(0, 0, z).applyMatrix4(mat));
+  }
+  return info;
+}
+
 /**
  * What Play mode (openspec play-mode) needs to make the build move, as plain data for
  * src/sim/bodyGraph.js: every visible part, the seated pins, pegs and shafts with their lines, the
@@ -1066,17 +1105,33 @@ export function playInputs(state, { braceTolerance = true } = {}) {
       chain: isChainPart(part) && inChain.has(inst.instanceId),
       motor: Boolean(part.hubSpecs),
       gear: part.gearSpecs ? { teeth: part.gearSpecs.teeth, type: part.gearSpecs.gearType } : null,
-      rack: Boolean(part.rackSpecs?.measured)
+      rack: Boolean(part.rackSpecs?.measured),
+      ...dropInfo(inst, part, fastenerIds.has(inst.instanceId))
     });
   }
-  const vec = (v) => v.toArray().map((x) => Math.round(x * 1000) / 1000);
+  const vec = playVec;
+  // Which way a peg or pin end points out of its own part (towards its tip), when only one end sticks out
+  // (a peg out both sides: the side its hole is on)
+  const outOf = (f, opening) => {
+    if (f?.kind !== 'pin' || !f.start || !f.end) return null;
+    let d = null;
+    if (f.freeAtStart !== f.freeAtEnd) d = f.freeAtEnd ? f.end.clone().sub(f.start) : f.start.clone().sub(f.end);
+    else if (opening?.origin && f.origin) {
+      const axis = f.end.clone().sub(f.start).normalize();
+      const along = opening.origin.clone().sub(f.origin).dot(axis);
+      if (Math.abs(along) > 0.5) d = axis.multiplyScalar(Math.sign(along));
+    }
+    return d && d.lengthSq() > 1e-9 ? vec(d.normalize()) : null;
+  };
   const seated = found.seatedPairs.map((p) => ({
     insert: p.insertOwner,
     opening: p.openingOwner,
     insertKind: p.insert.kind,
     openingKind: p.opening.kind,
     axis: vec(p.insert.axis),
-    point: vec(p.opening.origin)
+    point: vec(p.opening.origin),
+    overlapMm: Math.round((p.overlapMm ?? 5.5) * 100) / 100,
+    out: outOf(p.insert, p.opening)
   }));
   // Diagonal braces across non-Pythagorean pitch triangles (e.g. Flop's 1x18 beams at 6.5x2.5 = 6.964P
   // vs 7P) flex a pin by ~0.53 mm inside the hole; in play mode count parallel overlapping pins within 0.75 mm as seated.
@@ -1096,7 +1151,9 @@ export function playInputs(state, { braceTolerance = true } = {}) {
             insertKind: pair.insert.kind,
             openingKind: pair.opening.kind,
             axis: vec(pair.insert.axis),
-            point: vec(pair.opening.origin)
+            point: vec(pair.opening.origin),
+            overlapMm: Math.round((pair.overlapMm ?? 5.5) * 100) / 100,
+            out: outOf(pair.insert, pair.opening)
           });
         }
       }

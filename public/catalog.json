@@ -235,7 +235,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 6.35,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 18.63
+      "totalLengthMm": 18.63,
+      "blockersZ": [
+        [
+          -7.29,
+          0.91
+        ]
+      ],
+      "tipsZ": [
+        -12.49,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -399,7 +409,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 6.35,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 18.63
+      "totalLengthMm": 18.63,
+      "blockersZ": [
+        [
+          -7.29,
+          0.91
+        ]
+      ],
+      "tipsZ": [
+        -12.49,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -419,7 +439,7 @@
         "origin": [
           0,
           0,
-          -1.757
+          -1.8
         ],
         "axis": [
           0,
@@ -428,7 +448,7 @@
         ],
         "spanMm": [
           -9.739,
-          6.225
+          6.14
         ],
         "verified": true,
         "shape": "round",
@@ -537,7 +557,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 0,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 11.6
+      "totalLengthMm": 11.6,
+      "blockersZ": [
+        [
+          -5.46,
+          0.94
+        ]
+      ],
+      "tipsZ": [
+        -5.46,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -825,7 +855,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 3.17,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 15.45
+      "totalLengthMm": 15.45,
+      "blockersZ": [
+        [
+          -4.11,
+          0.89
+        ]
+      ],
+      "tipsZ": [
+        -9.31,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -1112,12 +1152,12 @@
     },
     "ports": [
       {
-        "portId": "peg.+z.0_0_-1",
+        "portId": "peg.+z.0_0_1",
         "type": "pin_peg",
         "origin": [
           0,
           0,
-          -3.382
+          2.275
         ],
         "axis": [
           0,
@@ -1125,7 +1165,7 @@
           1
         ],
         "spanMm": [
-          -12.203,
+          -0.89,
           5.439
         ],
         "verified": true,
@@ -1135,6 +1175,7 @@
         ],
         "kind": "peg",
         "aliases": [
+          "peg.+z.0_0_-1",
           "peg_1"
         ]
       }
@@ -1235,7 +1276,17 @@
       "sidePosZ_mm": 6.14,
       "sideNegZ_pitch": 0.5,
       "sidePosZ_pitch": 0.5,
-      "totalLengthMm": 12.4
+      "totalLengthMm": 12.4,
+      "blockersZ": [
+        [
+          -6.26,
+          -5.46
+        ]
+      ],
+      "tipsZ": [
+        -6.26,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -1250,12 +1301,12 @@
     },
     "ports": [
       {
-        "portId": "peg.thru.0_0_-1",
+        "portId": "peg.thru.0_0_0",
         "type": "pin_peg",
         "origin": [
           0,
           0,
-          -4.501
+          -0.41
         ],
         "axis": [
           0,
@@ -1263,7 +1314,7 @@
           1
         ],
         "spanMm": [
-          -14.441,
+          -6.26,
           5.439
         ],
         "verified": true,
@@ -1274,6 +1325,7 @@
         ],
         "kind": "peg",
         "aliases": [
+          "peg.thru.0_0_-1",
           "peg_1"
         ]
       }
@@ -1374,7 +1426,17 @@
       "sidePosZ_mm": 6.14,
       "sideNegZ_pitch": 0.7,
       "sidePosZ_pitch": 0.5,
-      "totalLengthMm": 15.28
+      "totalLengthMm": 15.28,
+      "blockersZ": [
+        [
+          -7.14,
+          -5.54
+        ]
+      ],
+      "tipsZ": [
+        -9.14,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -1389,12 +1451,12 @@
     },
     "ports": [
       {
-        "portId": "peg.+z.0_0_-78739",
+        "portId": "peg.+z.0_0_-1",
         "type": "pin_peg",
         "origin": [
           0,
           0,
-          -249997.28
+          -1.851
         ],
         "axis": [
           0,
@@ -1402,7 +1464,7 @@
           1
         ],
         "spanMm": [
-          -500000,
+          -9.14,
           5.439
         ],
         "verified": true,
@@ -1412,6 +1474,7 @@
         ],
         "kind": "peg",
         "aliases": [
+          "peg.+z.0_0_-78739",
           "peg_1"
         ]
       }
@@ -1527,7 +1590,7 @@
           1
         ],
         "spanMm": [
-          -6.261,
+          -6.26,
           6.2
         ],
         "verified": true,
@@ -1666,7 +1729,7 @@
           1
         ],
         "spanMm": [
-          -6.261,
+          -6.26,
           6.2
         ],
         "verified": true,
@@ -1790,7 +1853,17 @@
       "sidePosZ_mm": 6.14,
       "sideNegZ_pitch": 1,
       "sidePosZ_pitch": 0.5,
-      "totalLengthMm": 18.75
+      "totalLengthMm": 18.75,
+      "blockersZ": [
+        [
+          -12.61,
+          -11.81
+        ]
+      ],
+      "tipsZ": [
+        -12.61,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -1805,12 +1878,12 @@
     },
     "ports": [
       {
-        "portId": "peg.thru.0_0_-2",
+        "portId": "peg.thru.0_0_-1",
         "type": "pin_peg",
         "origin": [
           0,
           0,
-          -7.676
+          -3.585
         ],
         "axis": [
           0,
@@ -1818,7 +1891,7 @@
           1
         ],
         "spanMm": [
-          -20.791,
+          -12.61,
           5.439
         ],
         "verified": true,
@@ -1829,6 +1902,7 @@
         ],
         "kind": "peg",
         "aliases": [
+          "peg.thru.0_0_-2",
           "peg_1"
         ]
       }
@@ -1936,7 +2010,7 @@
         "origin": [
           0,
           0,
-          -3.206
+          -3.205
         ],
         "axis": [
           0,
@@ -1944,7 +2018,7 @@
           1
         ],
         "spanMm": [
-          -12.611,
+          -12.61,
           6.2
         ],
         "verified": true,
@@ -2062,7 +2136,7 @@
         "origin": [
           0,
           0,
-          -3.206
+          -3.205
         ],
         "axis": [
           0,
@@ -2070,7 +2144,7 @@
           1
         ],
         "spanMm": [
-          -12.611,
+          -12.61,
           6.2
         ],
         "verified": true,
@@ -2502,7 +2576,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 19.05,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 31.33
+      "totalLengthMm": 31.33,
+      "blockersZ": [
+        [
+          -19.99,
+          0.81
+        ]
+      ],
+      "tipsZ": [
+        -25.19,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -3853,7 +3937,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 12.7,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 24.98
+      "totalLengthMm": 24.98,
+      "blockersZ": [
+        [
+          -13.64,
+          0.96
+        ]
+      ],
+      "tipsZ": [
+        -18.84,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -4017,7 +4111,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 12.7,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 24.98
+      "totalLengthMm": 24.98,
+      "blockersZ": [
+        [
+          -13.64,
+          0.96
+        ]
+      ],
+      "tipsZ": [
+        -18.84,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -4037,7 +4141,7 @@
         "origin": [
           0,
           0,
-          -4.932
+          -4.974
         ],
         "axis": [
           0,
@@ -4046,7 +4150,7 @@
         ],
         "spanMm": [
           -16.089,
-          6.225
+          6.14
         ],
         "verified": true,
         "shape": "round",
@@ -5427,7 +5531,17 @@
       "sidePosZ_mm": 6.14,
       "sideNegZ_pitch": 0.5,
       "sidePosZ_pitch": 0.5,
-      "totalLengthMm": 12.28
+      "totalLengthMm": 12.28,
+      "blockersZ": [
+        [
+          -0.94,
+          0.86
+        ]
+      ],
+      "tipsZ": [
+        -6.14,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -5553,7 +5667,17 @@
       "sidePosZ_mm": 6.14,
       "sideNegZ_pitch": 0.5,
       "sidePosZ_pitch": 0.5,
-      "totalLengthMm": 12.28
+      "totalLengthMm": 12.28,
+      "blockersZ": [
+        [
+          -0.94,
+          0.86
+        ]
+      ],
+      "tipsZ": [
+        -6.14,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -5573,7 +5697,7 @@
         "origin": [
           0,
           0,
-          3.092
+          3.07
         ],
         "axis": [
           0,
@@ -5582,7 +5706,7 @@
         ],
         "spanMm": [
           0,
-          6.184
+          6.14
         ],
         "verified": true,
         "shape": "round",
@@ -6742,7 +6866,17 @@
       "sidePosZ_mm": 6.14,
       "sideNegZ_pitch": 1,
       "sidePosZ_pitch": 0.5,
-      "totalLengthMm": 18.63
+      "totalLengthMm": 18.63,
+      "blockersZ": [
+        [
+          -7.29,
+          -5.49
+        ]
+      ],
+      "tipsZ": [
+        -12.49,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -6762,7 +6896,7 @@
         "origin": [
           0,
           0,
-          -1.849
+          -2.825
         ],
         "axis": [
           0,
@@ -6771,7 +6905,7 @@
         ],
         "spanMm": [
           -11.789,
-          8.091
+          6.14
         ],
         "verified": true,
         "shape": "round",
@@ -6907,7 +7041,17 @@
       "sidePosZ_mm": 6.14,
       "sideNegZ_pitch": 1,
       "sidePosZ_pitch": 0.5,
-      "totalLengthMm": 18.63
+      "totalLengthMm": 18.63,
+      "blockersZ": [
+        [
+          -0.89,
+          0.91
+        ]
+      ],
+      "tipsZ": [
+        -12.49,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -6922,12 +7066,12 @@
     },
     "ports": [
       {
-        "portId": "peg.thru.0_0_-78739",
+        "portId": "peg.thru.0_0_-1",
         "type": "pin_peg",
         "origin": [
           0,
           0,
-          -249996.888
+          -3.175
         ],
         "axis": [
           0,
@@ -6935,8 +7079,8 @@
           1
         ],
         "spanMm": [
-          -500000,
-          6.225
+          -12.49,
+          6.14
         ],
         "verified": true,
         "shape": "round",
@@ -6946,6 +7090,7 @@
         ],
         "kind": "peg",
         "aliases": [
+          "peg.thru.0_0_-78739",
           "peg_1"
         ]
       }
@@ -7066,7 +7211,7 @@
         "origin": [
           0,
           0,
-          -4.565
+          -3.175
         ],
         "axis": [
           0,
@@ -7074,7 +7219,7 @@
           1
         ],
         "spanMm": [
-          -15.33,
+          -12.55,
           6.2
         ],
         "verified": true,
@@ -29816,7 +29961,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 25.4,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 37.68
+      "totalLengthMm": 37.68,
+      "blockersZ": [
+        [
+          -26.34,
+          0.86
+        ]
+      ],
+      "tipsZ": [
+        -31.54,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -29980,7 +30135,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 25.4,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 37.68
+      "totalLengthMm": 37.68,
+      "blockersZ": [
+        [
+          -26.34,
+          0.86
+        ]
+      ],
+      "tipsZ": [
+        -31.54,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -30000,7 +30165,7 @@
         "origin": [
           0,
           0,
-          -11.282
+          -11.325
         ],
         "axis": [
           0,
@@ -30009,7 +30174,7 @@
         ],
         "spanMm": [
           -28.789,
-          6.225
+          6.14
         ],
         "verified": true,
         "shape": "round",
@@ -44916,7 +45081,17 @@
       "sidePosZ_mm": 6.14,
       "sideNegZ_pitch": 1.5,
       "sidePosZ_pitch": 0.5,
-      "totalLengthMm": 24.98
+      "totalLengthMm": 24.98,
+      "blockersZ": [
+        [
+          -7.24,
+          -5.44
+        ]
+      ],
+      "tipsZ": [
+        -18.84,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -87564,7 +87739,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 38.1,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 50.38
+      "totalLengthMm": 50.38,
+      "blockersZ": [
+        [
+          -39.04,
+          0.96
+        ]
+      ],
+      "tipsZ": [
+        -44.24,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -87584,7 +87769,7 @@
         "origin": [
           0,
           0,
-          -18.675
+          -18.7
         ],
         "axis": [
           0,
@@ -87593,7 +87778,7 @@
         ],
         "spanMm": [
           -43.539,
-          6.189
+          6.14
         ],
         "verified": true,
         "shape": "round",
@@ -90229,7 +90414,17 @@
       "sidePosZ_mm": 6.14,
       "sideNegZ_pitch": 2.5,
       "sidePosZ_pitch": 0.5,
-      "totalLengthMm": 37.68
+      "totalLengthMm": 37.68,
+      "blockersZ": [
+        [
+          -13.54,
+          -11.74
+        ]
+      ],
+      "tipsZ": [
+        -31.54,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -90249,7 +90444,7 @@
         "origin": [
           0,
           0,
-          -14.026
+          -13.05
         ],
         "axis": [
           0,
@@ -90257,7 +90452,7 @@
           1
         ],
         "spanMm": [
-          -33.491,
+          -31.54,
           5.439
         ],
         "verified": true,
@@ -124848,7 +125043,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 50.8,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 63.08
+      "totalLengthMm": 63.08,
+      "blockersZ": [
+        [
+          -51.74,
+          0.86
+        ]
+      ],
+      "tipsZ": [
+        -56.94,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -158803,7 +159008,17 @@
       "shoulderPosZ": 5.76,
       "bodyLengthMm": 0,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 8
+      "totalLengthMm": 8,
+      "blockersZ": [
+        [
+          4.7,
+          11.1
+        ]
+      ],
+      "tipsZ": [
+        3.9,
+        11.9
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -159457,7 +159672,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 76.2,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 88.48
+      "totalLengthMm": 88.48,
+      "blockersZ": [
+        [
+          -77.14,
+          0.86
+        ]
+      ],
+      "tipsZ": [
+        -82.34,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -177093,7 +177318,17 @@
       "shoulderPosZ": 0,
       "bodyLengthMm": 101.6,
       "pinLengthMm": 6.14,
-      "totalLengthMm": 113.88
+      "totalLengthMm": 113.88,
+      "blockersZ": [
+        [
+          -102.54,
+          0.86
+        ]
+      ],
+      "tipsZ": [
+        -107.74,
+        6.14
+      ]
     },
     "mountingRules": {
       "massClass": "light",
@@ -177113,7 +177348,7 @@
         "origin": [
           0,
           0,
-          -51.172
+          -51.15
         ],
         "axis": [
           0,
@@ -177121,7 +177356,7 @@
           1
         ],
         "spanMm": [
-          -107.784,
+          -107.74,
           5.439
         ],
         "verified": true,
@@ -217802,10 +218037,10 @@
     },
     "ports": [
       {
-        "portId": "peg.thru.-78738_0_0",
+        "portId": "peg.thru.0_0_0",
         "type": "pin_peg",
         "origin": [
-          -249994.095,
+          0.625,
           0,
           0
         ],
@@ -217815,8 +218050,8 @@
           0
         ],
         "spanMm": [
-          -500000,
-          11.811
+          -10.56,
+          11.81
         ],
         "verified": true,
         "shape": "round",
@@ -217826,6 +218061,7 @@
         ],
         "kind": "peg",
         "aliases": [
+          "peg.thru.-78738_0_0",
           "peg_1"
         ]
       },
@@ -224179,10 +224415,10 @@
         ]
       },
       {
-        "portId": "peg.thru.-78738_0_0",
+        "portId": "peg.thru.1_0_0",
         "type": "pin_peg",
         "origin": [
-          -249994.095,
+          3.905,
           0,
           0
         ],
@@ -224192,8 +224428,8 @@
           0
         ],
         "spanMm": [
-          -500000,
-          11.811
+          -4,
+          11.81
         ],
         "verified": true,
         "shape": "round",
@@ -224203,6 +224439,7 @@
         ],
         "kind": "peg",
         "aliases": [
+          "peg.thru.-78738_0_0",
           "peg_2"
         ]
       },
@@ -238065,10 +238302,10 @@
     },
     "ports": [
       {
-        "portId": "peg.thru.-78739_0_0",
+        "portId": "peg.thru.1_0_0",
         "type": "pin_peg",
         "origin": [
-          -249996.38,
+          1.619,
           0,
           0
         ],
@@ -238078,7 +238315,7 @@
           0
         ],
         "spanMm": [
-          -500000,
+          -4,
           7.239
         ],
         "verified": true,
@@ -238089,6 +238326,7 @@
         ],
         "kind": "peg",
         "aliases": [
+          "peg.thru.-78739_0_0",
           "peg_1"
         ]
       },
@@ -270480,8 +270718,8 @@
           0
         ],
         "spanMm": [
-          -500000,
-          500000
+          -11.81,
+          11.81
         ],
         "verified": true,
         "shape": "round",

@@ -50,19 +50,33 @@ export function createPlayRunner(graph, instances, engine) {
   const byId = new Map(instances.map((i) => [i.instanceId, i]));
   const looseSet = new Set(graph.loose || []);
   const moving = []; // { id, body, start }
+  const allParts = []; // { id, body, start } including fixed chassis parts when a drop test moves the whole robot
   for (const b of graph.bodies) {
-    if (graph.fixed.includes(b.id) && !(graph.sliders || []).includes(b.id) && !looseSet.has(b.id)) continue;
+    const isFixed = graph.fixed.includes(b.id) && !(graph.sliders || []).includes(b.id) && !looseSet.has(b.id);
     for (const id of b.parts) {
       const inst = byId.get(id);
-      if (inst) moving.push({ id, body: b.id, start: startMatrix(inst) });
+      if (!inst) continue;
+      const entry = { id, body: b.id, start: startMatrix(inst) };
+      allParts.push(entry);
+      if (!isFixed) moving.push(entry);
+    }
+  }
+  const trackPartIds = new Set((graph.tracks || []).flatMap((t) => [...t.linkIds, ...t.grippers.map(([g]) => g)]));
+  if (graph.ground) {
+    for (const id of graph.still || []) {
+      if (trackPartIds.has(id)) continue;
+      const inst = byId.get(id);
+      if (inst) allParts.push({ id, body: graph.ground, start: startMatrix(inst) });
     }
   }
   const fixedOnly = (body) => graph.fixed.includes(body) && !(graph.sliders || []).includes(body) && !looseSet.has(body);
   const tracks = (graph.tracks || [])
     .filter((t) => t.frame && (t.drive || !fixedOnly(t.frame)))
     .map((t) => trackState(t, byId));
+  const allTracks = (graph.tracks || []).filter((t) => t.frame).map((t) => trackState(t, byId));
   const throttles = new Map();
   let last = null;
+  let wasDropping = false;
   const m = new THREE.Matrix4();
   const link = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -80,18 +94,34 @@ export function createPlayRunner(graph, instances, engine) {
     setSimulateGravity(on) {
       engine.setSimulateGravity?.(on);
     },
+    drop(heightMeters, landing = 'flat') {
+      return engine.drop?.(heightMeters, landing) || null;
+    },
+    resetDrop() {
+      engine.resetDrop?.();
+    },
+    setDropTimeScale(scale) {
+      engine.setDropTimeScale?.(scale);
+    },
+    dropReport() {
+      return engine.dropReport?.() || null;
+    },
     frame(meshMap, now = performance.now()) {
       const dt = last === null ? 0 : Math.min(MAX_DT, (now - last) / 1000);
       last = now;
       if (dt > 0) engine.step(dt, throttles);
       const deltas = engine.deltas();
-      for (const p of moving) {
+      const partDeltas = engine.partDeltas?.();
+      const dropping = Boolean(engine.dropReport?.()?.active);
+      const list = dropping || wasDropping || partDeltas ? allParts : moving;
+      wasDropping = dropping;
+      for (const p of list) {
         const group = meshMap.get(p.id);
-        const d = deltas.get(p.body);
+        const d = partDeltas?.get(p.id) || deltas.get(p.body);
         if (!group || !d) continue;
         m.multiplyMatrices(d, p.start).decompose(group.position, group.quaternion, group.scale);
       }
-      for (const t of tracks) {
+      for (const t of dropping ? allTracks : tracks) {
         const frameDelta = deltas.get(t.track.frame) || new THREE.Matrix4();
         if (t.order) {
           // Links per radian of the sprocket's turn against its frame: one link a tooth
