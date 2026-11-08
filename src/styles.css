@@ -825,6 +825,109 @@ body,
   text-decoration: underline;
 }
 
+/* The Outliner's "Selected (N)" box above the list: the selection again, with actions for all of it */
+.outliner-picked {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-strong);
+  background: rgba(255, 159, 28, 0.04);
+}
+
+.outliner-picked .outliner-heading {
+  padding: 0 0 0 2px;
+}
+
+.picked-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.picked-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.picked-actions .link-btn {
+  margin-left: 6px;
+}
+
+.icon-btn.danger:hover {
+  color: var(--danger);
+}
+
+.icon-btn.active {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.picked-color {
+  position: relative;
+  display: inline-flex;
+}
+
+.picked-color-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.picked-color-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  width: 192px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-panel-elevated);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.picked-color-input {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.picked-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 150px;
+  margin-top: 4px;
+}
+
+.instance-row.picked-row {
+  padding: 4px 6px 4px 9px;
+}
+
+.color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* A folder with only some of its parts selected */
+.instance-row.folder-row.partly-selected {
+  box-shadow: inset 3px 0 0 rgba(255, 159, 28, 0.6);
+}
+
 /* Box select rectangle: solid = parts wholly inside, dashed (dragged right to left) = parts it touches */
 .select-box {
   position: absolute;

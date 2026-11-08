@@ -32,17 +32,25 @@ In the 3D view, a click with Shift held on a part SHALL add it to the selection,
 - **THEN** only the fourth part is selected
 
 ### Requirement: Selecting in the Outliner
-In the Assembly Outliner, a plain click on a row SHALL select only that row's part or group. Ctrl+click, or Cmd+click on macOS, SHALL add or remove that row. While Select mode is on, every row SHALL have a checkbox, and a plain click on a row or its checkbox SHALL add or remove its part (a folder's: its whole group, shown mixed when only some of its parts are selected) without changing the rest of the selection; with Select mode off the checkboxes SHALL NOT be shown. Shift+click SHALL select every part between the primary part and the clicked row in build order, adding them to the selection. Clicking a part's row inside a group folder SHALL select just that part, not the whole group.
+In the Assembly Outliner, a plain click on a row SHALL select only that row's part or group. Ctrl+click, or Cmd+click on macOS, SHALL add or remove that row. While Select mode is on, every row SHALL have a checkbox, and a plain click on a row or its checkbox SHALL add or remove its part (a folder's: its whole group, shown mixed when only some of its parts are selected) without changing the rest of the selection; with Select mode off the checkboxes SHALL NOT be shown. Shift+click SHALL add every row between the primary part's row and the clicked row, in the order the list shows: a group folder in the range brings in its whole group, and a part's row inside an open folder counts as its folder, so Shift+click selects several groups. Shift+Alt+click SHALL instead add every single part between the primary part and the clicked part, inside one group or across groups (a closed folder's parts counting where the folder is). Clicking a part's row inside a group folder SHALL select just that part, not the whole group.
 
-The selected parts SHALL be listed first, under a "Selected (N)" heading with a Clear button, group folders first, then in build order: a wholly selected group as its folder, and a selected part of a partly selected group as its own row naming the group. The other parts SHALL follow under "Other parts".
+Selecting SHALL NOT move rows: every part stays in its place in the list (group folders first, then loose parts, otherwise in build order), highlighted when selected; a folder with only some of its parts selected SHALL say how many. While anything is selected, a "Selected (N)" box above the list SHALL list the selection again (a wholly selected group as its folder, a selected part of a partly selected group as its own row naming the group). The box SHALL open and close from its heading, and the choice SHALL be remembered in this browser. A plain click on a row in the box SHALL make it the primary part without changing the selection and scroll the list to it; Ctrl/Cmd+click or the row's X SHALL unselect it. The box heading SHALL have actions for the whole selection, each one history step: hide/show, lock/unlock, colour (the part colours plus a custom colour), clone, delete, and Clear.
 
 #### Scenario: Checkbox adds and removes
 - **WHEN** Select mode is on, a beam is selected, and the user ticks a plate's checkbox, then unticks the beam's
 - **THEN** the plate is added while the beam stays selected, and then only the plate is selected
 
-#### Scenario: Selected parts on top
+#### Scenario: Selected parts stay in place
 - **WHEN** the user selects two parts far down the list
-- **THEN** both rows show at the top under "Selected (2)", highlighted
+- **THEN** both rows stay where they were, highlighted, and the "Selected (2)" box above the list names them
+
+#### Scenario: Colour several parts
+- **WHEN** three parts are selected and the user picks red in the Selected box's colour menu
+- **THEN** all three turn red in one history step
+
+#### Scenario: Close the Selected box
+- **WHEN** the user closes the Selected box and reloads
+- **THEN** the box shows only its heading and actions until opened again
 
 #### Scenario: Ctrl/Cmd+click a row
 - **WHEN** one row is selected and the user Cmd+clicks another row
@@ -51,6 +59,14 @@ The selected parts SHALL be listed first, under a "Selected (N)" heading with a 
 #### Scenario: Range
 - **WHEN** row 3 is selected and the user Shift+clicks row 7
 - **THEN** rows 3 to 7 are selected
+
+#### Scenario: Range of groups
+- **WHEN** group folder G1 is selected and the user Shift+clicks folder G3, with G2 between them
+- **THEN** every part of G1, G2 and G3 is selected
+
+#### Scenario: Range of single parts across groups
+- **WHEN** G1 and G2 are open, the last part of G1 is selected, and the user Shift+Alt+clicks the first part of G2
+- **THEN** just those two parts are selected, not the rest of either group
 
 ### Requirement: Box select
 The Select menu SHALL have a Box select mode, also toggled with `B`. While it is on, a left-drag in the 3D view that does not start on the Move arrows or a rotate ring SHALL draw a rectangle instead of turning the camera, and on release SHALL select the visible parts in it: dragged left to right, the parts wholly inside the rectangle; dragged right to left, every part it touches (the two are drawn differently). A part in a group SHALL bring in its whole group. The parts SHALL replace the selection, or be added to it with Shift held or while Select mode is on. A short drag SHALL count as a click. The camera SHALL NOT move while a box is drawn; right-drag panning and wheel zoom keep working. Esc SHALL turn Box select off, and it SHALL NOT be saved with the build.

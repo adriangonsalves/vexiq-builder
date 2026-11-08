@@ -1306,6 +1306,8 @@ function applyGroupAppearance(group, { baseColor, isSelected, isAttention = fals
     }
     if (!child.isMesh || !child.userData.isPartMesh || !child.material) return;
     const mat = child.material;
+    const wasTransparent = mat.transparent;
+    const wasDepthWrite = mat.depthWrite;
     if (isSelected) child.layers.enable(SELECT_LAYER);
     else child.layers.disable(SELECT_LAYER);
 
@@ -1342,7 +1344,9 @@ function applyGroupAppearance(group, { baseColor, isSelected, isAttention = fals
         }
       }
     }
-    mat.needsUpdate = true;
+    // Colours and opacity take effect without a rebuild; only a change of see-through rebuilds the
+    // material (flagging every part each time made three.js rework all of them on the next frame)
+    if (mat.transparent !== wasTransparent || mat.depthWrite !== wasDepthWrite) mat.needsUpdate = true;
   });
 }
 
@@ -1694,6 +1698,35 @@ export default function Viewport3D({
   // hits: when given, every overlapped part's id is pushed to it (all of them, not just the first).
   // tightOk: a contact that only the normal collision mesh sees is a tight fit, not an overlap. Set
   // it where the result marks a part overlapping; moves that stop at first contact leave it off
+  // Overlap answers per pair of parts, kept with both parts' poses and shapes (see pairLook): while
+  // neither part moves, turns or changes shape, the answer is reused instead of testing the meshes again.
+  // Hiding, showing, colouring or selecting a part re-runs the check for every part, so without this a
+  // big robot spent seconds re-testing pairs that hadn't changed.
+  const pairCacheRef = useRef(new Map());
+  const pairCacheCatalogRef = useRef(null);
+  /** What a pair's answer depends on, for one part: its world matrix, hub angle and collision shapes. */
+  const pairLook = (group) => {
+    const d = group.userData;
+    return { m: group.matrixWorld.elements.slice(), hub: d.hub?.angle ?? 0, geos: d.collisionGeometries, deep: d.deepCollisionGeometries };
+  };
+  const sameLook = (look, group) => {
+    const d = group.userData;
+    if (look.geos !== d.collisionGeometries || look.deep !== d.deepCollisionGeometries || look.hub !== (d.hub?.angle ?? 0)) return false;
+    const e = group.matrixWorld.elements;
+    for (let k = 0; k < 16; k++) if (look.m[k] !== e[k]) return false;
+    return true;
+  };
+  /** A part's world box, worked out again only when its matrix has changed. */
+  const worldBoxOf = (group) => {
+    const d = group.userData;
+    const e = group.matrixWorld.elements;
+    const c = d.worldBoxCache;
+    if (c && c.local === d.localBox && c.m.every((v, k) => v === e[k])) return c.box;
+    const box = d.localBox.clone().applyMatrix4(group.matrixWorld);
+    d.worldBoxCache = { local: d.localBox, m: e.slice(), box };
+    return box;
+  };
+
   const checkGroupCollision = (targetGroup, useAssembledPositions = false, ignoreIds = null, hits = null, tightOk = false) => {
     if (!targetGroup || !targetGroup.visible) return false;
     const colGeosA = targetGroup.userData.collisionGeometries;
@@ -1714,8 +1747,14 @@ export default function Viewport3D({
     }
 
     targetGroup.updateMatrixWorld(true);
-    const worldBoxA = localBoxA.clone().applyMatrix4(targetGroup.matrixWorld);
+    const worldBoxA = worldBoxOf(targetGroup);
     const invMatrixA = new THREE.Matrix4().copy(targetGroup.matrixWorld).invert();
+    if (pairCacheCatalogRef.current !== catalogMapRef.current || pairCacheRef.current.size > 200000) {
+      pairCacheRef.current.clear();
+      pairCacheCatalogRef.current = catalogMapRef.current;
+    }
+    const pairCache = pairCacheRef.current;
+    const idA = targetGroup.userData.instanceId;
     const matrixBtoA = new THREE.Matrix4();
 
     let collided = false;
@@ -1730,8 +1769,8 @@ export default function Viewport3D({
       const localBoxB = otherGroup.userData.localBox;
       if (!colGeosB || colGeosB.length === 0 || !localBoxB || localBoxB.isEmpty()) continue;
 
-      otherGroup.updateMatrixWorld(true);
-      const worldBoxB = localBoxB.clone().applyMatrix4(otherGroup.matrixWorld);
+      otherGroup.updateWorldMatrix(true, false);
+      const worldBoxB = worldBoxOf(otherGroup);
 
       if (!worldBoxA.intersectsBox(worldBoxB)) continue;
       const catalogMap = catalogMapRef.current;
@@ -1740,6 +1779,23 @@ export default function Viewport3D({
       if (isTireOnHub(partA, targetGroup.matrixWorld, partB, otherGroup.matrixWorld)) continue;
       if (isChainFit(partA, targetGroup.matrixWorld, partB, otherGroup.matrixWorld)) continue;
       if (isShaftInMotorSocket(partA, targetGroup.matrixWorld, partB, otherGroup.matrixWorld)) continue;
+      // The same pair (either way round: the tests below give the same answer both ways), neither part
+      // changed since it was last tested: the same answer
+      const aFirst = idA < otherId;
+      const pairKey = `${aFirst ? idA : otherId}\u0000${aFirst ? otherId : idA}\u0000${tightOk ? 1 : 0}`;
+      const cached = pairCache.get(pairKey);
+      if (cached && sameLook(aFirst ? cached.a : cached.b, targetGroup) && sameLook(aFirst ? cached.b : cached.a, otherGroup)) {
+        collided = cached.hit;
+        if (collided && hits) {
+          hits.push(otherId);
+          anyHit = true;
+          collided = false;
+          continue;
+        }
+        if (collided) break;
+        continue;
+      }
+      otherGroup.updateMatrixWorld(true);
 
       matrixBtoA.multiplyMatrices(invMatrixA, otherGroup.matrixWorld);
       // A turned motor hub's collision piece is posed by its own local matrix inside its group
@@ -1781,6 +1837,9 @@ export default function Viewport3D({
         if (featuresA === undefined) featuresA = worldFeaturesOfGroup(targetGroup);
         collided = findTooWideInserts(featuresA, worldFeaturesOfGroup(otherGroup)).length > 0;
       }
+      const lookA = pairLook(targetGroup);
+      const lookB = pairLook(otherGroup);
+      pairCache.set(pairKey, { a: aFirst ? lookA : lookB, b: aFirst ? lookB : lookA, hit: collided });
       if (collided && hits) {
         hits.push(otherId);
         anyHit = true;
@@ -4374,6 +4433,10 @@ export default function Viewport3D({
     dirLight1.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
     dirLight1.shadow.intensity = 0.75;
     scene.add(dirLight1.target);
+    // The selection outline's mask pass looks only at SELECT_LAYER. Lights left off that layer made the
+    // light setup differ between that pass and the normal one, so three.js reworked every part's material
+    // on every frame while anything was selected; on both layers, the setup never changes
+    for (const light of [ambientLight, hemiLight, dirLight1]) light.layers.enable(SELECT_LAYER);
     // A soft floor patch under the build for the shadow to fall on (the background is black, so a
     // shadow on nothing wouldn't show): dark slate, fading out toward its edge
     const floorFade = (() => {
@@ -5061,9 +5124,10 @@ export default function Viewport3D({
       const front = ids[0] ?? null;
       const selId = selectedIdRef.current;
       cancelPendingSelect();
-      // Shift+click, or any click in Select mode, adds or removes the part; empty space leaves the selection
+      // Shift+click, or any click in Select mode, adds or removes the part (a grouped part's whole group;
+      // with Alt held too, just that part); empty space leaves the selection
       if (e.shiftKey || selectModeRef.current) {
-        if (front) onSelectRef.current(front, { additive: true });
+        if (front) onSelectRef.current(front, { additive: true, exact: e.altKey });
         return;
       }
       // Wait for a possible double-click before selecting: on the selected part behind another, on

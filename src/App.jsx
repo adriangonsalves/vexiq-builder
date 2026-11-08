@@ -1334,6 +1334,16 @@ export default function App() {
     const wanted = new Set(selectedIds);
     setInstances((prev) => prev.map((i) => (wanted.has(i.instanceId) ? { ...i, [field]: value } : i)), { label: `${verb} ${setName}` });
   };
+  // The Outliner's colour menu: every selected part, one step (a dragged custom colour merges into one)
+  const handleSetSelectionColor = (hex, { live = false } = {}) => {
+    const wanted = new Set(selectedIds);
+    if (wanted.size === 0) return;
+    const name = selectedIds.length === 1 ? instances.find((i) => i.instanceId === selectedIds[0])?.label ?? 'part' : setName;
+    setInstances((prev) => prev.map((i) => (wanted.has(i.instanceId) ? { ...i, color: hex } : i)), {
+      label: `Colour ${name}`,
+      ...(live ? { mergeKey: `color:${[...wanted].sort().join(',')}` } : {})
+    });
+  };
   // Returns false when the name is refused (empty)
   const handleRenameGroup = (name) => {
     if (!selectionGroup) return false;
@@ -1535,6 +1545,47 @@ export default function App() {
     clearTimeout(tileTipImageTimerRef.current);
     setTileTip(null);
   };
+
+  // The library's cards, made again only when the list or the view changes. Rebuilding every card on
+  // each edit (hide, colour, move...) was a large share of the time those edits took. The cards call the
+  // latest handlers through a ref.
+  const libraryActionsRef = useRef(null);
+  libraryActionsRef.current = { startLibraryDrag, handleLibraryAdd, showTileTip, hideTileTip };
+  const libraryCards = useMemo(() => {
+    const act = () => libraryActionsRef.current;
+    const handlers = (part) => ({
+      onPointerDown: (e) => act().startLibraryDrag(e, part),
+      onDragStart: (e) => e.preventDefault(),
+      onClick: () => act().handleLibraryAdd(part),
+      onPointerEnter: (e) => act().showTileTip(part, e.currentTarget),
+      onPointerLeave: () => act().hideTileTip(),
+      onFocus: (e) => act().showTileTip(part, e.currentTarget),
+      onBlur: () => act().hideTileTip()
+    });
+    return filteredCatalog.map((part, idx) =>
+      libraryView === 'grid' ? (
+        <button key={part.id} type="button" className={`part-tile ${idx >= 18 ? 'part-card-deferred' : ''}`} aria-label={part.name} {...handlers(part)}>
+          <PartThumbnail part={part} index={idx} size={GRID_THUMB_PX} />
+          <span className="tile-size">{sizeText(part)}</span>
+        </button>
+      ) : (
+        <button key={part.id} type="button" className={`part-card ${idx >= 18 ? 'part-card-deferred' : ''}`} {...handlers(part)}>
+          <PartThumbnail part={part} index={idx} />
+          <div className="part-info">
+            <div className="part-name" title={part.name}>
+              {part.name}
+            </div>
+            <div className="part-meta">
+              <span>{part.partNumber}</span>
+              <span>{sizeText(part)}</span>
+              <span className="part-meta-count">{part.connectorCount} holes/axes</span>
+            </div>
+          </div>
+          <span className="part-add-badge">+ Add</span>
+        </button>
+      )
+    );
+  }, [filteredCatalog, libraryView]);
 
   // meta.extraPatches: other parts changed by the same placement (a shaft group turned to mesh, a
   // motor hub turned to fit), recorded in the same history step
@@ -2709,52 +2760,7 @@ export default function App() {
             className={`catalog-list scroller${libraryView === 'grid' ? ' grid' : ''}`}
             onScroll={tileTip ? hideTileTip : undefined}
           >
-            {filteredCatalog.map((part, idx) =>
-              libraryView === 'grid' ? (
-                <button
-                  key={part.id}
-                  type="button"
-                  className={`part-tile ${idx >= 18 ? 'part-card-deferred' : ''}`}
-                  onPointerDown={(e) => startLibraryDrag(e, part)}
-                  onDragStart={(e) => e.preventDefault()}
-                  aria-label={part.name}
-                  onClick={() => handleLibraryAdd(part)}
-                  onPointerEnter={(e) => showTileTip(part, e.currentTarget)}
-                  onPointerLeave={hideTileTip}
-                  onFocus={(e) => showTileTip(part, e.currentTarget)}
-                  onBlur={hideTileTip}
-                >
-                  <PartThumbnail part={part} index={idx} size={GRID_THUMB_PX} />
-                  <span className="tile-size">{sizeText(part)}</span>
-                </button>
-              ) : (
-                <button
-                  key={part.id}
-                  type="button"
-                  className={`part-card ${idx >= 18 ? 'part-card-deferred' : ''}`}
-                  onPointerDown={(e) => startLibraryDrag(e, part)}
-                  onDragStart={(e) => e.preventDefault()}
-                  onClick={() => handleLibraryAdd(part)}
-                  onPointerEnter={(e) => showTileTip(part, e.currentTarget)}
-                  onPointerLeave={hideTileTip}
-                  onFocus={(e) => showTileTip(part, e.currentTarget)}
-                  onBlur={hideTileTip}
-                >
-                  <PartThumbnail part={part} index={idx} />
-                  <div className="part-info">
-                    <div className="part-name" title={part.name}>
-                      {part.name}
-                    </div>
-                    <div className="part-meta">
-                      <span>{part.partNumber}</span>
-                      <span>{sizeText(part)}</span>
-                      <span className="part-meta-count">{part.connectorCount} holes/axes</span>
-                    </div>
-                  </div>
-                  <span className="part-add-badge">+ Add</span>
-                </button>
-              )
-            )}
+            {libraryCards}
 
             {filteredCatalog.length === 0 && (
               <div className="empty-state">
@@ -3047,6 +3053,11 @@ export default function App() {
             }}
             onTogglePart={(id, patch) => handleUpdateTransform(id, patch)}
             onSetGroupFlag={handleSetGroupFlag}
+            colors={VEX_COLORS}
+            onSetSelectionFlag={handleSetSetFlag}
+            onSetSelectionColor={handleSetSelectionColor}
+            onCloneSelection={handleDuplicateSelected}
+            onDeleteSelection={handleDeleteSelected}
             onClearAll={() => {
               setExplodeMode('off');
               setInstances([], { label: 'Clear assembly' });

@@ -32,7 +32,7 @@ Each group SHALL show in the Assembly Outliner as one folder row, listed before 
 - **THEN** all 14 parts are hidden, and one undo shows them again
 
 ### Requirement: Selecting a group
-A plain click, Shift+click or Select-mode click on any part of a group in the 3D view SHALL select or deselect the whole group, all its parts together. Clicking a folder row in the Outliner SHALL select the whole group. Clicking a part's row inside an open folder SHALL select just that part, which can then be edited on its own with every single-part tool. Select Connected SHALL select whole groups when any of their parts is reached.
+A plain click, Shift+click or Select-mode click on any part of a group in the 3D view SHALL select or deselect the whole group, all its parts together; Shift+Alt+click SHALL add or remove just the clicked part. Clicking a folder row in the Outliner SHALL select the whole group. Clicking a part's row inside an open folder SHALL select just that part, which can then be edited on its own with every single-part tool. Select Connected SHALL select whole groups when any of their parts is reached.
 
 #### Scenario: Click a grouped part
 - **WHEN** the user clicks a wheel that belongs to "Left Drive"
