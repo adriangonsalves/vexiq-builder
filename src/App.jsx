@@ -3048,6 +3048,7 @@ export default function App() {
               dropSlowMotion={playDropSlowMotion}
               onDropSlowMotion={handlePlayDropSlowMotion}
               highlightLoose={playHighlightLoose}
+              compact={compactLayout}
               onHighlightLoose={setPlayHighlightLoose}
               onDrop={handlePlayDrop}
               onResetDrop={handlePlayResetDrop}

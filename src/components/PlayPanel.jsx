@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { LANDINGS } from '../sim/impact.js';
 
 /**
@@ -25,6 +25,7 @@ export default function PlayPanel({
   dropSlowMotion = 1,
   onDropSlowMotion,
   highlightLoose = false,
+  compact = false,
   onHighlightLoose,
   onDrop,
   onResetDrop,
@@ -37,6 +38,17 @@ export default function PlayPanel({
   const [dropHeight, setDropHeight] = useState(0.5);
   const [dropLanding, setDropLanding] = useState('flat');
   const [showDropDetails, setShowDropDetails] = useState(false);
+  // On small screens the controls fold away when a drop starts so the robot stays in view; the
+  // Findings section is its own fold, open on big screens and closed on small ones until asked for.
+  const [collapsed, setCollapsed] = useState(false);
+  const [findingsOpen, setFindingsOpen] = useState(!compact);
+  const startDrop = () => {
+    if (compact) {
+      setCollapsed(true);
+      setFindingsOpen(false);
+    }
+    onDrop?.(dropHeight, dropLanding);
+  };
   const toggleHold = (id, checked) => {
     setHolds((prev) => {
       const next = new Set(prev);
@@ -55,11 +67,22 @@ export default function PlayPanel({
             no collisions
           </span>
         )}
-        <button type="button" className="explode-close" onClick={onClose} title="Stop playing and put every part back (Esc)" aria-label="Close Play mode">
+        <button
+          type="button"
+          className="explode-close"
+          style={{ marginLeft: 'auto' }}
+          onClick={() => setCollapsed((c) => !c)}
+          title={collapsed ? 'Show the Play controls' : 'Fold the Play controls away'}
+          aria-label={collapsed ? 'Expand Play panel' : 'Collapse Play panel'}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        </button>
+        <button type="button" className="explode-close" style={{ marginLeft: 0 }} onClick={onClose} title="Stop playing and put every part back (Esc)" aria-label="Close Play mode">
           <X size={14} />
         </button>
       </div>
-      {error ? (
+      {collapsed ? null : error ? (
         <div className="play-error" role="alert">{error}</div>
       ) : !ready ? (
         <div className="explode-busy" role="status">Working out how the parts move…</div>
@@ -138,7 +161,7 @@ export default function PlayPanel({
                       </option>
                     ))}
                   </select>
-                  <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: 11 }} disabled={dropUnavailable} onClick={() => onDrop?.(dropHeight, dropLanding)} title={dropUnavailable ? 'The server is running older code without the joints the drop test needs: restart the dev server' : 'Lift the robot and drop it, landing as chosen'}>
+                  <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: 11 }} disabled={dropUnavailable} onClick={startDrop} title={dropUnavailable ? 'The server is running older code without the joints the drop test needs: restart the dev server' : 'Lift the robot and drop it, landing as chosen'}>
                     Drop
                   </button>
                   {dropReport?.active && (
@@ -175,6 +198,12 @@ export default function PlayPanel({
                 )}
                 {dropReport?.impacted && (
                   <div className="play-warnings" style={{ marginTop: 6 }}>
+                    <button type="button" className="play-warnings-toggle" onClick={() => setFindingsOpen((on) => !on)} aria-expanded={findingsOpen}>
+                      {findingsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      Findings
+                    </button>
+                    {findingsOpen && (
+                      <div>
                     {dropReport.brokenPins.length === 0 ? (
                       <div style={{ fontSize: 11, color: '#4ade80' }} role="status">
                         Survived a {dropReport.heightM} m drop intact ({dropReport.peakG} g, busiest joint {dropReport.maxForceN} N)
@@ -212,6 +241,8 @@ export default function PlayPanel({
                         ))}
                       </ul>
                     )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -219,7 +250,7 @@ export default function PlayPanel({
           )}
         </>
       )}
-      {warnings.length > 0 && (
+      {!collapsed && warnings.length > 0 && (
         <div className="play-warnings">
           <button type="button" className="play-warnings-toggle" onClick={() => setShowWarnings((on) => !on)} aria-expanded={showWarnings}>
             <AlertTriangle size={12} />
