@@ -32,7 +32,10 @@ import {
   measurePinEnds,
   planMates,
   mateAction,
-  holesFilledByFit
+  holesFilledByFit,
+  cornerHoles,
+  listHoleFits,
+  listTargetFits
 } from '../src/utils/pinHoleAlignment.js';
 
 let failures = 0;
@@ -1214,6 +1217,67 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   check('  seated within 0.25 mm: not reported', near(0.1).length === 0);
   check('  3 mm off: not reported', near(3).length === 0);
   check('  with the Fix assembly limits (4.5 mm, 20°): 3 mm off is reported', findNearSeatedPairs(pinAt(3), beam, { maxLineMm: 4.5, maxAngleDeg: 20, maxGapMm: 4 }).length >= 1);
+}
+
+// Placing at a target (openspec target-hole-placement)
+{
+  const xs = (name) => {
+    const feats = getLocalFeatures(part(name));
+    return [...cornerHoles(part(name))].map((id) => feats.find((f) => f.featureId === id));
+  };
+  const beamCorners = xs('1x12 Beam').filter((f) => Math.abs(f.axis[2]) > 0.99);
+  const beamX = beamCorners.map((f) => f.origin[0]).sort((a, b) => a - b);
+  check('corner holes: a 1x12 Beam keeps its two end holes', beamCorners.length === 2 && near(beamX[0], -69.85) && near(beamX[1], 69.85), JSON.stringify(beamX));
+  const plateCorners = xs('4x8 Plate').filter((f) => Math.abs(f.axis[2]) > 0.99);
+  const plateXY = plateCorners.map((f) => `${f.origin[0].toFixed(2)},${f.origin[1].toFixed(2)}`).sort();
+  check('corner holes: a 4x8 Plate keeps its four corners', plateCorners.length === 4 && new Set(plateCorners.map((f) => Math.sign(f.origin[0]) + ':' + Math.sign(f.origin[1]))).size === 4, JSON.stringify(plateXY));
+  check('corner holes: a part with three holes keeps all three', xs('1x2 Beam').length === 3);
+
+  const pinMeta = part('0x2 Connector Pin');
+  const pinFeats = collectWorldFeatures(pinMeta, buildWorldMatrix([0, 0, 0], [0, 0, 0]), 'pin', getPartMeasurements(pinMeta));
+  const top = freeSetLeadEnds(pinFeats).sort((a, b) => b.point.z - a.point.z)[0];
+  const pinTarget = { opening: top.feature, face: { point: top.point, outward: top.dir }, onShaft: true };
+  const beam6 = part('1x6 Beam');
+  const fitsOnPin = listHoleFits({ partMeta: beam6, instanceId: 'sel', hovered: pinTarget, receivingQuaternion: new THREE.Quaternion(), otherFeatures: pinFeats, currentQuaternion: new THREE.Quaternion() });
+  const anchorOf = (meta, fit) => collectWorldFeatures(meta, new THREE.Matrix4().compose(fit.position, fit.quaternion, new THREE.Vector3(1, 1, 1)), 'sel').find((w) => w.featureId === fit.featureId);
+  const a0 = fitsOnPin[0] && anchorOf(beam6, fitsOnPin[0]);
+  const lowZ = a0 ? Math.min(a0.start.z, a0.end.z) : NaN;
+  check('hole fits: a 1x6 Beam onto an upright pin end lands on its line, face toward the end', Boolean(a0) && near(a0.origin.x, 0) && near(a0.origin.y, 0) && Math.abs(a0.axis.z) > 0.99 && near(lowZ, top.point.z + 1, 0.05), JSON.stringify({ n: fitsOnPin.length, o: a0?.origin.toArray(), lowZ, tip: top.point.z }));
+  check('  by an end hole only', fitsOnPin.length > 0 && fitsOnPin.every((f) => Math.abs(getLocalFeatures(beam6).find((x) => x.featureId === f.featureId).origin[0]) > 30));
+
+  const beamOnFloor = collectWorldFeatures(beam6, buildWorldMatrix([0, 0, 0], [0, 0, 0]), 'floor');
+  const hole = beamOnFloor.find((f) => f.kind === 'pin_hole' && Math.abs(f.axis.z) > 0.99);
+  const topFace = openFaces(hole).sort((a, b) => b.point.z - a.point.z)[0];
+  const faceTarget = { opening: hole, face: topFace };
+  const plate = part('4x8 Plate');
+  const plateFits = listHoleFits({ partMeta: plate, instanceId: 'sel', hovered: faceTarget, receivingQuaternion: new THREE.Quaternion(), otherFeatures: beamOnFloor, currentQuaternion: new THREE.Quaternion() });
+  const p0 = plateFits[0] && anchorOf(plate, plateFits[0]);
+  check('hole fits: a 4x8 Plate lies flat on a beam hole face with a corner hole on the line', Boolean(p0) && near(p0.origin.x, hole.origin.x) && near(p0.origin.y, hole.origin.y) && near(Math.min(p0.start.z, p0.end.z), topFace.point.z + 1, 0.05) && cornerHoles(plate).has(plateFits[0].featureId), JSON.stringify({ n: plateFits.length, o: p0?.origin.toArray(), z: p0 && [p0.start.z, p0.end.z], face: topFace.point.z }));
+  check('  and travels only to the face', near(plateFits[0]?.travelMm ?? NaN, 1));
+
+  const shaftMeta = part('2x Pitch Shaft');
+  const shaftFeats = collectWorldFeatures(shaftMeta, buildWorldMatrix([0, 0, 0], [0, 0, 22.5]), 'shaft');
+  const shaft = shaftFeats.find((f) => f.kind === 'shaft');
+  const shaftTop = shaft.end.z > shaft.start.z ? shaft.end : shaft.start;
+  const shaftTarget = { opening: shaft, face: { point: shaftTop.clone(), outward: new THREE.Vector3(0, 0, Math.sign(shaftTop.z - shaft.origin.z) || 1) }, onShaft: true };
+  const gear = part('24 Tooth Gear');
+  const gearFits = listHoleFits({ partMeta: gear, instanceId: 'sel', hovered: shaftTarget, receivingQuaternion: new THREE.Quaternion(), otherFeatures: shaftFeats, currentQuaternion: new THREE.Quaternion() });
+  const flatOk = (fit) => {
+    const bore = anchorOf(gear, fit);
+    if (!bore?.flatDir || !shaft.flatDir) return false;
+    const d = THREE.MathUtils.radToDeg(Math.acos(Math.min(1, Math.abs(bore.flatDir.dot(shaft.flatDir)))));
+    return d < 0.5 || Math.abs(d - 90) < 0.5;
+  };
+  check('hole fits: a square-bore part on a square shaft end gets only the flats rolls', gearFits.length > 0 && gearFits.every(flatOk), `${gearFits.length} fits`);
+
+  const rules = (meta, target, feats) => listTargetFits({ partMeta: meta, instanceId: 'sel', target, receivingQuaternion: new THREE.Quaternion(), otherFeatures: feats, currentQuaternion: new THREE.Quaternion() });
+  const pinOnFace = rules(pinMeta, faceTarget, beamOnFloor);
+  check('target fits: a pin on a hole face plugs in', pinOnFace.length > 0 && pinOnFace[0].rule === 'insert');
+  const gearOnShaft = rules(gear, shaftTarget, shaftFeats);
+  check('target fits: a gear on a shaft end goes on by its bore', gearOnShaft.length > 0 && gearOnShaft.every((f) => f.rule === 'bore'));
+  const beamOnFace = rules(beam6, faceTarget, beamOnFloor);
+  check('target fits: a beam on a hole face lines up by its holes', beamOnFace.length > 0 && beamOnFace.every((f) => f.rule === 'hole'));
+  check('target fits: a pin on a pin end has none', rules(pinMeta, pinTarget, pinFeats).length === 0);
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);

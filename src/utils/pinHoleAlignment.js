@@ -1617,6 +1617,163 @@ export function listBoreFits({ partMeta, measured = null, instanceId, hovered, r
   return fits.sort((a, b) => a.turnRad - b.turnRad || a.roll - b.roll);
 }
 
+// --- Placing at a target hole or pin end (openspec target-hole-placement) ---------------------------
+
+const STACK_HOLE_KINDS = new Set(['pin_hole', 'shaft_bore']);
+const cornerCache = new WeakMap(); // partMeta -> Set of featureIds
+
+/**
+ * The holes of a part that may meet a target (design.md §6): its pin holes and shaft bores grouped by
+ * direction (parallel within 2°); a group of more than four keeps only the holes at the corners of
+ * the smallest rectangle, in the part's own axes, holding the group's centres (a single row: its two
+ * ends). Groups of four or fewer keep all. Returns a Set of local featureIds.
+ */
+export function cornerHoles(partMeta) {
+  if (!partMeta) return new Set();
+  if (cornerCache.has(partMeta)) return cornerCache.get(partMeta);
+  const holes = getLocalFeatures(partMeta).filter((f) => STACK_HOLE_KINDS.has(f.kind));
+  const groups = [];
+  for (const f of holes) {
+    const axis = new THREE.Vector3(...f.axis);
+    const g = groups.find((x) => Math.abs(x.axis.dot(axis)) >= PARALLEL_MIN_DOT);
+    if (g) g.members.push(f);
+    else groups.push({ axis, members: [f] });
+  }
+  const keep = new Set();
+  const TOL = MAX_LINE_DISTANCE_MM;
+  for (const { axis, members } of groups) {
+    if (members.length <= 4) {
+      for (const f of members) keep.add(f.featureId);
+      continue;
+    }
+    const u = mostAcross(axis, LOCAL_AXES);
+    const w = axis.clone().cross(u).normalize();
+    const pts = members.map((f) => {
+      const o = new THREE.Vector3(...f.origin);
+      return { f, a: o.dot(u), b: o.dot(w) };
+    });
+    const range = (k) => [Math.min(...pts.map((p) => p[k])), Math.max(...pts.map((p) => p[k]))];
+    const [aLo, aHi] = range('a');
+    const [bLo, bHi] = range('b');
+    const atEdge = (v, lo, hi) => Math.abs(v - lo) <= TOL || Math.abs(v - hi) <= TOL;
+    let corners = pts.filter((p) => atEdge(p.a, aLo, aHi) && atEdge(p.b, bLo, bHi));
+    // A pattern with no hole at its corners (an L shape): the holes at the ends of its long way
+    if (corners.length === 0) corners = pts.filter((p) => atEdge(p.a, aLo, aHi));
+    // Holes on one spot (a through hole listed twice) count once
+    for (const p of corners) keep.add(p.f.featureId);
+  }
+  cornerCache.set(partMeta, keep);
+  return keep;
+}
+
+/** True when the part has no pins, pegs or shafts of its own. */
+const holesOnly = (partMeta) => !getLocalFeatures(partMeta).some((f) => OPENINGS_BY_INSERT[f.kind]);
+
+/**
+ * Every way a part can meet `hovered` by one of its holes (target-hole-placement):
+ * - `hovered.onShaft` (a pin, peg or shaft end, `opening` being that insert): a hole the insert fits,
+ *   on the insert's line with its face toward the end, slid on until contact;
+ * - otherwise (a hole face): one of the part's pin holes or shaft bores on the hole's line, its face
+ *   flat on the target face (travel ends at the face).
+ * A part with only holes uses its corner holes (cornerHoles). Four quarter-turn rolls relative to the
+ * receiving part, or the four flat-matching rolls for a square hole on a square shaft. Each fit
+ * counts the part's other holes parallel to the target that line up with an opening or insert of
+ * another part (`green`, with a marker for each). Sorted by green, then the smallest turn.
+ */
+export function listHoleFits({ partMeta, measured = null, instanceId, hovered, receivingQuaternion, otherFeatures = [], currentQuaternion }) {
+  const { opening, face } = hovered;
+  const n = face.outward.clone().normalize();
+  const onShaft = Boolean(hovered.onShaft);
+  const allowed = onShaft ? OPENINGS_BY_INSERT[opening.kind] : STACK_HOLE_KINDS;
+  if (!allowed) return [];
+  const corners = holesOnly(partMeta) ? cornerHoles(partMeta) : null;
+  const candidates = otherFeatures.filter((o) => o.instanceId !== instanceId);
+  const insertLength = onShaft ? opening.start.distanceTo(opening.end) : 0;
+  const travelMm = PICK_GAP_MM + insertLength;
+  const fits = [];
+  for (const f of getLocalFeatures(partMeta)) {
+    if (!allowed.has(f.kind)) continue;
+    if (corners && STACK_HOLE_KINDS.has(f.kind) && !corners.has(f.featureId)) continue;
+    const axis = new THREE.Vector3(...f.axis);
+    const t0 = dot3(f.origin, f.axis);
+    const pointAt = (t) => new THREE.Vector3(...f.origin).addScaledVector(axis, t - t0);
+    const ends = f.through || f.kind === 'collar_hole' ? ['lo', 'hi'] : ['hi'];
+    for (const end of ends) {
+      const lead = { end, dir: end === 'hi' ? axis.clone() : axis.clone().negate(), point: pointAt(end === 'hi' ? f.tMax : f.tMin) };
+      const base = { partMeta, measured, face: face.point, outward: n, receivingQuaternion, lead };
+      const basePose = insertPose(base);
+      if (!basePose) continue;
+      const squareRoll = onShaft && Number.isFinite(f.squarePhaseDeg) && opening.flatDir ? squareRollAbout(n, partMeta, basePose, f, instanceId, measured, opening) : null;
+      // A round insert in a square hole can't turn it to fit: only round holes or matching squares
+      if (onShaft && opening.kind === 'shaft' && opening.flatDir && Number.isFinite(f.squarePhaseDeg) && squareRoll === null) continue;
+      const offset = THREE.MathUtils.degToRad(squareRoll ?? 0);
+      for (let q = 0; q < 4; q++) {
+        const pose = insertPose({ ...base, rollRad: (q * Math.PI) / 2 + offset });
+        if (!pose) continue;
+        const duplicate = fits.some(
+          (g) => g.position.distanceTo(pose.position) < 0.01 && g.quaternion.angleTo(pose.quaternion) < THREE.MathUtils.degToRad(0.1)
+        );
+        if (duplicate) continue;
+        // Where the part will sit once in: on a face it is already there (plus the gap); on a pin the
+        // count is taken at the gap pose too, since sliding along the line keeps lines lined up
+        const world = collectWorldFeatures(partMeta, pose.matrix, instanceId, measured);
+        const markers = [];
+        for (const w of world) {
+          if (w.featureId.split('@')[0] === f.featureId) continue;
+          if (OPENINGS_BY_INSERT[w.kind]) continue;
+          if (Math.abs(w.axis.dot(n)) < PARALLEL_MIN_DOT) continue;
+          const match = candidates.find((o) => o !== opening && Math.abs(o.axis.dot(n)) >= PARALLEL_MIN_DOT && linesCoincide(w.origin, w.axis, o.origin, o.axis));
+          if (!match) continue;
+          const p = w.origin.clone();
+          markers.push({ featureId: w.featureId, green: true, opening: match, point: p.addScaledVector(n, -p.clone().sub(face.point).dot(n)) });
+        }
+        fits.push({
+          featureId: f.featureId,
+          end,
+          roll: q,
+          quaternion: pose.quaternion,
+          position: pose.position,
+          rotationDeg: pose.rotationDeg,
+          markers,
+          green: 1 + markers.length,
+          total: 1 + markers.length,
+          holeFit: true,
+          turnRad: currentQuaternion ? pose.quaternion.angleTo(currentQuaternion) : 0,
+          travelMm,
+          sweepMm: travelMm,
+          direction: n.clone().negate()
+        });
+      }
+    }
+  }
+  return fits.sort((a, b) => b.green - a.green || a.turnRad - b.turnRad || a.roll - b.roll);
+}
+
+/**
+ * All fits of a part at a target (target-hole-placement, design.md §5), each tagged `rule`:
+ * - a hole face: the part's fitting pins, pegs or shafts plugged in ('insert'), or a bore part's bore
+ *   on the face ('bore'); then its holes lined up on the face ('hole'), used when no plug fit is free;
+ * - a pin, peg or shaft end (`target.onShaft`): a bore part's bore on a shaft ('bore'), else the
+ *   part's holes slid on ('hole').
+ * Plug fits come first. Empty when the part can't meet the target at all.
+ */
+export function listTargetFits({ partMeta, measured = null, instanceId, target, receivingQuaternion, otherFeatures = [], currentQuaternion, meshNeighbours = null }) {
+  const args = { partMeta, measured, instanceId, hovered: target, receivingQuaternion, otherFeatures, currentQuaternion, meshNeighbours };
+  const tag = (fits, rule) => fits.map((f) => Object.assign(f, { rule }));
+  const { opening } = target;
+  const out = [];
+  if (target.onShaft) {
+    if (opening.kind === 'shaft' && isBorePart(partMeta)) out.push(...tag(listBoreFits(args), 'bore'));
+    else out.push(...tag(listHoleFits(args), 'hole'));
+    return out;
+  }
+  const plugs = getLocalFeatures(partMeta).some((f) => OPENINGS_BY_INSERT[f.kind]?.has(opening.kind));
+  if (plugs) out.push(...tag(listInsertFits(args), 'insert'));
+  else if (isBorePart(partMeta) && insertFitsOpening('shaft', opening.kind)) out.push(...tag(listBoreFits(args), 'bore'));
+  if (STACK_HOLE_KINDS.has(opening.kind) && !(isBorePart(partMeta) && out.length)) out.push(...tag(listHoleFits(args), 'hole'));
+  return out;
+}
+
 /** True when an insert of `insertKind` ('pin' / 'shaft') fits an opening of `openingKind`. */
 export const insertFitsOpening = (insertKind, openingKind) => Boolean(OPENINGS_BY_INSERT[insertKind]?.has(openingKind));
 

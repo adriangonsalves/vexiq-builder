@@ -1448,6 +1448,17 @@ export default function App() {
   const handleLibraryAdd = (part) => {
     // The click that ends a drag from the library doesn't add another
     if (suppressLibraryClickRef.current) return;
+    // With a target hole or pin end set (Alt+click in the view), the part goes straight into it, in
+    // position choosing; the add and the placing are one history step (openspec target-hole-placement)
+    if (hasTargetRef.current) {
+      const mergeKey = `place:${Date.now().toString(36)}`;
+      const added = handleAddPart(part, null, null, { mergeKey, mergeWindowMs: Infinity });
+      if (!added) return;
+      recordLibraryUse(part.id);
+      setPlaceRequest({ instanceId: added.instanceId, label: added.label, mergeKey, atTarget: true });
+      if (layoutSize === 'small') closeUnpinnedDrawer();
+      return;
+    }
     const added = handleAddPart(part);
     if (added) recordLibraryUse(part.id);
     if (added && layoutSize === 'small') closeUnpinnedDrawer();
@@ -1459,6 +1470,11 @@ export default function App() {
   // one history step, and cancelling takes the step away again.
   const viewportAreaRef = useRef(null);
   const suppressLibraryClickRef = useRef(false);
+  // A target hole or pin end is set in the view (the viewport reports it)
+  const hasTargetRef = useRef(false);
+  const handleTargetChange = useCallback((has) => {
+    hasTargetRef.current = has;
+  }, []);
   const [libraryDrag, setLibraryDrag] = useState(null); // { name, x, y } while a library part is dragged outside the view
   const [placeRequest, setPlaceRequest] = useState(null); // { instanceId, label, mergeKey, dropPending }
   const startLibraryDrag = (e, part) => {
@@ -2826,6 +2842,7 @@ export default function App() {
             onRegisterViewSpot={handleRegisterViewSpot}
             placeRequest={placeRequest}
             onCancelPlace={handleCancelPlace}
+            onTargetChange={handleTargetChange}
             transformMode={transformMode}
             snapPitchFactor={snapPitchFactor}
             rotationSnapDeg={rotationSnapDeg}
