@@ -1638,6 +1638,42 @@ body,
   border-color: rgba(248, 113, 113, 0.5);
 }
 
+/* Messages with buttons (an error to read and close, the Bend sheet banner) take clicks */
+.message-strip.interactive {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.message-strip .strip-btn {
+  flex: none;
+  padding: 2px 9px;
+  font-size: 12px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.message-strip .strip-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+.message-strip .strip-close {
+  flex: none;
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  opacity: 0.8;
+}
+.message-strip.bend-banner {
+  top: auto;
+  bottom: 14px;
+}
+
 @keyframes message-in {
   from {
     opacity: 0;

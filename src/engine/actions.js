@@ -302,9 +302,9 @@ export function runAction(action, state, params = {}) {
   // Bend sheet (openspec shaped-parts-and-sheet-bending): where the sheet can be anchored to the other
   // part, nothing changed; and bending it (or flattening it) as one step
   if (action === 'sheet_bend_choices') {
-    const found = sheetBendChoices(state, { sheetId: params.sheetId, targetId: params.targetId });
+    const found = sheetBendChoices(state, { sheetId: params.sheetId, targetId: params.targetId, sheetPortId: params.sheetPortId ?? null, targetPortId: params.targetPortId ?? null });
     if (!found.ok) return found;
-    return { ...found, choices: found.choices.map(({ id, name, row, face, missMm, stretchMm, layers, note, shape, targetPorts }) => ({ id, name, row, face, missMm, stretchMm, layers, note, shape, targetPorts })) };
+    return { ...found, choices: found.choices.map(({ id, name, row, face, missMm, stretchMm, layers, note, shape, targetPorts, holesMatched }) => ({ id, name, row, face, missMm, stretchMm, layers, note, shape, targetPorts, holesMatched })) };
   }
   if (action === 'bend_sheet') {
     return bendSheet(state, {
@@ -314,7 +314,9 @@ export function runAction(action, state, params = {}) {
       sheetRow: params.sheetRow ?? null,
       face: params.face ?? null,
       moveTarget: Boolean(params.moveTarget),
-      flatten: Boolean(params.flatten)
+      flatten: Boolean(params.flatten),
+      sheetPortId: params.sheetPortId ?? null,
+      targetPortId: params.targetPortId ?? null
     });
   }
 

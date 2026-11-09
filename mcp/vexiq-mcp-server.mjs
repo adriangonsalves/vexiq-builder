@@ -736,7 +736,7 @@ const TOOLS = [
   {
     name: 'bend_sheet',
     description:
-      'Bend a plastic sheet (2x12, 6x6 or 6x12 Plastic Sheet) onto a row of holes on another part, as the app\'s Tools → Bend sheet does. The rows of the sheet that already have pins (or another part\'s holes) in them stay flat; the sheet bends along lines parallel to those rows (never twisting) and follows one smooth curve to the chosen row, exactly as long as the sheet between the two rows, leaving each row in line with the sheet; past the last anchored row it runs straight. Call it again with another target to anchor a further row. Without choice or sheetRow it changes nothing and lists the choices: [{ id, name, row, face, layers, missMm, stretchMm, note }] (name like "sheet row 4 → 1x12 Beam, upper face"; note names parts the rest of the sheet past that row still runs into) and reasons for rows it refused (would twist, out of reach by N mm, would bend too tightly, would pass through a part). A row up to 1 mm out of reach is offered with the sheet stretched that much between the two rows, so its pins seat. Where another sheet already lies on that face, the sheet goes on top of it 0.1 mm out (layers). Pass choice (an id or name from the list), or sheetRow (and face, e.g. "upper"), to bend it; pins in the moving rows move with the sheet. With moveTarget and sheetRow, a target held only by this sheet that is out of reach is moved to the nearest spot the row reaches. flatten removes the bend. A sheet pressing up to 1.5 mm into a part, or on a sheet it is stacked on, flexes: that is a tight fit, not an overlap. One undo step.',
+      'Bend a plastic sheet (2x12, 6x6 or 6x12 Plastic Sheet) onto a row of holes on another part, as the app\'s Tools → Bend sheet does. The rows of the sheet that already have pins (or another part\'s holes) in them stay flat; the sheet bends along lines parallel to those rows (never twisting) and follows one smooth curve to the chosen row, exactly as long as the sheet between the two rows, leaving each row in line with the sheet; past the last anchored row it runs straight. Call it again with another target to anchor a further row. Without choice or sheetRow it changes nothing and lists the choices: [{ id, name, row, face, layers, missMm, stretchMm, note }] (name like "sheet row 4 → 1x12 Beam, upper face"; note names parts the rest of the sheet past that row still runs into) and reasons for rows it refused (would twist, out of reach by N mm, would bend too tightly, would pass through a part). A row up to 1 mm out of reach is offered with the sheet stretched that much between the two rows, so its pins seat. Where another sheet already lies on that face, the sheet goes on top of it 0.1 mm out (layers). Pass choice (an id or name from the list), or sheetRow (and face, e.g. "upper"), to bend it; pins in the moving rows move with the sheet. With moveTarget and sheetRow, a target held only by this sheet that is out of reach is moved to the nearest spot the row reaches. flatten removes the bend. By hole: pass sheetPortId (the row of that hole is the row anchored) and targetPortId (the hole it lands on) to bend directly with the fit that lines up the most holes; the reply gives holesMatched. A sheet pressing up to 1.5 mm into a part, or on a sheet it is stacked on, flexes: that is a tight fit, not an overlap. One undo step.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -746,6 +746,8 @@ const TOOLS = [
         sheetRow: { type: 'number', description: 'The sheet row to anchor (rows count from the held edge, 1 = the first).' },
         face: { type: 'string', description: 'With sheetRow: the target face to lie on, e.g. "upper", "lower", "front", "back".' },
         moveTarget: { type: 'boolean', description: 'With sheetRow: move a target only this sheet holds onto the sheet when it is out of reach.' },
+        sheetPortId: { type: 'string', description: 'A hole of the sheet to anchor (its row is the row anchored). With targetPortId, bends there directly, showing the fit with the most holes lined up; with no targetPortId, lists the choices.' },
+        targetPortId: { type: 'string', description: 'The hole of the target part the marked sheet hole lands on.' },
         flatten: { type: 'boolean', description: 'Remove the bend.' }
       },
       required: ['sheetId']
@@ -1057,9 +1059,9 @@ async function executeTool(name, args = {}) {
 
   if (name === 'bend_sheet') {
     const state = readAssemblyState();
-    const listing = !args.flatten && args.choice === undefined && args.sheetRow === undefined;
+    const listing = !args.flatten && args.choice === undefined && args.sheetRow === undefined && !args.sheetPortId;
     if (listing) {
-      const found = sheetBendChoices(state, { sheetId: args.sheetId, targetId: args.targetId });
+      const found = sheetBendChoices(state, { sheetId: args.sheetId, targetId: args.targetId, sheetPortId: args.sheetPortId ?? null, targetPortId: args.targetPortId ?? null });
       if (!found.ok) return { isError: true, error: found.error };
       return {
         ok: true,
@@ -1067,7 +1069,7 @@ async function executeTool(name, args = {}) {
         reasons: found.reasons
       };
     }
-    const bent = bendSheet(state, { sheetId: args.sheetId, targetId: args.targetId ?? null, choice: args.choice ?? null, sheetRow: args.sheetRow ?? null, face: args.face ?? null, moveTarget: Boolean(args.moveTarget), flatten: Boolean(args.flatten) });
+    const bent = bendSheet(state, { sheetId: args.sheetId, targetId: args.targetId ?? null, choice: args.choice ?? null, sheetRow: args.sheetRow ?? null, face: args.face ?? null, moveTarget: Boolean(args.moveTarget), flatten: Boolean(args.flatten), sheetPortId: args.sheetPortId ?? null, targetPortId: args.targetPortId ?? null });
     if (!bent.ok) return { isError: true, error: bent.error, ...(bent.choices ? { choices: bent.choices } : {}) };
     await writeAssemblyState(bent.state, { stepLabel: bent.stepLabel });
     const after = readAssemblyState();
@@ -1076,6 +1078,7 @@ async function executeTool(name, args = {}) {
     return {
       ok: true,
       message: bent.message,
+      ...(bent.holesMatched != null ? { holesMatched: bent.holesMatched } : {}),
       shape: sheet?.shape || null,
       shapeDescription: sheet?.shape ? describeShape(sheet.shape) : null,
       moved: bent.movedIds,

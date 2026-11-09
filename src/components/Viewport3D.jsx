@@ -1466,6 +1466,8 @@ export default function Viewport3D({
   placeRequest = null,
   onCancelPlace,
   onTargetChange,
+  onHoleAltClick,
+  holePicking = false,
   transformMode,
   snapPitchFactor,
   rotationSnapDeg,
@@ -1637,6 +1639,10 @@ export default function Viewport3D({
 
   const onMateFeedbackRef = useRef(onMateFeedback);
   const onTargetChangeRef = useRef(onTargetChange);
+  const holePickingRef = useRef(holePicking);
+  holePickingRef.current = holePicking;
+  const onHoleAltClickRef = useRef(onHoleAltClick);
+  onHoleAltClickRef.current = onHoleAltClick;
   onTargetChangeRef.current = onTargetChange;
   onMateFeedbackRef.current = onMateFeedback;
 
@@ -3182,9 +3188,11 @@ export default function Viewport3D({
         outwardLocal: candidate.face.outward.clone().applyQuaternion(inverse)
       };
     }
-    const had = Boolean(targetRef.current);
+    const had = targetRef.current;
     targetRef.current = next;
-    if (had !== Boolean(next)) onTargetChangeRef.current?.(Boolean(next));
+    if (Boolean(had) !== Boolean(next) || had?.featureId !== next?.featureId || had?.instanceId !== next?.instanceId) {
+      onTargetChangeRef.current?.(Boolean(next), next && !next.onShaft ? { instanceId: next.instanceId, portId: next.featureId.replace(/@(lo|hi)$/, '') } : null);
+    }
     renderTarget();
   };
 
@@ -3260,6 +3268,8 @@ export default function Viewport3D({
   const altClick = () => {
     const lit = altHoverRef.current?.hovered;
     if (!lit) return false;
+    // Bend sheet by holes (openspec bend-sheet-by-holes) takes the click when it is on
+    if (!lit.onShaft && onHoleAltClickRef.current?.(lit.opening.instanceId, lit.opening.featureId.replace(/@(lo|hi)$/, ''))) return true;
     if (lit.taken) {
       onMateFeedbackRef.current?.('That hole already has a part in it', true);
       return true;
@@ -5396,7 +5406,7 @@ export default function Viewport3D({
       }
 
       // Alt+click on a lit hole or pin end sets, moves or clears the target, never selects
-      if (e.altKey && !e.shiftKey && altHoverRef.current) {
+      if ((e.altKey || holePickingRef.current) && !e.shiftKey && altHoverRef.current) {
         updateAltHover(e.clientX - inputEl.getBoundingClientRect().left, e.clientY - inputEl.getBoundingClientRect().top);
         if (altClick()) {
           cancelPendingSelect();
@@ -5445,7 +5455,8 @@ export default function Viewport3D({
       if (pickModeRef.current?.kind === 'copy' && (!modifier || transform.dragging)) endPick();
       else if (!pickModeRef.current && modifier && !e.shiftKey) startCopy(); // Shift+Ctrl is for the wheel
       // Alt (not Shift+Alt, which selects one part of a group) lights the target under the cursor
-      const altLights = e.altKey && !e.shiftKey && !modifier && e.buttons === 0;
+      // (Bend sheet by holes lights them without Alt)
+      const altLights = (e.altKey || holePickingRef.current) && !e.shiftKey && !modifier && e.buttons === 0;
       if (altHoverRef.current && (!altLights || !canAltHover())) endAltHover();
       else if (altLights && !altHoverRef.current) startAltHover();
       if (altHoverRef.current) updateAltHover(e.clientX - rect.left, e.clientY - rect.top);

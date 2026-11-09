@@ -111,7 +111,7 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, aud
             icon={Spline}
             disabled={Boolean(disabledReason || bendReason)}
             onSelect={choose(onBendSheet)}
-            title={disabledReason || bendReason || 'Curve the selected plastic sheet onto a row of holes on the other selected part. Its pinned rows stay flat.'}
+            title={disabledReason || bendReason || 'Curve the selected plastic sheet onto a row of holes on the other selected part (its pinned rows stay flat), or, with only a sheet selected, Alt+click one of its holes and then a hole on another part.'}
           >
             Bend sheet…
           </MenuItem>

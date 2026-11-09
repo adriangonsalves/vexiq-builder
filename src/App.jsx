@@ -422,6 +422,7 @@ export default function App() {
   );
   useEffect(() => {
     if (!actionFeedback) return undefined;
+    if (actionFeedback.isError) return undefined; // an error stays until it is closed
     const timer = setTimeout(() => setActionFeedback(null), 4000);
     return () => clearTimeout(timer);
   }, [actionFeedback]);
@@ -1472,8 +1473,10 @@ export default function App() {
   const suppressLibraryClickRef = useRef(false);
   // A target hole or pin end is set in the view (the viewport reports it)
   const hasTargetRef = useRef(false);
-  const handleTargetChange = useCallback((has) => {
+  const [targetHole, setTargetHole] = useState(null); // { instanceId, portId } when the target is a hole
+  const handleTargetChange = useCallback((has, hole = null) => {
     hasTargetRef.current = has;
+    setTargetHole(hole);
   }, []);
   const [libraryDrag, setLibraryDrag] = useState(null); // { name, x, y } while a library part is dragged outside the view
   const [placeRequest, setPlaceRequest] = useState(null); // { instanceId, label, mergeKey, dropPending }
@@ -2270,6 +2273,8 @@ export default function App() {
       const target = chosen.find((i) => i !== sheet);
       return { ok: true, sheet, target };
     }
+    // A sheet alone that isn't bent yet: pick its hole and then another part's hole in the view
+    if (chosen.length === 1 && sheets.length === 1 && !chosen[0].shape) return { ok: true, sheet: chosen[0], target: null, byHoles: true };
     if (chosen.length === 1 && sheets.length === 1 && chosen[0].shape) return { ok: true, sheet: chosen[0], target: null };
     return { ok: false, error: 'Select a plastic sheet and the part to anchor it to (or a bent sheet alone to flatten it).' };
   }, [instances, selectedIds, catalogMap]);
@@ -2285,9 +2290,139 @@ export default function App() {
   );
   const bendDialogRef = useRef(null);
   bendDialogRef.current = bendDialog;
+  // Bend by holes (openspec bend-sheet-by-holes): Alt+click a sheet hole, then a hole of another part
+  const handleRunSmartActionRef = useRef(null);
+  handleRunSmartActionRef.current = handleRunSmartAction;
+  const [bendHoles, setBendHoles] = useState(null); // { sheetId, sheetLabel, portId, fits: [choice], index } while bending by holes
+  const bendHolesRef = useRef(null);
+  bendHolesRef.current = bendHoles;
+  const instancesNowRef = useRef(instances);
+  instancesNowRef.current = instances;
+  const endBendHoles = useCallback(() => {
+    setBendHoles(null);
+    setBendPreview(null);
+  }, []);
+  const showBendFit = useCallback((state, index) => {
+    const fit = state.fits[index];
+    setBendPreview({ sheetId: state.sheetId, shape: fit.shape, targetId: state.targetId, portIds: fit.targetPorts || [] });
+  }, []);
+  const keepBendFit = useCallback(async () => {
+    const st = bendHolesRef.current;
+    if (!st?.fits?.length) return;
+    const fit = st.fits[st.index];
+    setBendPreview(null);
+    const data = await handleRunSmartActionRef.current('bend_sheet', { sheetId: st.sheetId, targetId: st.targetId, choice: fit.name, sheetPortId: st.portId, targetPortId: st.targetPortId });
+    if (!data?.ok) {
+      setActionFeedback({ message: data?.error || 'The sheet couldn’t be bent.', isError: true });
+      showBendFit(st, st.index);
+      return;
+    }
+    setBendHoles(null);
+  }, [showBendFit]);
+  const pickBendHole = useCallback(async (instanceId, portId) => {
+    const st = bendHolesRef.current;
+    if (!st) return false;
+    const list = instancesNowRef.current;
+    if (instanceId === st.sheetId) {
+      setBendPreview(null);
+      setActionFeedback(null);
+      setBendHoles({ ...st, fits: [], index: 0, portId: st.portId === portId && !st.fits?.length ? null : portId });
+      return true;
+    }
+    if (!st.portId) {
+      setActionFeedback({ message: 'Alt+click a hole of the sheet first.', isError: true });
+      return true;
+    }
+    const target = list.find((i) => i.instanceId === instanceId);
+    const data = await backend.runAction('sheet_bend_choices', { instances: list }, { sheetId: st.sheetId, targetId: instanceId, sheetPortId: st.portId, targetPortId: portId });
+    if (!data?.ok || !data.choices.length) {
+      setBendPreview(null);
+      setBendHoles((cur) => (cur ? { ...cur, fits: [], index: 0 } : cur));
+      setActionFeedback({ message: data?.error || (data?.reasons?.length ? data.reasons.slice(0, 3).join(' ') : 'No row of the sheet lines up with that hole.'), isError: true });
+      return true;
+    }
+    const next = { ...st, targetId: instanceId, targetPortId: portId, targetLabel: target?.label, fits: data.choices, index: 0 };
+    setBendHoles(next);
+    showBendFit(next, 0);
+    return true;
+  }, [showBendFit]);
+  const handleHoleAltClick = useCallback((instanceId, portId) => {
+    if (!bendHolesRef.current) return false;
+    pickBendHole(instanceId, portId);
+    return true;
+  }, [pickBendHole]);
+  // While a fit is shown: wheel, R and Shift+R step through the fits, a click in the view keeps it, Esc cancels
+  const bendFitShown = Boolean(bendHoles?.fits?.length);
+  useEffect(() => {
+    if (!bendHoles) return undefined;
+    const step = (dir) => {
+      const st = bendHolesRef.current;
+      if (!st?.fits?.length) return;
+      const index = (st.index + dir + st.fits.length) % st.fits.length;
+      const next = { ...st, index };
+      setBendHoles(next);
+      showBendFit(next, index);
+    };
+    const onKey = (e) => {
+      const st = bendHolesRef.current;
+      if (!st) return;
+      const field = document.activeElement;
+      if (field && (field.tagName === 'INPUT' || field.tagName === 'TEXTAREA' || field.isContentEditable)) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (st.fits?.length) {
+          setBendPreview(null);
+          setBendHoles({ ...st, fits: [], index: 0 });
+        } else endBendHoles();
+      } else if (e.key === 'Enter' && st.fits?.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        keepBendFit();
+      } else if ((e.key === 'r' || e.key === 'R') && st.fits?.length && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        step(e.shiftKey ? -1 : 1);
+      }
+    };
+    const area = viewportAreaRef.current;
+    const onWheel = (e) => {
+      if (!bendHolesRef.current?.fits?.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      step(e.deltaY > 0 ? 1 : -1);
+    };
+    window.addEventListener('keydown', onKey, true);
+    area?.addEventListener('wheel', onWheel, { capture: true, passive: false });
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      area?.removeEventListener('wheel', onWheel, true);
+    };
+  }, [bendHoles ? 'on' : 'off', bendFitShown, endBendHoles, keepBendFit, showBendFit]);
+  const bendBanner = bendHoles
+    ? bendHoles.fits?.length
+      ? `Fit ${bendHoles.index + 1} of ${bendHoles.fits.length}: ${bendHoles.fits[bendHoles.index].holesMatched} hole${bendHoles.fits[bendHoles.index].holesMatched === 1 ? '' : 's'} line up on ${bendHoles.targetLabel}, ${bendHoles.fits[bendHoles.index].face}. Wheel or R for another fit, or click another hole.`
+      : bendHoles.portId
+        ? `Bending ${bendHoles.sheetLabel}: click a hole on the part to bend onto (Esc to stop).`
+        : `Bending ${bendHoles.sheetLabel}: click the sheet hole to anchor (Esc to stop).`
+    : null;
+  // A hole of a plastic sheet that is the marked target starts bending by holes straight away
+  const bendFromHole = useMemo(() => {
+    if (!targetHole) return null;
+    const inst = instances.find((i) => i.instanceId === targetHole.instanceId);
+    return inst && isPlasticSheet(catalogMap.get(inst.partId)) ? { sheet: inst, portId: targetHole.portId } : null;
+  }, [targetHole, instances, catalogMap]);
   const openBendSheet = () => {
+    if (bendFromHole && !bendCheck.target) {
+      setBendHoles({ sheetId: bendFromHole.sheet.instanceId, sheetLabel: bendFromHole.sheet.label, portId: bendFromHole.portId, fits: [], index: 0 });
+      return;
+    }
     if (!bendCheck.ok) return;
     const { sheet, target } = bendCheck;
+    if (bendCheck.byHoles) {
+      setBendHoles({ sheetId: sheet.instanceId, sheetLabel: sheet.label, portId: null, fits: [], index: 0 });
+      return;
+    }
     setBendDialog({ sheetId: sheet.instanceId, sheetLabel: sheet.label, targetId: target?.instanceId ?? null, targetLabel: target?.label ?? null, bent: Boolean(sheet.shape) });
   };
   // A past point shown, or Play mode on: the 3D view selects and edits nothing
@@ -2297,7 +2432,12 @@ export default function App() {
     () => (bendPreview ? instances.map((i) => (i.instanceId === bendPreview.sheetId ? { ...i, shape: bendPreview.shape } : i)) : instances),
     [instances, bendPreview]
   );
-  const markedHoles = useMemo(() => (bendPreview?.targetId && bendPreview.portIds.length ? [{ instanceId: bendPreview.targetId, portIds: bendPreview.portIds }] : EMPTY_IDS), [bendPreview]);
+  const markedHoles = useMemo(() => {
+    const marks = [];
+    if (bendPreview?.targetId && bendPreview.portIds.length) marks.push({ instanceId: bendPreview.targetId, portIds: bendPreview.portIds });
+    if (bendHoles?.portId) marks.push({ instanceId: bendHoles.sheetId, portIds: [bendHoles.portId] });
+    return marks.length ? marks : EMPTY_IDS;
+  }, [bendPreview, bendHoles?.portId, bendHoles?.sheetId]);
 
   // The engine's plan for the selection (openspec chain-routing-around-parts): what it asks about,
   // obstacles included, and the parts the chain would pass through with the remembered route
@@ -2565,7 +2705,7 @@ export default function App() {
               onExplode={toggleExplode}
               onChain={() => openChainBuilder('chain')}
               onTrack={() => openChainBuilder('track')}
-              bendReason={bendCheck.ok ? null : bendCheck.error}
+              bendReason={bendCheck.ok || bendFromHole ? null : bendCheck.error}
               onBendSheet={openBendSheet}
             />
           </div>
@@ -2813,9 +2953,25 @@ export default function App() {
           className={`viewport-container layout-${viewLayout}`}
           onPointerDown={layoutSize === 'small' ? closeUnpinnedDrawer : undefined}
         >
+          {bendBanner && (
+            <div className="message-strip interactive bend-banner" role="status" aria-live="polite">
+              <span>{bendBanner}</span>
+              {bendFitShown && (
+                <button type="button" className="strip-btn" onClick={keepBendFit} title="Keep this bend (Enter)">
+                  Keep
+                </button>
+              )}
+              <button type="button" className="strip-btn" onClick={() => (bendFitShown ? (setBendPreview(null), setBendHoles((c) => (c ? { ...c, fits: [], index: 0 } : c))) : endBendHoles())} title="Esc">
+                {bendFitShown ? 'Cancel' : 'Stop'}
+              </button>
+            </div>
+          )}
           {actionFeedback && (
-            <div className={`message-strip ${actionFeedback.isError ? 'error' : ''}`} role="status" aria-live="polite">
-              {actionFeedback.message}
+            <div className={`message-strip interactive ${actionFeedback.isError ? 'error' : ''}`} role="status" aria-live="polite">
+              <span>{actionFeedback.message}</span>
+              <button type="button" className="strip-close" onClick={() => setActionFeedback(null)} aria-label="Close message" title="Close">
+                ×
+              </button>
             </div>
           )}
           <Viewport3D
@@ -2843,6 +2999,8 @@ export default function App() {
             placeRequest={placeRequest}
             onCancelPlace={handleCancelPlace}
             onTargetChange={handleTargetChange}
+            onHoleAltClick={handleHoleAltClick}
+            holePicking={Boolean(bendHoles) && !locked}
             transformMode={transformMode}
             snapPitchFactor={snapPitchFactor}
             rotationSnapDeg={rotationSnapDeg}

@@ -19,7 +19,7 @@ import {
   partOf
 } from '../mcp/assembly-engine.mjs';
 import { bendSheet, sheetBendChoices } from '../src/engine/sheetBending.js';
-import { bendCurve, sheetFrame, sheetRows } from '../src/utils/sheetBend.js';
+import { bendCurve, sheetFrame, sheetRows, solvePiece, seriesPieces } from '../src/utils/sheetBend.js';
 import { shapeKey, shapedPart, shapeError } from '../src/utils/shapedParts.js';
 import { applyOps, diffParts } from '../src/utils/buildHistory.js';
 import { starterById } from '../src/starters.js';
@@ -119,6 +119,71 @@ check('a beam 10° off parallel is refused for twisting', tw.choices.length === 
 const blocker = { ...inst('228-2500-011-1'), instanceId: 'blocker', label: 'Blocking beam', position: [103, 23.3, 0] };
 const blocked = sheetBendChoices({ instances: [...state.instances, blocker] }, { sheetId: big.instanceId, targetId: inst('228-2500-011-1').instanceId });
 check('a beam across the curve removes the row 4 choice', !blocked.choices.some((c) => c.row === 4 && c.face === row4?.face) && blocked.reasons.some((x) => /Blocking beam/.test(x)), blocked.reasons.filter((x) => /pass/.test(x)).join(' | '));
+
+// --- By hole: the marked sheet hole's row is the only row anchored (openspec bend-sheet-by-holes) ---
+{
+  const beamId = inst('228-2500-011-1').instanceId;
+  const sheetHoles = (row) => sheetRows(SHEET_6X12, 'z', 'min').find((x) => x.row === row).ports;
+  const beamHoles = getWorldPortsForInstance(inst('228-2500-011-1')).filter((p) => p.type === 'pin_hole');
+  const all = sheetBendChoices(state, { sheetId: big.instanceId, targetId: beamId });
+  const wanted = all.choices.find((c) => c.row === 4);
+  // Try each (row 4 hole, beam hole) pair: the pairs that line up give choices
+  let target = null;
+  let sheetHole = null;
+  let hit = null;
+  for (const sh of sheetHoles(4)) {
+    for (const bh of wanted ? beamHoles : []) {
+      const r2 = sheetBendChoices(state, { sheetId: big.instanceId, targetId: beamId, sheetPortId: sh.portId, targetPortId: bh.portId });
+      if (r2.choices?.length) { [sheetHole, target, hit] = [sh, bh, r2]; break; }
+    }
+    if (hit) break;
+  }
+  check('marking a row 4 hole offers only row 4 choices', Boolean(hit?.choices?.length) && hit.choices.every((c) => c.row === 4), hit ? hit.choices.map((c) => c.name).join(' | ') + ' / ' + hit.reasons.join(' | ') : 'no row 4 choice');
+  check('each by-hole choice says how many holes line up, the most first', Boolean(hit?.choices?.length) && hit.choices.every((c, i, a) => c.holesMatched >= 1 && (!i || a[i - 1].holesMatched >= c.holesMatched)), hit?.choices?.map((c) => c.holesMatched).join(' '));
+  const held = sheetBendChoices(state, { sheetId: big.instanceId, targetId: beamId, sheetPortId: sheetHoles(2)[0].portId, targetPortId: beamHoles[0].portId });
+  check('a hole in an already held row is refused, saying so', held.choices.length === 0 && held.reasons.some((x) => /already held/.test(x)), held.reasons.join(' | '));
+  // A marked hole far along the row from the picked one: a plain reason, never the empty answer
+  let far = null;
+  for (const bh of beamHoles) {
+    const r3 = sheetBendChoices(state, { sheetId: big.instanceId, targetId: beamId, sheetPortId: sheetHoles(4)[0].portId, targetPortId: bh.portId });
+    if (!r3.choices.length) { far = r3; break; }
+  }
+  check('a marked hole that can\'t reach the picked hole says how far along the row it is', Boolean(far) && far.reasons.length > 0 && far.reasons.some((x) => /along the row|can't slide|out of reach|too tightly|pass through/.test(x)), far?.reasons?.join(' | '));
+  const direct = hit?.choices?.length ? bendSheet(state, { sheetId: big.instanceId, targetId: beamId, sheetPortId: sheetHole.portId, targetPortId: target.portId }) : { ok: false };
+  check('bending by hole is one step and reports holesMatched', direct.ok && direct.record === true && direct.holesMatched >= 1, direct.error || `${direct.holesMatched} holes`);
+  check('a bad hole id is refused', sheetBendChoices(state, { sheetId: big.instanceId, targetId: beamId, sheetPortId: 'nope' }).ok === false);
+}
+
+// --- One smooth bend when the sheet has spare length (no S) ---
+{
+  // Up, then turned 120° onto a face 49 mm along and 25 mm over, from a 63.5 mm sheet: 14 mm spare
+  const piece = solvePiece([-31.8, 0.1], [1, 0], [10.6, 24.9], [-0.5, 0.866], 63.5);
+  const pts = piece.sample ? piece.sample(200) : [];
+  let left = 0, right = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = [pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]];
+    const b = [pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]];
+    const c = a[0] * b[1] - a[1] * b[0];
+    if (c > 1e-4) left++;
+    if (c < -1e-4) right++;
+  }
+  const length = pts.slice(1).reduce((n, p, i) => n + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
+  check('a sheet with spare length bends one way, in one arc', piece.kind === 'arc' && (left === 0 || right === 0), `${piece.kind}, r ${(1 / piece.maxK).toFixed(1)} mm`);
+  check('that arc is exactly as long as the sheet and ends on the target', Math.abs(length - 63.5) < 0.2 && Math.hypot(pts.at(-1)[0] - 10.6, pts.at(-1)[1] - 24.9) < 0.01, length.toFixed(2));
+}
+
+// --- The longer search: S-bends and loops, when the plain bends don't clear the parts ---
+{
+  const t = Date.now();
+  const found = seriesPieces([-31.8, 0.1], [1, 0], [10.6, 24.9], [-0.5, 0.866], 63.5);
+  const ok = found.length >= 3 && found.every((piece) => {
+    const pts = piece.sample(300);
+    const length = pts.slice(1).reduce((n, p, i) => n + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
+    return Math.abs(length - 63.5) < 0.3 && Math.hypot(pts.at(-1)[0] - 10.6, pts.at(-1)[1] - 24.9) < 0.05 && piece.maxK <= 1 / 3 + 1e-6;
+  });
+  check('the longer search finds several paths, each the sheet\'s length, ending on the target, none tighter than 3 mm', ok, `${found.length} paths in ${Date.now() - t} ms`);
+  check('they come gentlest first', found.every((x, i) => !i || found[i - 1].bending <= x.bending + 1e-9));
+}
 
 // --- Bending ---
 let r = bendSheet(state, { sheetId: big.instanceId, targetId: inst('228-2500-011-1').instanceId, choice: row4?.id });

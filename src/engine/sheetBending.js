@@ -17,17 +17,20 @@ import {
 import {
   MAX_STRETCH_MM,
   MIN_BEND_RADIUS_MM,
+  ROW_PITCH_MM,
   STACK_GAP_MM,
   bendCurve,
   isPlasticSheet,
-  leastBendingPiece,
   reachPiece,
+  seriesPieces,
+  solvePiece,
   sheetFrame,
   sheetRows
 } from '../utils/sheetBend.js';
 import { normalizeShape, shapeError } from '../utils/shapedParts.js';
 import { quaternionToEulerDeg } from '../utils/gearMeshing.js';
 
+const MAX_TURN_COS = -0.9; // the sheet may turn up to about 155° between the held row and the anchored one
 const ROW_MATCH_MM = 1; // sheet holes and target holes line up along the row this closely
 const PARALLEL_DEG = 3; // a target line this far off the bend line would need a twist
 const HELD_LINE_MM = 0.5; // a sheet hole counts as held when another part's hole or pin is this close to its line
@@ -126,23 +129,46 @@ function bendStarts(state, sheet) {
   return { starts, reason: starts.length ? null : 'The sheet is held on rows at both ends, so there is nothing free to bend.' };
 }
 
-/** A target part's pin holes as lines (holes sharing a line and a direction), in world space. */
+/**
+ * A target part's pin holes as lines (holes sharing a direction that lie on one straight line), in
+ * world space, each line sorted along itself. The line holding the most holes is taken first, so a
+ * beam's rows come out as rows whatever order its holes are listed in.
+ */
 function holeLines(target) {
   const holes = getWorldPortsForInstance(target).filter((p) => p.type === 'pin_hole');
   const lines = [];
+  const groups = [];
   for (const h of holes) {
-    const line = lines.find((l) => {
-      const c = coaxial(l.holes[0], h);
-      if (!c) return false;
-      if (l.holes.length === 1) return true;
-      // On the line through the first two holes
-      const a = v3(l.holes[0].worldOrigin);
-      const dir = v3(l.holes[1].worldOrigin).sub(a).normalize();
-      const d = v3(h.worldOrigin).sub(a);
-      return d.clone().sub(dir.clone().multiplyScalar(d.dot(dir))).length() < 0.5;
-    });
-    if (line) line.holes.push(h);
-    else lines.push({ holes: [h] });
+    const g = groups.find((x) => coaxial(x[0], h));
+    if (g) g.push(h);
+    else groups.push([h]);
+  }
+  for (const group of groups) {
+    let left = group.slice();
+    while (left.length) {
+      let best = null;
+      for (let i = 0; i < left.length && left.length > 1; i++) {
+        for (let j = i + 1; j < left.length; j++) {
+          const a = v3(left[i].worldOrigin);
+          const dir = v3(left[j].worldOrigin).sub(a);
+          if (dir.length() < 0.01) continue;
+          dir.normalize();
+          const on = left.filter((h) => {
+            const d = v3(h.worldOrigin).sub(a);
+            return d.clone().sub(dir.clone().multiplyScalar(d.dot(dir))).length() < 0.5;
+          });
+          if (!best || on.length > best.on.length) best = { on, dir };
+        }
+      }
+      if (!best) {
+        lines.push({ holes: [left[0]] });
+        left = left.slice(1);
+        continue;
+      }
+      best.on.sort((x, y) => v3(x.worldOrigin).dot(best.dir) - v3(y.worldOrigin).dot(best.dir));
+      lines.push({ holes: best.on });
+      left = left.filter((h) => !best.on.includes(h));
+    }
   }
   return lines;
 }
@@ -235,25 +261,41 @@ function partsInSheetHoles(state, sheet) {
  * { id, name, row, face, missMm, stretchMm, bending, shape }. `reasons` explains rows that were
  * refused (twist, out of reach, too tight); `leftOut` counts choices that would hit a part.
  */
-export function sheetBendChoices(state, { sheetId, targetId }) {
+export function sheetBendChoices(state, { sheetId, targetId, sheetPortId = null, targetPortId = null }) {
   const sheet = state.instances.find((i) => i.instanceId === sheetId);
   const target = state.instances.find((i) => i.instanceId === targetId);
   if (!sheet || !target) return { ok: false, error: 'Select a plastic sheet and the part to anchor it to.' };
   const base = getCatalog().catalogById.get(sheet.partId);
   if (!isPlasticSheet(base)) {
-    if (isPlasticSheet(getCatalog().catalogById.get(target.partId))) return sheetBendChoices(state, { sheetId: targetId, targetId: sheetId });
+    if (isPlasticSheet(getCatalog().catalogById.get(target.partId))) return sheetBendChoices(state, { sheetId: targetId, targetId: sheetId, sheetPortId: targetPortId, targetPortId: sheetPortId });
     return { ok: false, error: 'Only plastic sheets can be bent: select a 2x12, 6x6 or 6x12 Plastic Sheet and the part to anchor it to.' };
   }
   const { starts, reason } = bendStarts(state, sheet);
   if (!starts.length) return { ok: true, choices: [], reasons: [reason], leftOut: [] };
 
   const space = sheetSpace(sheet);
-  const lines = holeLines(target);
+  // Marked holes (hole by hole bending): only the marked hole's row, and the picked hole's line
+  if (sheetPortId && !getWorldPortsForInstance(sheet).some((p) => p.portId === sheetPortId && p.type === 'pin_hole')) return { ok: false, error: `${sheet.label} has no hole ${sheetPortId}.` };
+  const pickedHole = targetPortId ? getWorldPortsForInstance(target).find((p) => p.portId === targetPortId && p.type === 'pin_hole') : null;
+  if (targetPortId && !pickedHole) return { ok: false, error: `${target.label} has no hole ${targetPortId}.` };
+  let lines = holeLines(target);
+  if (pickedHole) lines = lines.filter((l) => l.holes.some((h) => h.portId === targetPortId));
   const reasons = new Set();
   const raw = [];
+  const searches = new Map(); // row|face -> inputs for the longer search (hole by hole bending only)
+  const keyReasons = new Map(); // row|face -> why the plain bends failed
   for (const start of starts) {
     const f = sheetFrame(base, start.across, start.from);
-    const rows = sheetRows(base, start.across, start.from).filter((r) => r.row > start.lastRow);
+    const allRows = sheetRows(base, start.across, start.from);
+    let rows = allRows.filter((r) => r.row > start.lastRow);
+    if (sheetPortId) {
+      const markedRow = allRows.find((r) => r.ports.some((p) => p.portId === sheetPortId));
+      if (markedRow && markedRow.row <= start.lastRow) {
+        reasons.add(`The marked hole is in row ${markedRow.row}, which is already held or anchored: mark a hole in a row further along.`);
+        continue;
+      }
+      rows = rows.filter((r) => r === markedRow);
+    }
     const w = [0, 0, 0];
     w[f.wi] = 1; // the bend line, in the sheet's frame
     for (const line of lines) {
@@ -291,71 +333,141 @@ export function sheetBendChoices(state, { sheetId, targetId }) {
           const targetW = holesL.map((x) => x.p[f.wi]);
           const lo = Math.min(...targetW) - ROW_MATCH_MM;
           const hi = Math.max(...targetW) + ROW_MATCH_MM;
+          // The sheet doesn't slide along its row: the marked hole has to be (nearly) across from the picked one
+          if (sheetPortId) {
+            const marked = row.ports.find((p) => p.portId === sheetPortId);
+            const pickedAt = space.toLocal(pickedHole.worldOrigin)[f.wi];
+            const gap = marked.origin[f.wi] - pickedAt;
+            if (Math.abs(gap) > ROW_MATCH_MM) {
+              const holes = Math.round(Math.abs(gap) / ROW_PITCH_MM);
+              reasons.add(`The marked sheet hole is ${Math.abs(gap).toFixed(1)} mm (about ${holes} hole${holes === 1 ? '' : 's'}) along the row from the hole you picked on ${target.label}, and the sheet can't slide. Pick the hole on ${target.label} directly across from the marked one, or mark a sheet hole in line with it.`);
+              continue;
+            }
+          }
           const onTarget = row.ports.filter((p) => p.origin[f.wi] >= lo && p.origin[f.wi] <= hi);
-          if (!onTarget.length) continue;
+          if (!onTarget.length) {
+            reasons.add(`Sheet row ${row.row} → ${target.label}: no hole of that row is in line with the part's holes.`);
+            continue;
+          }
           const offs = onTarget.map((p) => Math.min(...targetW.map((t) => Math.abs(t - p.origin[f.wi]))));
-          if (offs.some((o) => o > ROW_MATCH_MM)) continue;
+          if (offs.some((o) => o > ROW_MATCH_MM)) {
+            reasons.add(`Sheet row ${row.row} → ${target.label}: the holes of that row and the part's holes aren't the same distance apart, so they can't line up.`);
+            continue;
+          }
           const alongMiss = Math.max(...offs);
           const L = row.s - start.prev.s;
+          const key = `${row.row}|${faceName(outwardW)}|${start.across}|${start.from}`;
           for (const sg of [1, -1]) {
             const t1 = [-n2[1] * sg, n2[0] * sg];
-            if (t1[0] * start.prev.t[0] + t1[1] * start.prev.t[1] < -0.2) continue; // arriving backwards
+            // How this row and face are anchored with a given piece (variant 0: the plain bend)
+            const build = (piece, stretch, variant) => {
+              const anchor = { row: row.row, at: P1, dir: t1, stretch, on: target.label, ...(variant ? { variant } : {}) };
+              const shape = normalizeShape({
+                kind: 'sheet-bend',
+                across: start.across,
+                from: start.from,
+                held: start.held,
+                anchors: [...(start.shape?.anchors || []), anchor]
+              });
+              return { holesMatched: onTarget.length, row: row.row, face: faceName(outwardW), layers, missMm: Math.max(stretch, alongMiss), stretchMm: stretch, alongMm: alongMiss, bending: piece.bending, shape, variant, targetPorts: line.holes.map((h) => h.portId) };
+            };
+            // The longer search (S-bends, loops) is kept for when no plain bend works for this row and face
+            if (sheetPortId) {
+              if (!searches.has(key)) searches.set(key, []);
+              searches.get(key).push({ p0: start.prev.p, t0: start.prev.t, P1, t1, L, build });
+            }
+            if (t1[0] * start.prev.t[0] + t1[1] * start.prev.t[1] < MAX_TURN_COS) continue; // arriving backwards
             const reached = reachPiece(start.prev.p, start.prev.t, P1, t1, L);
             if (reached.error) {
-              reasons.add(Number.isFinite(reached.shortMm)
+              if (!keyReasons.has(key)) keyReasons.set(key, new Set());
+              keyReasons.get(key).add(Number.isFinite(reached.shortMm)
                 ? `Sheet row ${row.row} → ${target.label}, ${faceName(outwardW)}: out of reach by ${reached.shortMm.toFixed(1)} mm.`
                 : `Sheet row ${row.row} → ${target.label}, ${faceName(outwardW)}: the sheet would have to bend too tightly.`);
               continue;
             }
-            const { piece, stretch } = reached;
-            const anchor = { row: row.row, at: P1, dir: t1, stretch, on: target.label };
-            const shape = normalizeShape({
-              kind: 'sheet-bend',
-              across: start.across,
-              from: start.from,
-              held: start.held,
-              anchors: [...(start.shape?.anchors || []), anchor]
-            });
-            raw.push({ row: row.row, face: faceName(outwardW), layers, missMm: Math.max(stretch, alongMiss), stretchMm: stretch, alongMm: alongMiss, bending: piece.bending, shape, targetPorts: line.holes.map((h) => h.portId) });
+            raw.push(build(reached.piece, reached.stretch, 0));
           }
         }
       }
     }
   }
 
-  // Keep the gentler direction for the same row and face, then check what each one would hit
-  const best = new Map();
+  // For each row and face, try the ways of arriving in order (most holes lined up, then the gentlest
+  // bend) and keep the first that doesn't run into a part: the gentlest may be a hump over the part
+  const byKey = new Map();
   for (const c of raw) {
     const key = `${c.row}|${c.face}|${c.shape.across}|${c.shape.from}`;
-    if (!best.has(key) || c.bending < best.get(key).bending) best.set(key, c);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(c);
   }
   const visible = state.instances.filter((i) => i.visible !== false);
   const pinned = partsInSheetHoles(state, sheet);
   const choices = [];
   const leftOut = [];
-  for (const c of best.values()) {
+  // Does the sheet bent as `c` clear the other parts up to its anchored row? (past it is only noted)
+  const tryOne = (c) => {
     const candidate = { ...sheet, shape: c.shape };
     const nowPinned = partsInSheetHoles({ instances: visible }, candidate);
     const ignore = new Set([...pinned.keys(), ...nowPinned.keys()]);
     const others = visible.filter((i) => !ignore.has(i.instanceId) && i.instanceId !== sheet.instanceId);
-    // The sheet up to the anchored row must be clear; past it the sheet isn't placed yet (a later
-    // anchor bends it), so what it runs into there is only noted
     const upTo = checkCandidateCollision({ ...sheet, shape: { ...c.shape, trimAfterRow: c.row } }, others);
-    if (upTo.isIntersecting) {
-      leftOut.push({ row: c.row, face: c.face, hits: upTo.collidingWith[0]?.label || 'a part' });
-      continue;
+    if (upTo.isIntersecting) return { hit: upTo.collidingWith[0]?.label || 'a part' };
+    c.pastRowHits = checkCandidateCollision(candidate, others).collidingWith.map((x) => x.label);
+    return { ok: true };
+  };
+  const SEARCH_TESTS = 30; // clearance checks the longer search may spend on one row and face
+  const searchStop = Date.now() + 8000;
+  const allKeys = new Set([...byKey.keys(), ...searches.keys()]);
+  for (const key of allKeys) {
+    const tries = (byKey.get(key) || []).sort((x, y) => y.holesMatched - x.holesMatched || x.bending - y.bending);
+    let first = null;
+    let chosen = null;
+    for (const c of tries) {
+      const res = tryOne(c);
+      if (res.ok) {
+        chosen = c;
+        break;
+      }
+      first ||= { row: c.row, face: c.face, hits: res.hit };
     }
-    const whole = checkCandidateCollision(candidate, others);
-    c.pastRowHits = whole.collidingWith.map((x) => x.label);
-    choices.push(c);
+    // No plain bend works: search for S-bends and loops that do (only when the holes were picked)
+    let searched = false;
+    if (!chosen && searches.has(key) && Date.now() < searchStop) {
+      searched = true;
+      const pool = [];
+      for (const input of searches.get(key)) {
+        seriesPieces(input.p0, input.t0, input.P1, input.t1, input.L).forEach((piece, i) => pool.push({ piece, variant: i + 1, input }));
+      }
+      pool.sort((x, y) => x.piece.bending - y.piece.bending);
+      for (const { piece, variant, input } of pool.slice(0, SEARCH_TESTS)) {
+        const c = input.build(piece, 0, variant);
+        const res = tryOne(c);
+        if (res.ok) {
+          c.searched = true;
+          chosen = c;
+          break;
+        }
+        first ||= { row: c.row, face: c.face, hits: res.hit };
+      }
+    }
+    if (chosen) choices.push(chosen);
+    else {
+      if (first) leftOut.push(first);
+      for (const r of keyReasons.get(key) || []) reasons.add(r);
+      if (searched) {
+        const [row, face] = key.split('|');
+        reasons.add(`Sheet row ${row} → ${target.label}, ${face}: even bending it in an S or a loop, no path of that length clears the other parts.`);
+      }
+    }
   }
-  choices.sort((a, b) => a.missMm - b.missMm || a.bending - b.bending);
+  choices.sort((a, b) => (sheetPortId ? b.holesMatched - a.holesMatched : 0) || a.missMm - b.missMm || a.bending - b.bending);
   const several = new Set(choices.map((c) => `${c.shape.across}|${c.shape.from}`)).size > 1;
   choices.forEach((c, i) => {
     c.id = `choice-${i + 1}`;
     const off = c.stretchMm ? `, stretched ${c.stretchMm.toFixed(1)} mm` : c.alongMm > 0.05 ? `, ${c.alongMm.toFixed(1)} mm off along the row` : '';
-    c.name = `sheet row ${c.row} → ${target.label}, ${c.face}${c.layers ? ` (on top of ${c.layers} sheet${c.layers > 1 ? 's' : ''})` : ''}${several ? `, bending across ${c.shape.across} from the ${c.shape.from} edge` : ''}${off}`;
-    if (c.pastRowHits.length) c.note = `Past row ${c.row} the sheet still runs into ${c.pastRowHits.join(', ')}: anchor a later row to bend it clear.`;
+    c.name = `sheet row ${c.row} → ${target.label}, ${c.face}${c.layers ? ` (on top of ${c.layers} sheet${c.layers > 1 ? 's' : ''})` : ''}${several ? `, bending across ${c.shape.across} from the ${c.shape.from} edge` : ''}${off}${sheetPortId ? `, ${c.holesMatched} hole${c.holesMatched === 1 ? '' : 's'} line up` : ''}`;
+    if (c.searched) c.note = `${c.note ? `${c.note} ` : ''}This bend goes first one way and then back (found by a longer search), so the sheet clears the other parts.`;
+    if (c.pastRowHits.length) c.note = `${c.note ? `${c.note} ` : ''}Past row ${c.row} the sheet still runs into ${c.pastRowHits.join(', ')}: anchor a later row to bend it clear.`;
   });
   for (const l of leftOut) reasons.add(`Sheet row ${l.row} → ${target.label}, ${l.face}: the sheet would pass through ${l.hits}.`);
   return { ok: true, sheetId: sheet.instanceId, targetId: target.instanceId, choices, reasons: [...reasons], leftOut };
@@ -406,7 +518,7 @@ function heldOnlyBySheet(state, target, sheet) {
  * moves the pins in its moving rows, and with `moveTarget` moves a target only this sheet holds onto
  * the nearest reachable spot. `flatten` removes the bend. Returns the action reply.
  */
-export function bendSheet(state, { sheetId, targetId = null, choice = null, sheetRow = null, face = null, moveTarget = false, flatten = false }) {
+export function bendSheet(state, { sheetId, targetId = null, choice = null, sheetRow = null, face = null, moveTarget = false, flatten = false, sheetPortId = null, targetPortId = null }) {
   let sheet = state.instances.find((i) => i.instanceId === sheetId);
   if (sheet && !isPlasticSheet(getCatalog().catalogById.get(sheet.partId)) && targetId) {
     const other = state.instances.find((i) => i.instanceId === targetId);
@@ -433,13 +545,15 @@ export function bendSheet(state, { sheetId, targetId = null, choice = null, shee
   }
   const target = state.instances.find((i) => i.instanceId === targetId);
   if (!target) return { ok: false, error: 'Select the part to anchor the sheet to.' };
-  const found = sheetBendChoices(state, { sheetId, targetId });
+  const found = sheetBendChoices(state, { sheetId, targetId, sheetPortId, targetPortId });
   if (!found.ok) return found;
-  const pick = found.choices.find((c) => (choice && (c.id === choice || c.name === choice)) || (!choice && sheetRow && c.row === Number(sheetRow) && (!face || c.face.startsWith(face))));
+  const byHole = Boolean(sheetPortId && !choice && !sheetRow);
+  const pick = byHole ? found.choices[0] : found.choices.find((c) => (choice && (c.id === choice || c.name === choice)) || (!choice && sheetRow && c.row === Number(sheetRow) && (!face || c.face.startsWith(face))));
   if (pick) {
     const err = shapeError(getCatalog().catalogById.get(sheet.partId), pick.shape);
     if (err) return { ok: false, error: err };
-    return finish({ ...sheet, shape: pick.shape }, new Map(), `Bent ${sheet.label}: ${pick.name}.`);
+    const done = finish({ ...sheet, shape: pick.shape }, new Map(), `Bent ${sheet.label}: ${pick.name}.`);
+    return { ...done, holesMatched: pick.holesMatched };
   }
   if (moveTarget && sheetRow) {
     if (!heldOnlyBySheet(state, target, sheet)) return { ok: false, error: `${target.label} is held by other parts too, so it can't be moved to the sheet.` };
@@ -483,7 +597,7 @@ function moveTargetToSheet(state, sheet, target, row, face) {
         let lo = 0;
         let hi = 1;
         const at = (k) => [start.prev.p[0] + (P1[0] - start.prev.p[0]) * k, start.prev.p[1] + (P1[1] - start.prev.p[1]) * k];
-        const fits = (k) => [t1, [-t1[0], -t1[1]]].some((t) => !leastBendingPiece(start.prev.p, start.prev.t, at(k), t, L).error);
+        const fits = (k) => [t1, [-t1[0], -t1[1]]].some((t) => !solvePiece(start.prev.p, start.prev.t, at(k), t, L).error);
         if (fits(1)) return { error: 'The sheet already reaches that part.' };
         if (!fits(0.3)) continue;
         lo = 0.3;

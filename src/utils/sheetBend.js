@@ -172,6 +172,266 @@ export function leastBendingPiece(p0, t0, p1, t1, L) {
   return best || { error: 'no curve of that length', shortMm: 0 };
 }
 
+// --- One smooth bend: straight, one arc, straight ---------------------------------------------------
+const cross2 = (a, b) => a[0] * b[1] - a[1] * b[0];
+const COUNTER_BEND_K = 0.002; // curvature (1/mm) either way that counts as a real bend
+
+// True when the cubic piece bends one way and then the other (an S): a sheet with spare length
+// would bow one way instead
+function hasCounterBend(p0, t0, p1, t1, ha, hb) {
+  let left = false;
+  let right = false;
+  const du = 1 / PIECE_SAMPLES;
+  for (let i = 0; i <= PIECE_SAMPLES; i++) {
+    const u = i * du;
+    const d1 = hermiteD1(p0, t0, p1, t1, ha, hb, u);
+    const d2 = hermiteD2(p0, t0, p1, t1, ha, hb, u);
+    const speed = len(d1);
+    if (speed < 1e-9) continue;
+    const k = cross2(d1, d2) / speed ** 3;
+    if (k > COUNTER_BEND_K) left = true;
+    if (k < -COUNTER_BEND_K) right = true;
+  }
+  return left && right;
+}
+
+/**
+ * Straight, then one circular arc turning the sheet from t0 to t1, then straight, exactly `L` long
+ * from p0 to p1: the arc's radius follows from the length (never tighter than MIN_BEND_RADIUS_MM, and
+ * both straights at least 0). One bend, never an S. Null when there is no such piece.
+ */
+function arcPiece(p0, t0, p1, t1, L) {
+  const c = Math.max(-1, Math.min(1, dot(t0, t1)));
+  const phi = Math.acos(c);
+  const det = cross2(t0, t1);
+  if (phi < 1e-3 || phi > Math.PI - 1e-3) return null;
+  const sigma = Math.sign(det);
+  const n0 = [-t0[1], t0[0]];
+  const A1 = add(mul(t0, Math.sin(phi)), mul(n0, sigma * (1 - Math.cos(phi))));
+  const D0 = sub(p1, p0);
+  const a0 = cross2(D0, t1) / det;
+  const b0 = cross2(t0, D0) / det;
+  const aA = cross2(A1, t1) / det;
+  const bA = cross2(t0, A1) / det;
+  const slope = phi - aA - bA;
+  if (Math.abs(slope) < 1e-9) return null;
+  const r = (L - (a0 + b0)) / slope;
+  const a = a0 - r * aA;
+  const b = b0 - r * bA;
+  if (!(r >= MIN_BEND_RADIUS_MM) || a < -1e-6 || b < -1e-6) return null;
+  const arcStart = add(p0, mul(t0, a));
+  const arcEnd = add(arcStart, mul(A1, r));
+  const sample = (n) => {
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const d = (i / n) * L;
+      if (d <= a) pts.push(add(p0, mul(t0, d)));
+      else if (d <= a + r * phi) {
+        const psi = (d - a) / r;
+        pts.push(add(arcStart, mul(add(mul(t0, Math.sin(psi)), mul(n0, sigma * (1 - Math.cos(psi)))), r)));
+      } else pts.push(add(arcEnd, mul(t1, d - a - r * phi)));
+    }
+    return pts;
+  };
+  return { kind: 'arc', a, b, r, bending: phi / r, maxK: 1 / r, sample };
+}
+
+/**
+ * The piece the sheet follows from p0 (leaving along t0) to p1 (arriving along t1), `L` long: the
+ * least-bending cubic, unless that bends one way and then back (spare length makes an S), in which
+ * case one smooth arc between straights when there is one. { kind, bending, maxK, sample(n) }, or
+ * { error, shortMm } as leastBendingPiece. The same call decides every bend, so a saved bend
+ * always comes back as it was worked out.
+ */
+export function solvePiece(p0, t0, p1, t1, L) {
+  const cubic = leastBendingPiece(p0, t0, p1, t1, L);
+  const cubicOk = !cubic.error && cubic.maxK <= 1 / MIN_BEND_RADIUS_MM;
+  if (cubicOk && !hasCounterBend(p0, t0, p1, t1, cubic.ha, cubic.hb)) return withSample(cubic, p0, t0, p1, t1);
+  const arc = arcPiece(p0, t0, p1, t1, L);
+  if (arc) return arc;
+  return cubic.error ? cubic : withSample(cubic, p0, t0, p1, t1);
+}
+function withSample(cubic, p0, t0, p1, t1) {
+  return { ...cubic, kind: 'cubic', sample: (n) => Array.from({ length: n + 1 }, (_, i) => hermiteAt(p0, t0, p1, t1, cubic.ha, cubic.hb, i / n)) };
+}
+
+// --- A longer search: any smooth path, loops included -----------------------------------------------
+const SERIES_SEGMENTS = 12;
+const SERIES_SEEDS = [
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+  [1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, 1, 1, 1, 1, 1, 1]
+];
+const SELF_CLEAR_MM = 1.7; // two layers of the sheet (1.5 mm thick) must not touch
+
+function seriesEnd(p0, th0, kap, ell) {
+  let x = p0[0];
+  let y = p0[1];
+  let th = th0;
+  for (const k of kap) {
+    if (Math.abs(k) < 1e-9) {
+      x += ell * Math.cos(th);
+      y += ell * Math.sin(th);
+    } else {
+      x += (Math.sin(th + k * ell) - Math.sin(th)) / k;
+      y += (Math.cos(th) - Math.cos(th + k * ell)) / k;
+      th += k * ell;
+    }
+  }
+  return [x, y, th];
+}
+
+// Solves the square system m x = v by Gaussian elimination (null when singular)
+function solveN(m, v) {
+  const n = v.length;
+  const a = m.map((row, i) => [...row, v[i]]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(a[r][c]) > Math.abs(a[piv][c])) piv = r;
+    if (Math.abs(a[piv][c]) < 1e-12) return null;
+    [a[c], a[piv]] = [a[piv], a[c]];
+    for (let r = c + 1; r < n; r++) {
+      const f = a[r][c] / a[c][c];
+      for (let k = c; k <= n; k++) a[r][k] -= f * a[c][k];
+    }
+  }
+  const x = new Array(n).fill(0);
+  for (let r = n - 1; r >= 0; r--) {
+    let sum = a[r][n];
+    for (let k = r + 1; k < n; k++) sum -= a[r][k] * x[k];
+    x[r] = sum / a[r][r];
+  }
+  return x;
+}
+
+/**
+ * Every different smooth path found from p0 (leaving along t0) to p1 (arriving along t1) that is
+ * exactly `L` long, made of 12 pieces of constant curvature (never tighter than MIN_BEND_RADIUS_MM),
+ * with S-bends and loops allowed, gentlest first. It is a search: the plain least-bending path, then
+ * paths forced through a grid of waypoints (each refined by Newton steps), so it is only asked for
+ * when the plain bends don't work. Each is { kind: 'series', bending, maxK, sample(n) }.
+ * Deterministic: the same call gives the same list.
+ */
+export function seriesPieces(p0, t0, p1, t1, L, { limit = 24, waypoints = true } = {}) {
+  const K = SERIES_SEGMENTS;
+  const ell = L / K;
+  const kmax = 1 / MIN_BEND_RADIUS_MM;
+  const th0 = Math.atan2(t0[1], t0[0]);
+  const thT = Math.atan2(t1[1], t1[0]);
+  const wrapped = Math.atan2(Math.sin(thT - th0), Math.cos(thT - th0));
+  const endOf = (kap, upTo = K) => seriesEnd(p0, th0, kap.slice(0, upTo), ell);
+
+  // Newton steps that keep the ends (and a waypoint, when given) where they must be while easing to the
+  // least bending along the directions left free
+  const solve = (kap0, target, way) => {
+    let kap = kap0.slice();
+    const rows = way ? 5 : 3;
+    for (let it = 0; it < 120; it++) {
+      const e = endOf(kap);
+      const r = [e[0] - p1[0], e[1] - p1[1], (e[2] - target) * 10];
+      let w = null;
+      if (way) {
+        w = endOf(kap, way.seg);
+        r.push(w[0] - way.at[0], w[1] - way.at[1]);
+      }
+      const J = Array.from({ length: rows }, () => new Array(K).fill(0));
+      for (let j = 0; j < K; j++) {
+        const kp = kap.slice();
+        kp[j] += 1e-5;
+        const ep = endOf(kp);
+        J[0][j] = (ep[0] - e[0]) / 1e-5;
+        J[1][j] = (ep[1] - e[1]) / 1e-5;
+        J[2][j] = ((ep[2] - e[2]) * 10) / 1e-5;
+        if (way) {
+          const wp = endOf(kp, way.seg);
+          J[3][j] = (wp[0] - w[0]) / 1e-5;
+          J[4][j] = (wp[1] - w[1]) / 1e-5;
+        }
+      }
+      const JJt = J.map((ra) => J.map((rb) => ra.reduce((sum, x, j) => sum + x * rb[j], 0)));
+      const lam = solveN(JJt, r);
+      if (!lam) return null;
+      const Jk = J.map((ra) => ra.reduce((sum, x, j) => sum + x * kap[j], 0));
+      const mu = solveN(JJt, Jk);
+      const stepO = kap.map((k, j) => (mu ? -0.3 * (k - J.reduce((sum, ra, a) => sum + ra[j] * mu[a], 0)) : 0));
+      const stepC = kap.map((_, j) => -J.reduce((sum, ra, a) => sum + ra[j] * lam[a], 0));
+      kap = kap.map((k, j) => Math.max(-kmax, Math.min(kmax, k + stepC[j] + stepO[j])));
+      const close = Math.hypot(r[0], r[1]) < 0.004 && Math.abs(r[2]) < 4e-3 && (!way || Math.hypot(r[3], r[4]) < 0.004);
+      if (close && it > 12 && Math.hypot(...stepO) < 2e-4) break;
+    }
+    const e = endOf(kap);
+    if (Math.hypot(e[0] - p1[0], e[1] - p1[1]) > 0.02 || Math.abs(e[2] - target) > 2e-3) return null;
+    if (way) {
+      const w = endOf(kap, way.seg);
+      if (Math.hypot(w[0] - way.at[0], w[1] - way.at[1]) > 0.02) return null;
+    }
+    return kap.some((k) => Math.abs(k) > kmax + 1e-6) ? null : kap;
+  };
+
+  const starts = [];
+  for (const m of [0, 1, -1]) {
+    const target = th0 + wrapped + 2 * Math.PI * m;
+    for (const pat of SERIES_SEEDS.slice(0, 4)) starts.push({ kap0: pat.map((x) => x * 0.1), target, way: null });
+    if (waypoints && m === 0) {
+      // Forced through a point about halfway along: a grid round the two ends
+      const mid = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2];
+      const half = 0.6 * L;
+      for (const seg of [5, 6, 7]) {
+        const reach = seg * ell;
+        for (let gx = -4; gx <= 4; gx++) {
+          for (let gy = -4; gy <= 4; gy++) {
+            const at = [mid[0] + (gx / 4) * half, mid[1] + (gy / 4) * half];
+            if (Math.hypot(at[0] - p0[0], at[1] - p0[1]) > reach - 0.5 || Math.hypot(at[0] - p1[0], at[1] - p1[1]) > L - reach - 0.5) continue;
+            starts.push({ kap0: new Array(K).fill(0), target, way: { seg, at } });
+          }
+        }
+      }
+    }
+  }
+  const found = [];
+  const looks = (kap) => {
+    const pts = [];
+    for (let i = 1; i <= 8; i++) {
+      const e = endOf(kap, 0);
+      void e;
+      pts.push(pointAt(kap, (i / 8) * L));
+    }
+    return pts;
+  };
+  const pointAt = (kap, d) => {
+    const seg = Math.min(K - 1, Math.floor(d / ell));
+    const e = seriesEnd(p0, th0, kap.slice(0, seg), ell);
+    const part = seriesEnd([e[0], e[1]], e[2], [kap[seg]], d - seg * ell);
+    return [part[0], part[1]];
+  };
+  for (const st of starts) {
+    const kap = solve(st.kap0, st.target, st.way);
+    if (!kap) continue;
+    const sig = looks(kap);
+    if (found.some((f) => f.sig.every((q, i) => Math.hypot(q[0] - sig[i][0], q[1] - sig[i][1]) < 1.5))) continue;
+    found.push({ kap, sig, bending: ell * kap.reduce((sum, k) => sum + k * k, 0), maxK: Math.max(...kap.map(Math.abs)) });
+  }
+  found.sort((a, b) => a.bending - b.bending);
+  const pieces = [];
+  for (const f of found) {
+    const sample = (n) => Array.from({ length: n + 1 }, (_, i) => pointAt(f.kap, (i / n) * L));
+    const pts = sample(240);
+    // Two layers of the sheet may not touch where the path crosses or runs back past itself
+    let touches = false;
+    const gap = Math.ceil(8 / (L / 240));
+    for (let i = 0; i < pts.length && !touches; i++) {
+      for (let j = i + gap; j < pts.length; j++) {
+        if (Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]) < SELF_CLEAR_MM) {
+          touches = true;
+          break;
+        }
+      }
+    }
+    if (!touches) pieces.push({ kind: 'series', bending: f.bending, maxK: f.maxK, sample });
+    if (pieces.length >= limit) break;
+  }
+  return pieces;
+}
+
 /**
  * The piece from p0 to p1 with the least stretch beyond `L` that is smooth enough (no tighter than
  * MIN_BEND_RADIUS_MM): { piece, stretch } with stretch 0 when `L` works, or { error, shortMm } when
@@ -179,7 +439,7 @@ export function leastBendingPiece(p0, t0, p1, t1, L) {
  */
 export function reachPiece(p0, t0, p1, t1, L, maxStretch = MAX_STRETCH_MM) {
   const ok = (extra) => {
-    const piece = leastBendingPiece(p0, t0, p1, t1, L + extra);
+    const piece = solvePiece(p0, t0, p1, t1, L + extra);
     return !piece.error && piece.maxK <= 1 / MIN_BEND_RADIUS_MM ? piece : null;
   };
   const first = ok(0);
@@ -231,17 +491,14 @@ export function bendCurve(part, shape) {
     if (s1 <= prev.s + 1e-6) throw new Error(`Row ${anchor.row} isn't past row ${prev.row}`);
     const L = s1 - prev.s + (anchor.stretch || 0);
     const t1 = unit(anchor.dir);
-    const piece = leastBendingPiece(prev.p, prev.t, anchor.at, t1, L);
+    const piece = anchor.variant ? seriesPieces(prev.p, prev.t, anchor.at, t1, L)[anchor.variant - 1] || { error: 'no such curve' } : solvePiece(prev.p, prev.t, anchor.at, t1, L);
     if (piece.error) throw new Error(`Row ${anchor.row}: ${piece.error}${piece.shortMm ? ` by ${piece.shortMm.toFixed(1)} mm` : ''}`);
     if (piece.maxK > 1 / MIN_BEND_RADIUS_MM) throw new Error(`Row ${anchor.row}: the sheet would have to bend too tightly`);
     // Sample the piece by arc length so a flat distance maps evenly onto it
     const n = 400;
-    const pts = [];
+    const pts = piece.sample(n);
     const arc = [0];
-    for (let i = 0; i <= n; i++) {
-      pts.push(hermiteAt(prev.p, prev.t, anchor.at, t1, piece.ha, piece.hb, i / n));
-      if (i) arc.push(arc[i - 1] + len(sub(pts[i], pts[i - 1])));
-    }
+    for (let i = 1; i <= n; i++) arc.push(arc[i - 1] + len(sub(pts[i], pts[i - 1])));
     segments.push({ s0: prev.s, s1, piece: { pts, arc, total: arc[n] }, maxK: piece.maxK });
     prev = { s: s1, p: [...anchor.at], t: t1, row: anchor.row };
   }
