@@ -257,6 +257,7 @@ function withSample(cubic, p0, t0, p1, t1) {
 
 // --- A longer search: any smooth path, loops included -----------------------------------------------
 const SERIES_SEGMENTS = 12;
+export const SERIES_SCALE = 1e5; // a saved search result keeps its curvatures as whole numbers of 1/100000 per mm
 const SERIES_SEEDS = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
   [1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, 1, 1, 1, 1, 1, 1]
@@ -426,10 +427,40 @@ export function seriesPieces(p0, t0, p1, t1, L, { limit = 24, waypoints = true }
         }
       }
     }
-    if (!touches) pieces.push({ kind: 'series', bending: f.bending, maxK: f.maxK, sample });
+    // How many times the path turns the other way: fewer is the simpler route
+    let flips = 0;
+    let lastSide = 0;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const u = sub(pts[i], pts[i - 1]);
+      const w = sub(pts[i + 1], pts[i]);
+      const k = (2 * cross2(u, w)) / (len(u) * len(w) * len(add(u, w)) || 1); // signed curvature
+      const side = Math.abs(k) > 0.004 ? Math.sign(k) : 0; // a bend counts when its radius is under 250 mm
+      if (side && lastSide && side !== lastSide) flips++;
+      if (side) lastSide = side;
+    }
+    if (!touches) pieces.push({ kind: 'series', bending: f.bending, maxK: f.maxK, flips, kappas: f.kap, sample });
     if (pieces.length >= limit) break;
   }
   return pieces;
+}
+
+/**
+ * A path from its curvatures: `kap` (12 of them, 1/mm) over `L` from p0 leaving along t0. This is how a
+ * saved search result comes back, as it was found, without searching again.
+ */
+export function seriesFromKappas(p0, t0, L, kap) {
+  const K = kap.length;
+  const ell = L / K;
+  const th0 = Math.atan2(t0[1], t0[0]);
+  const sample = (n) =>
+    Array.from({ length: n + 1 }, (_, i) => {
+      const d = (i / n) * L;
+      const seg = Math.min(K - 1, Math.floor(d / ell));
+      const e = seriesEnd(p0, th0, kap.slice(0, seg), ell);
+      const part = seriesEnd([e[0], e[1]], e[2], [kap[seg]], d - seg * ell);
+      return [part[0], part[1]];
+    });
+  return { kind: 'series', bending: ell * kap.reduce((sum, k) => sum + k * k, 0), maxK: Math.max(...kap.map(Math.abs)), kappas: kap, sample };
 }
 
 /**
@@ -491,7 +522,7 @@ export function bendCurve(part, shape) {
     if (s1 <= prev.s + 1e-6) throw new Error(`Row ${anchor.row} isn't past row ${prev.row}`);
     const L = s1 - prev.s + (anchor.stretch || 0);
     const t1 = unit(anchor.dir);
-    const piece = anchor.variant ? seriesPieces(prev.p, prev.t, anchor.at, t1, L)[anchor.variant - 1] || { error: 'no such curve' } : solvePiece(prev.p, prev.t, anchor.at, t1, L);
+    const piece = anchor.series ? seriesFromKappas(prev.p, prev.t, L, anchor.series.map((k) => k / SERIES_SCALE)) : solvePiece(prev.p, prev.t, anchor.at, t1, L);
     if (piece.error) throw new Error(`Row ${anchor.row}: ${piece.error}${piece.shortMm ? ` by ${piece.shortMm.toFixed(1)} mm` : ''}`);
     if (piece.maxK > 1 / MIN_BEND_RADIUS_MM) throw new Error(`Row ${anchor.row}: the sheet would have to bend too tightly`);
     // Sample the piece by arc length so a flat distance maps evenly onto it

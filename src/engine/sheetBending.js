@@ -22,15 +22,18 @@ import {
   bendCurve,
   isPlasticSheet,
   reachPiece,
+  SERIES_SCALE,
   seriesPieces,
   solvePiece,
   sheetFrame,
   sheetRows
 } from '../utils/sheetBend.js';
 import { normalizeShape, shapeError } from '../utils/shapedParts.js';
+import { sheetFlexDepth } from '../utils/sheetContact.js';
 import { quaternionToEulerDeg } from '../utils/gearMeshing.js';
 
 const MAX_TURN_COS = -0.9; // the sheet may turn up to about 155° between the held row and the anchored one
+const SHEET_CROSS_MM = 3; // pressing this far into another sheet is a stack; further is a bend cutting through it
 const ROW_MATCH_MM = 1; // sheet holes and target holes line up along the row this closely
 const PARALLEL_DEG = 3; // a target line this far off the bend line would need a twist
 const HELD_LINE_MM = 0.5; // a sheet hole counts as held when another part's hole or pin is this close to its line
@@ -361,7 +364,7 @@ export function sheetBendChoices(state, { sheetId, targetId, sheetPortId = null,
             const t1 = [-n2[1] * sg, n2[0] * sg];
             // How this row and face are anchored with a given piece (variant 0: the plain bend)
             const build = (piece, stretch, variant) => {
-              const anchor = { row: row.row, at: P1, dir: t1, stretch, on: target.label, ...(variant ? { variant } : {}) };
+              const anchor = { row: row.row, at: P1, dir: t1, stretch, on: target.label, ...(piece.kappas ? { series: piece.kappas.map((k) => Math.round(k * SERIES_SCALE)) } : {}) };
               const shape = normalizeShape({
                 kind: 'sheet-bend',
                 across: start.across,
@@ -412,6 +415,14 @@ export function sheetBendChoices(state, { sheetId, targetId, sheetPortId = null,
     const others = visible.filter((i) => !ignore.has(i.instanceId) && i.instanceId !== sheet.instanceId);
     const upTo = checkCandidateCollision({ ...sheet, shape: { ...c.shape, trimAfterRow: c.row } }, others);
     if (upTo.isIntersecting) return { hit: upTo.collidingWith[0]?.label || 'a part' };
+    // Sheets stacked on the same holes count as tight fits, but a bend that cuts through another sheet is no stack
+    const trimmed = { ...sheet, shape: { ...c.shape, trimAfterRow: c.row } };
+    for (const t of upTo.tightFits) {
+      const otherSheet = others.find((i) => i.instanceId === t.instanceId);
+      if (!otherSheet || !isPlasticSheet(partOf(otherSheet))) continue;
+      const depth = sheetFlexDepth(getPartRawGeometry(partOf(trimmed)), buildWorldMatrix(trimmed.position, trimmed.rotation), getPartRawGeometry(partOf(otherSheet)), buildWorldMatrix(otherSheet.position, otherSheet.rotation), SHEET_CROSS_MM);
+      if (depth > SHEET_CROSS_MM) return { hit: t.label };
+    }
     c.pastRowHits = checkCandidateCollision(candidate, others).collidingWith.map((x) => x.label);
     return { ok: true };
   };
@@ -438,12 +449,14 @@ export function sheetBendChoices(state, { sheetId, targetId, sheetPortId = null,
       for (const input of searches.get(key)) {
         seriesPieces(input.p0, input.t0, input.P1, input.t1, input.L).forEach((piece, i) => pool.push({ piece, variant: i + 1, input }));
       }
-      pool.sort((x, y) => x.piece.bending - y.piece.bending);
+      // the simplest route first: fewest turns back the other way, then the gentlest
+      pool.sort((x, y) => x.piece.flips - y.piece.flips || x.piece.bending - y.piece.bending);
       for (const { piece, variant, input } of pool.slice(0, SEARCH_TESTS)) {
         const c = input.build(piece, 0, variant);
         const res = tryOne(c);
         if (res.ok) {
           c.searched = true;
+          c.flips = piece.flips;
           chosen = c;
           break;
         }
@@ -460,7 +473,8 @@ export function sheetBendChoices(state, { sheetId, targetId, sheetPortId = null,
       }
     }
   }
-  choices.sort((a, b) => (sheetPortId ? b.holesMatched - a.holesMatched : 0) || a.missMm - b.missMm || a.bending - b.bending);
+  // A plain bend always comes before one found by the longer search
+  choices.sort((a, b) => Number(Boolean(a.searched)) - Number(Boolean(b.searched)) || (a.searched && b.searched ? a.flips - b.flips : 0) || (sheetPortId ? b.holesMatched - a.holesMatched : 0) || a.missMm - b.missMm || a.bending - b.bending);
   const several = new Set(choices.map((c) => `${c.shape.across}|${c.shape.from}`)).size > 1;
   choices.forEach((c, i) => {
     c.id = `choice-${i + 1}`;
