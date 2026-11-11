@@ -12,75 +12,17 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import vm from 'node:vm';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { getPartRawGeometry } from '../mcp/assembly-engine.mjs';
 import { frameOffset, frameTurn } from '../src/engine/cadFrames.js';
 import { loadProject, projectIdFrom, walkAssembly } from './import-cad.mjs';
+import { dracoDecoder, nodeMeshes, nodesByPath, projectArchive } from './cad-meshes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CACHE = path.join(ROOT, '.cache', 'cad-projects');
 const FRAMES_PATH = path.join(ROOT, 'public', 'cad-frames.json');
 const MAX_MEAN_MM = 0.5;
 const SAMPLES = 1500;
-const API = 'https://api.cadasio.com/api';
-
-/** The project's archive (project data and a zip of Draco meshes), downloaded once. */
-async function projectArchive(projectArg) {
-  const id = projectIdFrom(projectArg);
-  const latest = await (await fetch(`${API}/getLatestProjectVersionOnline?projectId=${encodeURIComponent(id)}`)).json();
-  if (!latest?.hasFile) throw new Error(`Project "${id}" has no downloadable version`);
-  const file = `${latest.projectId}_${latest.version}.zip`;
-  const local = path.join(CACHE, file);
-  if (!fs.existsSync(local)) {
-    const signed = (await (await fetch(`${API}/getSignedUrlViewer?fileName=${file}&projectId=${latest.projectId}&subFolder=versions`)).text()).replace(/^"|"$/g, '');
-    const res = await fetch(signed);
-    if (!res.ok) throw new Error(`Couldn't download ${file} (${res.status})`);
-    fs.mkdirSync(CACHE, { recursive: true });
-    fs.writeFileSync(local, Buffer.from(await res.arrayBuffer()));
-  }
-  const meshDir = path.join(CACHE, `${latest.projectId}_${latest.version}`);
-  if (!fs.existsSync(meshDir)) {
-    fs.mkdirSync(meshDir, { recursive: true });
-    execFileSync('unzip', ['-o', '-q', local, 'mesh.zip', '-d', meshDir]);
-    execFileSync('unzip', ['-o', '-q', path.join(meshDir, 'mesh.zip'), '-d', meshDir]);
-    fs.rmSync(path.join(meshDir, 'mesh.zip'));
-  }
-  return meshDir;
-}
-
-/** three's Draco decoder, loaded in Node. */
-async function dracoDecoder() {
-  const lib = path.join(ROOT, 'node_modules', 'three', 'examples', 'jsm', 'libs', 'draco', 'draco_decoder.js');
-  const ctx = { console, WebAssembly, setTimeout, Math, Date, Promise, ArrayBuffer, Uint8Array, Int8Array, Uint16Array, Int16Array, Uint32Array, Int32Array, Float32Array, Float64Array };
-  vm.createContext(ctx);
-  vm.runInContext(`${fs.readFileSync(lib, 'utf8')}\nthis.DracoDecoderModule = DracoDecoderModule;`, ctx);
-  const draco = await ctx.DracoDecoderModule();
-  return (file) => {
-    const bytes = new Uint8Array(fs.readFileSync(file));
-    const decoder = new draco.Decoder();
-    const buffer = new draco.DecoderBuffer();
-    buffer.Init(bytes, bytes.length);
-    const mesh = new draco.Mesh();
-    const status = decoder.DecodeBufferToMesh(buffer, mesh);
-    if (!status.ok()) throw new Error(`${path.basename(file)}: ${status.error_msg()}`);
-    const attr = decoder.GetAttribute(mesh, decoder.GetAttributeId(mesh, draco.POSITION));
-    const arr = new draco.DracoFloat32Array();
-    decoder.GetAttributeFloatForAllPoints(mesh, attr, arr);
-    const points = new Float32Array(arr.size());
-    for (let i = 0; i < points.length; i++) points[i] = arr.GetValue(i);
-    [arr, mesh, buffer, decoder].forEach((o) => draco.destroy(o));
-    return points;
-  };
-}
-
-const matrixOf = (s) => {
-  const v = String(s).split(',').map(Number);
-  // Row-vector form (point · M) to three's column form
-  return new THREE.Matrix4().set(v[0], v[4], v[8], v[12], v[1], v[5], v[9], v[13], v[2], v[6], v[10], v[14], 0, 0, 0, 1);
-};
 
 /**
  * For each CAD part number, its first instance's meshes as [{ versionId, matrix }], each matrix
@@ -88,24 +30,13 @@ const matrixOf = (s) => {
  */
 function meshesByPartNumber(project, walked) {
   const versions = project.assemblyStructure.rootVersions || {};
-  const byPath = new Map();
-  const walk = (node) => {
-    byPath.set(node.rootReference.name, node);
-    for (const c of node.children || []) walk(c);
-  };
-  for (const c of project.assemblyStructure.children || []) walk(c);
+  const byPath = nodesByPath(project);
   const out = new Map();
   for (const p of walked.parts) {
     if (out.has(p.cadPartNumber) || p.hidden) continue;
-    const meshes = [];
-    const collect = (node, rel) => {
-      const kids = node.children || [];
-      if (!kids.length) meshes.push({ versionId: node.rootReference.childVersionId, matrix: rel });
-      for (const c of kids) collect(c, rel.clone().multiply(matrixOf(c.rootReference.transform)));
-    };
     const node = byPath.get(p.path);
     if (!node) continue;
-    collect(node, new THREE.Matrix4());
+    const meshes = nodeMeshes(node);
     if (meshes.some((m) => versions[m.versionId])) out.set(p.cadPartNumber, meshes);
   }
   return out;
@@ -210,10 +141,11 @@ async function main(argv) {
   const only = args.includes('--only') ? args[args.indexOf('--only') + 1].split(',') : null;
   const projectId = projectIdFrom(source);
   const project = await loadProject(source);
-  const walked = walkAssembly(project);
+  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.json'), 'utf8'));
+  const libraryNumbers = new Set(catalog.map((p) => p.partNumber));
+  const walked = walkAssembly(project, { isLibraryPart: (n) => libraryNumbers.has(n) });
   const meshDir = await projectArchive(source);
   const decode = await dracoDecoder();
-  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.json'), 'utf8'));
   const table = JSON.parse(fs.readFileSync(FRAMES_PATH, 'utf8'));
   const frames = table.frames;
   const scale = walked.scaleFactor;

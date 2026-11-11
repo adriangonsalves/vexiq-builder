@@ -220,6 +220,34 @@ export function registerVexIqWebMcpTools(contextRef) {
       annotations: { readOnlyHint: false }
     },
     {
+      name: 'place_band',
+      description:
+        'Strings a rubber band or belt round spots on other parts (as the MCP server\'s place_band and the app\'s Band builder do). spots: [{ instanceId, feature ("post:body", "post:pin", "post:shaft", "groove", "rim", "gap:<k>", "gaphook:<k>", "edge:<holePortId>", "edge:side+|side-|end+|end-", "hook"), side ("out" | "in"), wraps (1-3), height, cross }] in loop order. Each stretch between hooks takes the shortest clear way round parts in the way, bending on their real corners (addedInWay; alternative 1-3 for the next ways round); inWay: { instanceId: "over" | "under" } limits one to a side; a part no way round clears comes back in needsRoute. Two hooks (first and last spots, posts, pins, grooves, gaps) with only edges between: there and back over the same spots; three or more hooks: a loop (back forces one). A band longer than its route is refused with the size that fits (suggestion) unless allowSlack. With list: true or one spot, lists spots and routes and changes nothing. Reply: stretch, stretchState, pullN, lengthMm, suggestion, route.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          bandPartId: { type: 'string', description: 'The band or belt to add (part id, number or name).' },
+          instanceId: { type: 'string', description: 'A placed band to re-string instead.' },
+          spots: { type: 'array', items: { type: 'object' }, description: 'The spots in loop order.' },
+          inWay: { type: 'object', description: 'Answers for parts in a run\'s way: "over" | "under".' },
+          list: { type: 'boolean', description: 'List spots (and routes between two spots); change nothing.' },
+          back: { type: 'string', enum: ['auto', 'straight', 'same'], description: '"auto" (default): there and back for two hooks, a loop for more; "same" or "straight" forces one.' },
+          allowSlack: { type: 'boolean', description: 'Place it even when it would hang loose.' },
+          alternative: { type: 'number', description: '0: the shortest way round; 1-3: the next ways.' },
+          near: { type: 'array', items: { type: 'string' } }
+        }
+      },
+      async execute(args = {}) {
+        const ctx = contextRef.current;
+        if (!ctx) return { error: 'Application context is not ready.' };
+        const data = await ctx.runAction('place_band', args);
+        if (!data?.ok) return { error: data?.error || 'Could not place the band.', ...(data?.needsRoute ? { needsRoute: data.needsRoute } : {}), ...(data?.suggestion ? { suggestion: data.suggestion } : {}) };
+        const { state, record, stepLabel, ...reply } = data;
+        return reply;
+      },
+      annotations: { readOnlyHint: false }
+    },
+    {
       name: 'clear_assembly',
       description:
         'Resets the 3D workspace by removing all placed parts or restoring the starter assembly.',

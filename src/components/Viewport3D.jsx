@@ -23,6 +23,12 @@ import { settlePlacement } from '../utils/placementFit.js';
 import { isTireOnHub } from '../utils/tireFit.js';
 import { isChainFit } from '../utils/chainFit.js';
 import { batteryBayPose } from '../utils/batteryBay.js';
+import { createBandOverlay } from './bandOverlay.js';
+
+// A strung band can't be moved or turned by itself (openspec rubber-bands)
+const BAND_FOLLOWS = 'A band follows its spots: drag a handle (Edit route) to move it';
+import { spotsNearPoint } from '../utils/bandRoute.js';
+import { isBandPart } from '../utils/bandPath.js';
 import { setGridPivot, wholeGroupOf } from '../utils/partGroups.js';
 import {
   HOLE_SNAP_AXIAL_REACH_MM,
@@ -1486,6 +1492,10 @@ export default function Viewport3D({
   onPickStatus,
   onCubeMenu,
   onInsertCopy,
+  bandPick = null,
+  onBandHover,
+  onBandPick,
+  onBandHandle,
   projection = 'perspective',
   viewLayout = 'single',
   stereoCrossEyed = false,
@@ -1578,6 +1588,79 @@ export default function Viewport3D({
   catalogMapRef.current = shapedCatalogMap;
   // A copy's part: shaped when it has a shape; a group's userData (partId may be a shaped part's id) works too
   const partFor = (inst) => (!inst ? null : inst.shape ? shapedPart(catalogMapRef.current.base.get(inst.partId), inst.shape) : catalogMapRef.current.get(inst.partId));
+
+  // --- Band builder (openspec rubber-bands) --------------------------------------------------------
+  // While `bandPick` is on, the spot under the pointer lights (R, Shift+R or the wheel step to the
+  // next near one), a click hands it to the app, and the app's see-through band and spot handles are
+  // drawn. A drag from a handle moves that spot (onBandHandle(index, spot | null, { done })).
+  const bandPickRef = useRef(bandPick);
+  bandPickRef.current = bandPick;
+  const onBandHoverRef = useRef(onBandHover);
+  onBandHoverRef.current = onBandHover;
+  const onBandPickRef = useRef(onBandPick);
+  onBandPickRef.current = onBandPick;
+  const onBandHandleRef = useRef(onBandHandle);
+  onBandHandleRef.current = onBandHandle;
+  const bandOverlayRef = useRef(null);
+  const bandHoverRef = useRef(null); // { list, index, point } under the pointer
+  const bandDragRef = useRef(null); // { index } while a handle is dragged
+
+  /** Lights the spot of the part under the ray (or none); returns the lit spot. */
+  const updateBandHover = (raycaster, partsRoot) => {
+    const meshes = [];
+    partsRoot.traverse((child) => {
+      if (child.isMesh && child.userData.isPartMesh && child.userData.instanceId && child.parent?.visible !== false) meshes.push(child);
+    });
+    const routedBand = (id) => instancesRef.current.find((i) => i.instanceId === id)?.shape?.kind === 'band';
+    const hit = raycaster.intersectObjects(meshes, false).find((h) => !routedBand(h.object.userData.instanceId));
+    const prev = bandHoverRef.current;
+    let next = null;
+    if (hit) {
+      const inst = instancesRef.current.find((i) => i.instanceId === hit.object.userData.instanceId);
+      const list = inst ? spotsNearPoint(inst, partFor(inst), hit.point, 8) : [];
+      if (list.length) {
+        const same = prev && prev.list.length === list.length && prev.list.every((x, i) => x.instanceId === list[i].instanceId && x.feature === list[i].feature);
+        next = { list, index: same ? prev.index : 0, point: hit.point.toArray() };
+      }
+    }
+    bandHoverRef.current = next;
+    const spot = next ? next.list[next.index] : null;
+    bandOverlayRef.current?.setLit(spot);
+    onBandHoverRef.current?.(spot ? { instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, label: spot.label, height: spot.height, near: next.list.length } : null, hit ? hit.point.toArray() : null);
+    return spot;
+  };
+
+  // The app's see-through band and spot handles
+  useEffect(() => {
+    const overlay = bandOverlayRef.current;
+    if (!overlay) return;
+    if (!bandPick) {
+      overlay.clear();
+      bandHoverRef.current = null;
+      bandDragRef.current = null;
+      // The builder closed (Done, Esc, or a handle dropped in Edit route): the camera turns and zooms again
+      if (orbitRef.current) {
+        orbitRef.current.enabled = true;
+        orbitRef.current.enableZoom = true;
+      }
+    } else {
+      overlay.setPreview(bandPick.preview || {});
+      overlay.setHandles(bandPick.handles || []);
+      if (!bandHoverRef.current) overlay.setLit(null);
+    }
+    renderFrameRef.current?.();
+  }, [bandPick]);
+
+  /** R / Shift+R / the wheel over a lit spot: the next (or previous) spot near the pointer. */
+  const stepBandHover = (dir) => {
+    const h = bandHoverRef.current;
+    if (!h || h.list.length < 2) return false;
+    h.index = (h.index + dir + h.list.length) % h.list.length;
+    const spot = h.list[h.index];
+    bandOverlayRef.current?.setLit(spot);
+    onBandHoverRef.current?.({ instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, label: spot.label, height: spot.height, near: h.list.length }, h.point);
+    return true;
+  };
 
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
@@ -1738,8 +1821,22 @@ export default function Viewport3D({
     return box;
   };
 
+  // Strung bands are judged by the engine's band rule (src/engine/bandFit.js), not by meshes here: a
+  // band reads its saved flag, and other parts don't test against bands (openspec rubber-bands)
+  const bandIdsCache = useRef({ list: null, ids: new Set() });
+  const routedBandIds = () => {
+    const list = instancesRef.current;
+    if (bandIdsCache.current.list !== list) {
+      bandIdsCache.current = { list, ids: new Set(list.filter((i) => i.shape?.kind === 'band' && Array.isArray(i.shape.route)).map((i) => i.instanceId)) };
+    }
+    return bandIdsCache.current.ids;
+  };
   const checkGroupCollision = (targetGroup, useAssembledPositions = false, ignoreIds = null, hits = null, tightOk = false) => {
     if (!targetGroup || !targetGroup.visible) return false;
+    const bandIds = routedBandIds();
+    if (bandIds.has(targetGroup.userData.instanceId)) {
+      return Boolean(instancesRef.current.find((i) => i.instanceId === targetGroup.userData.instanceId)?.isIntersecting);
+    }
     const colGeosA = targetGroup.userData.collisionGeometries;
     const localBoxA = targetGroup.userData.localBox;
     if (!colGeosA || colGeosA.length === 0 || !localBoxA || localBoxA.isEmpty()) {
@@ -1774,6 +1871,7 @@ export default function Viewport3D({
     for (const [otherId, otherGroup] of meshMapRef.current.entries()) {
       if (otherId === targetGroup.userData.instanceId) continue;
       if (ignoreIds?.has(otherId)) continue;
+      if (bandIds.has(otherId)) continue;
       if (!otherGroup.visible) continue;
 
       const colGeosB = otherGroup.userData.collisionGeometries;
@@ -3996,6 +4094,7 @@ export default function Viewport3D({
       return clear();
     }
     if (inst.locked) return clear('Part is locked');
+    if (inst.shape?.kind === 'band') return clear(BAND_FOLLOWS);
     if (explodeModeRef.current !== 'off') return clear("Can't rotate in Explode view");
     if (arrowOverlayRef.current?.isShown() || pickModeRef.current?.kind === 'pick' || !group.userData.localBox) return clear();
 
@@ -4299,13 +4398,19 @@ export default function Viewport3D({
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
+    const isBand = inst?.shape?.kind === 'band';
     const canMove =
       transformModeRef.current === 'translate' &&
       explodeModeRef.current === 'off' &&
       group &&
       inst &&
       inst.visible !== false &&
-      !inst.locked;
+      !inst.locked &&
+      !isBand;
+    if (isBand && transformModeRef.current === 'translate' && rotateMessageKeyRef.current !== `${selId}:band`) {
+      onMateFeedbackRef.current?.(BAND_FOLLOWS, false);
+      rotateMessageKeyRef.current = `${selId}:band`;
+    }
     if (canMove) {
       if (transform.object !== group) transform.attach(group);
       // The arrows follow the part's own axes; Alt shows the world's
@@ -4778,6 +4883,10 @@ export default function Viewport3D({
     const targetOverlay = createPickOverlay({ color: TARGET_COLOR, name: '__target__' });
     scene.add(targetOverlay.group);
     targetOverlayRef.current = targetOverlay;
+    // Band builder: the lit spot, the see-through band and spot handles (openspec rubber-bands)
+    const bandOverlay = createBandOverlay();
+    scene.add(bandOverlay.group);
+    bandOverlayRef.current = bandOverlay;
 
     // Rotate-mode rings and their angle labels (typed angles turn the part)
     const rotateGizmo = createRotateGizmo();
@@ -5116,6 +5225,28 @@ export default function Viewport3D({
       pointerDownPos.set(e.clientX, e.clientY);
       // A new press that isn't grabbing the gizmo starts clean, so a missed drag end can't block clicks
       if (!transform.dragging) wasDraggingRef.current = false;
+      // Band builder: right-click or Alt+click on an anchor (a spot's circle) takes it off the route
+      if (bandPickRef.current && (e.button === 2 || (e.button === 0 && e.altKey))) {
+        setRayFromEvent(e);
+        const index = bandOverlayRef.current?.pickHandle(raycaster) ?? -1;
+        if (index >= 0 && !bandPickRef.current.handles?.[index]?.small) {
+          onBandHandleRef.current?.(index, null, { done: true });
+          return;
+        }
+      }
+      // Band builder: a press on a spot handle starts dragging it to another spot
+      if (bandPickRef.current && e.button === 0) {
+        setRayFromEvent(e);
+        const index = bandOverlayRef.current?.pickHandle(raycaster) ?? -1;
+        if (index >= 0) {
+          bandDragRef.current = { index };
+          orbit.enabled = false;
+          return;
+        }
+        // Not on a handle: the camera turns, even if an earlier drag's end was missed
+        bandDragRef.current = null;
+        orbit.enabled = true;
+      }
       if (
         boxSelectRef.current &&
         e.button === 0 &&
@@ -5335,6 +5466,24 @@ export default function Viewport3D({
       }
       const dx = e.clientX - pointerDownPos.x;
       const dy = e.clientY - pointerDownPos.y;
+      // Band builder: a click adds the lit spot; the end of a handle drag moves that spot
+      if (bandPickRef.current && e.button === 0) {
+        if (bandDragRef.current) {
+          const { index } = bandDragRef.current;
+          bandDragRef.current = null;
+          orbit.enabled = true;
+          const h = bandHoverRef.current;
+          const spot = h ? h.list[h.index] : null;
+          onBandHandleRef.current?.(index, spot ? { instanceId: spot.instanceId, feature: spot.feature, height: spot.height } : null, { done: true });
+          return;
+        }
+        if (Math.hypot(dx, dy) <= 5) {
+          const h = bandHoverRef.current;
+          const spot = h ? h.list[h.index] : null;
+          if (spot) onBandPickRef.current?.({ instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, label: spot.label, height: spot.height });
+        }
+        return;
+      }
       if (boxDrag && e.button === 0) {
         const box = boxDrag;
         boxDrag = null;
@@ -5443,6 +5592,15 @@ export default function Viewport3D({
     let pickHoverAt = null;
     const handlePointerMove = (e) => {
       const rect = inputEl.getBoundingClientRect();
+      // Band builder: light the spot under the pointer (not while a button turns the camera)
+      if (bandPickRef.current && !boxDrag) {
+        if (e.buttons === 0 || bandDragRef.current) {
+          setRayFromEvent(e);
+          const spot = updateBandHover(raycaster, partsRoot);
+          if (bandDragRef.current) onBandHandleRef.current?.(bandDragRef.current.index, spot ? { instanceId: spot.instanceId, feature: spot.feature, height: spot.height } : null, { done: false });
+        }
+        return;
+      }
       if (boxDrag) {
         boxDrag.x1 = e.clientX - rect.left;
         boxDrag.y1 = e.clientY - rect.top;
@@ -5565,6 +5723,13 @@ export default function Viewport3D({
       } else if (e.key !== 'Alt' && altHoverRef.current && (e.shiftKey || e.ctrlKey || e.metaKey)) {
         endAltHover();
       }
+      if (bandPickRef.current && (e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey && e.target?.tagName !== 'INPUT') {
+        if (stepBandHover(e.shiftKey ? -1 : 1)) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return;
+        }
+      }
       if (pickModeRef.current && e.target?.tagName !== 'INPUT') {
         if (e.key === 'Escape') {
           e.preventDefault();
@@ -5619,6 +5784,17 @@ export default function Viewport3D({
         if (!delta || now - lastExpandAt < EXPAND_STEP_MS) return;
         lastExpandAt = now;
         onExpandSelectionRef.current?.(delta < 0 ? 1 : -1, { pinnedOnly });
+        return;
+      }
+      // Band builder with several spots near the pointer: the wheel steps through them
+      if (bandPickRef.current && bandHoverRef.current?.list.length > 1) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        pickWheelAccum += e.deltaY;
+        if (Math.abs(pickWheelAccum) >= 40) {
+          stepBandHover(pickWheelAccum > 0 ? 1 : -1);
+          pickWheelAccum = 0;
+        }
         return;
       }
       // Picking with a hole highlighted: the wheel steps through fits instead of zooming
@@ -5823,6 +5999,23 @@ export default function Viewport3D({
     inputEl.addEventListener('pointerup', handleRingPointerUp, true);
     inputEl.addEventListener('pointerdown', handlePointerDown);
     inputEl.addEventListener('pointerup', handlePointerUp);
+    // No browser menu for a right-click while the Band builder is on (it takes an anchor off)
+    const blockBandMenu = (e) => {
+      if (bandPickRef.current) e.preventDefault();
+    };
+    inputEl.addEventListener('contextmenu', blockBandMenu);
+    // A band handle let go outside the view still ends the drag (and gives the camera back)
+    const endBandDragAnywhere = () => {
+      if (!bandDragRef.current) return;
+      const { index } = bandDragRef.current;
+      bandDragRef.current = null;
+      orbit.enabled = true;
+      const h = bandHoverRef.current;
+      const spot = h ? h.list[h.index] : null;
+      onBandHandleRef.current?.(index, spot ? { instanceId: spot.instanceId, feature: spot.feature, height: spot.height } : null, { done: true });
+    };
+    window.addEventListener('pointerup', endBandDragAnywhere);
+    window.addEventListener('pointercancel', endBandDragAnywhere);
     inputEl.addEventListener('pointermove', handlePointerMove);
     inputEl.addEventListener('dblclick', handleDoubleClick);
     // Shift+click selects parts; without this the browser also extends a text selection across the page
@@ -6456,6 +6649,9 @@ export default function Viewport3D({
       inputEl.removeEventListener('pointerup', handleRingPointerUp, true);
       inputEl.removeEventListener('pointerdown', handlePointerDown);
       inputEl.removeEventListener('pointerup', handlePointerUp);
+      inputEl.removeEventListener('contextmenu', blockBandMenu);
+      window.removeEventListener('pointerup', endBandDragAnywhere);
+      window.removeEventListener('pointercancel', endBandDragAnywhere);
       inputEl.removeEventListener('pointermove', handlePointerMove);
       inputEl.removeEventListener('dblclick', handleDoubleClick);
       inputEl.removeEventListener('mousedown', preventShiftTextSelect);
@@ -6618,7 +6814,19 @@ export default function Viewport3D({
             const isMetal = isMetalPart(partMeta);
             const baseColor = resolvePartBaseColor(inst, partMeta);
             const isClear = isClearPlasticPart(partMeta);
-            const material = isClear
+            // Rubber bands and belts (openspec rubber-bands): silicone ones glossy, rubber belts satin
+            const bandFinish = isBandPart(partMeta) ? (/silicone/i.test(partMeta.name || '') ? 'silicone' : 'rubber') : null;
+            const material = bandFinish
+              ? new THREE.MeshPhysicalMaterial({
+                  color: new THREE.Color(baseColor),
+                  roughness: bandFinish === 'silicone' ? 0.28 : 0.6,
+                  metalness: 0,
+                  clearcoat: bandFinish === 'silicone' ? 0.8 : 0.15,
+                  clearcoatRoughness: bandFinish === 'silicone' ? 0.12 : 0.5,
+                  sheen: bandFinish === 'silicone' ? 0.3 : 0,
+                  envMapIntensity: bandFinish === 'silicone' ? 1.2 : 0.5
+                })
+              : isClear
               ? new THREE.MeshPhysicalMaterial({
                   color: new THREE.Color(baseColor),
                   roughness: 0.06,
@@ -6659,16 +6867,16 @@ export default function Viewport3D({
 
             geometries.forEach((geo, index) => {
               let meshMat = material;
-              if (geo.userData.rubber) meshMat = fixedMaterials.get('rubber');
-              else if (geo.userData.fixedColor) meshMat = fixedMaterials.get(geo.userData.fixedColor);
+              if (geo.userData.rubber && !bandFinish) meshMat = fixedMaterials.get('rubber');
+              else if (geo.userData.fixedColor && !bandFinish) meshMat = fixedMaterials.get(geo.userData.fixedColor);
 
               const mesh = new THREE.Mesh(geo, meshMat);
               mesh.castShadow = true; // only matters while the Shadows option is on
               mesh.receiveShadow = true;
               mesh.userData.instanceId = inst.instanceId;
               mesh.userData.isPartMesh = true;
-              if (geo.userData.rubber) mesh.userData.fixedColor = RUBBER_COLOR;
-              else if (geo.userData.fixedColor) mesh.userData.fixedColor = geo.userData.fixedColor;
+              if (geo.userData.rubber && !bandFinish) mesh.userData.fixedColor = RUBBER_COLOR;
+              else if (geo.userData.fixedColor && !bandFinish) mesh.userData.fixedColor = geo.userData.fixedColor;
               if (isMetal) mesh.userData.isMetal = true;
               if (isClear) mesh.userData.clearPlastic = true;
               group.add(mesh);

@@ -14,7 +14,8 @@
  * motor }], links: [{ kind, a, b, ratio, sign, axisA, axisB?, direction?, mmPerRad? }],
  * motors: [{ id, label, hinge }], still: [partId], pins: [partId], solidPins: [partId] (the pins that
  * are solid posts, standoffs, and so collide), tracks: [{ links (in order round
- * the loop, or null), linkIds, grippers: [[gripperId, linkId]], frame: bodyId, drive: { body, axis, teeth } | null }], warnings: [{ partId, text }] }.
+ * the loop, or null), linkIds, grippers: [[gripperId, linkId]], frame: bodyId, drive: { body, axis, teeth } | null }], bands: [{ id, label,
+ * elements, bodies (per spot), pulls, freeMm, ... }] (openspec rubber-bands), warnings: [{ partId, text }] }.
  */
 import { gapStrengths, jointSpec, seatGrip, snapGrip } from './fastenerStrength.js';
 
@@ -56,7 +57,7 @@ function unionFind(ids) {
 }
 
 export function buildBodyGraph(inputs) {
-  const { parts, seated, groups, meshes, chains, tracks = [], sprocketAxes = {}, bays = [] } = inputs;
+  const { parts, seated, groups, meshes, chains, tracks = [], sprocketAxes = {}, bays = [], bands = [] } = inputs;
   const byId = new Map(parts.map((p) => [p.id, p]));
   const labelOf = (id) => byId.get(id)?.label || id;
   const warnings = [];
@@ -441,9 +442,17 @@ export function buildBodyGraph(inputs) {
     })
     .filter(Boolean);
 
+  // Bands (openspec rubber-bands): no body of their own; each spot belongs to the body of its part.
+  // A band whose spots are all on one body pulls on nothing.
+  const bandList = bands.map((b) => {
+    const spotBodies = b.elements.map((e) => bodyOf(e.instanceId));
+    return { ...b, bodies: spotBodies, pulls: new Set(spotBodies.filter(Boolean)).size > 1 };
+  });
+
   return {
     bodies: bodies.map(({ root, ...rest }) => rest),
     tracks: trackList,
+    bands: bandList,
     ground: bodies[0]?.id || null,
     fixed,
     loose,

@@ -54,6 +54,10 @@ A band's path SHALL follow from its **route**, which is:
 - the number of wraps on each spot (1 to 3);
 - whether it crosses between two round spots (a figure-8).
 
+Each spot on a route SHALL be a **hook** (the band is looped on it) or a **guide** (the band bends round it on the way between two hooks). The first and last spots SHALL be hooks. Between them, posts, grooves, rims, gaps and the anchor hook SHALL be hooks, and edges SHALL be guides.
+
+A route with two hooks SHALL be a **fold**: the band runs from the first hook to the second and comes back over the same guides and bends in reverse, beside itself. A route with three or more hooks SHALL be a **loop**: the band runs from each hook to the next and from the last to the first, and a guide applies only between the two hooks it was given between.
+
 **Outside** SHALL mean the band bends round the spot with the spot inside the bend, as a band stretched round a ring of posts does. **Inside** SHALL mean the band bends the other way, with the spot pressing into the loop. This meaning SHALL hold when the route isn't flat.
 
 Between spots the band SHALL run in straight lines. It SHALL leave each round spot where its curve meets the next straight line, and SHALL pass a gap at that gap's centre. A band with more wraps on a spot SHALL go round that spot that many times.
@@ -63,11 +67,15 @@ On a smooth post, a band SHALL sit at the height the user picked, slid along the
 - a head, shoulder or part on the post;
 - another band already on it.
 
-No straight run SHALL pass through a part. A run that would SHALL make that part a spot (see "Parts in the way").
+No part of a band SHALL pass through a part. A run that would SHALL bend round that part (see "Parts in the way").
 
 #### Scenario: Two-post spring
 - **WHEN** a #117B band's route is Swish's left Catapult Arm standoff, then the 0x3 Connector Pin in the Chassis 2x20 Beam, both outside
 - **THEN** the band is a long loop with two straight runs between them, curving round each
+
+#### Scenario: Two hooks with a beam between
+- **WHEN** a band's route is a standoff on one face of a 2x14 Beam and a pin on the other side of it
+- **THEN** both halves of the band go over the same edge of the beam, side by side, and the band touches no other part
 
 #### Scenario: Through a tooth gap
 - **WHEN** a #117B band's route on the right side of Swish's intake is the upper front standoff, then the inner 24 Tooth Sprocket's gap in line with it, then the left-side spots, then the gap in line with the upper back standoff, then that standoff
@@ -86,18 +94,24 @@ The band SHALL be drawn, and the builder panel SHALL say, in one of four states:
 - **tight:** amber, up to 3.0;
 - **too far:** red, past 3.0.
 
-The panel SHALL show the stretch, for example "1.6×", and the band's pull in newtons at that stretch. When the band is slack or too far, the panel SHALL name the library band or belt whose stretch on the same route would be closest to 1.5×. The thresholds and the pull SHALL be listed as assumed values, so they can be changed in one place.
+The panel SHALL show the stretch, for example "1.6×", and the band's pull in newtons at that stretch. When the band is slack or too far, the panel SHALL name the library band or belt whose stretch on the same route would be closest to 1.5×.
+
+A band SHALL NOT be placed slack. When the size the user picked would be slack on the route, the builder SHALL place nothing, say how long the band and the route are, and offer the size that fits in one click; `place_band` SHALL refuse with the same size named, unless `allowSlack` is given. A band already placed that goes slack because its parts moved SHALL stay, shown slack. The thresholds and the pull SHALL be listed as assumed values, so they can be changed in one place.
 
 #### Scenario: Swish arm band
 - **WHEN** the two-post route of Swish's catapult arm band is used with a #117B band
 - **THEN** it shows snug, at about 1.6×
+
+#### Scenario: Band too long
+- **WHEN** a #117B band (354 mm) is picked for a route 166 mm long
+- **THEN** it isn't placed, and the panel offers the belt whose stretch on that route is closest to 1.5×
 
 #### Scenario: Band too small
 - **WHEN** the same route is used with a 2x30 mm Square Silicone Belt
 - **THEN** it shows too far, in red, and the panel suggests the #117B
 
 ### Requirement: Band builder
-**Tools → Band builder** SHALL start band picking in the 3D view, with a panel listing the band and belt sizes and **Choose for me**. Choose for me SHALL pick the size closest to 1.5× when the loop is closed.
+**Tools → Band builder** SHALL start band picking in the 3D view, with a panel listing the band and belt sizes and **Choose for me**. Choose for me SHALL be the size until the user picks one, and SHALL use the size closest to 1.5× on the route, in the see-through band as well as the placed one.
 
 While picking:
 - The single spot nearest the pointer SHALL light up. A gap's label SHALL show its number, for example "gap 7".
@@ -107,6 +121,8 @@ While picking:
 - Clicking the first spot again, **Enter** or **Done** SHALL close the loop once it has two or more spots. Nothing else SHALL close it, so a route can have any number of spots.
 - **Backspace** SHALL take off the last spot.
 - **Esc** SHALL cancel without changing the build.
+
+The band SHALL come back as "How a band's path is found" says (a fold for two hooks, a loop for three or more) without the user choosing. With three or more spots, the panel SHALL show which it is and let the user force the other: **Loop** or **There and back**. The see-through band SHALL show the route the band would really take, bends round parts included, after each click.
 
 Each spot in the route SHALL have on-screen controls in the panel for side (outside or inside), wraps (1 to 3), and, between two round spots next to each other, cross. Hovering a spot in the view SHALL offer the same three controls beside it. Finishing SHALL be one history step labelled with the band and its spots, for example "Band: #117B round 2 spots (Catapult Arm standoff, Chassis pin)".
 
@@ -118,30 +134,54 @@ Each spot in the route SHALL have on-screen controls in the panel for side (outs
 - **WHEN** the pointer is over a 24 Tooth Sprocket's rim, gap 6 is lit, and the user presses R once
 - **THEN** gap 7 is lit and the see-through band passes through it
 
+#### Scenario: Under two beams from one pin to the next
+- **WHEN** the user clicks a standoff on one beam, that beam's bottom edge, the next beam's bottom edge and a standoff on that beam, and presses Done
+- **THEN** the band runs under both beams there and back, bending only at those two edges, overlapping nothing
+
 #### Scenario: Flip to inside
 - **WHEN** a route has three standoffs and the user sets the middle one to inside
 - **THEN** the band goes round that standoff on the inside of the loop and its stretch updates
 
 ### Requirement: Routes from a start and an end
-When the user has clicked only two spots and presses **Show routes** in the panel, or calls `place_band` without a full route, the app SHALL list the routes between them. Each listed route SHALL:
-- touch only spots within reach;
-- pass through no part;
-- be snug or tight.
-
-The routes SHALL be sorted by fewest spots, then by stretch closest to 1.5×. Each route SHALL be named in words, for example "round Standoff #3, 1.8×". R SHALL step the preview through them, and Enter SHALL keep the one shown. When no route fits, the panel SHALL say why, for example "every route stretches past 3×".
+When a band between two hooks has more than one clear way to go (over a beam or under it), the app SHALL take the shortest and SHALL offer the others: **Other way round** in the panel (R while no spot is lit) SHALL step the see-through band through up to three next-shortest ways, each bending round different corners and passing through no part, and Done SHALL keep the one shown. `place_band` with `list: true` and two spots SHALL list the same ways, each named in words with its stretch, for example "over 2x14 Beam, 1.8×". When no way is found, the panel SHALL say which part blocks the band.
 
 #### Scenario: Pick among routes
-- **WHEN** the user clicks a pin on an arm and a pin on the chassis with a standoff partly in the way, and presses Show routes
-- **THEN** the panel lists a route round the standoff's near side and one round its far side, the first is previewed, and R shows the second
+- **WHEN** the user clicks a standoff on the outer face of each of two 2x14 Beams joined at a right angle, and presses Other way round
+- **THEN** the see-through band changes from over the beams' top edges to under their bottom edges, or the reverse, and Done places the one shown
 
 ### Requirement: Parts in the way
-When a straight run of a band would pass through a part that is not in the route, the app SHALL ask whether the band goes over or under that part, as Chain builder does. The answer SHALL add that part's nearest spot to the route on the chosen side.
+When a half of a band, from one hook to the next, would pass through parts, it SHALL take the shortest clear way round them, as a tight string would, without asking: it SHALL bend only on the outer corners of those parts' real shapes, and all the parts in its way SHALL be weighed together, not one at a time. In a fold the other half SHALL come back over the same bends. The bends added SHALL be listed by part. The panel SHALL offer **Other way round** to step through up to three next-shortest ways. Only when no way is found within the limits (8 bends on a half, 3× stretch) SHALL the app say which part blocks the band and ask for a spot to go round.
 
-When the run would pass through the solid web of a gear or sprocket, the band SHALL instead go through the tooth gap that gives the shortest path. The gap SHALL be named in the panel, and R SHALL step it to the next gap.
+When the run would pass through the solid web of a gear or sprocket, the band SHALL go through the tooth gap that gives the shortest path. The gap SHALL be named in the panel, and R SHALL step it to the next gap.
+
+A post SHALL only take a band where at least 1.5 mm of it is free of the parts it goes into, measured on those parts' shapes. A pin buried in the parts it joins SHALL be refused with a message saying nothing of it sticks out.
+
+#### Scenario: Band between two pins across a beam
+- **WHEN** the user strings a band from a pin on one side of a 2x14 Beam to a standoff on the other side
+- **THEN** both halves of the band go over the same edge of the beam, the panel lists the beam as bent round, and the band overlaps nothing
+
+#### Scenario: Round the corner of two beams
+- **WHEN** the user strings a band from a standoff on the outer face of one 2x14 Beam to a standoff on the outer face of another joined to it at a right angle
+- **THEN** the band bends only on the two beams' own corners, both halves the same way, and overlaps nothing
+
+#### Scenario: Buried pin
+- **WHEN** the user picks a 1x1 Connector Pin that sits wholly inside the beam and corner connector it joins
+- **THEN** the band isn't placed and the message says nothing of the pin sticks out
 
 #### Scenario: Default gap
 - **WHEN** a band runs from a standoff between two sprockets toward the other side of the robot, and the straight line would cut the inner sprocket's web
 - **THEN** it goes through the gap lined up with that standoff, as in VEX's CAD, and the panel names it
+
+### Requirement: Band overlaps
+One rule SHALL say whether a strung band overlaps a part, in the 3D view, the audit, `place_band` and after parts move: the band overlaps a part when any of its strip sits more than 0.5 mm inside that part. The parts the band is strung on SHALL be tested like any other, except where the band curves round its own spot and where it passes a tooth gap. A band lying against a part SHALL NOT be shown as overlapping. Two bands on the same spot SHALL NOT count as overlapping.
+
+#### Scenario: Band lying on a beam
+- **WHEN** a band is strung from a standoff over a beam's edge to a pin
+- **THEN** the band isn't shown red, and the audit lists no overlap for it
+
+#### Scenario: Band cutting its own beam
+- **WHEN** a beam on a band's route is moved so that one of the band's straight runs passes through it
+- **THEN** the band is shown as overlapping that beam, or is routed round it
 
 ### Requirement: Ring close-up
 When the route touches a gear, sprocket or pulley, the builder panel SHALL show a flat drawing of that part's face. The drawing SHALL include:
@@ -216,9 +256,11 @@ A band's route and path SHALL be saved with the build, in starters, the build li
 The MCP server SHALL have a `place_band` tool taking:
 - `bandPartId` (or an existing band's `instanceId`);
 - `spots`, an ordered list of `{ instanceId, feature, side, wraps, height }`, where `feature` names a post, groove, rim, gap number, edge or anchor hook;
-- an optional `cross`.
+- an optional `cross`;
+- an optional `back`: `"auto"` (the default: a fold for two hooks, a loop for three or more), `"same"` or `"straight"`;
+- an optional `allowSlack`.
 
-With two or more spots and no `list`, it SHALL place or reroute the band and return its stretch, pull, path length and any parts in the way. A part in the way that needs an over-or-under answer SHALL be returned as `needsRoute` and nothing placed. With one spot, or with `list: true`, it SHALL change nothing and return:
+With two or more spots and no `list`, it SHALL place or reroute the band, bending round parts in the way as the app does, and return its stretch, pull, path length, the bends it added and any overlaps. A part no way round clears SHALL be returned as `needsRoute` and nothing placed. A band that would be slack SHALL be refused with the size that fits. With one spot, or with `list: true`, it SHALL change nothing and return:
 - the spots within reach of those parts, with their features named as the tool takes them;
 - the routes it would list in the app.
 

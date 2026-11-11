@@ -450,11 +450,11 @@
    "offsetMm": [
     0,
     0,
-    -0.03
+    0
    ],
    "source": "mesh",
-   "checkedOn": "4063-2026-2027_viqrc_herobot_flop",
-   "meanErrorMm": 0.064
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.005
   },
   "228-7045": {
    "rule": "origin",
@@ -464,8 +464,314 @@
     0
    ],
    "source": "mesh",
-   "checkedOn": "4063-2026-2027_viqrc_herobot_flop",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
    "meanErrorMm": 0.005
+  },
+  "228-2500-239": {
+   "rule": "origin",
+   "turn": [
+    0,
+    180,
+    0
+   ],
+   "offsetMm": [
+    6.73,
+    5.43,
+    18.2
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.004
+  },
+  "228-2500-034": {
+   "rule": "centre",
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.001
+  },
+  "228-2500-087": {
+   "rule": "centre",
+   "turn": [
+    0,
+    0,
+    180
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.03
+  },
+  "228-2500-421": {
+   "rule": "centre",
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.055
+  },
+  "228-2500-438": {
+   "rule": "centre",
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.005
+  },
+  "228-2500-214": {
+   "rule": "centre",
+   "turn": [
+    0,
+    180,
+    0
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.007
+  },
+  "228-2500-032": {
+   "rule": "centre",
+   "turn": [
+    0,
+    0,
+    180
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.001
+  },
+  "228-2500-1411": {
+   "rule": "centre",
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.011
+  },
+  "228-2500-145": {
+   "rule": "centre",
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.006
+  },
+  "228-2500-1407": {
+   "rule": "centre",
+   "turn": [
+    0,
+    0,
+    -90
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.003
+  },
+  "228-2500-120": {
+   "rule": "centre",
+   "turn": [
+    0,
+    180,
+    180
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.001
+  },
+  "228-2500-2236": {
+   "rule": "origin",
+   "turn": [
+    0,
+    0,
+    180
+   ],
+   "offsetMm": [
+    0,
+    0.01,
+    0
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.004
+  },
+  "228-2500-148": {
+   "rule": "centre",
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.003
+  },
+  "228-2500-003": {
+   "rule": "centre",
+   "turn": [
+    0,
+    180,
+    0
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.004
+  },
+  "228-2500-131": {
+   "rule": "centre",
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.006
+  },
+  "228-2500-028": {
+   "rule": "centre",
+   "turn": [
+    0,
+    180,
+    180
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.003
+  },
+  "228-2500-235": {
+   "rule": "centre",
+   "turn": [
+    0,
+    180,
+    0
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.007
+  },
+  "228-2500-014": {
+   "rule": "centre",
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.007
+  },
+  "228-2500-083": {
+   "rule": "centre",
+   "turn": [
+    0,
+    0,
+    180
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.003
+  },
+  "228-2500-251": {
+   "rule": "centre",
+   "turn": [
+    0,
+    0,
+    -90
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.011
+  },
+  "228-2500-2234": {
+   "rule": "origin",
+   "turn": [
+    0,
+    0,
+    180
+   ],
+   "offsetMm": [
+    0,
+    0.01,
+    0
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.003
+  },
+  "228-2500-250": {
+   "rule": "centre",
+   "turn": [
+    0,
+    0,
+    180
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.004
+  },
+  "228-2500-013": {
+   "rule": "centre",
+   "turn": [
+    0,
+    180,
+    180
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.001
+  },
+  "228-2500-1925": {
+   "rule": "centre",
+   "turn": [
+    0,
+    180,
+    0
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.007
+  },
+  "228-2500-1258": {
+   "rule": "centre",
+   "turn": [
+    0,
+    90,
+    0
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.003
+  },
+  "228-2500-038": {
+   "rule": "centre",
+   "turn": [
+    0,
+    180,
+    0
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.003
+  },
+  "228-2500-1117": {
+   "rule": "centre",
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.005
+  },
+  "228-2500-136": {
+   "rule": "centre",
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.003
+  },
+  "228-2500-002": {
+   "rule": "centre",
+   "turn": [
+    0,
+    0,
+    180
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.004
+  },
+  "228-2500-146": {
+   "rule": "centre",
+   "turn": [
+    0,
+    180,
+    90
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.006
+  },
+  "228-2500-008": {
+   "rule": "centre",
+   "turn": [
+    0,
+    0,
+    180
+   ],
+   "source": "mesh",
+   "checkedOn": "4094-viqc 2024-2025 hero bot swish",
+   "meanErrorMm": 0.001
   }
  }
 }

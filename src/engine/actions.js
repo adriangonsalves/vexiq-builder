@@ -25,10 +25,27 @@ import {
 import { buildBodyGraph } from '../sim/bodyGraph.js';
 import { fitSet, fixAssembly } from './fixAssembly.js';
 import { bendSheet, sheetBendChoices } from './sheetBending.js';
+import { placeBand, rerouteBands } from './bandRouting.js';
+import { followBands } from '../utils/bandRoute.js';
+import { withBandFlags } from './bandFit.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet', 'play_setup'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet', 'play_setup', 'place_band', 'band_routes', 'band_flags'];
 
 export function runAction(action, state, params = {}) {
+  const result = runActionOnce(action, state, params);
+  // Bands follow the parts an action moved (openspec rubber-bands), in the same step
+  if (result?.state?.instances && result.state.instances !== state.instances) {
+    const followed = followBands(state.instances || [], result.state.instances, partOf);
+    // ...and are flagged by the band rule where they now overlap a part
+    // ...routed again where the move left their bends wrong, and flagged by the band rule
+    const rerouted = followed.changed.length ? rerouteBands(followed.instances, followed.changed).instances : followed.instances;
+    const flagged = followed.changed.length ? withBandFlags(rerouted, followed.changed) : rerouted;
+    if (flagged !== result.state.instances) return { ...result, state: { ...result.state, instances: flagged } };
+  }
+  return result;
+}
+
+function runActionOnce(action, state, params = {}) {
   const { catalogById } = getCatalog();
 
   if (action === 'auto_fasten') {
@@ -319,6 +336,31 @@ export function runAction(action, state, params = {}) {
       targetPortId: params.targetPortId ?? null
     });
   }
+
+  // Band builder (openspec rubber-bands): string a band round spots (or list spots and routes), and
+  // the routes between two spots for the panel's Show routes
+  if (action === 'band_flags') {
+    // Each strung band's overlap flag by the band rule (the app asks after loading a build and after
+    // bands follow a move, since the view doesn't judge bands)
+    // Bands whose parts moved so their bends no longer fit are routed again first (`bands`)
+    const re = rerouteBands(state.instances || []);
+    const flags = {};
+    const bands = {};
+    for (const i of withBandFlags(re.instances)) {
+      if (i.shape?.kind === 'band' && Array.isArray(i.shape.route)) flags[i.instanceId] = Boolean(i.isIntersecting);
+      if (re.changed.includes(i.instanceId)) bands[i.instanceId] = i;
+    }
+    return { ok: true, flags, bands };
+  }
+  if (action === 'place_band') {
+    return placeBand(state, params);
+  }
+  if (action === 'band_routes') {
+    // The ways round for the given spots (Other way round), as place_band with list gives them
+    const res = placeBand(state, { ...params, list: true });
+    return res.ok ? { ok: true, routes: res.routes, reason: res.routes.length ? null : 'no way round is clear' } : res;
+  }
+
 
   // What one part overlaps and what it only tight-fits against (the Inspector, openspec tight-fits)
   if (action === 'contacts') {

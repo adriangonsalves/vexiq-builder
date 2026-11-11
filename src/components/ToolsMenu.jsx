@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ChevronDown, ClipboardCheck, Expand, Link2, Magnet, Play, Ruler, Spline, Wrench } from 'lucide-react';
+import { ChevronDown, CircleDashed, ClipboardCheck, Expand, Link2, Magnet, Play, Ruler, Spline, Wrench } from 'lucide-react';
 import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.jsx';
 
 /**
@@ -14,8 +14,11 @@ import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.j
  * Bend sheet (openspec shaped-parts-and-sheet-bending) curves a plastic sheet onto another part's holes.
  * Play mode (openspec play-mode) runs the Smart Motors and shows how the build moves; ticked while on,
  * and the way out, so it stays clickable while the other tools are greyed out.
+ * Band builder (openspec rubber-bands) strings a rubber band or belt round spots picked in the view;
+ * Band between these and Belt round these start it from the selection; Flatten band takes a strung
+ * band off its spots.
  */
-export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, bendReason = null, playing = false, playReason = null, onPlay, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack, onBendSheet }) {
+export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, bendReason = null, playing = false, playReason = null, onPlay, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack, onBendSheet, bandOpen = false, onBand, betweenReason = null, onBandBetween, beltReason = null, onBelt, flattenBandReason = null, onFlattenBand }) {
   const buttonRef = useRef(null);
   const [at, setAt] = useState(null);
   const close = useCallback(() => setAt(null), []);
@@ -114,6 +117,24 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, aud
             title={disabledReason || bendReason || 'Curve the selected plastic sheet onto a row of holes on the other selected part (its pinned rows stay flat), or, with only a sheet selected, Alt+click one of its holes and then a hole on another part.'}
           >
             Bend sheet…
+          </MenuItem>
+          <MenuItem
+            icon={CircleDashed}
+            checked={bandOpen}
+            disabled={Boolean(disabledReason) && !bandOpen}
+            onSelect={choose(onBand)}
+            title={bandOpen ? 'Close the Band builder (Esc)' : disabledReason || 'String a rubber band or belt: click the posts, pins, pulleys, tooth gaps or beam ends it goes round, in order'}
+          >
+            Band builder
+          </MenuItem>
+          <MenuItem disabled={Boolean(disabledReason || betweenReason)} onSelect={choose(onBandBetween)} title={disabledReason || betweenReason || 'Start a band between the nearest spots of the two selected parts'}>
+            Band between these
+          </MenuItem>
+          <MenuItem disabled={Boolean(disabledReason || beltReason)} onSelect={choose(onBelt)} title={disabledReason || beltReason || 'Start a belt round the outside of the selected pulleys, hubs or sprockets'}>
+            Belt round these
+          </MenuItem>
+          <MenuItem disabled={Boolean(disabledReason || flattenBandReason)} onSelect={choose(onFlattenBand)} title={disabledReason || flattenBandReason || 'Take the selected band off its spots: a flat ring where it is'}>
+            Flatten band
           </MenuItem>
           {disabledReason && <div className="popover-note">{disabledReason}</div>}
         </PopoverMenu>

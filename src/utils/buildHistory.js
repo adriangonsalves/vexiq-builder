@@ -355,16 +355,21 @@ export function recordStep(
   history,
   before,
   after,
-  { source = 'app', label, mergeKey, at = Date.now(), mergeWindowMs = MERGE_WINDOW_MS, linear = false } = {}
+  { source = 'app', label, mergeKey, at = Date.now(), mergeWindowMs = MERGE_WINDOW_MS, linear = false, mergeIntoHead = false } = {}
 ) {
   const head = stepById(history, history.headId);
+  // `mergeIntoHead`: a follow-up the app makes by itself just after a step (a band routed again
+  // after its parts moved) joins that step, keeping its label
+  const followUp = mergeIntoHead && head && childrenOf(history, head.id).length === 0 && at - (head.lastAt ?? head.at) <= 10000;
+  if (followUp) label = head.label;
   const canMerge =
-    mergeKey &&
-    head &&
-    head.mergeKey === mergeKey &&
-    head.source === source &&
-    at - (head.lastAt ?? head.at) <= mergeWindowMs &&
-    childrenOf(history, head.id).length === 0;
+    followUp ||
+    (mergeKey &&
+      head &&
+      head.mergeKey === mergeKey &&
+      head.source === source &&
+      at - (head.lastAt ?? head.at) <= mergeWindowMs &&
+      childrenOf(history, head.id).length === 0);
 
   if (canMerge) {
     const beforeHead = revertOps(before, head.ops);

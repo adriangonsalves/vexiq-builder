@@ -56,6 +56,8 @@ import SelectMenu from './components/SelectMenu.jsx';
 import { ChainBuilderDialog, ChainRouteDialog } from './components/BuildMenu.jsx';
 import ToolsMenu from './components/ToolsMenu.jsx';
 import BendSheetDialog from './components/BendSheetDialog.jsx';
+import BandBuilderPanel from './components/BandBuilderPanel.jsx';
+import { useBandBuilder } from './components/useBandBuilder.js';
 import AuditPanel from './components/AuditPanel.jsx';
 import { auditIssues, problemCount } from './utils/auditIssues.js';
 import { buildChainPath, checkSprocketsForChain } from './utils/chainPath.js';
@@ -105,6 +107,9 @@ import {
 } from './utils/partGroups.js';
 import { connectedFrom, layersFrom } from './utils/jointLayers.js';
 import { describeShape, shapedPart } from './utils/shapedParts.js';
+import { bandReport, copiedBand, followBands, isRoutedBand } from './utils/bandRoute.js';
+import { STRETCH_COLORS } from './sim/bandStrength.js';
+import { BAND_SPECS } from './utils/bandPath.js';
 import { isPlasticSheet } from './utils/sheetBend.js';
 import {
   applyOps,
@@ -183,6 +188,8 @@ const applyPatches = (parts, patches) => {
 
 export default function App() {
   const [catalog, setCatalog] = useState([]);
+  // The part a copy is drawn as, for code outside React's render (bands following their parts)
+  const partOfRef = useRef(() => null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
 
@@ -472,12 +479,19 @@ export default function App() {
     }
     const source = meta.source || 'app';
     setBuild((b) => {
-      const next = typeof updater === 'function' ? updater(b.instances) : updater;
-      if (next === b.instances) return b;
+      const proposed = typeof updater === 'function' ? updater(b.instances) : updater;
+      if (proposed === b.instances) return b;
+      // Bands follow the parts they're strung on (openspec rubber-bands), in the same step
+      const followed = followBands(b.instances, proposed, partOfRef.current);
+      const next = followed.instances;
+      if (followed.flattened.length) {
+        queueMicrotask(() => setActionFeedback({ message: `${followed.flattened.join(', ')} lost ${followed.flattened.length > 1 ? 'their' : 'its'} spots and ${followed.flattened.length > 1 ? 'are' : 'is'} a flat ring again.`, isError: false }));
+      }
       const recorded = recordStep(b.history, b.instances, next, {
         source,
         label: meta.label,
         mergeKey: meta.mergeKey,
+        ...(meta.mergeIntoHead ? { mergeIntoHead: true } : {}),
         ...(meta.mergeWindowMs !== undefined ? { mergeWindowMs: meta.mergeWindowMs } : {}),
         linear: isLinearHistory(settingsRef.current)
       });
@@ -952,6 +966,7 @@ export default function App() {
     }
     return map;
   }, [catalog]);
+  partOfRef.current = (inst) => shapedPart(catalogMap.get(inst?.partId), inst?.shape);
 
   const categories = useMemo(() => {
     const counts = new Map();
@@ -1643,7 +1658,8 @@ export default function App() {
       selectedInstance.position[2]
     ];
     const copy = {
-      ...selectedInstance,
+      // A band copied without its parts is a flat ring (openspec rubber-bands)
+      ...copiedBand(selectedInstance, new Map()),
       instanceId: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       label: `${selectedInstance.label} (Copy)`,
       position: copyPos,
@@ -1765,6 +1781,7 @@ export default function App() {
     selectedId: primaryId,
     selectedIds,
     placePartAt: (part, pos, color) => handleAddPart(part, pos, color, { source: 'assistant' }),
+    runAction: (action, params) => handleRunSmartActionRef.current(action, params),
     configureViewport: ({
       transformMode: tm,
       showGrid: sg,
@@ -2293,6 +2310,53 @@ export default function App() {
   // Bend by holes (openspec bend-sheet-by-holes): Alt+click a sheet hole, then a hole of another part
   const handleRunSmartActionRef = useRef(null);
   handleRunSmartActionRef.current = handleRunSmartAction;
+
+  // The Band builder (openspec rubber-bands)
+  const runBandAction = useCallback((action, params) => handleRunSmartActionRef.current(action, params), []);
+  const instancesForBandRef = useRef(instances);
+  instancesForBandRef.current = instances;
+  // The engine's try of a route for the Band builder's preview: changes nothing, records nothing
+  const previewBandPlace = useCallback((params) => backend.runAction('place_band', { instances: instancesForBandRef.current }, params), []);
+  // Strung bands' overlap flags come from the engine's band rule (the view doesn't judge bands): asked
+  // when a build loads and whenever bands or the parts change (openspec rubber-bands)
+  const bandFlagKey = useMemo(() => (instances.some(isRoutedBand) ? instances.map((i) => `${i.instanceId}:${i.position}:${i.rotation}:${i.visible}:${isRoutedBand(i) ? `${i.shape.path?.lengthMm}:${Boolean(i.isIntersecting)}` : ''}`).join('|') : ''), [instances]);
+  useEffect(() => {
+    if (!bandFlagKey) return undefined;
+    let live = true;
+    const timer = setTimeout(() => {
+      backend
+        .runAction('band_flags', { instances: instancesForBandRef.current }, {})
+        .then((data) => {
+          if (!live || !data?.ok || lockedRef.current) return;
+          // Bands whose parts moved so their bends no longer fit, routed again: part of the move's step
+          const rerouted = data.bands || {};
+          if (Object.keys(rerouted).length) {
+            setInstances((list) => list.map((i) => (rerouted[i.instanceId] && i.shape?.kind === 'band' ? { ...rerouted[i.instanceId], ...(i.locked !== undefined ? { locked: i.locked } : {}) } : i)), { mergeIntoHead: true });
+          }
+          setInstances((list) => {
+            let changed = false;
+            const next = list.map((i) => {
+              if (!(i.instanceId in data.flags) || rerouted[i.instanceId] || Boolean(i.isIntersecting) === data.flags[i.instanceId]) return i;
+              changed = true;
+              return { ...i, isIntersecting: data.flags[i.instanceId] };
+            });
+            return changed ? next : list;
+          });
+        })
+        .catch(() => {});
+    }, 150);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [bandFlagKey]);
+  const band = useBandBuilder({ instances, catalog, catalogMap, selectedIds, runAction: runBandAction, previewPlace: previewBandPlace, setFeedback: setActionFeedback, locked: Boolean(preview || play) });
+  const selectedBand = selectedIds.length === 1 && isRoutedBand(instances.find((i) => i.instanceId === selectedIds[0])) ? instances.find((i) => i.instanceId === selectedIds[0]) : null;
+  const flattenBand = (inst) => {
+    if (!inst) return;
+    const { shape, ...flat } = inst;
+    setInstances((prev) => prev.map((i) => (i.instanceId === inst.instanceId ? flat : i)), { label: `Flatten ${inst.label}` });
+  };
   const [bendHoles, setBendHoles] = useState(null); // { sheetId, sheetLabel, portId, fits: [choice], index } while bending by holes
   const bendHolesRef = useRef(null);
   bendHolesRef.current = bendHoles;
@@ -2707,6 +2771,14 @@ export default function App() {
               onTrack={() => openChainBuilder('track')}
               bendReason={bendCheck.ok || bendFromHole ? null : bendCheck.error}
               onBendSheet={openBendSheet}
+              bandOpen={Boolean(band.session)}
+              onBand={() => (band.session ? band.close() : band.open())}
+              betweenReason={band.betweenCheck.ok ? null : band.betweenCheck.error}
+              onBandBetween={() => band.open(band.betweenCheck.route)}
+              beltReason={band.beltCheck.ok ? null : band.beltCheck.error}
+              onBelt={() => band.open(band.beltCheck.route, { size: '228-2500-221' })}
+              flattenBandReason={selectedBand ? null : 'Select a strung band.'}
+              onFlattenBand={() => flattenBand(selectedBand)}
             />
           </div>
 
@@ -2715,7 +2787,8 @@ export default function App() {
               type="button"
               className={`btn ${transformMode === 'translate' ? 'active' : ''}`}
               onClick={() => setTransformMode('translate')}
-              title="Move Tool (Shortcut: W)"
+              disabled={Boolean(selectedBand)}
+              title={selectedBand ? 'A band follows its spots: drag a handle' : 'Move Tool (Shortcut: W)'}
               aria-label="Move"
             >
               <Move size={14} />
@@ -2725,7 +2798,8 @@ export default function App() {
               type="button"
               className={`btn ${transformMode === 'rotate' ? 'active' : ''}`}
               onClick={() => setTransformMode('rotate')}
-              title="Rotate Tool (Shortcut: E)"
+              disabled={Boolean(selectedBand)}
+              title={selectedBand ? 'A band follows its spots: drag a handle' : 'Rotate Tool (Shortcut: E)'}
               aria-label="Rotate"
             >
               <RotateCw size={14} />
@@ -3001,6 +3075,10 @@ export default function App() {
             onTargetChange={handleTargetChange}
             onHoleAltClick={handleHoleAltClick}
             holePicking={Boolean(bendHoles) && !locked}
+            bandPick={locked ? null : band.viewportBand}
+            onBandHover={band.onHover}
+            onBandPick={band.onPick}
+            onBandHandle={band.onHandle}
             transformMode={transformMode}
             snapPitchFactor={snapPitchFactor}
             rotationSnapDeg={rotationSnapDeg}
@@ -3038,7 +3116,11 @@ export default function App() {
               motors={play.graph?.motors}
               throttles={playThrottles}
               status={playStatus}
-              warnings={play.graph?.warnings}
+              warnings={
+                play.mode === 'kinematic' && play.graph?.bands?.length
+                  ? [...(play.graph?.warnings || []), ...play.graph.bands.map((b) => ({ partId: b.id, text: `${b.label}: bands don't pull without physics` }))]
+                  : play.graph?.warnings
+              }
               limitSpeedByLoad={playLimitSpeedByLoad}
               onLimitSpeedByLoad={handlePlayLimitSpeedByLoad}
               simulateGravity={playSimulateGravity}
@@ -3057,6 +3139,8 @@ export default function App() {
               onClose={closePlay}
             />
           )}
+
+          {band.session && <BandBuilderPanel band={band} />}
 
           {explodeMode !== 'off' && (
             <ExplodePanel
@@ -3415,7 +3499,7 @@ export default function App() {
                 </div>
 
                 {/* A copy with its own shape: a bent sheet (openspec shaped-parts-and-sheet-bending) */}
-                {selectedInstance.shape && (
+                {selectedInstance.shape && !isRoutedBand(selectedInstance) && (
                   <div className="field-group">
                     <div className="field-label">
                       <span>Shape</span>
@@ -3425,6 +3509,86 @@ export default function App() {
                     </p>
                   </div>
                 )}
+
+                {/* A strung band (openspec rubber-bands): size, stretch, pull and its spots */}
+                {isRoutedBand(selectedInstance) && (() => {
+                  const rep = bandReport(selectedInstance, (i) => catalogMap.get(i.partId));
+                  if (!rep) return null;
+                  const name = (id) => instances.find((i) => i.instanceId === id)?.label || id;
+                  // The route shown is the band's whole loop (bends included): strung as it is
+                  const restring = (route, partId = selectedInstance.partId) =>
+                    handleRunSmartAction('place_band', { instanceId: selectedInstance.instanceId, spots: route, back: 'straight', allowSlack: true, ...(partId !== selectedInstance.partId ? { bandPartId: partId } : {}) });
+                  return (
+                    <div className="field-group">
+                      <div className="field-label">
+                        <span>Band</span>
+                      </div>
+                      <div className="band-stretch" title="Stretch is the band's length round its spots divided by its free length. Snug is 1 to 2×; 1.5 to 2× is best. Limits and pull are assumed values (src/sim/bandStrength.js).">
+                        <div className="band-stretch-head">
+                          <span className="band-dot" style={{ background: `#${(STRETCH_COLORS[rep.state] ?? 0x2fa84f).toString(16).padStart(6, '0')}` }} />
+                          <strong>{rep.stretch.toFixed(2)}× stretched</strong>
+                          <span className="band-stretch-state">{rep.state}</span>
+                        </div>
+                        <div className="band-stretch-bar" aria-hidden="true">
+                          <span className="band-stretch-fill" style={{ width: `${Math.min(100, (rep.stretch / 3) * 100)}%`, background: `#${(STRETCH_COLORS[rep.state] ?? 0x2fa84f).toString(16).padStart(6, '0')}` }} />
+                          <span className="band-stretch-mark" style={{ left: `${(1 / 3) * 100}%` }} />
+                          <span className="band-stretch-mark" style={{ left: `${(2 / 3) * 100}%` }} />
+                        </div>
+                        <p className="settings-note" style={{ margin: 0 }}>
+                          {rep.size}: {Math.round(rep.lengthMm)} mm round its spots, {Math.round(rep.freeMm)} mm free (+{Math.round(rep.lengthMm - rep.freeMm)} mm), pulling {rep.pullN.toFixed(1)} N
+                        </p>
+                      </div>
+                      <label className="settings-note" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        Size
+                        <select
+                          value={catalogMap.get(selectedInstance.partId)?.partNumber}
+                          onChange={(e) => {
+                            const part = catalog.find((p) => p.partNumber === e.target.value);
+                            // Strung again as the new size (its colour too, unless it was given its own)
+                            const sh = selectedInstance.shape;
+                            if (part) handleRunSmartAction('place_band', { instanceId: selectedInstance.instanceId, bandPartId: part.id, spots: sh.picks || sh.route, back: sh.picks ? sh.back || 'auto' : 'straight', allowSlack: true });
+                          }}
+                        >
+                          {catalog
+                            .filter((p) => BAND_SPECS[p.partNumber] && p.partNumber !== '228-2500-474')
+                            .map((p) => (
+                              <option key={p.id} value={p.partNumber}>
+                                {BAND_SPECS[p.partNumber].name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <ol className="band-route inspector-band-route">
+                        {selectedInstance.shape.route.map((s, i) => (
+                          <li key={`${s.instanceId}|${s.feature}|${i}`}>
+                            <span className="band-route-name" title={name(s.instanceId)}>
+                              {i + 1}. {s.feature.replace(/^post:/, '').replace(/^gap:/, 'gap ')} <span className="band-route-part">{name(s.instanceId)}</span>
+                            </span>
+                            <span className="band-controls">
+                              <button type="button" className="chip" onClick={() => restring(selectedInstance.shape.route.map((x, k) => (k === i ? { ...x, side: x.side === 'in' ? 'out' : 'in' } : x)))}>
+                                {s.side === 'in' ? 'Inside' : 'Outside'}
+                              </button>
+                              <button type="button" className="chip" onClick={() => restring(selectedInstance.shape.route.map((x, k) => (k === i ? { ...x, wraps: ((x.wraps || 1) % 3) + 1 } : x)))} title="Turns round this spot (1 to 3)">
+                                {s.wraps || 1}×
+                              </button>
+                              <button type="button" className={`chip ${s.cross ? 'active' : ''}`} onClick={() => restring(selectedInstance.shape.route.map((x, k) => (k === i ? { ...x, cross: !x.cross } : x)))} title="Cross the run to the next spot (a figure-8)">
+                                Cross
+                              </button>
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button type="button" className="btn btn-outline" onClick={() => band.editBand(selectedInstance)} title="Drag the band's spot handles to other spots, or a run onto a gear's rim to put it through a gap">
+                          Edit route
+                        </button>
+                        <button type="button" className="btn btn-outline" onClick={() => flattenBand(selectedInstance)} title="Take the band off its spots: a flat ring where it is">
+                          Flatten
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Part Color Swatches */}
                 <div className="field-group">

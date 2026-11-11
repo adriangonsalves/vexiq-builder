@@ -2832,3 +2832,243 @@ body,
 .app-shell[data-layout="small"] .panel-left .drawer-pin {
   margin-left: 0;
 }
+
+/* Band builder (openspec rubber-bands) */
+.band-panel {
+  position: absolute;
+  top: 52px;
+  left: 12px;
+  z-index: 16;
+  width: 300px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 64px);
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-panel-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  font-size: 12.5px;
+}
+.band-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.band-panel-title {
+  color: #f472b6;
+}
+.band-sizes,
+.band-ring-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.band-panel .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  font-size: 11.5px;
+  color: var(--text-primary, #e2e8f0);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.band-panel .chip.active {
+  color: #0f172a;
+  background: #f472b6;
+  border-color: #f472b6;
+}
+.band-hint {
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+.band-lit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px dashed #f472b6;
+  border-radius: 6px;
+}
+.band-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.band-route {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.band-route li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.band-route-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+.band-route-part {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.band-wraps {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.band-readout {
+  line-height: 1.4;
+}
+.band-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.band-suggest {
+  color: var(--text-secondary);
+}
+.band-routes ol {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+.band-routes .link-btn.active {
+  font-weight: 700;
+  text-decoration: underline;
+}
+.band-inway {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #f2a900;
+  border-radius: 6px;
+}
+.band-inway-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.band-ring {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.band-ring figcaption {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: center;
+}
+.band-ring-rim {
+  fill: rgba(148, 163, 184, 0.12);
+  stroke: #94a3b8;
+  stroke-width: 1;
+}
+.band-notch {
+  cursor: pointer;
+}
+.band-notch circle {
+  fill: #475569;
+}
+.band-notch text {
+  fill: #94a3b8;
+  font-size: 8px;
+}
+.band-notch.on circle {
+  fill: #2fa84f;
+}
+.band-notch.lit circle {
+  fill: #ff3bd4;
+}
+.band-post {
+  fill: #64748b;
+  stroke: #cbd5e1;
+  stroke-width: 0.8;
+  cursor: pointer;
+}
+.band-post.on {
+  fill: #2fa84f;
+}
+.band-ring-route {
+  fill: none;
+  stroke: #2fa84f;
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+.band-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+@media (max-width: 520px) {
+  .band-panel {
+    top: auto;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 55%;
+  }
+}
+
+/* A strung band's stretch in the Inspector (openspec rubber-bands) */
+.band-stretch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 4px;
+}
+.band-stretch-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+.band-stretch-state {
+  color: var(--text-muted, #94a3b8);
+  text-transform: capitalize;
+}
+.band-stretch-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+.band-stretch-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+}
+.band-stretch-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(148, 163, 184, 0.7);
+}

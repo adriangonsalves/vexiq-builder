@@ -1124,6 +1124,38 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
 }
 
 // ---------------------------------------------------------------------------
+// Rubber bands (openspec rubber-bands): place_band, bands following their parts, get_assembly's report
+{
+  await call('clear_assembly');
+  const post = (ref, x) => ({ partQuery: '228-2500-065', ref, label: `Post ${ref}`, position: [x, 20, 0], rotation: [-90, 0, 0] });
+  let res = await call('place_parts', { parts: [post('A', 0), post('B', 100)] });
+  const A = res.data?.parts?.find((p) => p.ref === 'A')?.instanceId;
+  const B = res.data?.parts?.find((p) => p.ref === 'B')?.instanceId;
+  res = await call('place_band', { bandPartId: '228-2500-468', spots: [{ instanceId: A, feature: 'post:body' }, { instanceId: B, feature: 'post:body' }] });
+  const flatBelt = 200 + 2 * Math.PI * (3.175 + 1);
+  check('place_band strings a #32 between two posts: two straight runs and half a turn round each', res.data?.ok && Math.abs(res.data.lengthMm - flatBelt) < 0.2 && res.data.stretchState === 'snug', JSON.stringify(res.data));
+  const bandId = res.data?.instanceId;
+  let got = await call('get_assembly');
+  const report = got.data?.instances?.find((i) => i.instanceId === bandId)?.band;
+  check('get_assembly reports the band: size, stretch, pull and route', report?.size === '#32' && report.route.length === 2 && report.pullN > 0, JSON.stringify(report));
+  res = await call('update_part', { instanceId: B, position: [120, 20, 0] });
+  got = await call('get_assembly');
+  const after = got.data?.instances?.find((i) => i.instanceId === bandId)?.band;
+  check('moving a post the band is on lengthens the band, in the same undo step', Math.abs(after?.lengthMm - (flatBelt + 40)) < 0.3 && historyCheck.stepsByTool.update_part >= 1, JSON.stringify(after));
+  res = await call('update_part', { instanceId: B, rotation: [-90, 0, 20] });
+  got = await call('get_assembly');
+  check('turning a post the band is on keeps the band on it', got.data?.instances?.find((i) => i.instanceId === bandId)?.band?.route.length === 2);
+  res = await call('place_band', { bandPartId: '228-2500-468', spots: [{ instanceId: A, feature: 'post:body' }], list: true });
+  check('place_band with one spot lists spots and changes nothing', res.data?.ok && res.data.spots?.some((x) => x.instanceId === B && x.feature === 'post:body'), JSON.stringify(res.data).slice(0, 200));
+  res = await call('place_band', { bandPartId: '228-2500-468', spots: [{ instanceId: A, feature: 'gap:3' }, { instanceId: B, feature: 'post:body' }] });
+  check('place_band refuses a spot a part does not have, listing the ones it has', res.isError && /post:body/.test(res.data?.error || ''), JSON.stringify(res.data));
+  res = await call('remove_part', { instanceId: B });
+  got = await call('get_assembly');
+  const flat = got.data?.instances?.find((i) => i.instanceId === bandId);
+  check('removing a post leaves the band a flat ring', flat && !flat.shape && !flat.band, JSON.stringify(flat?.shape || null).slice(0, 100));
+}
+
+// ---------------------------------------------------------------------------
 server.stdin.end();
 server.kill();
 await stopBridge().catch(() => {});

@@ -6,6 +6,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { explodeKey, writeBlueprint } from './mcp/assembly-engine.mjs';
 import { runAction } from './src/engine/actions.js';
+import { withBandFlags } from './src/engine/bandFit.js';
 import { actionStepLabel, applyOps, diffParts, loadHistory, mergeBrowserSave, recordStep, summarize } from './src/utils/buildHistory.js';
 import { syncSelection } from './src/utils/partGroups.js';
 import { MCP_OFF_MESSAGE, isLinearHistory, normalizeSettings } from './src/utils/appSettings.js';
@@ -389,6 +390,15 @@ function vexiqMcpBridgePlugin() {
                   return;
                 }
                 payload = merged.state;
+              }
+              // A strung band's overlap flag is the engine's (src/engine/bandFit.js): put right any a
+              // tab sends from its own test (a tab still on older code would mark bands as overlapping)
+              if (Array.isArray(payload.instances) && payload.instances.some((i) => i?.shape?.kind === 'band')) {
+                try {
+                  payload = { ...payload, instances: withBandFlags(payload.instances) };
+                } catch {
+                  /* keep the tab's flags */
+                }
               }
               broadcastState(payload, source, req.headers['x-client-id']);
 
