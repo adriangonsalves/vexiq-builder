@@ -2598,7 +2598,12 @@ export default function Viewport3D({
   const pickLabelOf = (id) => instancesRef.current.find((i) => i.instanceId === id)?.label || id;
 
   // Bore parts have no pins to count
-  const pinCount = (fit) => (fit.bore ? '' : ` · ${fit.green} of ${fit.total} pins in holes`);
+  // (a part with only holes counts its holes lined up instead)
+  const pinCount = (fit) => {
+    if (fit.bore) return '';
+    if (fit.holeFit) return fit.green > 1 ? ` · ${fit.green} holes lined up` : '';
+    return ` · ${fit.green} of ${fit.total} pins in holes`;
+  };
 
   /** Tells App what to show in the picking banner, or null when picking ends. */
   const emitPickStatus = () => {
@@ -2633,7 +2638,7 @@ export default function Viewport3D({
       const lined = fit && fit.green > 1 ? ` · ${fit.green} ${fit.holeFit ? 'holes' : 'pins'} lined up` : '';
       const text =
         pick.message ??
-        `Add ${name} into ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${lined}. Click to place it, wheel or R for other fits, Esc to cancel`;
+        `${pick.place ? 'Add' : 'Move'} ${name} to ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${lined}. Click to place it, wheel or R for other fits, Esc to cancel`;
       onPickStatusRef.current?.({ text, tone: pick.message ? 'warning' : 'info' });
       return;
     }
@@ -2644,9 +2649,11 @@ export default function Viewport3D({
       onPickStatusRef.current?.({ text, tone: 'info' });
       return;
     }
-    let text = pick.bore
-      ? `Pick a place for ${name}: point at an axle's end or a hole, click to put it on${arrowHint}, Esc to cancel`
-      : `Pick a hole for ${name}: point at a hole, click to insert${arrowHint}, Esc to cancel`;
+    let text = pick.holesPick
+      ? `Pick a place for ${name}: point at a part (its free pins first, then its holes), click to put it on, Esc to cancel`
+      : pick.bore
+        ? `Pick a place for ${name}: point at an axle's end or a hole, click to put it on${arrowHint}, Esc to cancel`
+        : `Pick a hole for ${name}: point at a hole, click to insert${arrowHint}, Esc to cancel`;
     let tone = 'info';
     if (pick.hovered?.taken) {
       text = 'That hole already has a part in it';
@@ -2656,7 +2663,7 @@ export default function Viewport3D({
       tone = 'warning';
     } else if (pick.hovered) {
       const fit = pick.fits[pick.fitIndex];
-      text = `${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${pinCount(fit)}. Click to insert, wheel or R for other fits${arrowHint}, Esc to cancel`;
+      text = `${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${pinCount(fit)}. ${pick.place ? 'Click to place it' : 'Click to insert'}, wheel or R for other fits${arrowHint}, Esc to cancel`;
     }
     if (pick.message) {
       text = pick.message;
@@ -2686,7 +2693,7 @@ export default function Viewport3D({
     }
     // Placing poses the part itself at the fit instead of a see-through copy
     if (pick.place) poseFollowAtFit(fit);
-    overlay.showGhost(fit && !pick.place ? { position: fit.position, quaternion: fit.quaternion } : null);
+    overlay.showGhost(fit && !pick.place ? { position: fit.seated?.position ?? fit.position, quaternion: fit.quaternion } : null);
     overlay.showMarkers(fit ? fit.markers : [], hovered ? hovered.face.outward : new THREE.Vector3(0, 0, 1));
     emitPickStatus();
   };
@@ -2711,7 +2718,21 @@ export default function Viewport3D({
     rebuildOtherFeatures();
     const others = otherFeaturesRef.current.flatMap((o) => o.features);
     const candidates = bore ? boreTargets(others) : [];
-    for (const f of bore ? [] : others) {
+    if (followOnly) {
+      // A part with only holes (a beam) lines its holes up with a free pin or shaft end, or else with
+      // a free hole's face; they are lit and fitted like any other target
+      const entries = visibleFeatureEntries().filter((e) => e.instanceId !== selId);
+      const all = entries.flatMap((e) => e.features);
+      for (const f of all) {
+        if (f.kind !== 'pin_hole' && f.kind !== 'shaft_bore') continue;
+        if (isOpeningTaken(f, all)) continue;
+        for (const face of openFaces(f)) candidates.push({ opening: f, face });
+      }
+      for (const end of freeInsertEnds(entries)) {
+        candidates.push({ opening: end.feature, face: { point: end.point, outward: end.dir }, onShaft: true, which: end.which });
+      }
+    }
+    for (const f of bore || followOnly ? [] : others) {
       if (!insertKinds.some((k) => insertFitsOpening(k, f.kind))) continue;
       for (const face of openFaces(f)) candidates.push({ opening: f, face });
     }
@@ -2747,9 +2768,11 @@ export default function Viewport3D({
    * Starts hole picking for the selected part when it has pins, pegs or shafts: hides the gizmo and
    * gathers the hole faces its inserts fit. Returns false (nothing started) for parts without inserts.
    */
-  const startPick = ({ alongsideArrows = false } = {}) => {
-    const session = buildPickSession('pick', { alongsideArrows });
+  const startPick = ({ alongsideArrows = false, holesOnly = false } = {}) => {
+    const session = buildPickSession('pick', { alongsideArrows, allowFollowOnly: holesOnly });
     if (!session) return false;
+    // A part with only holes (a beam) picks the part under the pointer as placing does
+    if (session.followOnly) session.holesPick = true;
     const group = meshMapRef.current.get(session.selId);
     pickModeRef.current = session;
     const transform = transformRef.current;
@@ -2759,6 +2782,43 @@ export default function Viewport3D({
     }
     pickOverlayRef.current?.setGhostSource(group);
     refreshRotateSetup(); // hides the rotate rings while picking
+    renderPick();
+    return true;
+  };
+
+  /**
+   * With a target hole or pin end set and a part with only holes (a beam) selected: lines its corner
+   * holes up with the target and shows it there; wheel or R steps through the other positions, click
+   * puts it in. Returns false when there is nothing to do (no target, other kind of part, no free fit).
+   */
+  const startTargetFit = ({ quiet = false } = {}) => {
+    if (pickModeRef.current || explodeModeRef.current !== 'off') return false;
+    const target = resolveTarget();
+    if (!target) return false;
+    const session = buildPickSession('pick', { allowFollowOnly: true });
+    if (!session || !session.followOnly) return false;
+    const group = meshMapRef.current.get(session.selId);
+    const inst = instancesRef.current.find((i) => i.instanceId === session.selId);
+    if (!group || !inst || inst.locked) return false;
+    const fits = targetFits(session, group, target);
+    if (!fits.length) {
+      if (!quiet) onMateFeedbackRef.current?.(`No free fit for ${pickLabelOf(session.selId)} at this ${target.onShaft ? 'pin' : 'hole'}`, true);
+      return false;
+    }
+    session.followOnly = false;
+    session.hovered = { ...target, taken: false };
+    session.fits = fits;
+    session.fitIndex = 0;
+    session.fixed = true;
+    pickModeRef.current = session;
+    const transform = transformRef.current;
+    if (transform) {
+      transform.enabled = false;
+      transform.getHelper().visible = false;
+    }
+    hideMateArrows();
+    pickOverlayRef.current?.setGhostSource(group);
+    refreshRotateSetup();
     renderPick();
     return true;
   };
@@ -2823,6 +2883,9 @@ export default function Viewport3D({
 
   // At most this many fits are seated to find the free ones when placing at the target
   const TARGET_FIT_CAP = 48;
+  // A part lying on a hole face that touches the surface round a sunken rim backs off up to this far
+  const HOLE_FACE_BACKOFF_MM = 3;
+  const HOLE_FACE_BACKOFF_STEP_MM = 0.25;
 
   /**
    * The free fits of the part being placed (`group`) at `target` (design.md §7): every fit from
@@ -2853,8 +2916,27 @@ export default function Viewport3D({
       group.position.copy(fit.position);
       group.quaternion.copy(fit.quaternion);
       group.updateMatrixWorld(true);
-      if (checkGroupCollision(group, false)) continue; // the way in is blocked
-      const final = sweepToContact(group, fit.position.clone(), fit.direction, fit.travelMm, fit.sweepMm);
+      let start = fit.position.clone();
+      if (checkGroupCollision(group, false)) {
+        // Lying on a hole face: a hole whose rim sits below the part's surface (a corner connector's)
+        // leaves the part touching that surface at the face pose; back it off a little to clear it
+        if (fit.rule !== 'hole' || target.onShaft) continue; // the way in is blocked
+        let clear = null;
+        for (let back = HOLE_FACE_BACKOFF_STEP_MM; back <= HOLE_FACE_BACKOFF_MM + 1e-6; back += HOLE_FACE_BACKOFF_STEP_MM) {
+          group.position.copy(fit.position).addScaledVector(fit.direction, -back);
+          group.updateMatrixWorld(true);
+          if (!checkGroupCollision(group, false)) {
+            clear = back;
+            break;
+          }
+        }
+        if (clear === null) continue; // the way in is blocked
+        start = group.position.clone();
+        fit.travelMm += clear;
+        fit.sweepMm += clear;
+        fit.position = start.clone();
+      }
+      const final = sweepToContact(group, start, fit.direction, fit.travelMm, fit.sweepMm);
       const seated = { position: final.clone(), quaternion: fit.quaternion.clone() };
       const same = free.some((g) => g.seated.position.distanceTo(seated.position) < 0.05 && g.seated.quaternion.angleTo(seated.quaternion) < THREE.MathUtils.degToRad(0.5));
       if (!same) free.push({ ...fit, seated });
@@ -3010,13 +3092,73 @@ export default function Viewport3D({
     return near.filter((n) => n.depth <= near[0]?.depth + 2).sort((a, b) => a.screen - b.screen)[0]?.c ?? null;
   };
 
+  /** Instance id and hit point (world) of the nearest visible part under the pointer (canvas px), other than `skipId`. */
+  const partUnderPointer = (canvasX, canvasY, skipId) => {
+    const camera = pointerCameraRef.current();
+    const inputEl = inputElRef.current;
+    if (!camera || !inputEl) return null;
+    const rect = inputEl.getBoundingClientRect();
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2((canvasX / rect.width) * 2 - 1, -(canvasY / rect.height) * 2 + 1), camera);
+    if (camera.isOrthographicCamera) raycaster.ray.origin.addScaledVector(raycaster.ray.direction, camera.near);
+    const meshes = [];
+    for (const [id, group] of meshMapRef.current.entries()) {
+      if (id === skipId || !group.visible) continue;
+      group.traverse((child) => {
+        if (child.isMesh && child.userData.isPartMesh) meshes.push(child);
+      });
+    }
+    const hit = raycaster.intersectObjects(meshes, false)[0];
+    return hit ? { instanceId: hit.object.userData.instanceId, point: hit.point } : null;
+  };
+
+  /** The free fits of the part being placed at candidate `c`, worked out once per placing session. */
+  const placeFitsFor = (pick, c) => {
+    if (!pick.fitCache) pick.fitCache = new Map();
+    if (!pick.fitCache.has(c)) pick.fitCache.set(c, targetFits(pick, meshMapRef.current.get(pick.selId), { ...c, taken: false }));
+    return pick.fitCache.get(c);
+  };
+
+  // New targets tried per pointer move while placing a part with only holes (each is up to 48 seatings)
+  const PLACE_TRIES_PER_MOVE = 4;
+
+  /**
+   * Where a part with only holes (a beam) being placed goes for the pointer at (canvas px): a hole or
+   * pin end within reach on screen when the part fits there; otherwise, on the part under the pointer,
+   * its free pin, peg and shaft ends first, then its free holes, nearest the pointed spot first, the
+   * first one the part fits. Targets the part can't fit are skipped. Null when there is none.
+   */
+  const placeTargetAt = (pick, canvasX, canvasY) => {
+    let tries = 0;
+    const fits = (c) => {
+      if (!pick.fitCache?.has(c)) {
+        if (tries >= PLACE_TRIES_PER_MOVE) return false;
+        tries += 1;
+      }
+      return placeFitsFor(pick, c).length > 0;
+    };
+    const exact = nearestScreenTarget(pick.candidates, canvasX, canvasY);
+    if (exact && fits(exact)) return exact;
+    const hit = partUnderPointer(canvasX, canvasY, pick.selId);
+    if (!hit) return null;
+    // Staying on the part already lit keeps its target (so the wheel's choice isn't lost)
+    if (pick.hovered && pick.hovered.opening.instanceId === hit.instanceId && !exact) return pick.candidates.find((c) => c.opening === pick.hovered.opening && c.face === pick.hovered.face) ?? null;
+    const near = (list) => list.sort((a, b) => a.face.point.distanceTo(hit.point) - b.face.point.distanceTo(hit.point));
+    const onPart = pick.candidates.filter((c) => c.opening.instanceId === hit.instanceId);
+    for (const c of [...near(onPart.filter((c) => c.onShaft)), ...near(onPart.filter((c) => !c.onShaft))]) {
+      if (fits(c)) return c;
+    }
+    return null;
+  };
+
   const updatePickHover = (canvasX, canvasY) => {
     const pick = pickModeRef.current;
     const camera = pointerCameraRef.current();
     const inputEl = inputElRef.current;
     if (!pick || !camera || !inputEl) return;
     if (pick.fixed) return; // placing at the target: it stays the hovered one
-    const front = nearestScreenTarget(pick.candidates, canvasX, canvasY);
+    const placingHolesOnly = Boolean(pick.place?.followOnly || pick.holesPick);
+    const front = placingHolesOnly ? placeTargetAt(pick, canvasX, canvasY) : nearestScreenTarget(pick.candidates, canvasX, canvasY);
     const same = front && pick.hovered && pick.hovered.opening === front.opening && pick.hovered.face === front.face;
     if (same || (!front && !pick.hovered)) return;
     pick.message = null;
@@ -3025,13 +3167,17 @@ export default function Viewport3D({
       pick.hovered = null;
       pick.fits = [];
     } else {
-      const taken = isCopyHoleTaken(pick, front.opening);
+      const taken = !placingHolesOnly && !front.onShaft && isCopyHoleTaken(pick, front.opening);
       const receiving = meshMapRef.current.get(front.opening.instanceId);
       const receivingQuaternion = receiving ? receiving.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
       pick.hovered = { ...front, taken };
       const listFits = pick.bore ? listBoreFits : listInsertFits;
       pick.fits = taken
         ? []
+        : placingHolesOnly
+          ? placeFitsFor(pick, front)
+        : pick.followOnly
+          ? targetFits(pick, meshMapRef.current.get(pick.selId), pick.hovered)
         : pick.set
           ? listSetInsertFits({ leadEnds: pick.set.leads, hovered: front, otherFeatures: pick.others }).map((fit) => ({
               ...fit,
@@ -3373,6 +3519,11 @@ export default function Viewport3D({
       return true;
     }
     setTarget(sameTarget(lit, resolveTarget()) ? null : lit);
+    // A beam (only holes) already selected goes straight to the new target, to scrub its positions
+    if (targetRef.current) {
+      endAltHover();
+      startTargetFit({ quiet: true });
+    }
     return true;
   };
 
@@ -3434,6 +3585,10 @@ export default function Viewport3D({
     let action = mateAction(plans, hasInserts);
     // A bore part with nothing lined up picks an axle or hole to go onto
     if (action === 'none' && isBorePart(partMeta)) action = 'pick';
+    // A hole is chosen and the part has only holes (a beam): line its corner holes up with it
+    if (action === 'none' && targetRef.current && startTargetFit()) return;
+    // Otherwise a part with only holes picks a part to go on: point at it, wheel for other positions
+    if (action === 'none' && startPick({ holesOnly: true })) return;
     if (action === 'none') {
       feedback('Nothing lined up to mate with', true);
     } else if (action === 'pick') {
