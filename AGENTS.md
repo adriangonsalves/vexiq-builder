@@ -1,6 +1,8 @@
+
 # Notes for agents working on VEX IQ Builder
 
 The app and its MCP server (`mcp/vexiq-mcp-server.mjs`) build VEX IQ robots from the official CAD parts. `features.md` describes what the app does; this file holds what isn't obvious from the code: how real pieces are meant to go together, and habits that avoid mistakes made in earlier sessions.
+
 
 ## How pieces are used
 
@@ -28,6 +30,8 @@ The MCP server sends the section between the markers below to every client when 
 - `mirror_subassembly` (or `place_parts` with `mirror`) builds the second side; still look at it, since a part whose left and right versions differ can only be turned to the closest pose.
 - Converting new parts: put the STEP file in `VEX-IQ-All-Parts/`, then `npm run convert` and `npm run index-metadata`. In a git worktree, link `VEX-IQ-All-Parts/` and `VEX-IQ-All-Control/` from the main checkout first, or the catalog is rewritten empty.
 - Checks: `node scripts/check-*.mjs` (each exits 1 on failure).
+- When some new functionality is proposed without explicitly asking for a new spec, prompt if it should be a new spec or if an older spec should be updated. 
+
 
 ## Importing VEX CAD
 
@@ -36,3 +40,9 @@ The MCP server sends the section between the markers below to every client when 
 - The import builds what instructions.online shows when finished: parts hidden by the step named "Completed View" are left out (the steps after it are exploded views), but poses come from the CAD, since the finished view nudges some parts without the pins in them.
 - A sheet VEX's CAD bends (entry `"bend": "pins"`) is laid on the sheet pins that hold it and bent through the rest; read the report's "Bent …" lines for the rows anchored and any stretch. Add the entry for a new robot's bent sheet part.
 - Imported parts that overlap stay where they are with a warning; tight fits (up to 0.5 mm, common in VEX CAD) aren't overlaps. Port ids are stable (`hole.+y.-2_8_-2`); old ids such as `hole_14` still work.
+
+
+# Philosphy
+- This software is primarily intended for middle school kids so keep the UI and operations simple and unclutter. Spend extra effort exploring if a UI interaction can be simplified. 
+- This is intended to be used by Kids and it maybe on tablet and phone formfactors so new UI interactions would need a way to express on these devices 
+- This software is intended to be used without an server component and even  internet connection if the users desires. So most of the logic should be client side. IF some logic has to be serverside, call it out during the planning phase. 
