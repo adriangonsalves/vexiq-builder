@@ -11,7 +11,7 @@ const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
  * size, Other way round, the parts-in-the-way question, and the ring close-up of each gear, sprocket or
  * pulley on the route. Every key action has a button here, for touch.
  */
-export default function BandBuilderPanel({ band }) {
+export default function BandBuilderPanel({ band, touch = false }) {
   const { session, sizes, readout, entryLabel, ringParts } = band;
   const [ringIndex, setRingIndex] = useState(0);
   if (!session) return null;
@@ -42,12 +42,28 @@ export default function BandBuilderPanel({ band }) {
       </div>
 
       <div className="band-hint">
+        {touch ? (
+          // By touch (openspec context-toolbar): a tap lights a spot, a second tap adds it
+          <>
+            {session.route.length === 0
+              ? 'Tap a post, pin, pulley, tooth gap or beam end to light it, and tap it again to hook the band on.'
+              : session.route.length === 1
+                ? 'Tap the next spot, then tap it again to add it.'
+                : editing
+                  ? 'Circles are anchors the band must go round; dots are handles on the band. Tap a spot twice to add an anchor in the stretch nearest it, drag a dot onto a spot to add one there, and drag a circle to move it.'
+                  : 'Tap more spots (twice each), or Done to close the band. To make it go another way, drag a small handle on the band onto the edge or post it should go round, or press Other way round; drag a circle to move that spot.'}{' '}
+            Turn the wheel on the right for the next spot near the lit one.
+          </>
+        ) : (
+          <>
         {session.route.length === 0
           ? 'Click a post, pin, pulley, tooth gap or beam end to hook the band on.'
           : session.route.length === 1
             ? 'Click the next spot.'
             : (editing ? 'Circles are anchors the band must go round; dots are handles on the band. Click a spot to add an anchor in the stretch nearest it, drag a dot onto a spot to add one there, drag a circle to move it, and right-click (or Alt+click) a circle to take it off.' : 'Click more spots, or Done to close the band. To make it go another way, drag a small handle on the band onto the edge or post it should go round, or press Other way round; drag a circle to move that spot, right-click it to take it off.')}{' '}
         R or the wheel steps to the next spot near the pointer.
+          </>
+        )}
       </div>
 
       {hover && (

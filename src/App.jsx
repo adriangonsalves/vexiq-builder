@@ -26,14 +26,12 @@ import {
   History as HistoryIcon,
   List as ListIcon,
   Maximize2,
-  Move,
   PanelLeftClose,
   PanelLeftOpen,
   Radio,
   Settings as SettingsIcon,
   Redo2,
   RotateCcw,
-  RotateCw,
   Search,
   Sparkles,
   Trash2,
@@ -42,6 +40,10 @@ import {
   X
 } from 'lucide-react';
 import Viewport3D from './components/Viewport3D.jsx';
+import ContextToolbar from './components/ContextToolbar.jsx';
+import { barItems } from './utils/contextToolbarItems.js';
+import { useHeldKeys } from './utils/useHeldKeys.js';
+import { getLocalFeatures, isBorePart } from './utils/pinHoleAlignment.js';
 import PartThumbnail, { GRID_THUMB_PX, ZOOM_THUMB_PX, cachedThumbnail } from './components/PartThumbnail.jsx';
 import { loadRecent, recordUse, saveRecent } from './utils/recentParts.js';
 import HistoryTimeline from './components/HistoryTimeline.jsx';
@@ -214,6 +216,19 @@ export default function App() {
   const [boxSelect, setBoxSelect] = useState(false);
   const [snapPitchFactor, setSnapPitchFactor] = useState(0.5); // 1 = 12.7mm, 0.5 = 6.35mm, 0.25 = 3.175mm, 0 = Free
   const [rotationSnapDeg, setRotationSnapDeg] = useState(15); // 15, 45, 90, 0
+  // The context bar's switches (openspec context-toolbar); none is saved or part of the history
+  const [worldAxes, setWorldAxes] = useState(false); // World arrows
+  const [freeMove, setFreeMove] = useState(false); // Free move
+  const [pointerTool, setPointerTool] = useState('select'); // 'select' | 'target' (Mark a hole) | 'stamp' (Stamp copies)
+  const [exactPick, setExactPick] = useState(false); // One part of a group, armed for one pick
+  const [interaction, setInteraction] = useState(null); // what the 3D view is doing (onInteractionChange)
+  const lastInputRef = useRef('mouse'); // 'mouse' | 'touch': the input last used in the view or on the bar
+  lastInputRef.current = interaction?.input ?? lastInputRef.current;
+  const [growLayers, setGrowLayers] = useState(null); // Grow selection's wheel session: { pinnedOnly, readout }
+  const viewControlsRef = useRef(null); // { step, commit, cancel, join, ringDone } from the 3D view
+  const handleRegisterControls = useCallback((controls) => {
+    viewControlsRef.current = controls;
+  }, []);
   const [showGrid, setShowGrid] = useState(true);
   const [showConnectors, setShowConnectors] = useState(true);
   // Explode panel (openspec explode-view): the direction while open ('off' = closed), the slider
@@ -1489,9 +1504,13 @@ export default function App() {
   // A target hole or pin end is set in the view (the viewport reports it)
   const hasTargetRef = useRef(false);
   const [targetHole, setTargetHole] = useState(null); // { instanceId, portId } when the target is a hole
+  const [hasTarget, setHasTarget] = useState(false);
   const handleTargetChange = useCallback((has, hole = null) => {
     hasTargetRef.current = has;
+    setHasTarget(has);
     setTargetHole(hole);
+    // Mark a hole on the context bar is armed for one mark: a target set, moved or cleared ends it
+    setPointerTool((tool) => (tool === 'target' ? 'select' : tool));
   }, []);
   const [libraryDrag, setLibraryDrag] = useState(null); // { name, x, y } while a library part is dragged outside the view
   const [placeRequest, setPlaceRequest] = useState(null); // { instanceId, label, mergeKey, dropPending }
@@ -2003,6 +2022,12 @@ export default function App() {
       } else if (e.key === 'Escape') {
         if (explodeMode !== 'off') {
           closeExplode();
+        } else if (pointerTool !== 'select' || exactPick || growLayers) {
+          // Esc first turns off the context bar's armed tools (Mark a hole, Stamp copies, One part of
+          // a group, Grow selection) and keeps the selection
+          setPointerTool('select');
+          setExactPick(false);
+          setGrowLayers(null);
         } else if (boxSelect || selectMode) {
           // Esc first leaves Box select / Select mode and keeps the selection
           setBoxSelect(false);
@@ -2394,7 +2419,7 @@ export default function App() {
       return true;
     }
     if (!st.portId) {
-      setActionFeedback({ message: 'Alt+click a hole of the sheet first.', isError: true });
+      setActionFeedback({ message: lastInputRef.current === 'touch' ? 'Tap a hole of the sheet first.' : 'Alt+click a hole of the sheet first.', isError: true });
       return true;
     }
     const target = list.find((i) => i.instanceId === instanceId);
@@ -2463,12 +2488,14 @@ export default function App() {
       area?.removeEventListener('wheel', onWheel, true);
     };
   }, [bendHoles ? 'on' : 'off', bendFitShown, endBendHoles, keepBendFit, showBendFit]);
+  // Its controls follow the input last used in the view (openspec context-toolbar)
+  const bendByTouch = interaction?.input === 'touch';
   const bendBanner = bendHoles
     ? bendHoles.fits?.length
-      ? `Fit ${bendHoles.index + 1} of ${bendHoles.fits.length}: ${bendHoles.fits[bendHoles.index].holesMatched} hole${bendHoles.fits[bendHoles.index].holesMatched === 1 ? '' : 's'} line up on ${bendHoles.targetLabel}, ${bendHoles.fits[bendHoles.index].face}. Wheel or R for another fit, or click another hole.`
+      ? `Fit ${bendHoles.index + 1} of ${bendHoles.fits.length}: ${bendHoles.fits[bendHoles.index].holesMatched} hole${bendHoles.fits[bendHoles.index].holesMatched === 1 ? '' : 's'} line up on ${bendHoles.targetLabel}, ${bendHoles.fits[bendHoles.index].face}. ${bendByTouch ? 'Turn the wheel for another fit, ✓ to keep it, or tap another hole.' : 'Wheel or R for another fit, or click another hole.'}`
       : bendHoles.portId
-        ? `Bending ${bendHoles.sheetLabel}: click a hole on the part to bend onto (Esc to stop).`
-        : `Bending ${bendHoles.sheetLabel}: click the sheet hole to anchor (Esc to stop).`
+        ? `Bending ${bendHoles.sheetLabel}: ${bendByTouch ? 'tap a hole on the part to bend onto, or Stop.' : 'click a hole on the part to bend onto (Esc to stop).'}`
+        : `Bending ${bendHoles.sheetLabel}: ${bendByTouch ? 'tap the sheet hole to anchor, or Stop.' : 'click the sheet hole to anchor (Esc to stop).'}`
     : null;
   // A hole of a plastic sheet that is the marked target starts bending by holes straight away
   const bendFromHole = useMemo(() => {
@@ -2660,6 +2687,183 @@ export default function App() {
     }
   };
 
+  // --- The context bar in the 3D view (openspec context-toolbar) ---------------------------------
+  const heldKeys = useHeldKeys();
+  const barSelection = useMemo(() => {
+    const count = selectedIds.length;
+    const only = count === 1 ? instances.find((i) => i.instanceId === selectedIds[0]) : null;
+    const part = only ? shapedPart(catalogMap.get(only.partId), only.shape) : null;
+    const stampable = Boolean(part) && (getLocalFeatures(part).some((f) => f.kind === 'pin' || f.kind === 'shaft') || isBorePart(part));
+    return { count, wholeGroup: count > 1 && Boolean(selectionGroup), stampable, locked: Boolean(only?.locked), hidden: only?.visible === false, band: Boolean(selectedBand) };
+  }, [selectedIds, instances, catalogMap, selectionGroup, selectedBand]);
+
+  // Stamp copies turns off when the selection changes, and in Explode or Play; Grow selection closes
+  // on any selection change it didn't make itself
+  const selectionKey = selectedIds.join(',');
+  const prevSelectionKeyRef = useRef(selectionKey);
+  useEffect(() => {
+    if (prevSelectionKeyRef.current === selectionKey) return;
+    prevSelectionKeyRef.current = selectionKey;
+    setPointerTool((tool) => (tool === 'stamp' ? 'select' : tool));
+    const st = expandRef.current;
+    if (growLayers && !st?.pending && (st?.lastIds ?? []).join(',') !== selectionKey) setGrowLayers(null);
+  }, [selectionKey, growLayers]);
+  useEffect(() => {
+    if (explodeMode !== 'off' || play) {
+      setPointerTool('select');
+      setExactPick(false);
+      setGrowLayers(null);
+    }
+  }, [explodeMode, play]);
+
+  const stepBendFit = (dir) => {
+    const st = bendHolesRef.current;
+    if (!st?.fits?.length) return;
+    const index = (st.index + dir + st.fits.length) % st.fits.length;
+    const next = { ...st, index };
+    setBendHoles(next);
+    showBendFit(next, index);
+  };
+  const dropBendFit = () => {
+    setBendPreview(null);
+    setBendHoles((c) => (c ? { ...c, fits: [], index: 0 } : c));
+  };
+  const layersReadout = () => {
+    const st = expandRef.current;
+    const ids = st?.lastIds ?? selectedIds;
+    return `Layer ${st?.lastIds ? st.depth : 0} · ${partCount(ids.length)}`;
+  };
+  const stepLayers = async (dir) => {
+    const pinnedOnly = Boolean(growLayers?.pinnedOnly);
+    await handleExpandSelection(dir, { pinnedOnly });
+    setGrowLayers((cur) => (cur ? { ...cur, readout: layersReadout() } : cur));
+  };
+
+  // The wheel bar's session (design Decision 3): the view's sessions, Bend sheet by holes and Grow selection
+  const touchInput = interaction?.input === 'touch';
+  const stepper = (() => {
+    const ctl = viewControlsRef.current;
+    if (bendHoles?.fits?.length) {
+      const n = bendHoles.fits.length;
+      return { kind: 'bendFits', readout: `${bendHoles.index + 1} / ${n}`, canStep: n > 1, canCommit: true, position: bendHoles.index, awayDir: -1, stepKeys: ['R', 'Shift + R'], onStep: stepBendFit, onCommit: keepBendFit, onCancel: dropBendFit };
+    }
+    if (growLayers) {
+      return { kind: 'layers', readout: growLayers.readout, canStep: true, canCommit: true, position: expandRef.current?.depth ?? 0, awayDir: 1, stepKeys: ['Shift + wheel away', 'Shift + wheel toward you'], onStep: stepLayers, onCommit: () => setGrowLayers(null) };
+    }
+    const it = interaction;
+    if (!it?.session || !ctl) return null;
+    if (it.session === 'fits') {
+      // The copy preview held by Ctrl/Cmd shows the wheel bar only while a hole is lit
+      if (it.fitsKind === 'copy' && pointerTool !== 'stamp' && !it.lit) return null;
+      const count = it.fit?.count ?? 0;
+      const readout = it.fit ? `${it.fit.index + 1} / ${count}` : it.taken ? 'Hole taken' : it.lit ? "Doesn't fit" : touchInput ? 'Tap a hole' : 'Point at a hole';
+      return {
+        kind: 'fits',
+        commitTip: it.fitsKind === 'copy' ? 'stamp' : 'fits',
+        readout,
+        canStep: count > 1,
+        canCommit: Boolean(it.fit) || (it.placing && !it.lit),
+        position: it.fit?.index ?? 0,
+        awayDir: -1, // as the mouse wheel over the view: away is the previous fit
+        stepKeys: it.fitsKind === 'copy' ? null : ['R', 'Shift + R'],
+        onStep: (d) => ctl.step(d),
+        onCommit: () => ctl.commit(),
+        onCancel: () => {
+          const stamping = it.fitsKind === 'copy';
+          ctl.cancel();
+          if (stamping) setPointerTool((tool) => (tool === 'stamp' ? 'select' : tool));
+        }
+      };
+    }
+    if (it.session === 'ring') {
+      const step = rotationSnapDeg > 0 ? rotationSnapDeg : 5;
+      return { kind: 'ring', readout: `${it.ring.label} ${it.ring.angleDeg}°`, canStep: true, canCommit: true, position: Math.round(it.ring.angleDeg / step), awayDir: 1, stepKeys: null, onStep: (d) => ctl.step(d), onCommit: () => ctl.ringDone() };
+    }
+    if (it.session === 'band') {
+      return { kind: 'band', readout: it.band.name, canStep: it.band.nearby > 1, canCommit: true, position: it.band.index ?? 0, awayDir: -1, stepKeys: ['R', 'Shift + R'], onStep: (d) => ctl.step(d), onCommit: () => ctl.commit() };
+    }
+    if (it.session === 'arrows') return { kind: 'arrows', onCancel: () => ctl.cancel() };
+    return null;
+  })();
+
+  const barList = barItems({
+    selection: barSelection,
+    transformMode,
+    locked: false,
+    explode: explodeMode !== 'off',
+    playing: Boolean(play),
+    previewing: Boolean(preview),
+    immersive,
+    hasTarget,
+    stepper
+  });
+  // A button shows on while it is tapped on or its key is held (Shift+Alt lights only One part of a group)
+  const shiftOnly = heldKeys.shift && !heldKeys.alt;
+  const altOnly = heldKeys.alt && !heldKeys.shift;
+  const barOn = {
+    addToSelection: selectMode || shiftOnly,
+    markHole: pointerTool === 'target' || (altOnly && !heldKeys.mod),
+    stampCopies: pointerTool === 'stamp' || (heldKeys.mod && !heldKeys.shift && !heldKeys.alt),
+    worldArrows: worldAxes || altOnly,
+    freeMove: freeMove || altOnly,
+    growSelection: Boolean(growLayers) || shiftOnly,
+    onePartOfGroup: exactPick || (heldKeys.shift && heldKeys.alt),
+    pinsOnly: Boolean(growLayers?.pinnedOnly) || heldKeys.mod
+  };
+  const handleBarPress = (id) => {
+    switch (id) {
+      case 'move':
+        setTransformMode('translate');
+        break;
+      case 'rotate':
+        setTransformMode('rotate');
+        break;
+      case 'addToSelection':
+        setSelectMode((v) => !v);
+        break;
+      case 'markHole':
+        setPointerTool((t) => (t === 'target' ? 'select' : 'target'));
+        break;
+      case 'join':
+        viewControlsRef.current?.join();
+        break;
+      case 'stampCopies':
+        setPointerTool((t) => (t === 'stamp' ? 'select' : 'stamp'));
+        break;
+      case 'worldArrows':
+        setWorldAxes((v) => !v);
+        break;
+      case 'freeMove':
+        setFreeMove((v) => !v);
+        break;
+      case 'growSelection':
+        expandRef.current = null; // grow from the selection as it is now
+        setGrowLayers({ pinnedOnly: false, readout: `Layer 0 · ${partCount(selectedIds.length)}` });
+        break;
+      case 'onePartOfGroup':
+        setExactPick((v) => !v);
+        break;
+      case 'duplicate':
+        handleDuplicateSelected();
+        break;
+      case 'delete':
+        handleDeleteSelected();
+        break;
+      case 'pinsOnly':
+        expandRef.current = null; // start again from the current selection
+        setGrowLayers((cur) => (cur ? { pinnedOnly: !cur.pinnedOnly, readout: `Layer 0 · ${partCount(selectedIds.length)}` } : cur));
+        break;
+      case 'commit':
+        stepper?.onCommit?.();
+        break;
+      case 'cancel':
+        stepper?.onCancel?.();
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
     <div className="app-shell" data-layout={layoutSize} data-toolbar={toolbarDocked ? 'docked' : 'floating'}>
       {/* Top Modeler Toolbar */}
@@ -2782,31 +2986,6 @@ export default function App() {
             />
           </div>
 
-          <div className="toolbar-group" role="group" aria-label="Transform Mode">
-            <button
-              type="button"
-              className={`btn ${transformMode === 'translate' ? 'active' : ''}`}
-              onClick={() => setTransformMode('translate')}
-              disabled={Boolean(selectedBand)}
-              title={selectedBand ? 'A band follows its spots: drag a handle' : 'Move Tool (Shortcut: W)'}
-              aria-label="Move"
-            >
-              <Move size={14} />
-              <span className="btn-text">Move</span>
-            </button>
-            <button
-              type="button"
-              className={`btn ${transformMode === 'rotate' ? 'active' : ''}`}
-              onClick={() => setTransformMode('rotate')}
-              disabled={Boolean(selectedBand)}
-              title={selectedBand ? 'A band follows its spots: drag a handle' : 'Rotate Tool (Shortcut: E)'}
-              aria-label="Rotate"
-            >
-              <RotateCw size={14} />
-              <span className="btn-text">Rotate</span>
-            </button>
-          </div>
-
           <div className="toolbar-group" role="group" aria-label="Snap and Explode">
             <ToolbarMenu
               icon={Magnet}
@@ -2844,7 +3023,7 @@ export default function App() {
               {panelsHidden ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
               <span className="btn-text">{panelsHidden ? 'Panels' : 'Wide'}</span>
             </button>
-            {viewLayout === 'stereo' && (
+            {(viewLayout === 'stereo' || layoutSize !== 'large') && (
               <button
                 type="button"
                 className={`btn ${viewMenuAt ? 'active' : ''}`}
@@ -2856,7 +3035,7 @@ export default function App() {
                   const r = e.currentTarget.getBoundingClientRect();
                   setViewMenuAt({ x: r.left, y: r.bottom + 4 });
                 }}
-                title="View options (the view cube's menu, which is hidden in Stereo)"
+                title={viewLayout === 'stereo' ? "View options (the view cube's menu, which is hidden in Stereo)" : "View options (the view cube's menu)"}
                 aria-haspopup="menu"
                 aria-label="View"
               >
@@ -3105,6 +3284,14 @@ export default function App() {
             onToggleRotateRequest={locked ? noop : handleToggleRotateRequest}
             collisionRecheck={locked ? undefined : build.recheck}
             onPickStatus={setPickStatus}
+            worldAxes={worldAxes}
+            freeMove={freeMove}
+            pointerTool={locked ? 'select' : pointerTool}
+            exactPick={exactPick && !locked}
+            onExactPickUsed={() => setExactPick(false)}
+            onPointerToolEnd={() => setPointerTool('select')}
+            onRegisterControls={handleRegisterControls}
+            onInteractionChange={setInteraction}
             onInsertCopy={locked ? noop : handleInsertCopy}
           />
 
@@ -3140,7 +3327,7 @@ export default function App() {
             />
           )}
 
-          {band.session && <BandBuilderPanel band={band} />}
+          {band.session && <BandBuilderPanel band={band} touch={interaction?.input === 'touch'} />}
 
           {explodeMode !== 'off' && (
             <ExplodePanel
@@ -3275,6 +3462,18 @@ export default function App() {
               </div>
             </div>
           )}
+
+          <ContextToolbar
+            items={barList}
+            on={barOn}
+            hasTarget={hasTarget}
+            turnStep={rotationSnapDeg}
+            onTurnStep={setRotationSnapDeg}
+            onPress={handleBarPress}
+            onInputKind={(kind) => viewControlsRef.current?.input?.(kind)}
+            stepper={stepper}
+            measureKey={`${auditOpen}|${timelineVisible}|${viewLayout}|${layoutSize}|${toolbarDocked}`}
+          />
 
           <AuditPanel
             open={auditOpen}

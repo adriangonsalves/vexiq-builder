@@ -27,6 +27,7 @@
 - [ ] 4.4 Add the ring close-up: SVG from `gearSpecs` with numbered notches, posts as dots and the route drawn, click to add or remove, and a part switcher. Verify that selecting Swish's upper intake band shows its route through the right notches, and that clicking a notch updates the 3D band.
 - [ ] 4.5 Add editing: spot handles to drag to another spot, dragging a run onto a rim to add a gap that hops gap to gap (off the rim removes it), Inspector details with size / side / wraps / cross changes, Tools → Flatten, and Move and Rotate greyed out for routed bands. Verify the push-into-gap, change-size and flatten scenarios, each as one history step.
 - [ ] 4.6 Check the builder at phone width and with touch only (every key action has a button). Verify by screenshot at 390 px wide.
+  - Note from context-toolbar: by touch, a tap on a spot lights it (with the see-through band) and a second tap adds it, and the context bar's wheel steps to the next spot near the lit one (its tick adds it), so stepping and picking no longer need R, the mouse wheel or hover.
 
 ## 5. MCP
 

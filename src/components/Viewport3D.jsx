@@ -1474,6 +1474,14 @@ export default function Viewport3D({
   onTargetChange,
   onHoleAltClick,
   holePicking = false,
+  worldAxes = false,
+  freeMove = false,
+  pointerTool = 'select',
+  exactPick = false,
+  onExactPickUsed,
+  onRegisterControls,
+  onInteractionChange,
+  onPointerToolEnd,
   transformMode,
   snapPitchFactor,
   rotationSnapDeg,
@@ -1548,6 +1556,15 @@ export default function Viewport3D({
   const lineSettleCacheRef = useRef({ key: '', settled: null }); // last along-the-line settle, per snapped pose
   const hasClearDragPosRef = useRef(false);
   const altKeyRef = useRef(false); // Alt held: drag without snapping onto holes
+  // The context bar's stand-ins for Alt (openspec context-toolbar): World arrows and Free move
+  const worldAxesRef = useRef(worldAxes);
+  worldAxesRef.current = worldAxes;
+  const freeMoveRef = useRef(freeMove);
+  freeMoveRef.current = freeMove;
+  /** The Move arrows and rotate rings follow the world's axes (Alt held, or World arrows on). */
+  const worldAxesOn = () => altKeyRef.current || worldAxesRef.current;
+  /** A drag doesn't pull onto holes, straighten or mesh (Alt held, or Free move on). */
+  const noSnapOn = () => altKeyRef.current || freeMoveRef.current;
   // Hole picking (double-click with nothing lined up): { selId, ... } while picking, else null
   const pickModeRef = useRef(null);
   const pickOverlayRef = useRef(null);
@@ -1627,6 +1644,7 @@ export default function Viewport3D({
     const spot = next ? next.list[next.index] : null;
     bandOverlayRef.current?.setLit(spot);
     onBandHoverRef.current?.(spot ? { instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, label: spot.label, height: spot.height, near: next.list.length } : null, hit ? hit.point.toArray() : null);
+    emitInteraction();
     return spot;
   };
 
@@ -1638,6 +1656,7 @@ export default function Viewport3D({
       overlay.clear();
       bandHoverRef.current = null;
       bandDragRef.current = null;
+      emitInteraction();
       // The builder closed (Done, Esc, or a handle dropped in Edit route): the camera turns and zooms again
       if (orbitRef.current) {
         orbitRef.current.enabled = true;
@@ -1659,6 +1678,7 @@ export default function Viewport3D({
     const spot = h.list[h.index];
     bandOverlayRef.current?.setLit(spot);
     onBandHoverRef.current?.({ instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, label: spot.label, height: spot.height, near: h.list.length }, h.point);
+    emitInteraction();
     return true;
   };
 
@@ -1731,6 +1751,25 @@ export default function Viewport3D({
 
   const onToggleRotateRequestRef = useRef(onToggleRotateRequest);
   onToggleRotateRequestRef.current = onToggleRotateRequest;
+
+  // The context bar (openspec context-toolbar): 'target' stands in for Alt over holes, 'stamp' for
+  // Ctrl/Cmd (the copy preview); `exactPick` for the Alt of Shift+Alt+click (one part of a group)
+  const pointerToolRef = useRef(pointerTool);
+  pointerToolRef.current = pointerTool;
+  const exactPickRef = useRef(exactPick);
+  exactPickRef.current = exactPick;
+  const onExactPickUsedRef = useRef(onExactPickUsed);
+  onExactPickUsedRef.current = onExactPickUsed;
+  const onInteractionChangeRef = useRef(onInteractionChange);
+  onInteractionChangeRef.current = onInteractionChange;
+  const onPointerToolEndRef = useRef(onPointerToolEnd);
+  onPointerToolEndRef.current = onPointerToolEnd;
+  /** Holes light for a target: Mark a hole is armed, or Bend sheet by holes is picking (Alt does it too). */
+  const targetToolOn = () => pointerToolRef.current === 'target' || holePickingRef.current;
+  const stampOn = () => pointerToolRef.current === 'stamp';
+  // The kind of the last press in the view ('mouse' | 'touch'; a pen counts as touch), for the
+  // controls named in banners (openspec context-toolbar)
+  const lastPointerKindRef = useRef('mouse');
 
   /**
    * Exact concave mesh-to-mesh intersection check using three-mesh-bvh on inward-eroded
@@ -2408,6 +2447,7 @@ export default function Viewport3D({
     if (!arrows?.isShown()) return;
     arrows.hide();
     arrowPlansRef.current = [];
+    setTimeout(emitInteraction, 0);
     const transform = transformRef.current;
     if (transform && pickModeRef.current?.kind !== 'pick') {
       transform.enabled = true;
@@ -2432,6 +2472,7 @@ export default function Viewport3D({
     transform.enabled = false;
     transform.getHelper().visible = false;
     refreshRotateSetup(); // hides the rotate rings while the arrows are shown
+    emitInteraction();
   };
 
   /**
@@ -2605,13 +2646,51 @@ export default function Viewport3D({
     return ` · ${fit.green} of ${fit.total} pins in holes`;
   };
 
+  // The controls a picking banner names, by the input last used (openspec context-toolbar): taps and the
+  // context bar's wheel, tick and cross after a touch, the mouse and keys as before after a mouse
+  const PICK_CONTROLS = {
+    mouse: {
+      point: 'point at',
+      insert: 'click to insert',
+      Insert: 'Click to insert',
+      Place: 'Click to place it',
+      putOn: 'click to put it on',
+      putDown: 'click to put it down',
+      putDownHere: 'click to put it down here',
+      fits: 'wheel or R for other fits',
+      cancel: 'Esc to cancel',
+      arrow: ', or click the arrow to stack along the lined-up holes',
+      copy: (stamp) => (stamp ? 'Click to insert a copy, wheel for other fits' : 'Ctrl/Cmd+double-click to insert a copy, wheel for other fits'),
+      moveIt: 'move it where it goes (it pulls onto lined-up holes)',
+      firstFits: ''
+    },
+    touch: {
+      point: 'tap',
+      insert: 'tap it again or ✓ to insert',
+      Insert: 'Tap the hole again or ✓ to insert',
+      Place: 'Tap ✓ or the marked hole to place it',
+      putOn: 'tap it again or ✓ to put it on',
+      putDown: '✓ to put it down',
+      putDownHere: '✓ to put it down here',
+      fits: 'turn the wheel for other fits',
+      cancel: '✕ to cancel',
+      arrow: ', or tap the arrow to stack along the lined-up holes',
+      copy: () => 'Tap the hole again or ✓ to insert a copy, turn the wheel for other fits',
+      moveIt: 'tap a part to fit it there',
+      firstFits: ', turn the wheel for other fits'
+    }
+  };
+
   /** Tells App what to show in the picking banner, or null when picking ends. */
   const emitPickStatus = () => {
+    const say = PICK_CONTROLS[lastPointerKindRef.current] || PICK_CONTROLS.mouse;
     const pick = pickModeRef.current;
     if (!pick) {
       onPickStatusRef.current?.(null);
+      emitInteraction();
       return;
     }
+    emitInteraction();
     const name = pick.set ? pick.set.name : pickLabelOf(pick.selId);
     if (pick.kind === 'copy') {
       // Copy preview: a short line only while a hole is lit (or after a refusal); none over the
@@ -2626,34 +2705,34 @@ export default function Viewport3D({
         text = pick.message ?? (pick.hovered.taken ? 'That hole already has a part in it' : `${name} doesn't fit this hole from this side`);
       } else if (pick.hovered) {
         const fit = pick.fits[pick.fitIndex];
-        text = `Copy ${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${pinCount(fit)}. Ctrl/Cmd+double-click to insert a copy, wheel for other fits`;
+        text = `Copy ${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${pinCount(fit)}. ${say.copy(stampOn())}`;
       }
       onPickStatusRef.current?.(text ? { text, tone } : null);
       return;
     }
-    const arrowHint = pick.alongsideArrows ? ', or click the arrow to stack along the lined-up holes' : '';
+    const arrowHint = pick.alongsideArrows ? say.arrow : '';
     if (pick.fixed && pick.hovered) {
       // Placing at the target (target-hole-placement)
       const fit = pick.fits[pick.fitIndex];
       const lined = fit && fit.green > 1 ? ` · ${fit.green} ${fit.holeFit ? 'holes' : 'pins'} lined up` : '';
       const text =
         pick.message ??
-        `${pick.place ? 'Add' : 'Move'} ${name} to ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${lined}. Click to place it, wheel or R for other fits, Esc to cancel`;
+        `${pick.place ? 'Add' : 'Move'} ${name} to ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${lined}. ${say.Place}, ${say.fits}, ${say.cancel}`;
       onPickStatusRef.current?.({ text, tone: pick.message ? 'warning' : 'info' });
       return;
     }
     if (pick.place && !pick.hovered && !pick.message) {
       const text = pick.place.followOnly
-        ? `Placing ${name}: move it where it goes (it pulls onto lined-up holes), click to put it down, Esc to cancel`
-        : `Placing ${name}: point at a ${pick.bore ? "hole or an axle's end" : 'hole'} to fit it, click to put it down here, Esc to cancel`;
+        ? `Placing ${name}: ${say.moveIt}, ${say.putDown}, ${say.cancel}`
+        : `Placing ${name}: ${say.point} a ${pick.bore ? "hole or an axle's end" : 'hole'} to fit it, ${say.putDownHere}, ${say.cancel}`;
       onPickStatusRef.current?.({ text, tone: 'info' });
       return;
     }
     let text = pick.holesPick
-      ? `Pick a place for ${name}: point at a part (its free pins first, then its holes), click to put it on, Esc to cancel`
+      ? `Pick a place for ${name}: ${say.point} a part (its free pins first, then its holes)${say.firstFits}, ${say.putOn}, ${say.cancel}`
       : pick.bore
-        ? `Pick a place for ${name}: point at an axle's end or a hole, click to put it on${arrowHint}, Esc to cancel`
-        : `Pick a hole for ${name}: point at a hole, click to insert${arrowHint}, Esc to cancel`;
+        ? `Pick a place for ${name}: ${say.point} an axle's end or a hole${say.firstFits}, ${say.putOn}${arrowHint}, ${say.cancel}`
+        : `Pick a hole for ${name}: ${say.point} a hole${say.firstFits}, ${say.insert}${arrowHint}, ${say.cancel}`;
     let tone = 'info';
     if (pick.hovered?.taken) {
       text = 'That hole already has a part in it';
@@ -2663,7 +2742,7 @@ export default function Viewport3D({
       tone = 'warning';
     } else if (pick.hovered) {
       const fit = pick.fits[pick.fitIndex];
-      text = `${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${pinCount(fit)}. ${pick.place ? 'Click to place it' : 'Click to insert'}, wheel or R for other fits${arrowHint}, Esc to cancel`;
+      text = `${name} → ${pickLabelOf(pick.hovered.opening.instanceId)}: Fit ${pick.fitIndex + 1} of ${pick.fits.length}${pinCount(fit)}. ${pick.place ? (lastPointerKindRef.current === 'touch' ? 'Tap the hole again or ✓ to place it' : 'Click to place it') : say.Insert}, ${say.fits}${arrowHint}, ${say.cancel}`;
     }
     if (pick.message) {
       text = pick.message;
@@ -2977,7 +3056,7 @@ export default function Viewport3D({
     if (!hit) return;
     group.position.add(hit.sub(centre));
     group.updateMatrixWorld(true);
-    if (pick.place.followOnly && !altKeyRef.current) {
+    if (pick.place.followOnly && !noSnapOn()) {
       const features = collectWorldFeatures(pick.partMeta, group.matrixWorld, pick.selId, pick.measured);
       const reachBox = worldPartBox(pick.partMeta, group.matrixWorld)?.expandByScalar(HOLE_SNAP_AXIAL_REACH_MM);
       const candidates = [];
@@ -3609,6 +3688,7 @@ export default function Viewport3D({
     rotateGizmoRef.current?.setSelected(index);
     if (orbitRef.current) orbitRef.current.enableZoom = index < 0;
     refreshAnchorLines();
+    emitInteraction();
   };
 
   /**
@@ -3938,7 +4018,7 @@ export default function Viewport3D({
     poseAt(final ?? travel);
     // Then Fix assembly's fit (square up and seat), as when a dragged set is let go; Alt skips it
     let fitNote = '';
-    if (!altKeyRef.current) {
+    if (!noSnapOn()) {
       const fitted = await fitSetNow(ctx.ids);
       if (fitted.aborted) return;
       fitNote = fitted.note;
@@ -4064,7 +4144,7 @@ export default function Viewport3D({
     let turn = null;
     drag.snapLine = null;
     const directions = setDragDirections();
-    if (!altKeyRef.current && drag.features.length && directions.length) {
+    if (!noSnapOn() && drag.features.length && directions.length) {
       drag.candidates = setSnapCandidates(drag, delta);
       const reach = { axialReachMm: SET_HOLE_SNAP_AXIAL_REACH_MM };
       const st = findStraighten(setFeaturesAt(drag, delta), drag.candidates, reach);
@@ -4083,7 +4163,7 @@ export default function Viewport3D({
     }
     drag.delta = delta;
     drag.turn = turn;
-    drag.moved = altKeyRef.current ? [] : setFeaturesAt(drag, delta, turn);
+    drag.moved = noSnapOn() ? [] : setFeaturesAt(drag, delta, turn);
     pivotObj.position.copy(start).add(delta);
     poseSetMembers(drag, delta, turn);
   };
@@ -4179,7 +4259,7 @@ export default function Viewport3D({
     }
     // 2. The fit, unless Alt is held or the set never left where it started
     let note = '';
-    if (!altKeyRef.current && drag.leftStart) {
+    if (!noSnapOn() && drag.leftStart) {
       const fitted = await fitSetNow(drag.ids);
       if (fitted.aborted) return;
       note = fitted.note;
@@ -4286,7 +4366,7 @@ export default function Viewport3D({
         return axis.dot(worldAxis) < 0 ? axis.negate() : axis;
       };
       // The rings follow the part's own axes, like the Move arrows; Alt shows the world's
-      const own = altKeyRef.current ? new THREE.Quaternion() : group.getWorldQuaternion(new THREE.Quaternion());
+      const own = worldAxesOn() ? new THREE.Quaternion() : group.getWorldQuaternion(new THREE.Quaternion());
       rings = [
         { name: 'X', axis: ringAxis(new THREE.Vector3(1, 0, 0).applyQuaternion(own)) },
         { name: 'Y', axis: ringAxis(new THREE.Vector3(0, 1, 0).applyQuaternion(own)) },
@@ -4436,6 +4516,7 @@ export default function Viewport3D({
   const commitRotation = () => {
     const gesture = rotateGestureRef.current;
     rotateGestureRef.current = null;
+    setTimeout(emitInteraction, 50); // the ring's angle for the bar's read-out
     if (gesture?.wheelTimer) clearTimeout(gesture.wheelTimer);
     rotateGizmoRef.current?.setDragging(-1);
     rotateGizmoRef.current?.clearSlices();
@@ -4569,12 +4650,191 @@ export default function Viewport3D({
     if (canMove) {
       if (transform.object !== group) transform.attach(group);
       // The arrows follow the part's own axes; Alt shows the world's
-      if (!transform.dragging) transform.setSpace(altKeyRef.current ? 'world' : 'local');
+      if (!transform.dragging) transform.setSpace(worldAxesOn() ? 'world' : 'local');
     } else {
       transform.detach();
     }
     refreshRotateSetup();
   };
+
+  // World arrows switched on the context bar: the arrows and rings follow, as when Alt is pressed
+  // (not in the middle of a drag or a ring turn; they catch up when it ends)
+  useEffect(() => {
+    const transform = transformRef.current;
+    if (!transform) return;
+    if (!transform.dragging && transform.object && !transform.object.userData.isSetPivot) transform.setSpace(worldAxesOn() ? 'world' : 'local');
+    if (transformModeRef.current === 'rotate' && !rotateGestureRef.current) refreshRotateSetup();
+    renderFrameRef.current?.();
+  }, [worldAxes]);
+
+  // --- What the view is doing, for the context bar (openspec context-toolbar) ------------------------
+
+  /** The session the bar's wheel works on, and what it shows (design.md Decision 3). */
+  const interactionState = () => {
+    const pick = pickModeRef.current;
+    const setup = rotateSetupRef.current;
+    const ring = selectedRingRef.current;
+    const bandLit = bandPickRef.current ? bandHoverRef.current : null;
+    const arrows = Boolean(arrowOverlayRef.current?.isShown());
+    let session = null;
+    if (pick) session = 'fits';
+    else if (bandLit) session = 'band';
+    else if (ring >= 0 && setup?.rings?.[ring]) session = 'ring';
+    else if (arrows) session = 'arrows';
+    const hovered = pick?.hovered ?? null;
+    const spot = bandLit ? bandLit.list[bandLit.index] : null;
+    return {
+      session,
+      fitsKind: !pick ? null : pick.kind === 'copy' ? 'copy' : pick.place ? 'place' : pick.fixed ? 'target' : 'pick',
+      fit: hovered && !hovered.taken && pick.fits.length ? { index: pick.fitIndex, count: pick.fits.length } : null,
+      lit: Boolean(hovered),
+      taken: Boolean(hovered?.taken),
+      placing: Boolean(pick?.place),
+      ring: session === 'ring' ? { label: setup.rings[ring].name, angleDeg: Math.round((setup.angles?.[ring] ?? 0) * 10) / 10 } : null,
+      band: spot ? { nearby: bandLit.list.length, index: bandLit.index, name: spot.label } : null,
+      input: lastPointerKindRef.current
+    };
+  };
+  const lastInteractionRef = useRef('');
+  /** Sends the state to App when it differs from the last one sent (pointer moves don't re-render App). */
+  const emitInteraction = () => {
+    const state = interactionState();
+    const key = JSON.stringify(state);
+    if (key === lastInteractionRef.current) return;
+    lastInteractionRef.current = key;
+    onInteractionChangeRef.current?.(state);
+  };
+
+  /**
+   * One step of the running session, as one notch of the mouse wheel: the next (dir 1) or previous
+   * (-1) band spot near the lit one, fit of the lit hole, or snap step of the selected ring. Returns
+   * true when it stepped (or a session took the step).
+   */
+  const stepSession = (dir) => {
+    if (bandPickRef.current && bandHoverRef.current?.list.length > 1) return stepBandHover(dir);
+    if (pickModeRef.current?.hovered) return cyclePickFit(dir);
+    const ring = selectedRingRef.current;
+    const setup = rotateSetupRef.current;
+    if (ring < 0 || !setup || rotateGestureRef.current?.kind === 'drag') return false;
+    const gesture = rotateGestureRef.current ?? beginRotateGesture('wheel', ring);
+    if (!gesture || gesture.ring !== ring) return false;
+    const snap = rotationSnapDegRef.current;
+    const step = snap > 0 ? snap : 5;
+    let total = setup.angles[ring] + dir * step;
+    if (snap > 0) total = Math.round(total / step) * step;
+    turnSelectedTo(ring, total);
+    clearTimeout(gesture.wheelTimer);
+    gesture.wheelTimer = setTimeout(commitRotation, 300);
+    emitInteraction();
+    return true;
+  };
+
+  /** The band builder's lit spot goes on the route, as a click on it does. */
+  const pickLitBandSpot = () => {
+    const h = bandHoverRef.current;
+    const spot = h ? h.list[h.index] : null;
+    if (!spot) return false;
+    onBandPickRef.current?.({ instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, label: spot.label, height: spot.height });
+    return true;
+  };
+
+  /** Ends the running session as Esc does (picking, the copy preview, mate arrows, the selected ring). */
+  const cancelSession = () => {
+    if (pickModeRef.current) {
+      endPick();
+      return true;
+    }
+    if (arrowOverlayRef.current?.isShown()) {
+      hideMateArrows();
+      if (inputElRef.current) inputElRef.current.style.cursor = '';
+      return true;
+    }
+    if (selectedRingRef.current >= 0) {
+      selectRing(-1);
+      return true;
+    }
+    return false;
+  };
+
+  /**
+   * Join on the bar: what double-clicking the selection does. A selected battery with nothing lined
+   * up slides into the nearest brain it fits whose bay is free, as double-clicking that brain does.
+   */
+  const joinSelected = () => {
+    if (pickModeRef.current || transformRef.current?.dragging) return;
+    const selId = selectedIdRef.current;
+    if (selId && selectedIdsRef.current.length <= 1 && planMates(lastAlignedRef.current, selId).length === 0) {
+      const group = meshMapRef.current.get(selId);
+      const brains = instancesRef.current
+        .filter((i) => i.instanceId !== selId && i.visible !== false && batteryFitsBrain(selId, i.instanceId))
+        .map((i) => ({ id: i.instanceId, group: meshMapRef.current.get(i.instanceId) }))
+        .filter((b) => b.group)
+        .sort((a, b) => a.group.position.distanceTo(group.position) - b.group.position.distanceTo(group.position));
+      if (brains.length) {
+        const free = brains.find((b) => batteryBayFree(selId, b.id));
+        slideBatteryInto((free ?? brains[0]).id);
+        return;
+      }
+    }
+    handleMateRequest();
+  };
+
+  /** Whether the battery `batteryId` fits the bay of brain `brainId` without hitting anything. */
+  const batteryBayFree = (batteryId, brainId) => {
+    const group = meshMapRef.current.get(batteryId);
+    const brain = meshMapRef.current.get(brainId);
+    const partOf = (id) => partFor(instancesRef.current.find((i) => i.instanceId === id));
+    if (!group || !brain) return false;
+    brain.updateMatrixWorld(true);
+    const pose = batteryBayPose(partOf(batteryId), partOf(brainId), brain.matrixWorld);
+    if (!pose) return false;
+    const before = groupPose(group);
+    poseGroup(group, pose);
+    const hit = checkGroupCollision(group, false);
+    poseGroup(group, before);
+    return !hit;
+  };
+
+  // Stamp copies switched on starts the copy preview (no key or pointer move needed) and off ends it;
+  // Mark a hole switched off stops lighting holes
+  useEffect(() => {
+    if (pointerTool === 'stamp') {
+      if (!pickModeRef.current && startCopy() && copyPointerRef.current) updatePickHover(copyPointerRef.current.x, copyPointerRef.current.y);
+    } else if (pickModeRef.current?.kind === 'copy') {
+      endPick();
+    }
+    if (pointerTool === 'target') {
+      if (startAltHover() && copyPointerRef.current) updateAltHover(copyPointerRef.current.x, copyPointerRef.current.y);
+    } else if (!holePickingRef.current) {
+      endAltHover();
+    }
+  }, [pointerTool]);
+
+  // The bar's commands: step, keep (tick), cancel (cross), join, and done with the ring
+  useEffect(() => {
+    if (!onRegisterControls) return;
+    onRegisterControls({
+      step: (dir) => stepSession(dir),
+      commit: () => {
+        if (bandPickRef.current) return pickLitBandSpot();
+        const pick = pickModeRef.current;
+        if (!pick) return false;
+        if (pick.kind === 'copy') copyInsert();
+        else pickClick();
+        return true;
+      },
+      cancel: () => cancelSession(),
+      join: () => joinSelected(),
+      ringDone: () => selectRing(-1),
+      // A press on the context bar counts as the last input too (for the controls banners name)
+      input: (kind) => {
+        if (kind === lastPointerKindRef.current) return;
+        lastPointerKindRef.current = kind;
+        emitInteraction();
+        if (pickModeRef.current) emitPickStatus();
+      }
+    });
+  }, [onRegisterControls]);
 
   // Expose a screenshot renderer to App.jsx for the MCP server's capture_screenshot tool. Everything
   // happens in one task (render, read the canvas, restore), so the user never sees a frame of it.
@@ -5143,7 +5403,7 @@ export default function Viewport3D({
 
         // Within 5° of a matching hole's line: turn square to it first, about the matched pin or hole,
         // then pull on as usual. Worked out from the drag's start turn, so it never adds up; skipped with Alt
-        if (!altKeyRef.current && partMeta) {
+        if (!noSnapOn() && partMeta) {
           const current = obj.quaternion.clone();
           obj.quaternion.copy(dragStartQuatRef.current);
           obj.position.copy(snappedPos);
@@ -5172,7 +5432,7 @@ export default function Viewport3D({
 
         // Near a hole that a pin/shaft (or one of its own holes) can line up with: snap onto it
         let snapLine = null;
-        if (!altKeyRef.current) {
+        if (!noSnapOn()) {
           const holeSnapped = snapDragToHoles(obj, partMeta, rawPos, snappedPos);
           if (holeSnapped) {
             snappedPos.copy(holeSnapped.position);
@@ -5182,7 +5442,7 @@ export default function Viewport3D({
 
         obj.position.copy(snappedPos);
         // Turn to mesh / to fit square flats before the collision step (skipped with Alt, like snapping)
-        if (!altKeyRef.current) {
+        if (!noSnapOn()) {
           liveFitWhileDragging(obj, partMeta);
           snappedPos.copy(obj.position);
         }
@@ -5256,7 +5516,7 @@ export default function Viewport3D({
     transform.addEventListener('dragging-changed', (event) => {
       orbit.enabled = !event.value;
       // Alt pressed or let go during the drag: the arrows catch up once it ends
-      if (!event.value && transform.object && !transform.object.userData.isSetPivot) transform.setSpace(altKeyRef.current ? 'world' : 'local');
+      if (!event.value && transform.object && !transform.object.userData.isSetPivot) transform.setSpace(worldAxesOn() ? 'world' : 'local');
       if (event.value) {
         wasDraggingRef.current = true;
         dragMovedRef.current = false;
@@ -5290,7 +5550,7 @@ export default function Viewport3D({
         if (instId) {
           // A moved part goes through the placement step (square fit, mesh, hub); a hand turn in
           // Rotate mode, or a drag with Alt held, is kept as it is
-          const settle = transformModeRef.current === 'translate' && !altKeyRef.current && dragMovedRef.current;
+          const settle = transformModeRef.current === 'translate' && !noSnapOn() && dragMovedRef.current;
           const notes = commitPlacement(obj, { settle });
           if (notes.length) onMateFeedbackRef.current?.(notes.join('. '));
         }
@@ -5378,6 +5638,11 @@ export default function Viewport3D({
 
     const handlePointerDown = (e) => {
       pointerDownPos.set(e.clientX, e.clientY);
+      const kind = e.pointerType === 'mouse' ? 'mouse' : 'touch';
+      if (kind !== lastPointerKindRef.current) {
+        lastPointerKindRef.current = kind;
+        emitInteraction();
+      }
       // A new press that isn't grabbing the gizmo starts clean, so a missed drag end can't block clicks
       if (!transform.dragging) wasDraggingRef.current = false;
       // Band builder: right-click or Alt+click on an anchor (a spot's circle) takes it off the route
@@ -5407,6 +5672,7 @@ export default function Viewport3D({
         e.button === 0 &&
         !e.ctrlKey &&
         !e.metaKey &&
+        pointerToolRef.current === 'select' &&
         !pickModeRef.current &&
         !transform.dragging &&
         !transform.axis &&
@@ -5437,7 +5703,7 @@ export default function Viewport3D({
     const handleRingPointerDown = (e) => {
       anchorPress = null;
       if (e.button !== 0 || !rotateSetupRef.current || rotateGestureRef.current) return;
-      if (pickModeRef.current?.kind === 'copy' && (e.ctrlKey || e.metaKey)) return; // part of a copy click
+      if (pickModeRef.current?.kind === 'copy' && (e.ctrlKey || e.metaKey || stampOn())) return; // part of a copy click
       // Anchor lines win over the rings and parts behind them; a drag from one still turns the camera
       const rect = inputEl.getBoundingClientRect();
       const anchor = rotateGizmo.pickAnchor(new THREE.Vector2(e.clientX - rect.left, e.clientY - rect.top), projectToCanvas);
@@ -5613,7 +5879,35 @@ export default function Viewport3D({
       copyInsert();
     };
 
+    /**
+     * A finger or pen can't hover (openspec context-toolbar): in a Fits session a tap lights the hole
+     * near it and shows its fit; a tap on the hole already lit puts the part in; a tap near nothing
+     * changes nothing. A part shown at the marked hole is kept only by a tap on that hole.
+     */
+    const touchFitsTap = (x, y) => {
+      const pick = pickModeRef.current;
+      if (!pick) return;
+      if (pick.fixed) {
+        if (pick.hovered && nearestScreenTarget([pick.hovered], x, y)) pickClick();
+        return;
+      }
+      const placingHolesOnly = Boolean(pick.place?.followOnly || pick.holesPick);
+      const front = placingHolesOnly ? placeTargetAt(pick, x, y) : nearestScreenTarget(pick.candidates, x, y);
+      if (!front) return;
+      const same = pick.hovered && pick.hovered.opening === front.opening && pick.hovered.face === front.face;
+      if (same) {
+        if (pick.kind === 'copy') copyInsert();
+        else pickClick();
+        return;
+      }
+      updatePickHover(x, y);
+      if (pick.place) followPointer(x, y);
+    };
+    const sameSpot = (a, b) => Boolean(a && b) && a.instanceId === b.instanceId && a.feature === b.feature;
+
     const handlePointerUp = (e) => {
+      const touch = e.pointerType !== 'mouse';
+      const tapSlop = touch ? 12 : 5;
       // The release that ends a drag from the library: placing carries on
       if (pendingDropRef.current && e.button === 0) {
         pendingDropRef.current = false;
@@ -5630,6 +5924,23 @@ export default function Viewport3D({
           const h = bandHoverRef.current;
           const spot = h ? h.list[h.index] : null;
           onBandHandleRef.current?.(index, spot ? { instanceId: spot.instanceId, feature: spot.feature, height: spot.height } : null, { done: true });
+          return;
+        }
+        if (touch && Math.hypot(dx, dy) <= tapSlop) {
+          // By touch: the first tap lights the spot (and the see-through band), a second tap on it adds
+          // it; a tap near no spot leaves the lit one as it was
+          const prev = bandHoverRef.current;
+          const prevSpot = prev ? prev.list[prev.index] : null;
+          setRayFromEvent(e);
+          const spot = updateBandHover(raycaster, partsRoot);
+          if (!spot) {
+            bandHoverRef.current = prev;
+            bandOverlayRef.current?.setLit(prevSpot);
+            onBandHoverRef.current?.(prevSpot ? { instanceId: prevSpot.instanceId, feature: prevSpot.feature, kind: prevSpot.kind, label: prevSpot.label, height: prevSpot.height, near: prev.list.length } : null, prev?.point ?? null);
+            emitInteraction();
+          } else if (sameSpot(spot, prevSpot)) {
+            pickLitBandSpot();
+          }
           return;
         }
         if (Math.hypot(dx, dy) <= 5) {
@@ -5657,7 +5968,23 @@ export default function Viewport3D({
         handleCopyPointerUp(e, Math.hypot(dx, dy) > 5);
         return;
       }
-      if (pickModeRef.current?.kind === 'copy') endPick(); // the modifier went up unseen
+      // Stamp copies on the bar: one click on a lit free hole inserts a copy; clicks never select
+      if (stampOn()) {
+        if (e.button === 0 && Math.hypot(dx, dy) <= tapSlop && !transform.dragging && !wasDraggingRef.current) {
+          if (!pickModeRef.current) startCopy();
+          if (pickModeRef.current?.kind === 'copy') {
+            const rect = inputEl.getBoundingClientRect();
+            if (touch) {
+              touchFitsTap(e.clientX - rect.left, e.clientY - rect.top);
+            } else {
+              updatePickHover(e.clientX - rect.left, e.clientY - rect.top);
+              copyInsert();
+            }
+          }
+        }
+        if (e.button === 0) return;
+      }
+      if (pickModeRef.current?.kind === 'copy' && !stampOn()) endPick(); // the modifier went up unseen
       // Right-click (not a right-drag pan) on the selected part, even behind another: Move <-> Rotate
       if (e.button === 2) {
         const selIds = selectedIdsRef.current;
@@ -5673,7 +6000,7 @@ export default function Viewport3D({
       }
       if (pickModeRef.current) {
         // Picking: a click inserts into the hovered hole (or leaves); a drag just turns the camera
-        if (Math.hypot(dx, dy) <= 5) {
+        if (Math.hypot(dx, dy) <= tapSlop) {
           // With the stacking arrow shown alongside, a click on the arrow mates along it instead
           if (arrowOverlay.isShown()) {
             setRayFromEvent(e);
@@ -5687,8 +6014,12 @@ export default function Viewport3D({
             }
           }
           const rect = inputEl.getBoundingClientRect();
-          updatePickHover(e.clientX - rect.left, e.clientY - rect.top);
-          pickClick();
+          if (touch) {
+            touchFitsTap(e.clientX - rect.left, e.clientY - rect.top);
+          } else {
+            updatePickHover(e.clientX - rect.left, e.clientY - rect.top);
+            pickClick();
+          }
         }
         return;
       }
@@ -5709,14 +6040,18 @@ export default function Viewport3D({
         }
       }
 
-      // Alt+click on a lit hole or pin end sets, moves or clears the target, never selects
-      if ((e.altKey || holePickingRef.current) && !e.shiftKey && altHoverRef.current) {
+      // Alt+click on a lit hole or pin end sets, moves or clears the target, never selects (so does a
+      // click with Mark a hole armed on the bar, where a click away from every hole does nothing)
+      const markArmed = pointerToolRef.current === 'target' && !e.shiftKey;
+      if ((markArmed || (touch && holePickingRef.current && !e.shiftKey)) && !altHoverRef.current) startAltHover();
+      if ((e.altKey || targetToolOn()) && !e.shiftKey && altHoverRef.current) {
         updateAltHover(e.clientX - inputEl.getBoundingClientRect().left, e.clientY - inputEl.getBoundingClientRect().top);
         if (altClick()) {
           cancelPendingSelect();
           return;
         }
       }
+      if (markArmed) return;
 
       const ids = pickPartsAt(e);
       const front = ids[0] ?? null;
@@ -5724,8 +6059,14 @@ export default function Viewport3D({
       cancelPendingSelect();
       // Shift+click, or any click in Select mode, adds or removes the part (a grouped part's whole group;
       // with Alt held too, just that part); empty space leaves the selection
+      // One part of a group armed on the bar stands in for the Alt of Shift+Alt+click, for one pick
+      const exact = exactPickRef.current;
+      const select = (id, options = {}) => {
+        onSelectRef.current(id, exact ? { ...options, exact: true } : options);
+        if (exact && id) onExactPickUsedRef.current?.();
+      };
       if (e.shiftKey || selectModeRef.current) {
-        if (front) onSelectRef.current(front, { additive: true, exact: e.altKey });
+        if (front) select(front, { additive: true, exact: e.altKey || exact });
         return;
       }
       // Wait for a possible double-click before selecting: on the selected part behind another, on
@@ -5736,11 +6077,11 @@ export default function Viewport3D({
       if (onSet || (selId && front !== selId && (ids.includes(selId) || batteryFitsBrain(selId, front)))) {
         pendingSelectTimer = setTimeout(() => {
           pendingSelectTimer = null;
-          onSelectRef.current(front);
+          select(front);
         }, DOUBLE_CLICK_WINDOW_MS);
         return;
       }
-      onSelectRef.current(front);
+      select(front);
     };
 
     let pickHoverFrame = 0;
@@ -5765,15 +6106,17 @@ export default function Viewport3D({
       copyPointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       // The copy preview follows Ctrl/Cmd (a missed keyup ends it here) and steps aside for a drag
       const modifier = e.ctrlKey || e.metaKey;
-      if (pickModeRef.current?.kind === 'copy' && (!modifier || transform.dragging)) endPick();
-      else if (!pickModeRef.current && modifier && !e.shiftKey) startCopy(); // Shift+Ctrl is for the wheel
+      const copyKey = modifier || stampOn(); // Stamp copies on the bar holds the preview on
+      if (pickModeRef.current?.kind === 'copy' && (!copyKey || transform.dragging)) endPick();
+      else if (!pickModeRef.current && copyKey && !e.shiftKey && !transform.dragging) startCopy(); // Shift+Ctrl is for the wheel
       // Alt (not Shift+Alt, which selects one part of a group) lights the target under the cursor
-      // (Bend sheet by holes lights them without Alt)
-      const altLights = (e.altKey || holePickingRef.current) && !e.shiftKey && !modifier && e.buttons === 0;
+      // (Bend sheet by holes and Mark a hole light them without Alt)
+      const altLights = (e.altKey || targetToolOn()) && !e.shiftKey && !modifier && e.buttons === 0;
       if (altHoverRef.current && (!altLights || !canAltHover())) endAltHover();
       else if (altLights && !altHoverRef.current) startAltHover();
       if (altHoverRef.current) updateAltHover(e.clientX - rect.left, e.clientY - rect.top);
       if (pickModeRef.current) {
+        if (e.pointerType !== 'mouse') return; // by touch only taps light holes
         if (arrowOverlay.isShown()) {
           setRayFromEvent(e);
           arrowOverlay.setHover(arrowOverlay.pick(raycaster));
@@ -5829,7 +6172,7 @@ export default function Viewport3D({
         if (pickPartsAt(e).some((id) => multi.includes(id))) onMateFeedbackRef.current?.('Copies are inserted one part at a time: select a single part.', true);
         return;
       }
-      if (e.ctrlKey || e.metaKey) return; // Ctrl/Cmd+double-click inserts a copy, never mates
+      if (e.ctrlKey || e.metaKey || stampOn()) return; // Ctrl/Cmd+double-click inserts a copy, never mates
       if (pickModeRef.current) return; // picking: single clicks insert
       if (transform.dragging) return;
       if (wasDraggingRef.current && dragMovedRef.current) return;
@@ -5879,7 +6222,7 @@ export default function Viewport3D({
         endAltHover();
       }
       if (bandPickRef.current && (e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey && e.target?.tagName !== 'INPUT') {
-        if (stepBandHover(e.shiftKey ? -1 : 1)) {
+        if (stepSession(e.shiftKey ? -1 : 1)) {
           e.preventDefault();
           e.stopImmediatePropagation();
           return;
@@ -5889,13 +6232,15 @@ export default function Viewport3D({
         if (e.key === 'Escape') {
           e.preventDefault();
           e.stopImmediatePropagation();
+          const stamping = pickModeRef.current.kind === 'copy' && stampOn();
           endPick();
+          if (stamping) onPointerToolEndRef.current?.('stamp');
           return;
         }
         if (pickModeRef.current.kind === 'pick' && (e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) {
           e.preventDefault();
           e.stopImmediatePropagation();
-          cyclePickFit(e.shiftKey ? -1 : 1);
+          stepSession(e.shiftKey ? -1 : 1);
           return;
         }
       }
@@ -5930,7 +6275,7 @@ export default function Viewport3D({
       // last layer off (towards); never zooms. Some mice report Shift+wheel as deltaX. With Ctrl/Cmd
       // too, only parts joined by a pin, shaft or peg in a hole count (a copy preview steps aside).
       const pinnedOnly = e.ctrlKey || e.metaKey;
-      if (pinnedOnly && e.shiftKey && pickModeRef.current?.kind === 'copy') endPick();
+      if (pinnedOnly && e.shiftKey && pickModeRef.current?.kind === 'copy' && !stampOn()) endPick();
       if (e.shiftKey && selectedIdsRef.current.length > 0 && !pickModeRef.current && selectedRingRef.current < 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -5947,7 +6292,7 @@ export default function Viewport3D({
         e.stopImmediatePropagation();
         pickWheelAccum += e.deltaY;
         if (Math.abs(pickWheelAccum) >= 40) {
-          stepBandHover(pickWheelAccum > 0 ? 1 : -1);
+          stepSession(pickWheelAccum > 0 ? 1 : -1);
           pickWheelAccum = 0;
         }
         return;
@@ -5958,7 +6303,7 @@ export default function Viewport3D({
         e.stopImmediatePropagation();
         pickWheelAccum += e.deltaY;
         if (Math.abs(pickWheelAccum) >= 40) {
-          cyclePickFit(pickWheelAccum > 0 ? 1 : -1);
+          stepSession(pickWheelAccum > 0 ? 1 : -1);
           pickWheelAccum = 0;
         }
         return;
@@ -5973,28 +6318,21 @@ export default function Viewport3D({
       const notches = Math.trunc(wheelAccum / WHEEL_NOTCH);
       if (notches === 0) return;
       wheelAccum -= notches * WHEEL_NOTCH;
-      const gesture = rotateGestureRef.current ?? beginRotateGesture('wheel', ring);
-      if (!gesture || gesture.ring !== ring) return;
-      const snap = rotationSnapDegRef.current;
-      const step = snap > 0 ? snap : 5;
-      let total = setup.angles[ring] + notches * step;
-      if (snap > 0) total = Math.round(total / step) * step;
-      turnSelectedTo(ring, total);
-      clearTimeout(gesture.wheelTimer);
-      gesture.wheelTimer = setTimeout(commitRotation, 300);
+      for (let i = 0; i < Math.abs(notches); i += 1) stepSession(Math.sign(notches));
     };
 
     // Letting go of Ctrl/Cmd, or leaving the window, ends the copy preview
     const handleKeyUp = (e) => {
-      if (pickModeRef.current?.kind === 'copy' && !e.ctrlKey && !e.metaKey) endPick();
-      if (e.key === 'Alt' || !e.altKey) endAltHover();
+      if (pickModeRef.current?.kind === 'copy' && !e.ctrlKey && !e.metaKey && !stampOn()) endPick();
+      if ((e.key === 'Alt' || !e.altKey) && !targetToolOn()) endAltHover();
     };
     const handleWindowBlur = () => {
-      if (pickModeRef.current?.kind === 'copy') endPick();
-      endAltHover();
+      if (pickModeRef.current?.kind === 'copy' && !stampOn()) endPick();
+      if (!targetToolOn()) endAltHover();
     };
     // Off the canvas, no hole is under the pointer
-    const handlePointerLeave = () => {
+    const handlePointerLeave = (e) => {
+      if (e.pointerType && e.pointerType !== 'mouse') return; // what a tap lit stays lit
       copyPointerRef.current = null;
       if (pickModeRef.current?.kind === 'copy') updatePickHover(-1e6, -1e6);
       endAltHover();
@@ -6007,7 +6345,7 @@ export default function Viewport3D({
       const held = e.type === 'blur' ? false : e.key === 'Alt' ? e.type === 'keydown' : e.altKey;
       if (held === altKeyRef.current) return;
       altKeyRef.current = held;
-      if (!transform.dragging && transform.object && !transform.object.userData.isSetPivot) transform.setSpace(held ? 'world' : 'local');
+      if (!transform.dragging && transform.object && !transform.object.userData.isSetPivot) transform.setSpace(worldAxesOn() ? 'world' : 'local');
       // The rotate rings switch too (not during a turn)
       if (transformModeRef.current === 'rotate' && !rotateGestureRef.current) refreshRotateSetup();
     };
