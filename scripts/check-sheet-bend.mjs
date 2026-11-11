@@ -19,7 +19,7 @@ import {
   partOf
 } from '../mcp/assembly-engine.mjs';
 import { bendSheet, sheetBendChoices } from '../src/engine/sheetBending.js';
-import { bendCurve, sheetFrame, sheetRows, solvePiece, seriesPieces } from '../src/utils/sheetBend.js';
+import { bendCurve, sheetFrame, sheetRows, solvePiece, seriesPieces, seriesFromKappas, SERIES_SCALE } from '../src/utils/sheetBend.js';
 import { shapeKey, shapedPart, shapeError } from '../src/utils/shapedParts.js';
 import { applyOps, diffParts } from '../src/utils/buildHistory.js';
 import { starterById } from '../src/starters.js';
@@ -182,6 +182,12 @@ check('a beam across the curve removes the row 4 choice', !blocked.choices.some(
     return Math.abs(length - 63.5) < 0.3 && Math.hypot(pts.at(-1)[0] - 10.6, pts.at(-1)[1] - 24.9) < 0.05 && piece.maxK <= 1 / 3 + 1e-6;
   });
   check('the longer search finds several paths, each the sheet\'s length, ending on the target, none tighter than 3 mm', ok, `${found.length} paths in ${Date.now() - t} ms`);
+  const again = found.every((piece) => {
+    const saved = piece.kappas.map((k) => Math.round(k * SERIES_SCALE) / SERIES_SCALE); // as a saved bend keeps them
+    const back = seriesFromKappas([-31.8, 0.1], [1, 0], 63.5, saved).sample(300);
+    return Math.hypot(back.at(-1)[0] - 10.6, back.at(-1)[1] - 24.9) < 0.1;
+  });
+  check('a saved search result comes back ending on the target (to 0.1 mm), without searching again', again);
   check('they come gentlest first', found.every((x, i) => !i || found[i - 1].bending <= x.bending + 1e-9));
 }
 
