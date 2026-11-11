@@ -7,8 +7,15 @@
  * Chain and track parts have no body of their own: each track rides with the body holding its
  * sprockets (graph.tracks[].frame), and one on a single sprocket runs round its loop as that
  * sprocket turns, each link moving to where the next link was (blended between the two).
+ *
+ * Bands (openspec rubber-bands) have no body either: each frame a band's path is found again from its
+ * spots carried by their bodies' moves, its strip is drawn along it, and it takes its stretch colour.
+ * Leaving Play puts every band's strip and colour back.
  */
 import * as THREE from 'three';
+import { solveBandPath, stretchOf } from '../utils/bandPath.js';
+import { bandKind } from '../utils/bandShape.js';
+import { STRETCH_COLORS, stretchState } from './bandStrength.js';
 
 const MAX_DT = 1 / 20; // a slow frame doesn't jump the motion
 
@@ -74,6 +81,58 @@ export function createPlayRunner(graph, instances, engine) {
     .filter((t) => t.frame && (t.drive || !fixedOnly(t.frame)))
     .map((t) => trackState(t, byId));
   const allTracks = (graph.tracks || []).filter((t) => t.frame).map((t) => trackState(t, byId));
+  // Bands: each spot carried by its part's body; the strip redrawn along the path found again
+  const bandStates = (graph.bands || []).map((b) => ({ band: b, inst: byId.get(b.id), saved: null }));
+  let lastMeshMap = null;
+  const drawBands = (meshMap, deltas) => {
+    for (const st of bandStates) {
+      const { band, inst } = st;
+      const group = meshMap.get(band.id);
+      if (!group || !inst) continue;
+      const elements = band.elements.map((e, i) => {
+        const d = deltas.get(band.bodies[i]);
+        const q = new THREE.Quaternion();
+        if (d) q.setFromRotationMatrix(d);
+        const out = { ...e, center: d ? new THREE.Vector3(...e.center).applyMatrix4(d) : new THREE.Vector3(...e.center), axis: new THREE.Vector3(...e.axis).applyQuaternion(q) };
+        if (e.radial) out.radial = new THREE.Vector3(...e.radial).applyQuaternion(q);
+        if (e.wrapDir) out.wrapDir = new THREE.Vector3(...e.wrapDir).applyQuaternion(q);
+        return out;
+      });
+      const path = solveBandPath(elements, { thickMm: band.thickMm, widthMm: band.widthMm, maxRounds: 40, tolMm: 0.02 });
+      if (!path) continue;
+      const mesh = group.children.find((c) => c.isMesh && c.userData.isPartMesh) || group.children.find((c) => c.isMesh);
+      if (!mesh) continue;
+      if (!st.saved) st.saved = { geometry: mesh.geometry, material: mesh.material };
+      const shape = {
+        kind: 'band',
+        route: band.elements,
+        path: { points: path.points.map((p) => [p.x - inst.position[0], p.y - inst.position[1], p.z - inst.position[2]]), ups: path.ups.map((u) => [u.x, u.y, u.z]) }
+      };
+      const arrays = bandKind.shapeMesh(null, null, null, shape, { partNumber: band.partNumber });
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arrays.pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(arrays.norm, 3));
+      geo.setIndex(new THREE.BufferAttribute(arrays.idx, 1));
+      if (mesh.geometry !== st.saved.geometry) mesh.geometry.dispose();
+      mesh.geometry = geo;
+      const state = stretchState(stretchOf({ freeMm: band.freeMm }, path.lengthMm));
+      if (mesh.material === st.saved.material) mesh.material = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material).clone();
+      mesh.material.color?.setHex(STRETCH_COLORS[state]);
+    }
+  };
+  const restoreBands = () => {
+    for (const st of bandStates) {
+      const group = lastMeshMap?.get(st.band.id);
+      const mesh = group?.children.find((c) => c.isMesh && c.userData.isPartMesh) || group?.children.find((c) => c.isMesh);
+      if (!mesh || !st.saved) continue;
+      if (mesh.geometry !== st.saved.geometry) mesh.geometry.dispose();
+      if (mesh.material !== st.saved.material) mesh.material.dispose?.();
+      mesh.geometry = st.saved.geometry;
+      mesh.material = st.saved.material;
+      st.saved = null;
+    }
+  };
+
   const throttles = new Map();
   let last = null;
   let wasDropping = false;
@@ -121,6 +180,8 @@ export function createPlayRunner(graph, instances, engine) {
         if (!group || !d) continue;
         m.multiplyMatrices(d, p.start).decompose(group.position, group.quaternion, group.scale);
       }
+      lastMeshMap = meshMap;
+      if (bandStates.length) drawBands(meshMap, deltas);
       for (const t of dropping ? allTracks : tracks) {
         const frameDelta = deltas.get(t.track.frame) || new THREE.Matrix4();
         if (t.order) {
@@ -160,6 +221,9 @@ export function createPlayRunner(graph, instances, engine) {
       }
     },
     status: () => engine.status(),
-    dispose: () => engine.dispose?.()
+    dispose: () => {
+      restoreBands();
+      return engine.dispose?.();
+    }
   };
 }

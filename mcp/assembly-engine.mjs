@@ -10,7 +10,11 @@ import { fileURLToPath } from 'node:url';
 import { applyOps, diffParts, fromLegacy, loadHistory, recordStep, summarize } from '../src/utils/buildHistory.js';
 import { isLinearHistory, normalizeSettings } from '../src/utils/appSettings.js';
 import { syncSelection } from '../src/utils/partGroups.js';
+import { followBands } from '../src/utils/bandRoute.js';
+import { withBandFlags } from '../src/engine/bandFit.js';
+import { rerouteBands } from '../src/engine/bandRouting.js';
 import {
+  partOf,
   buildDefaultStarterState,
   generateOrthographicViews as orthographicViews,
   setCatalogSource,
@@ -130,6 +134,14 @@ export async function writeAssemblyState(nextState, options = {}) {
   const store = appSyncContext.getStore();
   let instances = nextState.instances || [];
   let history = nextState.history;
+  // Bands follow the parts they're strung on (openspec rubber-bands), in the same step
+  {
+    const before = (readStateFile() || { instances: [] }).instances;
+    {
+      const followed = followBands(before, instances, partOf);
+      instances = withBandFlags(followed.changed.length ? rerouteBands(followed.instances, followed.changed).instances : followed.instances);
+    }
+  }
 
   if (recordHistory) {
     const saved = readStateFile() || { instances: [], history: fromLegacy([]) };

@@ -5,6 +5,7 @@
  * history step and the MCP server into one `mcp` step. Pure (no React/DOM), shared by the app, the
  * Vite bridge and the MCP server.
  */
+import { copiedBand } from './bandRoute.js';
 import * as THREE from 'three';
 import { quaternionToEulerDeg } from './gearMeshing.js';
 import { collectWorldFeatures, gridPivot } from './pinHoleAlignment.js';
@@ -322,13 +323,16 @@ export function cloneSet(instances, ids, offset, { newId, groupId = newGroupId()
   const group = wholeGroupOf(instances, ids);
   const wanted = new Set(ids);
   const makeId = newId || (() => `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
-  return instances
-    .filter((inst) => wanted.has(inst.instanceId))
+  const chosen = instances.filter((inst) => wanted.has(inst.instanceId));
+  // Bands copied with their parts stay strung on the copies (openspec rubber-bands)
+  const idMap = new Map(chosen.map((inst) => [inst.instanceId, makeId()]));
+  return chosen
+    .map((inst) => copiedBand(inst, idMap))
     .map((inst) => {
       const position = inst.position.map((v, i) => round3(v + (offset[i] || 0)));
       const copy = {
         ...inst,
-        instanceId: makeId(),
+        instanceId: idMap.get(inst.instanceId),
         label: `${inst.label} (Copy)`,
         position,
         lastValidPosition: [...position],

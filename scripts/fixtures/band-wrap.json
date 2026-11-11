@@ -1,0 +1,149 @@
+{
+ "note": "Build #5: two 2x14 Beams, two corner connectors, three 1x1 Connector Pins and two 0.25x Pitch Standoffs (openspec rubber-bands: bands wrap parts in their way)",
+ "instances": [
+  {
+   "instanceId": "inst-1794320278868-i11q",
+   "partId": "2x14-beam-228-2500-027-170",
+   "label": "2x14 Beam #1",
+   "position": [
+    -27.57,
+    20.133,
+    40.249
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "visible": true
+  },
+  {
+   "instanceId": "inst-1794320498676-xrtu",
+   "partId": "2x-wide-2x2-corner-connector-weak-228-2500-2295-103",
+   "label": "2x Wide, 2x2 Corner Connector (Weak) #1",
+   "position": [
+    54.98,
+    26.483,
+    37.147
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "visible": true
+  },
+  {
+   "instanceId": "inst-1794320610825-dqdw",
+   "partId": "2x14-beam-228-2500-027-170",
+   "label": "2x14 Beam #2",
+   "position": [
+    -119.15,
+    19.833,
+    -52.603
+   ],
+   "rotation": [
+    0,
+    -90,
+    0
+   ],
+   "visible": true
+  },
+  {
+   "instanceId": "inst-1794320706533-umxw",
+   "partId": "2x-wide-2x2-corner-connector-weak-228-2500-2295-103",
+   "label": "2x Wide, 2x2 Corner Connector (Weak) #1 (Copy)",
+   "position": [
+    -110.12,
+    13.483,
+    36.297
+   ],
+   "rotation": [
+    0,
+    0,
+    -90
+   ],
+   "visible": true
+  },
+  {
+   "instanceId": "inst-1794320782387-8sct",
+   "partId": "1x1-connector-pin-228-2500-060-31",
+   "label": "1x1 Connector Pin #1",
+   "position": [
+    -116.222,
+    26.183,
+    17.247
+   ],
+   "rotation": [
+    0,
+    90,
+    0
+   ],
+   "visible": true
+  },
+  {
+   "instanceId": "inst-1794320821739-zqal",
+   "partId": "1x1-connector-pin-228-2500-060-31",
+   "label": "1x1 Connector Pin #1 (Copy)",
+   "position": [
+    -103.522,
+    26.183,
+    17.247
+   ],
+   "rotation": [
+    0,
+    90,
+    0
+   ],
+   "visible": true
+  },
+  {
+   "instanceId": "inst-1794320826966-8d4s",
+   "partId": "1x1-connector-pin-228-2500-060-31",
+   "label": "1x1 Connector Pin #1 (Copy)",
+   "position": [
+    -116.222,
+    26.183,
+    29.947
+   ],
+   "rotation": [
+    0,
+    90,
+    0
+   ],
+   "visible": true
+  },
+  {
+   "instanceId": "inst-1794320848297-cp2r",
+   "partId": "0-25x-pitch-standoff-228-2500-063-5",
+   "label": "0.25x Pitch Standoff #1",
+   "position": [
+    -2.17,
+    20.133,
+    46.327
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "visible": true
+  },
+  {
+   "instanceId": "inst-1794320856837-wbyr",
+   "partId": "0-25x-pitch-standoff-228-2500-063-5",
+   "label": "0.25x Pitch Standoff #2",
+   "position": [
+    -125.228,
+    19.833,
+    -39.903
+   ],
+   "rotation": [
+    -90,
+    -90,
+    0
+   ],
+   "visible": true
+  }
+ ]
+}

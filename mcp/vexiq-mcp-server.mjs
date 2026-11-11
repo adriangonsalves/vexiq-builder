@@ -30,6 +30,8 @@ import {
   writeAssemblyState
 } from './assembly-engine.mjs';
 import { bendSheet, sheetBendChoices } from '../src/engine/sheetBending.js';
+import { placeBand } from '../src/engine/bandRouting.js';
+import { bandReport } from '../src/utils/bandRoute.js';
 import { describeShape } from '../src/utils/shapedParts.js';
 import { MCP_OFF_MESSAGE } from '../src/utils/appSettings.js';
 import {
@@ -736,7 +738,7 @@ const TOOLS = [
   {
     name: 'bend_sheet',
     description:
-      'Bend a plastic sheet (2x12, 6x6 or 6x12 Plastic Sheet) onto a row of holes on another part, as the app\'s Tools → Bend sheet does. The rows of the sheet that already have pins (or another part\'s holes) in them stay flat; the sheet bends along lines parallel to those rows (never twisting) and follows one smooth curve to the chosen row, exactly as long as the sheet between the two rows, leaving each row in line with the sheet; past the last anchored row it runs straight. Call it again with another target to anchor a further row. Without choice or sheetRow it changes nothing and lists the choices: [{ id, name, row, face, layers, missMm, stretchMm, note }] (name like "sheet row 4 → 1x12 Beam, upper face"; note names parts the rest of the sheet past that row still runs into) and reasons for rows it refused (would twist, out of reach by N mm, would bend too tightly, would pass through a part). A row up to 1 mm out of reach is offered with the sheet stretched that much between the two rows, so its pins seat. Where another sheet already lies on that face, the sheet goes on top of it 0.1 mm out (layers). Pass choice (an id or name from the list), or sheetRow (and face, e.g. "upper"), to bend it; pins in the moving rows move with the sheet. With moveTarget and sheetRow, a target held only by this sheet that is out of reach is moved to the nearest spot the row reaches. flatten removes the bend. A sheet pressing up to 1.5 mm into a part, or on a sheet it is stacked on, flexes: that is a tight fit, not an overlap. One undo step.',
+      'Bend a plastic sheet (2x12, 6x6 or 6x12 Plastic Sheet) onto a row of holes on another part, as the app\'s Tools → Bend sheet does. The rows of the sheet that already have pins (or another part\'s holes) in them stay flat; the sheet bends along lines parallel to those rows (never twisting) and follows one smooth curve to the chosen row, exactly as long as the sheet between the two rows, leaving each row in line with the sheet; past the last anchored row it runs straight. Call it again with another target to anchor a further row. Without choice or sheetRow it changes nothing and lists the choices: [{ id, name, row, face, layers, missMm, stretchMm, note }] (name like "sheet row 4 → 1x12 Beam, upper face"; note names parts the rest of the sheet past that row still runs into) and reasons for rows it refused (would twist, out of reach by N mm, would bend too tightly, would pass through a part). A row up to 1 mm out of reach is offered with the sheet stretched that much between the two rows, so its pins seat. Where another sheet already lies on that face, the sheet goes on top of it 0.1 mm out (layers). Pass choice (an id or name from the list), or sheetRow (and face, e.g. "upper"), to bend it; pins in the moving rows move with the sheet. With moveTarget and sheetRow, a target held only by this sheet that is out of reach is moved to the nearest spot the row reaches. flatten removes the bend. By hole: pass sheetPortId (the row of that hole is the row anchored) and targetPortId (the hole it lands on) to bend directly with the fit that lines up the most holes; the reply gives holesMatched. A sheet pressing up to 1.5 mm into a part, or on a sheet it is stacked on, flexes: that is a tight fit, not an overlap. One undo step.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -746,9 +748,47 @@ const TOOLS = [
         sheetRow: { type: 'number', description: 'The sheet row to anchor (rows count from the held edge, 1 = the first).' },
         face: { type: 'string', description: 'With sheetRow: the target face to lie on, e.g. "upper", "lower", "front", "back".' },
         moveTarget: { type: 'boolean', description: 'With sheetRow: move a target only this sheet holds onto the sheet when it is out of reach.' },
+        sheetPortId: { type: 'string', description: 'A hole of the sheet to anchor (its row is the row anchored). With targetPortId, bends there directly, showing the fit with the most holes lined up; with no targetPortId, lists the choices.' },
+        targetPortId: { type: 'string', description: 'The hole of the target part the marked sheet hole lands on.' },
         flatten: { type: 'boolean', description: 'Remove the bend.' }
       },
       required: ['sheetId']
+    }
+  },
+  {
+    name: 'place_band',
+    description:
+      'String a rubber band or belt (Silicone Rubber Band #32, #64, Thin #64, #117B; 2x30 mm Square Silicone Belt; 2x30/40/50/60 mm Rubber Belt) round spots on other parts, as the app\'s Tools → Band builder does. A spot is one feature of one part: "post:body" (a standoff\'s body), "post:pin" (a pin\'s leg), "post:shaft" (a shaft end), "groove" (a pulley), "rim" (a gear or sprocket\'s outside), "gap:<k>" (tooth gap k, which the band passes through from one face to the other), "gaphook:<k>" (hooked in gap k), "edge:<holePortId>" (a beam or bracket\'s rounded end or corner round that hole), "edge:side+|side-|end+|end-" (a straight beam or plate\'s long sides and ends, round its thickness), "hook" (the Rubber Band Anchor). Gaps are numbered round each gear from its own tooth phase, so they turn with it. Give spots in loop order; each may set side ("out", the default: round the far side from the loop\'s middle; "in": the band bends the other way, the spot pressing into the loop), wraps (1-3), height (mm along a post, picking which free stretch of it the band slides in) and cross (the run to the next spot crosses over, a figure-8). The band takes the shortest path that meets the route: straight runs between spots, curving round each. Each stretch from one hook to the next takes the shortest clear way round the parts between, bending on their real outer corners (route entries with feature "wrap" carrying the corner), listed in addedInWay; alternative: 1-3 gives the next way round (over instead of under; a dry run says how many there are); a run that would cut a gear\'s or sprocket\'s web goes through the gap that keeps the band shortest. inWay ({ instanceId: "over" | "under" }) keeps a part\'s bends to one side, and only parts no clear way avoids come back in needsRoute (nothing changes). A post takes a band only where 1.5 mm or more of it sticks out of the parts it goes into; a buried pin is refused. Reply: stretch (path length / free length), stretchState (slack < 1, snug ≤ 2, tight ≤ 3, too far; assumed limits), pullN (assumed stiffness), lengthMm, suggestion (the size closest to 1.5× when slack or too far), route, addedInWay. With list: true, or one spot, nothing changes and the reply lists spots on and near those parts ([{ instanceId, label, feature, kind, name, center, axis, radius, gap }]) and, with two spots, routes between them ([{ name, spots, stretch, state }]). A band on two hooks (posts, pins, grooves, gaps, the anchor; the first and last spots are always hooks) with only edges between goes there and back over the same spots and bends (pin, under one beam\'s edge, under the next, other pin, and back); three or more hooks make a loop; back: "same" or "straight" forces one. A band that would be slack (longer than its route) is refused with the size that fits in suggestion, unless allowSlack. Pass instanceId instead of bandPartId to re-string a placed band. A band follows its parts when they move and becomes a flat ring if fewer than two of its spots are left. One undo step.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        bandPartId: { type: 'string', description: 'The band or belt to add (part id, number or name).' },
+        instanceId: { type: 'string', description: 'A placed band to re-string instead.' },
+        spots: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              instanceId: { type: 'string' },
+              feature: { type: 'string', description: 'e.g. "post:body", "gap:17", "edge:hole.thru.0_0_0".' },
+              side: { type: 'string', enum: ['out', 'in'] },
+              wraps: { type: 'number' },
+              height: { type: 'number' },
+              cross: { type: 'boolean' }
+            },
+            required: ['instanceId', 'feature']
+          },
+          description: 'The spots in loop order.'
+        },
+        inWay: { type: 'object', additionalProperties: { type: 'string', enum: ['over', 'under'] }, description: 'Answers for parts in a run\'s way.' },
+        list: { type: 'boolean', description: 'List spots (and routes between two spots); change nothing.' },
+        near: { type: 'array', items: { type: 'string' }, description: 'With list: more parts whose spots to list.' },
+        back: { type: 'string', enum: ['auto', 'straight', 'same'], description: 'How the band comes back: "auto" (default) there and back over the same spots for two hooks, a loop for three or more; "straight" closes from the last spot to the first; "same" comes back over the middle spots in reverse.' },
+        allowSlack: { type: 'boolean', description: 'Place the band even when it is longer than its route (it hangs loose).' },
+        alternative: { type: 'number', description: '0 (default) the shortest way round; 1-3 the next ways (over instead of under the parts between).' },
+        ignoreInWay: { type: 'boolean', description: 'String the route as given even where a run passes through a part (CAD import, whose route VEX gives); those parts are listed in passesThrough.' },
+        label: { type: 'string' }
+      }
     }
   },
   {
@@ -920,6 +960,7 @@ async function executeTool(name, args = {}) {
       ...(part.chainSpecs ? { chainSpecs: part.chainSpecs } : {}),
       ...cadFrameEntries(part),
       ...(copy?.shape ? { instanceId: copy.instanceId, shape: copy.shape, shapeDescription: describeShape(copy.shape) } : {}),
+      ...(copy && bandReport(copy, partOf) ? { band: bandReport(copy, partOf) } : {}),
       connections: describePartConnections(part)
     };
     if (!args.verbose) return compact;
@@ -958,8 +999,9 @@ async function executeTool(name, args = {}) {
           pitchPosition: inst.position.map((c) => Number((c / VEX_PITCH_MM).toFixed(2))),
           // A Smart Motor's drive hub angle (missing in older saves means 0)
           ...(part?.hubSpecs ? { socketAngleDeg: Number(inst.socketAngleDeg) || 0 } : {}),
-          // A copy with its own shape, such as a bent sheet
-          ...(inst.shape ? { shapeDescription: describeShape(inst.shape) } : {})
+          // A copy with its own shape, such as a bent sheet or a strung band
+          ...(inst.shape ? { shapeDescription: describeShape(inst.shape) } : {}),
+          ...(bandReport(inst, partOf) ? { band: bandReport(inst, partOf) } : {})
         };
       })
     };
@@ -1057,9 +1099,9 @@ async function executeTool(name, args = {}) {
 
   if (name === 'bend_sheet') {
     const state = readAssemblyState();
-    const listing = !args.flatten && args.choice === undefined && args.sheetRow === undefined;
+    const listing = !args.flatten && args.choice === undefined && args.sheetRow === undefined && !args.sheetPortId;
     if (listing) {
-      const found = sheetBendChoices(state, { sheetId: args.sheetId, targetId: args.targetId });
+      const found = sheetBendChoices(state, { sheetId: args.sheetId, targetId: args.targetId, sheetPortId: args.sheetPortId ?? null, targetPortId: args.targetPortId ?? null });
       if (!found.ok) return { isError: true, error: found.error };
       return {
         ok: true,
@@ -1067,7 +1109,7 @@ async function executeTool(name, args = {}) {
         reasons: found.reasons
       };
     }
-    const bent = bendSheet(state, { sheetId: args.sheetId, targetId: args.targetId ?? null, choice: args.choice ?? null, sheetRow: args.sheetRow ?? null, face: args.face ?? null, moveTarget: Boolean(args.moveTarget), flatten: Boolean(args.flatten) });
+    const bent = bendSheet(state, { sheetId: args.sheetId, targetId: args.targetId ?? null, choice: args.choice ?? null, sheetRow: args.sheetRow ?? null, face: args.face ?? null, moveTarget: Boolean(args.moveTarget), flatten: Boolean(args.flatten), sheetPortId: args.sheetPortId ?? null, targetPortId: args.targetPortId ?? null });
     if (!bent.ok) return { isError: true, error: bent.error, ...(bent.choices ? { choices: bent.choices } : {}) };
     await writeAssemblyState(bent.state, { stepLabel: bent.stepLabel });
     const after = readAssemblyState();
@@ -1076,6 +1118,7 @@ async function executeTool(name, args = {}) {
     return {
       ok: true,
       message: bent.message,
+      ...(bent.holesMatched != null ? { holesMatched: bent.holesMatched } : {}),
       shape: sheet?.shape || null,
       shapeDescription: sheet?.shape ? describeShape(sheet.shape) : null,
       moved: bent.movedIds,
@@ -1083,6 +1126,16 @@ async function executeTool(name, args = {}) {
       tightFits: contacts.tightFits.map((c) => c.label),
       audit: summarizeAudit(auditAssembly(after))
     };
+  }
+
+  if (name === 'place_band') {
+    const state = readAssemblyState();
+    const res = placeBand(state, args);
+    if (!res.ok) return { isError: true, error: res.error, ...(res.needsRoute ? { needsRoute: res.needsRoute } : {}), ...(res.suggestion ? { suggestion: res.suggestion } : {}) };
+    if (!res.state) return { ok: true, spots: res.spots, routes: res.routes };
+    await writeAssemblyState(res.state, { stepLabel: res.stepLabel });
+    const { state: _s, record: _r, stepLabel: _l, ...reply } = res;
+    return reply;
   }
 
   if (name === 'ungroup_parts') {

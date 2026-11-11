@@ -32,6 +32,9 @@ import { areChainNeighbours, isChainFit, isChainPart, isGripperOnLink, isLink, i
 import { applyPatches, groupParts } from '../utils/partGroups.js';
 import { CHAIN_LINK_PART_NUMBER, TREAD_LINK_PART_NUMBER, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName } from '../utils/chainPath.js';
 import { sliceOutline } from '../utils/chainObstacles.js';
+import { bandOverlaps } from './bandFit.js';
+import { isRoutedBand, mirroredRoute, resolveRoute, setPostCover, stringBand } from '../utils/bandRoute.js';
+import { bandSpec } from '../utils/bandPath.js';
 import { mirrorShape, normalizeShape, shapeError, shapeMeshArrays, shapedPart } from '../utils/shapedParts.js';
 import { SHEET_PRESS_MM, isPlasticSheet } from '../utils/sheetBend.js';
 import { sheetFlexDepth, sheetsStacked } from '../utils/sheetContact.js';
@@ -334,6 +337,14 @@ export function checkCandidateCollision(candidate, instances) {
   const { catalogById } = getCatalog();
   const partA = partOf(candidate);
   if (!partA) return { isIntersecting: false, collidingWith: [], tightFits: [] };
+  // A strung band: the band rule (src/engine/bandFit.js), its own parts included (openspec rubber-bands)
+  if (isRoutedBand(candidate)) {
+    const others = instances.filter((i) => i.instanceId !== candidate.instanceId);
+    const collidingWith = bandOverlaps(candidate, others).map((o) => ({ instanceId: o.instanceId, label: o.label, partNumber: partOf(others.find((i) => i.instanceId === o.instanceId))?.partNumber, depthMm: o.depthMm }));
+    return { isIntersecting: collidingWith.length > 0, collidingWith, tightFits: [] };
+  }
+  // Against a strung band, the same rule, with the band strung on the parts as they'd be
+  let withCandidate = null;
 
   const bvhA = getPartCollisionBvh(partA);
   const { localBox: boxA } = bvhA;
@@ -351,6 +362,12 @@ export function checkCandidateCollision(candidate, instances) {
   for (const other of instances) {
     if (other.instanceId === candidate.instanceId) continue;
     if (other.visible === false) continue;
+    if (isRoutedBand(other)) {
+      withCandidate ||= instances.some((i) => i.instanceId === candidate.instanceId) ? instances.map((i) => (i.instanceId === candidate.instanceId ? candidate : i)) : [...instances, candidate];
+      const hit = bandOverlaps(other, withCandidate, { only: new Set([candidate.instanceId]) });
+      if (hit.length) collidingWith.push({ instanceId: other.instanceId, label: other.label, partNumber: partOf(other)?.partNumber, depthMm: hit[0].depthMm });
+      continue;
+    }
     const partB = partOf(other);
     if (!partB) continue;
 
@@ -720,6 +737,8 @@ function findJoints(state) {
     expandedWorldBoxes.set(inst.instanceId, rawBox.clone().expandByScalar(0.6));
     featuresById.set(inst.instanceId, worldFeaturesFor(inst));
 
+    // A strung band is held by the spots it's strung on, not by pins (openspec rubber-bands)
+    if (isRoutedBand(inst)) continue;
     if (isFastenerPart(part, featuresById.get(inst.instanceId))) {
       fasteners.push({ inst, part, mat });
     } else {
@@ -1087,6 +1106,109 @@ function dropInfo(inst, part, isFastener) {
  * src/sim/bodyGraph.js: every visible part, the seated pins, pegs and shafts with their lines, the
  * shaft groups with how well each square fits, meshing gears and racks, and chained sprockets.
  */
+/**
+ * Where other parts' solids cover a band's post (openspec rubber-bands): along the post, every 0.5 mm,
+ * a ring of points where a band on it would lie; a stretch where any of them is inside another part
+ * (a ray from it crosses that part's surface an odd number of times, both ways) is covered.
+ * Returns [[a, b]] along the post's axis from its centre.
+ */
+const postCoverCache = new WeakMap(); // instances array -> Map(post key -> covered stretches)
+function postCover(spot, postInst, instances) {
+  // The same build asks about the same post many times while routing one band
+  let byPost = postCoverCache.get(instances);
+  if (!byPost) postCoverCache.set(instances, (byPost = new Map()));
+  const key = `${postInst.instanceId}|${spot.feature}|${postInst.position}|${postInst.rotation}`;
+  if (!byPost.has(key)) byPost.set(key, measurePostCover(spot, postInst, instances));
+  return byPost.get(key);
+}
+
+function measurePostCover(spot, postInst, instances) {
+  const out = [];
+  const [lo, hi] = [Math.min(...spot.span), Math.max(...spot.span)];
+  const axis = spot.axis.clone().normalize();
+  const n1 = new THREE.Vector3().crossVectors(axis, Math.abs(axis.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).normalize();
+  const n2 = new THREE.Vector3().crossVectors(axis, n1);
+  const ring = (spot.radius || 2) + 0.75;
+  const dirs = [n1, n2, n1.clone().negate(), n2.clone().negate()];
+  const segBox = new THREE.Box3().setFromPoints([spot.center.clone().addScaledVector(axis, lo), spot.center.clone().addScaledVector(axis, hi)]).expandByScalar(ring + 1);
+  const ray = new THREE.Ray();
+  for (const other of instances) {
+    if (other.instanceId === postInst.instanceId || other.visible === false || isRoutedBand(other)) continue;
+    const part = partOf(other);
+    if (!part?.bbox || bandSpec(part)) continue;
+    const m = buildWorldMatrix(other.position, other.rotation);
+    if (!new THREE.Box3(new THREE.Vector3(...part.bbox.min), new THREE.Vector3(...part.bbox.max)).applyMatrix4(m).intersectsBox(segBox)) continue;
+    let geo;
+    try {
+      geo = getPartRawGeometry(part);
+    } catch {
+      continue;
+    }
+    const inv = m.clone().invert();
+    const q = new THREE.Quaternion().setFromRotationMatrix(inv);
+    const inside = (p) => {
+      const lp = p.clone().applyMatrix4(inv);
+      let odd = 0;
+      for (const d of [n1, n1.clone().negate()]) {
+        ray.origin.copy(lp);
+        ray.direction.copy(d).applyQuaternion(q);
+        if (geo.boundsTree.raycast(ray, THREE.DoubleSide).length % 2 === 1) odd++;
+      }
+      return odd === 2;
+    };
+    let start = null;
+    for (let t = lo; t <= hi + 1e-6; t += 0.5) {
+      const c = spot.center.clone().addScaledVector(axis, t);
+      const covered = dirs.some((d) => inside(c.clone().addScaledVector(d, ring)));
+      if (covered && start === null) start = t;
+      if (!covered && start !== null) {
+        out.push([start - 0.25, t - 0.25]);
+        start = null;
+      }
+    }
+    if (start !== null) out.push([start - 0.25, hi + 0.25]);
+  }
+  return out;
+}
+setPostCover(postCover);
+
+/**
+ * Play mode's bands (openspec rubber-bands): each strung band's spots at the start, as plain data,
+ * with what Play needs to pull: [{ id, label, partNumber, freeMm, thickMm, widthMm, path: { points, ups }
+ * (world, at the start), elements: [{ instanceId, ...spot (center, axis, radial: arrays), side, wraps,
+ * cross, key, wrapDir }] }].
+ */
+function playBands(visible) {
+  const arr3 = (v) => (v?.isVector3 ? [v.x, v.y, v.z] : v);
+  const out = [];
+  for (const inst of visible) {
+    if (!isRoutedBand(inst)) continue;
+    const part = partOf({ ...inst, shape: undefined });
+    const spec = bandSpec(part);
+    if (!spec) continue;
+    const { elements, missing } = resolveRoute(inst.shape.route, visible, partOf, { widthMm: spec.widthMm, selfId: inst.instanceId });
+    if (missing.length || elements.length < 2) continue;
+    out.push({
+      id: inst.instanceId,
+      label: inst.label || part.name,
+      partNumber: part.partNumber,
+      freeMm: spec.freeMm,
+      thickMm: spec.thickMm,
+      widthMm: spec.widthMm,
+      position: [...inst.position],
+      elements: elements.map((e, i) => ({
+        ...e,
+        instanceId: inst.shape.route[i].instanceId,
+        center: arr3(e.center),
+        axis: arr3(e.axis),
+        ...(e.radial ? { radial: arr3(e.radial) } : {}),
+        ...(e.wrapDir ? { wrapDir: arr3(e.wrapDir) } : {})
+      }))
+    });
+  }
+  return out;
+}
+
 export function playInputs(state, { braceTolerance = true } = {}) {
   const found = findJoints(state);
   const fastenerIds = new Set(found.fasteners.map((f) => f.inst.instanceId));
@@ -1097,6 +1219,7 @@ export function playInputs(state, { braceTolerance = true } = {}) {
   for (const inst of found.visible) {
     const part = partOf(inst);
     if (!part) continue;
+    if (isRoutedBand(inst)) continue; // a strung band is no body: it pulls on its spots (below)
     parts.push({
       id: inst.instanceId,
       label: inst.label || part.name,
@@ -1272,7 +1395,7 @@ export function playInputs(state, { braceTolerance = true } = {}) {
       if (a !== b && isTireOnHub(a.part, a.mat, b.part, b.mat) && /tire/i.test(a.part.name)) bays.push([a.inst.instanceId, b.inst.instanceId]);
     }
   }
-  return { parts, seated, groups, meshes, chains, tracks, sprocketAxes, bays };
+  return { parts, seated, groups, meshes, chains, tracks, sprocketAxes, bays, bands: playBands(found.visible) };
 }
 
 const SHAFT_TYPES = new Set(['straight_shaft', 'capped_shaft', 'motor_shaft']);
@@ -2199,6 +2322,24 @@ export function mirrorSubassembly(state, options = {}) {
 
     workingInstances.push(mirroredInst);
     mirroredInstances.push(mirroredInst);
+  }
+
+  // Bands mirrored with their parts are strung on the mirrored parts (openspec rubber-bands); one
+  // mirrored without them is a flat ring
+  const idMap = new Map(sourceInstances.map((src, k) => [src.instanceId, mirroredInstances[k]?.instanceId]).filter(([, id]) => id));
+  for (let k = 0; k < mirroredInstances.length; k++) {
+    const src = sourceInstances[k];
+    if (!isRoutedBand(src)) continue;
+    const mir = mirroredInstances[k];
+    const route = mirroredRoute(src.shape.route, idMap, workingInstances, axisIdx, planeOffsetMm, partOf);
+    const picks = src.shape.picks ? mirroredRoute(src.shape.picks, idMap, workingInstances, axisIdx, planeOffsetMm, partOf) : null;
+    const { shape: _old, ...bare } = mir;
+    const strung = route ? stringBand(bare, route, workingInstances, partOf, picks ? { picks, back: src.shape.back } : null) : null;
+    const { shape, ...flat } = mir;
+    const next = strung && !strung.error ? { ...flat, position: strung.position, rotation: strung.rotation, shape: strung.shape } : flat;
+    mirroredInstances[k] = next;
+    const at = workingInstances.findIndex((i) => i.instanceId === mir.instanceId);
+    if (at >= 0) workingInstances[at] = next;
   }
 
   return {

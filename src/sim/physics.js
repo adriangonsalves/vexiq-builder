@@ -23,6 +23,8 @@
  */
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
+import { solveBandPath } from '../utils/bandPath.js';
+import { bandPullN } from './bandStrength.js';
 import { sameLine } from './bodyGraph.js';
 import { MOTOR_FREE_RAD_S } from './kinematic.js';
 import { allMeasured, partMassKg } from './fastenerStrength.js';
@@ -1217,6 +1219,41 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     return poses;
   }
 
+  // Bands (openspec rubber-bands): each pulls the bodies holding its spots along its path, harder the
+  // more it stretches (an assumed stiffness). A band whose spots are all on one body pulls on nothing.
+  const pullingBands = (graph.bands || []).filter((b) => b.pulls);
+  function pullBands(h) {
+    for (const b of pullingBands) {
+      const els = b.elements.map((e, i) => {
+        const body = rb.get(b.bodies[i]);
+        const q = body ? toV3q(body.rotation()) : new THREE.Quaternion();
+        const t = body ? toV3(body.translation()).multiplyScalar(1 / MM) : new THREE.Vector3();
+        const out = { ...e, center: new THREE.Vector3(...e.center).applyQuaternion(q).add(t), axis: new THREE.Vector3(...e.axis).applyQuaternion(q) };
+        if (e.radial) out.radial = new THREE.Vector3(...e.radial).applyQuaternion(q);
+        if (e.wrapDir) out.wrapDir = new THREE.Vector3(...e.wrapDir).applyQuaternion(q);
+        return out;
+      });
+      const path = solveBandPath(els, { thickMm: b.thickMm, widthMm: b.widthMm, maxRounds: 40, tolMm: 0.02 });
+      if (!path) continue;
+      const T = bandPullN(b.partNumber, b.freeMm, path.lengthMm);
+      if (T <= 0) continue;
+      const c = path.contacts.map((x) => ({ a: new THREE.Vector3(...x.a), b: new THREE.Vector3(...x.b) }));
+      const n = c.length;
+      for (let i = 0; i < n; i++) {
+        const body = rb.get(b.bodies[i]);
+        if (!body?.isDynamic()) continue;
+        const toPrev = c[(i - 1 + n) % n].b.clone().sub(c[i].a);
+        const toNext = c[(i + 1) % n].a.clone().sub(c[i].b);
+        const f = new THREE.Vector3();
+        if (toPrev.lengthSq() > 1e-9) f.add(toPrev.normalize());
+        if (toNext.lengthSq() > 1e-9) f.add(toNext.normalize());
+        if (f.lengthSq() < 1e-12) continue;
+        const at = c[i].a.clone().add(c[i].b).multiplyScalar(0.5 * MM);
+        body.applyImpulseAtPoint(vec(f.multiplyScalar(T * h)), { x: at.x, y: at.y, z: at.z }, true);
+      }
+    }
+  }
+
   let carry = 0;
   let dropTimeScale = 1;
   return {
@@ -1233,6 +1270,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         carry -= h;
         driveMotors(throttles, h);
         holdLinks(h);
+        if (pullingBands.length) pullBands(h);
         world.step(events, hooks);
         stepDrop(h);
         checkBlocked(throttles);
