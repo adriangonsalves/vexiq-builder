@@ -39,20 +39,24 @@ Turning advanced options on SHALL show them all again, where they were before th
 The toolbar SHALL show, left to right:
 - the title, the current build's name (see build-library) and how many parts that build has;
 - Undo, Redo and History;
-- Move and Rotate;
+- the **Select** menu (see multi-select);
+- the **Tools** menu (Fix assembly, Audit, Blueprint, Explode, Play mode, and the chain, track, bend and band tools);
 - a **Snap** drop-down showing the current pitch snap (1P, 0.5P, 0.25P or Free);
-- an **Explode** drop-down showing the current explode mode (Off, X, Y, Z or All);
 - Focus;
-- the hide-panels toggle (Wide / Panels);
-- the View button (Stereo only, see view-cube-menu);
-- the **File** drop-down (New, Starter ▸, Load…, Export; see build-library) and Audit & Blueprint;
+- the hide-panels toggle (Wide / Panels), except in the small layout;
+- the View button (see view-cube-menu);
+- the **File** drop-down (New, Starter ▸, Load…, Export; see build-library);
 - the Settings gear.
 
-Grid, Axes, projection, layout and the stereo controls SHALL be in the cube menu, and Shadows and AO in Settings, not in the toolbar. A drop-down SHALL open on click, show its choices with the current one marked, apply a choice and close. It SHALL also close on `Esc` or a click outside. The `X` shortcut SHALL still cycle Explode, and the drop-down SHALL show the result.
+Move and Rotate SHALL NOT be in the toolbar: they are on the context bar in the 3D view (see context-toolbar). Grid, Axes, projection, layout and the stereo controls SHALL be in the cube menu, and Shadows and AO in Settings, not in the toolbar. A drop-down SHALL open on click, show its choices with the current one marked, apply a choice and close. It SHALL also close on `Esc` or a click outside. The `X` shortcut SHALL open or close the Explode panel, and Tools → Explode SHALL show a tick while it is open.
 
 #### Scenario: Pick a pitch snap
 - **WHEN** the user opens the Snap drop-down and picks 0.25P
 - **THEN** the drop-down closes and shows 0.25P, and drags step by 3.175 mm
+
+#### Scenario: No Move or Rotate in the toolbar
+- **WHEN** the app is open in any layout size
+- **THEN** the top toolbar has no Move or Rotate button, and the context bar in the 3D view has both
 
 ### Requirement: Messages over the view
 Messages from actions (mating, inserting, meshing, auto-fasten and the like, the ones the Smart Assembly section showed) SHALL appear in a message strip at the top of the 3D view. They SHALL show whether or not advanced options are on and whether or not a part is selected. A message SHALL fade after about 4 seconds, or when the next one replaces it. Error messages SHALL look different from the others.
