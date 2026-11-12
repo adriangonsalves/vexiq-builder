@@ -21,7 +21,7 @@ The app SHALL choose a layout size from the window's width: **small** below 700 
 - **THEN** the layout changes from medium to large and the same part is still selected with the camera unchanged
 
 ### Requirement: Medium layout uses a floating icon toolbar
-In the medium layout the top toolbar SHALL be replaced by a floating toolbar over the 3D view, on a single row. Its buttons SHALL show icons only, at least 44 × 44 px, each with an accessible name and a tooltip. Every command reachable from the large toolbar SHALL still be reachable. Commands that are grouped in a menu on the large toolbar (File, Select, Tools, Snap and Explode, View) SHALL open as a submenu from one icon; undo, redo and the move/rotate mode SHALL be direct buttons. When the 3D view is too narrow for the floating toolbar's single row, the toolbar SHALL NOT wrap: it SHALL dock across the top of the window and scroll sideways, as in the small layout, while the side panel stays. It SHALL float again once the row fits.
+In the medium layout the top toolbar SHALL be replaced by a floating toolbar over the 3D view, on a single row. Its buttons SHALL show icons only, at least 44 × 44 px, each with an accessible name and a tooltip. Every command reachable from the large toolbar SHALL still be reachable. Commands that are grouped in a menu on the large toolbar (File, Select, Tools, Snap, View) SHALL open as a submenu from one icon; undo and redo SHALL be direct buttons. The Move and Rotate mode buttons are not on this toolbar in any layout: they are on the context bar in the 3D view (see context-toolbar). When the 3D view is too narrow for the floating toolbar's single row, the toolbar SHALL NOT wrap: it SHALL dock across the top of the window and scroll sideways, as in the small layout, while the side panel stays. It SHALL float again once the row fits.
 
 #### Scenario: Opening Tools on a tablet
 - **WHEN** the user taps the Tools icon in the medium layout
@@ -42,6 +42,10 @@ In the medium layout the top toolbar SHALL be replaced by a floating toolbar ove
 #### Scenario: Narrowing further
 - **WHEN** the window narrows below 700 px
 - **THEN** the full small layout takes over (drawers instead of the side panel)
+
+#### Scenario: Move and Rotate on a tablet
+- **WHEN** the app is in the medium layout
+- **THEN** the floating toolbar has no Move or Rotate button and the context bar on the right edge of the 3D view has both
 
 ### Requirement: Medium layout has one side panel with tabs
 In the medium layout the left and right panels SHALL be replaced by a single side panel with two tabs, **Library** and **Outline**; the chosen tab fills the whole panel height. The 3D view SHALL take the rest of the width. The chosen tab SHALL be kept when the layout changes size and back.
