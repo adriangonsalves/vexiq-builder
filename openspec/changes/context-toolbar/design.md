@@ -168,6 +168,9 @@ The bar gets its own class (`.ctx-bar`, `.ctx-btn`) using the `.hud-pill` look (
 ### 13. Phone: problems behind one button (added after testing on a phone)
 On a phone the pills, banners and "done" strips covered much of the view, worst while scrubbing fits. In the small layout App leaves them out and gathers the warnings and errors into one list behind a warning button at the view's top left: live ones (a taken lit hole from `pickStatus` with tone `warning`, the selected part overlapping) are worked out each render, refusals (`actionFeedback` with `isError`) are kept until the list has been opened and closed. The wheel bar's read-out already names the fit, so nothing is lost by hiding the banner. Bend sheet by holes loses its banner's Stop on a phone, so while it waits for picks the bar shows a cross-only session (`bendPick`) on every layout.
 
+### 15. On a phone the bar sits on the left
+Testing on a phone showed the view cube taking much of the narrow view, so the bar under it landed over the middle of the build. In the small layout the bar moves to the left edge (`side: 'left'`), below the warning button: `left: 12px; top: 64px`, columns growing to the right (`direction: ltr`), its read-out, tips and the Turn step menu opening to its right. On a phone the band panel sits along the bottom, so the bar's bottom limit counts it too; the Explode and Play panels hide the bar. Tablets and desktop keep it on the right.
+
 ### 14. Auto Join and Manual Join
 The view adds `join: 'auto' | 'manual' | null` to the interaction state: `auto` when `planMates` finds a plan for the selection (one part: from `lastAlignedRef`, kept live during drags; a set: the set's aligned openings, cached per selection and part list) or a selected battery fits a brain, else `manual`. It is sent from the aligned-hole update, so it follows drags. The bar swaps the icon, name and tip; what the button does is unchanged (`joinSelected`).
 

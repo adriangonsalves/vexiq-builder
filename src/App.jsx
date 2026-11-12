@@ -3538,9 +3538,10 @@ export default function App() {
             onTurnStep={setRotationSnapDeg}
             onPress={handleBarPress}
             joinKind={interaction?.join ?? 'manual'}
+            side={phoneLayout ? 'left' : 'right'}
             onInputKind={(kind) => viewControlsRef.current?.input?.(kind)}
             stepper={stepper}
-            measureKey={`${auditOpen}|${timelineVisible}|${viewLayout}|${layoutSize}|${toolbarDocked}`}
+            measureKey={`${auditOpen}|${timelineVisible}|${viewLayout}|${layoutSize}|${toolbarDocked}|${band.session ? 'band' : ''}`}
           />
 
           <AuditPanel

@@ -67,6 +67,9 @@ const SEPARATED = new Set(['addToSelection', 'join', 'duplicate']); // a divider
 const TOGGLES = new Set(['move', 'rotate', 'addToSelection', 'markHole', 'stampCopies', 'worldArrows', 'freeMove', 'growSelection', 'onePartOfGroup', 'pinsOnly']);
 // What may be open along the bottom of the view: the history timeline, the Audit panel, the shortcuts strip
 const BOTTOM_OVERLAYS = ['.history-timeline', '.audit-panel.open', '.viewport-hud-bottom .shortcuts-bar'];
+// On a phone the bar is on the left, where the band builder's panel sits along the bottom
+const LEFT_BOTTOM_OVERLAYS = [...BOTTOM_OVERLAYS, '.band-panel'];
+const LEFT_TOP = 64; // under the phone's warning button
 
 function iconFor(id, { on, hasTarget, turnStep, joinKind }) {
   switch (id) {
@@ -108,7 +111,7 @@ function iconFor(id, { on, hasTarget, turnStep, joinKind }) {
 }
 
 /** Where the bar goes and how many rows its columns have, from the room under the cube. */
-function useBarPlace(barRef, measureKey) {
+function useBarPlace(barRef, measureKey, side) {
   const [place, setPlace] = useState({ rows: 20, beside: false, room: 2000 });
   const measure = useCallback(() => {
     const bar = barRef.current;
@@ -125,18 +128,19 @@ function useBarPlace(barRef, measureKey) {
       return t;
     };
     let bottom = height - 12;
-    for (const sel of BOTTOM_OVERLAYS) {
+    for (const sel of side === 'left' ? LEFT_BOTTOM_OVERLAYS : BOTTOM_OVERLAYS) {
       const el = container.querySelector(sel);
       if (!el || el.offsetParent === null) continue; // not shown (display: none)
       bottom = Math.min(bottom, topOf(el) - 8); // layout top: the Audit panel's slide doesn't count
     }
     const pitch = btn + gap + 1;
-    const under = Math.floor((bottom - 182 - 8) / pitch);
-    const beside = under < 4;
-    const room = bottom - (beside ? 60 : 182);
+    const top = side === 'left' ? LEFT_TOP : 182;
+    const under = Math.floor((bottom - top - 8) / pitch);
+    const beside = side !== 'left' && under < 4; // the right side moves beside the cube when short
+    const room = bottom - (beside ? 60 : top);
     const rows = Math.max(1, Math.floor((room - 8) / pitch));
     setPlace((cur) => (cur.rows === rows && cur.beside === beside && cur.room === room ? cur : { rows, beside, room }));
-  }, [barRef]);
+  }, [barRef, side]);
   useLayoutEffect(() => {
     measure();
     const t = setTimeout(measure, 260); // after the Audit panel's slide
@@ -147,7 +151,7 @@ function useBarPlace(barRef, measureKey) {
     if (!container || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver(measure);
     ro.observe(container);
-    for (const sel of ['.history-timeline', '.audit-panel', '.viewport-hud-bottom .shortcuts-bar']) {
+    for (const sel of ['.history-timeline', '.audit-panel', '.viewport-hud-bottom .shortcuts-bar', '.band-panel']) {
       const el = container.querySelector(sel);
       if (el) ro.observe(el);
     }
@@ -157,7 +161,7 @@ function useBarPlace(barRef, measureKey) {
 }
 
 /** The tip: name, one line, and the keys (not on touch); kept inside the window. */
-function BarTip({ tip }) {
+function BarTip({ tip, side }) {
   const ref = useRef(null);
   const [top, setTop] = useState(null);
   useLayoutEffect(() => {
@@ -174,7 +178,11 @@ function BarTip({ tip }) {
       ref={ref}
       className="ctx-tip"
       role="tooltip"
-      style={{ right: Math.max(8, window.innerWidth - tip.rect.left + 8), top: top ?? tip.rect.top, maxWidth: Math.max(160, tip.rect.left - 24) }}
+      style={
+        side === 'left'
+          ? { left: tip.rect.right + 8, top: top ?? tip.rect.top, maxWidth: Math.max(160, window.innerWidth - tip.rect.right - 24) }
+          : { right: Math.max(8, window.innerWidth - tip.rect.left + 8), top: top ?? tip.rect.top, maxWidth: Math.max(160, tip.rect.left - 24) }
+      }
     >
       <strong>{name}</strong>
       {line && <span>{line}</span>}
@@ -197,9 +205,9 @@ function BarTip({ tip }) {
   );
 }
 
-export default function ContextToolbar({ items, on = {}, hasTarget = false, turnStep = 15, joinKind = 'manual', onTurnStep, onPress, onInputKind, stepper = null, measureKey = '' }) {
+export default function ContextToolbar({ items, on = {}, hasTarget = false, turnStep = 15, joinKind = 'manual', side = 'right', onTurnStep, onPress, onInputKind, stepper = null, measureKey = '' }) {
   const barRef = useRef(null);
-  const place = useBarPlace(barRef, `${measureKey}|${items.length}|${stepper?.kind ?? ''}`);
+  const place = useBarPlace(barRef, `${measureKey}|${items.length}|${stepper?.kind ?? ''}`, side);
   const [tip, setTip] = useState(null); // { id, rect, text, reason, touch }
   const [turnMenu, setTurnMenu] = useState(null); // { x, y }
   const tipTimer = useRef(0);
@@ -290,7 +298,7 @@ export default function ContextToolbar({ items, on = {}, hasTarget = false, turn
     }
     if (id === 'turnStep') {
       const r = e.currentTarget.getBoundingClientRect();
-      setTurnMenu(turnMenu ? null : { x: r.left - 132, y: r.top });
+      setTurnMenu(turnMenu ? null : { x: side === 'left' ? r.right + 8 : r.left - 132, y: r.top });
       return;
     }
     onPress?.(id, e);
@@ -341,7 +349,7 @@ export default function ContextToolbar({ items, on = {}, hasTarget = false, turn
     const extras = items.filter((i) => ['turnStep', 'worldArrows', 'pinsOnly', 'commit', 'cancel'].includes(i.id));
     const wheel = has('wheel');
     body = (
-      <div className={`ctx-bar ctx-bar-wheel ${place.room < 420 ? 'wide' : ''}`} role="toolbar" aria-label="Wheel" aria-orientation="vertical" {...shared}>
+      <div className={`ctx-bar ctx-bar-wheel ${side === 'left' ? 'ctx-bar-left' : ''} ${place.room < 420 ? 'wide' : ''}`} role="toolbar" aria-label="Wheel" aria-orientation="vertical" {...shared}>
         {wheel && (
           <div className="ctx-wheel-group">
             {stepper.readout && (
@@ -357,7 +365,7 @@ export default function ContextToolbar({ items, on = {}, hasTarget = false, turn
     );
   } else {
     body = (
-      <div className="ctx-bar" role="toolbar" aria-label="Context bar" aria-orientation="vertical" {...shared}>
+      <div className={`ctx-bar ${side === 'left' ? 'ctx-bar-left' : ''}`} role="toolbar" aria-label="Context bar" aria-orientation="vertical" {...shared}>
         {items.map(button)}
       </div>
     );
@@ -366,7 +374,7 @@ export default function ContextToolbar({ items, on = {}, hasTarget = false, turn
   return (
     <>
       {body}
-      <BarTip tip={tip} />
+      <BarTip tip={tip} side={side} />
       {turnMenu && (
         <PopoverMenu at={turnMenu} onClose={() => setTurnMenu(null)} label="Turn step">
           {TURN_STEPS.map((s) => (

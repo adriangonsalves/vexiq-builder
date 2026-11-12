@@ -3377,3 +3377,21 @@ body,
   top: 2px;
   right: 2px;
 }
+
+/* Phone: the bar on the left edge, clear of the view cube; columns grow to the right and the
+   read-out opens to its right (openspec context-toolbar, design Decision 15) */
+.ctx-bar.ctx-bar-left {
+  left: 12px;
+  right: auto;
+  top: 64px;
+  direction: ltr;
+}
+
+.ctx-bar-left.ctx-bar-wheel.wide {
+  flex-direction: row-reverse;
+}
+
+.ctx-bar-left .ctx-readout {
+  left: calc(100% + 12px);
+  right: auto;
+}

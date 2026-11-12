@@ -30,7 +30,7 @@ Much of what the 3D view can do is reached by holding a key, turning the mouse w
 - Camera gestures (one finger turns, two fingers zoom and pan already work), and pinch or pan in the 4-View small views.
 - Choosing the working picture in Stereo by touch.
 - Hide, Lock and Colour buttons on the bar (they have buttons in the Outline already).
-- Moving the bar to the left edge, or dragging it around.
+- Moving the bar to the left edge on desktop and tablets (a phone puts it there, clear of the view cube), or dragging it around.
 - The keyboard shortcuts strip under the view on desktop (kept as it is).
 
 ## Capabilities

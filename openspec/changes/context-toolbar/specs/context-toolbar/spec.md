@@ -5,7 +5,7 @@ A small column of icon buttons in the 3D view that shows what can be done right 
 ## ADDED Requirements
 
 ### Requirement: The context bar sits in the 3D view
-The 3D view SHALL show a context bar: one column of icon-only buttons on the right edge of the working view, below the view cube. Buttons SHALL be at least 44 × 44 px in the medium and small layouts and on any screen whose main pointer is a finger, and at least 32 × 32 px otherwise. The bar SHALL NOT cover the view cube, the pills and messages at the top of the view, or a panel open along the bottom of the view (the history timeline, the Audit panel, the shortcuts strip); it ends above them. In 4-View it SHALL sit at the right edge of the working view, left of the small views. When the view is too short to show the bar's buttons in one column, the bar SHALL use more columns rather than hide buttons or scroll. A press on the bar SHALL NOT select or unselect parts, turn the camera or close a picking session.
+The 3D view SHALL show a context bar: one column of icon-only buttons on the right edge of the working view, below the view cube. Buttons SHALL be at least 44 × 44 px in the medium and small layouts and on any screen whose main pointer is a finger, and at least 32 × 32 px otherwise. The bar SHALL NOT cover the view cube, the pills and messages at the top of the view, or a panel open along the bottom of the view (the history timeline, the Audit panel, the shortcuts strip); it ends above them. In 4-View it SHALL sit at the right edge of the working view, left of the small views. When the view is too short to show the bar's buttons in one column, the bar SHALL use more columns rather than hide buttons or scroll. In the small (phone) layout, where the view cube takes much of the narrow view, the bar SHALL sit on the left edge of the view instead, below the warning button (see "Few messages over the view on a phone"), ending above a panel along the bottom (the band builder's included); its read-out, tips and menus SHALL open to its right, and further columns SHALL grow to the right. A press on the bar SHALL NOT select or unselect parts, turn the camera or close a picking session.
 
 The bar SHALL be hidden in Play mode, while the Explode panel is open, while a past step is shown from the history timeline, and in Stereo full screen.
 
@@ -20,6 +20,10 @@ The bar SHALL be hidden in Play mode, while the Explode panel is open, while a p
 #### Scenario: Phone turned sideways
 - **WHEN** the app is used in a window 844 × 390 px with a part selected
 - **THEN** every button of the bar is on screen, in more than one column, and none is under the view cube
+
+#### Scenario: Phone
+- **WHEN** the app is used in a window 390 × 844 px with a part selected
+- **THEN** the bar is on the left edge of the view, clear of the view cube, and every button is on screen
 
 #### Scenario: 4-View
 - **WHEN** the layout is 4-View

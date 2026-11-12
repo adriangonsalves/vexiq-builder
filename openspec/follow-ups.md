@@ -14,11 +14,11 @@ Low-priority items left open when a change was closed. Pick one up by proposing 
 
 ## From context-toolbar (in progress 2026-11-11)
 
-1. **A left-hand side for the context bar:** a setting, kept in the browser, that puts the bar on the left edge for left-handed builders (the Explode, Play and band panels live there now, so they would have to move).
+1. **A left-hand side for the context bar on tablets and desktop:** a setting, kept in the browser, that puts the bar on the left edge for left-handed builders (a phone already puts it there; on bigger screens the Explode, Play and band panels live there, so they would have to move).
 2. **Dragging a part from the library into the view by touch:** still mouse only (`startLibraryDrag` returns early for touch). By touch today: Mark a hole, then tap the part in the library.
 3. **Choosing the working half in Stereo by touch:** the working half follows the hover only.
 4. **Pinch and pan in the 4-View small views** by touch.
-5. **Thumb wheel direction vs. the mouse wheel:** the spec says dragging the bar's wheel up is the same as turning the mouse wheel away from you, and its scenario says dragging up goes from fit 1 to fit 3. In the view, turning the mouse wheel away steps fits and band spots *back* (and turns rings and grows layers *forward*), so both can't hold for fits. The bar's wheel goes up = next in every session; the mouse wheel over the view is unchanged. Decide whether the mouse wheel over the view should step fits the other way.
+5. ~~**Thumb wheel direction vs. the mouse wheel:** the spec says dragging the bar's wheel up is the same as turning the mouse wheel away from you, and its scenario says dragging up goes from fit 1 to fit 3. In the view, turning the mouse wheel away steps fits and band spots *back* (and turns rings and grows layers *forward*), so both can't hold for fits. The bar's wheel goes up = next in every session; the mouse wheel over the view is unchanged. Decide whether the mouse wheel over the view should step fits the other way.~~ Decided: it doesn't matter (the fits are a loop you don't see as a list); left as it is.
 6. **Stamp copies leaves the part's Move arrows on screen:** a tap that lands on the selected part's own arrow tip grabs the arrow instead of stamping. Hide the gizmo while Stamp copies is on?
 7. **A finger tap on a rotate ring or anchor line drifts:** rings and anchor lines still treat a press that moves more than 5 px as a drag (hole picking and the band builder allow 12 px for touch). Emulated taps never drift, so check on a real tablet whether ring taps select reliably.
 

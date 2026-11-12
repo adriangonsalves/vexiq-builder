@@ -52,7 +52,7 @@ export default function BandBuilderPanel({ band, touch = false }) {
                 : editing
                   ? 'Circles are anchors the band must go round; dots are handles on the band. Tap a spot twice to add an anchor in the stretch nearest it, drag a dot onto a spot to add one there, and drag a circle to move it.'
                   : 'Tap more spots (twice each), or Done to close the band. To make it go another way, drag a small handle on the band onto the edge or post it should go round, or press Other way round; drag a circle to move that spot.'}{' '}
-            Turn the wheel on the right for the next spot near the lit one.
+            Turn the bar's wheel for the next spot near the lit one.
           </>
         ) : (
           <>
