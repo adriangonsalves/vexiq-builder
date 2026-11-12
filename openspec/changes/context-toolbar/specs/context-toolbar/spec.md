@@ -38,7 +38,7 @@ The bar SHALL show these buttons, top to bottom, each only in the situation give
 | Rotate | always |
 | Add to selection | always |
 | Mark a hole | always |
-| Join | one or more parts are selected |
+| Auto Join or Manual Join | one or more parts are selected (see "Join") |
 | Stamp copies | exactly one part is selected and it has a pin, peg or shaft, or is a bore part (see copy-insert) |
 | World arrows | exactly one part is selected and its Move arrows or Rotate rings are showing |
 | Free move | one or more parts are selected, in Move mode |
@@ -146,7 +146,13 @@ The button SHALL turn off once a target is set, moved or cleared, when it is tap
 - **THEN** no target is set, the message says the hole already has a part in it, and the button is still armed
 
 ### Requirement: Join
+The Join button SHALL be called **Auto Join**, with its own icon, while the selection is lined up with something it can be pushed into (the mate a double-click would do now, with or without arrows), or is a Robot Battery that fits a Robot Brain with a free bay; otherwise it SHALL be called **Manual Join**, with a different icon, because tapping it starts hole picking. The name, icon and tip SHALL follow as the part is moved into or out of line. Both are the same button in the same place.
+
 Tapping Join SHALL do what double-clicking the selected part does: mate it with what it is lined up with, show the mate arrows when there is more than one way, or start hole picking when nothing is lined up (see pin-mating and hole-pick-insert); for a group or several parts, mate the set as double-clicking one of them does. With a Robot Battery selected and nothing lined up, Join SHALL slide it into the nearest Robot Brain it fits whose bay is free, as double-clicking that brain does. The same messages SHALL be shown as for the double-click ("Mated with …", "Nothing lined up to mate with", "Part is locked"). Double-click SHALL keep working.
+
+#### Scenario: Auto or Manual
+- **WHEN** a pin is selected with its tip lined up over a beam hole
+- **THEN** the button is Auto Join with the Auto Join icon, and after the pin is dragged away from every hole it is Manual Join with the Manual Join icon
 
 #### Scenario: Join a lined-up pin
 - **WHEN** a pin is selected with its tip lined up over a beam hole and the user taps Join
@@ -268,7 +274,7 @@ The wheel bar SHALL show in these sessions, with these controls:
 | Layers | Grow selection is open | one layer added or taken off | "Layer N · M" | closes the session | not shown |
 | Band spots | the band builder is open and a spot is lit | the next or previous spot near the lit one (as the mouse wheel and `R`) | the spot's name | adds the lit spot (as a click on it) | not shown (the band panel has Done, Back and close) |
 
-In the Ring session the wheel bar SHALL also show Turn step and, for a single part, World arrows. While mate arrows are shown and no other session is running, the bar SHALL show only a cross, which hides the arrows as `Esc` does.
+In the Ring session the wheel bar SHALL also show Turn step and, for a single part, World arrows. While mate arrows are shown and no other session is running, the bar SHALL show only a cross, which hides the arrows as `Esc` does. While Bend sheet by holes is waiting for the sheet hole or the hole to bend onto (no fit shown yet), the bar SHALL show only a cross, which stops Bend sheet as `Esc` and the banner's Stop do.
 
 #### Scenario: Keep a fit with the tick
 - **WHEN** a pin is being picked into a lit beam hole and the user taps the tick
@@ -289,6 +295,10 @@ In the Ring session the wheel bar SHALL also show Turn step and, for a single pa
 #### Scenario: Mate arrows
 - **WHEN** a corner connector with two ways to mate is joined and its arrows are shown
 - **THEN** the bar shows only a cross, and tapping it hides the arrows
+
+#### Scenario: Stop Bend sheet from the bar
+- **WHEN** Bend sheet by holes is waiting for the sheet hole and the user taps the bar's cross
+- **THEN** Bend sheet stops, as with its Stop button
 
 ### Requirement: Touch taps show the fit before placing
 A finger or pen can't hover, so for touch and pen input in a Fits session and in the band builder:
@@ -345,6 +355,21 @@ When the last press in the 3D view was by touch or pen, the banners and hints fo
 #### Scenario: Back to the mouse
 - **WHEN** the user then clicks in the view with a mouse and starts hole picking again
 - **THEN** the banner names the wheel, `R` and `Esc` as before
+
+### Requirement: Few messages over the view on a phone
+In the small (phone) layout the 3D view SHALL NOT show the pills along its top (the pitch note, the selection count, the selected part's name, the picking banner), the Bend sheet banner, or the strip messages that report what was done ("Mated with …", "Inserted …"), so the build stays in view; the wheel bar's read-out says which fit is shown. Warnings and errors (a hole already taken, a part locked, a blocked way in, an overlapping part, a refused bend) SHALL instead show as one small warning button at the top left of the view, with how many there are. Tapping it SHALL open a short list of them, each with the button it carries today (for example Revert Pose for an overlapping part), and tapping it again or the list's close button SHALL hide the list. A warning that comes and goes with what is shown (a lit hole that is taken, an overlapping part) SHALL stay in the list while it holds; one that reports a refused action SHALL stay until the list has been opened and closed. The medium and large layouts SHALL show their messages as before.
+
+#### Scenario: Scrubbing fits on a phone
+- **WHEN** hole picking runs in a window 390 px wide and the user steps through fits with the wheel
+- **THEN** no banner or pill covers the top of the view, and the wheel bar's read-out shows "2 / 6"
+
+#### Scenario: A warning on a phone
+- **WHEN** on a phone the user taps a hole that already has a part in it during hole picking
+- **THEN** the warning button shows with 1, and tapping it shows "That hole already has a part in it"; tapping it again hides the list
+
+#### Scenario: Tablet unchanged
+- **WHEN** the same happens in a window 1024 px wide
+- **THEN** the banner shows the warning over the view as before, and there is no warning button
 
 ### Requirement: The bar's switches are not part of the build
 Turning a bar button on or off, arming one, or opening a wheel session SHALL NOT add a history step and SHALL NOT be saved with the build or sent to other open tabs. World arrows, Free move, Add to selection, Stamp copies and the armed buttons SHALL all be off when the app is opened or reloaded. What a button then does to the build (a join, an inserted copy, a kept fit) SHALL be saved exactly as the gesture it stands in for.

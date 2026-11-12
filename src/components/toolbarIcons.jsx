@@ -147,3 +147,28 @@ export function PinsOnlyIcon({ size = 20, ...rest }) {
     </Icon>
   );
 }
+
+/** Auto Join: the pin goes straight into the slot it is lined up with (a double arrow into the bar). */
+export function AutoJoinIcon({ size = 20, ...rest }) {
+  return (
+    <Icon size={size} {...rest}>
+      <rect x="9.5" y="1.5" width="5" height="7" rx="2.5" />
+      <path d="M8.5 10.5L12 13l3.5-2.5M8.5 13.5L12 16l3.5-2.5" />
+      <path d="M3 18.5h6.5v2h5v-2H21" />
+      <path d="M3 18.5v3h18v-3" />
+    </Icon>
+  );
+}
+
+/** Manual Join: you pick the hole: a beam with three holes and a pointer on one of them. */
+export function ManualJoinIcon({ size = 20, ...rest }) {
+  return (
+    <Icon size={size} {...rest}>
+      <rect x="2" y="13" width="20" height="8" rx="3" />
+      <circle cx="6.5" cy="17" r="1.4" />
+      <circle cx="12" cy="17" r="1.4" />
+      <circle cx="17.5" cy="17" r="1.4" />
+      <path d="M11 2.5l6.5 5-3 .6 1.8 3.4-1.6.8-1.8-3.4-2 2.1z" />
+    </Icon>
+  );
+}

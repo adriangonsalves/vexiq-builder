@@ -15,7 +15,8 @@ const disabled = (id, reason) => item(id, 'disabled', reason);
 
 function wheelItems(stepper, arrowsShowing) {
   const { kind, canStep, canCommit } = stepper;
-  if (kind === 'arrows') return [item('cancel')];
+  // Mate arrows shown, or Bend sheet by holes waiting for its picks: only the cross
+  if (kind === 'arrows' || kind === 'bendPick') return [item('cancel')];
 
   const stepReason = (kind === 'fits' || kind === 'bendFits') && canCommit === false
     ? 'Tap a hole first'

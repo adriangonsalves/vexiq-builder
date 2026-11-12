@@ -6,7 +6,8 @@ import {
   AddToSelectionIcon,
   FreeMoveIcon,
   GrowSelectionIcon,
-  JoinIcon,
+  AutoJoinIcon,
+  ManualJoinIcon,
   MarkHoleIcon,
   OnePartOfGroupIcon,
   PinsOnlyIcon,
@@ -37,7 +38,8 @@ const TIPS = {
   rotate: ['Rotate', 'Turn the part with its rings', 'E · right-click the part'],
   addToSelection: ['Add to selection', 'Tap parts to add or take them out', 'Shift + click'],
   markHole: ['Mark a hole', 'Tap the hole or pin end the next part goes in', 'Alt + click'],
-  join: ['Join', "Push the part into what it's lined up with, or pick a hole for it", 'Double-click the part'],
+  join: ['Manual Join', 'Pick the hole the part goes into', 'Double-click the part'],
+  autoJoin: ['Auto Join', "Push the part into what it's lined up with", 'Double-click the part'],
   stampCopies: ['Stamp copies', 'Put a copy of this part in each hole you pick', 'Ctrl/Cmd + double-click'],
   worldArrows: ['World arrows', 'Arrows follow the room, not the part', 'Hold Alt'],
   freeMove: ['Free move', 'Stop parts jumping onto holes', 'Hold Alt while dragging'],
@@ -66,7 +68,7 @@ const TOGGLES = new Set(['move', 'rotate', 'addToSelection', 'markHole', 'stampC
 // What may be open along the bottom of the view: the history timeline, the Audit panel, the shortcuts strip
 const BOTTOM_OVERLAYS = ['.history-timeline', '.audit-panel.open', '.viewport-hud-bottom .shortcuts-bar'];
 
-function iconFor(id, { on, hasTarget, turnStep }) {
+function iconFor(id, { on, hasTarget, turnStep, joinKind }) {
   switch (id) {
     case 'move':
       return <Move size={18} />;
@@ -77,7 +79,7 @@ function iconFor(id, { on, hasTarget, turnStep }) {
     case 'markHole':
       return <MarkHoleIcon set={hasTarget} />;
     case 'join':
-      return <JoinIcon />;
+      return joinKind === 'auto' ? <AutoJoinIcon /> : <ManualJoinIcon />;
     case 'stampCopies':
       return <StampCopiesIcon />;
     case 'worldArrows':
@@ -195,7 +197,7 @@ function BarTip({ tip }) {
   );
 }
 
-export default function ContextToolbar({ items, on = {}, hasTarget = false, turnStep = 15, onTurnStep, onPress, onInputKind, stepper = null, measureKey = '' }) {
+export default function ContextToolbar({ items, on = {}, hasTarget = false, turnStep = 15, joinKind = 'manual', onTurnStep, onPress, onInputKind, stepper = null, measureKey = '' }) {
   const barRef = useRef(null);
   const place = useBarPlace(barRef, `${measureKey}|${items.length}|${stepper?.kind ?? ''}`);
   const [tip, setTip] = useState(null); // { id, rect, text, reason, touch }
@@ -206,6 +208,7 @@ export default function ContextToolbar({ items, on = {}, hasTarget = false, turn
   const tipText = (id) => {
     if (id === 'commit') return COMMIT_TIPS[stepper?.commitTip || stepper?.kind] || [id, '', null];
     // The step buttons name R / Shift+R only in the sessions R steps
+    if (id === 'join' && joinKind === 'auto') return TIPS.autoJoin;
     if ((id === 'stepUp' || id === 'stepDown') && stepper) return [TIPS[id][0], TIPS[id][1], stepper.stepKeys ? stepper.stepKeys[id === 'stepUp' ? 0 : 1] : 'Mouse wheel'];
     return TIPS[id] || [id, '', null];
   };
@@ -309,7 +312,7 @@ export default function ContextToolbar({ items, on = {}, hasTarget = false, turn
         aria-disabled={disabled || undefined}
         onClick={(e) => press(item.id, e)}
       >
-        {iconFor(item.id, { on: isOn, hasTarget, turnStep })}
+        {iconFor(item.id, { on: isOn, hasTarget, turnStep, joinKind })}
       </button>
     );
   };

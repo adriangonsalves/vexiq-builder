@@ -2747,6 +2747,10 @@ export default function App() {
       const n = bendHoles.fits.length;
       return { kind: 'bendFits', readout: `${bendHoles.index + 1} / ${n}`, canStep: n > 1, canCommit: true, position: bendHoles.index, awayDir: -1, stepKeys: ['R', 'Shift + R'], onStep: stepBendFit, onCommit: keepBendFit, onCancel: dropBendFit };
     }
+    if (bendHoles) {
+      // Bend sheet by holes waiting for its picks: the cross stops it (its banner's Stop isn't shown on a phone)
+      return { kind: 'bendPick', onCancel: endBendHoles };
+    }
     if (growLayers) {
       return { kind: 'layers', readout: growLayers.readout, canStep: true, canCommit: true, position: expandRef.current?.depth ?? 0, awayDir: 1, stepKeys: ['Shift + wheel away', 'Shift + wheel toward you'], onStep: stepLayers, onCommit: () => setGrowLayers(null) };
     }
@@ -2810,6 +2814,37 @@ export default function App() {
     onePartOfGroup: exactPick || (heldKeys.shift && heldKeys.alt),
     pinsOnly: Boolean(growLayers?.pinnedOnly) || heldKeys.mod
   };
+  // On a phone the view keeps its messages out of the way (openspec context-toolbar, design Decision 13):
+  // warnings and errors wait behind one button; refusals stay until the list has been opened and closed
+  const phoneLayout = layoutSize === 'small';
+  const [phoneErrors, setPhoneErrors] = useState([]); // [{ id, message }]
+  const [problemsOpen, setProblemsOpen] = useState(false);
+  useEffect(() => {
+    if (!phoneLayout || !actionFeedback?.isError) return;
+    const { message } = actionFeedback;
+    setPhoneErrors((list) => (list.some((p) => p.message === message) ? list : [...list.slice(-4), { id: `err-${Date.now()}`, message }]));
+  }, [actionFeedback, phoneLayout]);
+  const phoneProblems = phoneLayout
+    ? [
+        pickStatus?.tone === 'warning' ? { id: 'pick', message: pickStatus.text } : null,
+        selectedInstance?.isIntersecting && !locked
+          ? {
+              id: 'overlap',
+              message: `Overlapping part${contactsOfSelected?.overlaps?.length ? ` (into ${contactsOfSelected.overlaps.join(', ')})` : ''}: move it clear or through a hole.`,
+              action: { label: selectedInstance.lastValidPosition ? 'Revert Pose' : 'Cancel Placement', onClick: handleRevertSelectedIntersection }
+            }
+          : null,
+        ...phoneErrors
+      ].filter(Boolean)
+    : [];
+  const closeProblems = () => {
+    setProblemsOpen(false);
+    setPhoneErrors([]);
+  };
+  useEffect(() => {
+    if (problemsOpen && phoneProblems.length === 0) setProblemsOpen(false);
+  }, [problemsOpen, phoneProblems.length]);
+
   const handleBarPress = (id) => {
     switch (id) {
       case 'move':
@@ -3206,7 +3241,7 @@ export default function App() {
           className={`viewport-container layout-${viewLayout}`}
           onPointerDown={layoutSize === 'small' ? closeUnpinnedDrawer : undefined}
         >
-          {bendBanner && (
+          {bendBanner && !phoneLayout && (
             <div className="message-strip interactive bend-banner" role="status" aria-live="polite">
               <span>{bendBanner}</span>
               {bendFitShown && (
@@ -3219,7 +3254,7 @@ export default function App() {
               </button>
             </div>
           )}
-          {actionFeedback && (
+          {actionFeedback && !phoneLayout && (
             <div className={`message-strip interactive ${actionFeedback.isError ? 'error' : ''}`} role="status" aria-live="polite">
               <span>{actionFeedback.message}</span>
               <button type="button" className="strip-close" onClick={() => setActionFeedback(null)} aria-label="Close message" title="Close">
@@ -3340,7 +3375,39 @@ export default function App() {
             />
           )}
 
-          <div className="viewport-hud-top">
+          {phoneProblems.length > 0 && (
+            <div className="phone-problems">
+              <button
+                type="button"
+                className={`phone-problems-btn ${problemsOpen ? 'open' : ''}`}
+                aria-label={`${phoneProblems.length} warning${phoneProblems.length === 1 ? '' : 's'}`}
+                aria-expanded={problemsOpen}
+                onClick={() => (problemsOpen ? closeProblems() : setProblemsOpen(true))}
+              >
+                <AlertTriangle size={18} />
+                <span className="phone-problems-count">{phoneProblems.length}</span>
+              </button>
+              {problemsOpen && (
+                <div className="phone-problems-list" role="dialog" aria-label="Warnings">
+                  {phoneProblems.map((p) => (
+                    <div key={p.id} className="phone-problem">
+                      <span>{p.message}</span>
+                      {p.action && (
+                        <button type="button" className="btn btn-outline" onClick={p.action.onClick}>
+                          {p.action.label}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button type="button" className="strip-close" onClick={closeProblems} aria-label="Close warnings" title="Close">
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="viewport-hud-top" hidden={phoneLayout}>
             <div className="hud-pill">
               <Box size={14} style={{ color: '#60a5fa' }} />
               <span>
@@ -3470,6 +3537,7 @@ export default function App() {
             turnStep={rotationSnapDeg}
             onTurnStep={setRotationSnapDeg}
             onPress={handleBarPress}
+            joinKind={interaction?.join ?? 'manual'}
             onInputKind={(kind) => viewControlsRef.current?.input?.(kind)}
             stepper={stepper}
             measureKey={`${auditOpen}|${timelineVisible}|${viewLayout}|${layoutSize}|${toolbarDocked}`}

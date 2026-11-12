@@ -155,6 +155,11 @@ const step3 = ['wheel', 'stepUp', 'stepDown'];
   check('arrows (mate arrows only): cancel only', same(got, ['cancel']), show(got));
 }
 {
+  // Bend sheet by holes waiting for its picks: the cross alone stops it
+  const got = ids(wheel('bendPick', { hasCommit: false, canStep: false }));
+  check('bendPick (Bend sheet waiting for holes): cancel only', same(got, ['cancel']), show(got));
+}
+{
   for (const kind of ['fits', 'bendFits', 'ring', 'layers', 'band']) {
     const got = ids(wheel(kind));
     const stray = got.filter((i) => !wheelOnly.includes(i));

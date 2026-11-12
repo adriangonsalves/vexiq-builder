@@ -165,6 +165,12 @@ The `Transform Mode` group (App.jsx 2785–2808) is removed. The View button's c
 ### 12. Styles
 The bar gets its own class (`.ctx-bar`, `.ctx-btn`) using the `.hud-pill` look (dark, blurred, rounded). Size comes from `.app-shell[data-layout=medium|small] .ctx-btn` and `@media (pointer: coarse)`: 44 px; otherwise 32 px. On state is the accent fill plus an inset ring, so it doesn't rely on colour alone.
 
+### 13. Phone: problems behind one button (added after testing on a phone)
+On a phone the pills, banners and "done" strips covered much of the view, worst while scrubbing fits. In the small layout App leaves them out and gathers the warnings and errors into one list behind a warning button at the view's top left: live ones (a taken lit hole from `pickStatus` with tone `warning`, the selected part overlapping) are worked out each render, refusals (`actionFeedback` with `isError`) are kept until the list has been opened and closed. The wheel bar's read-out already names the fit, so nothing is lost by hiding the banner. Bend sheet by holes loses its banner's Stop on a phone, so while it waits for picks the bar shows a cross-only session (`bendPick`) on every layout.
+
+### 14. Auto Join and Manual Join
+The view adds `join: 'auto' | 'manual' | null` to the interaction state: `auto` when `planMates` finds a plan for the selection (one part: from `lastAlignedRef`, kept live during drags; a set: the set's aligned openings, cached per selection and part list) or a selected battery fits a brain, else `manual`. It is sent from the aligned-hole update, so it follows drags. The bar swaps the icon, name and tip; what the button does is unchanged (`joinSelected`).
+
 ## Risks / Trade-offs
 
 - [Eleven buttons is not a small bar] → buttons that don't apply are left out, so the common states are four (nothing selected) and nine to eleven (a part selected); dividers group them; the wheel bar replaces all of them during a session. At 44 px, eleven buttons need about 500 px, more than a tablet in landscape has under the cube, so a second column will be the usual sight there; task 4.4 checks it reads well. If it feels crowded in use, Grow selection and One part of a group are the two to move behind one "more" button.

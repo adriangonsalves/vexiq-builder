@@ -2380,7 +2380,12 @@ export default function Viewport3D({
    * Highlights (see-through) every opening lined up with the selected part's pins/shafts, and the
    * selected part's openings lined up with other parts' pins/shafts, while the insert is still outside.
    */
+  /** Lights the lined-up holes, and tells the bar whether Join is Auto or Manual now. */
   const updateAlignedHoleHighlights = () => {
+    updateAlignedHoleHighlightsNow();
+    emitInteraction();
+  };
+  const updateAlignedHoleHighlightsNow = () => {
     const overlay = holeOverlayRef.current;
     if (!overlay) return;
 
@@ -4692,8 +4697,42 @@ export default function Viewport3D({
       placing: Boolean(pick?.place),
       ring: session === 'ring' ? { label: setup.rings[ring].name, angleDeg: Math.round((setup.angles?.[ring] ?? 0) * 10) / 10 } : null,
       band: spot ? { nearby: bandLit.list.length, index: bandLit.index, name: spot.label } : null,
-      input: lastPointerKindRef.current
+      input: lastPointerKindRef.current,
+      join: joinKindNow()
     };
+  };
+
+  /**
+   * What Join would do now (openspec context-toolbar, design Decision 14): 'auto' when the selection is
+   * lined up with something to push into (or is a battery that fits a brain), 'manual' when it would
+   * start hole picking; null with nothing selected. A set's answer is kept per selection and part list.
+   */
+  const joinCacheRef = useRef({ key: '', parts: null, kind: null });
+  const joinKindNow = () => {
+    const ids = selectedIdsRef.current;
+    if (!ids.length) return null;
+    if (ids.length === 1) {
+      const selId = ids[0];
+      if (planMates(lastAlignedRef.current, selId).length > 0) return 'auto';
+      const fitsABrain = instancesRef.current.some((i) => i.instanceId !== selId && i.visible !== false && batteryFitsBrain(selId, i.instanceId));
+      return fitsABrain ? 'auto' : 'manual';
+    }
+    const cache = joinCacheRef.current;
+    const key = ids.join(',');
+    if (cache.key === key && cache.parts === instancesRef.current) return cache.kind;
+    let kind = 'manual';
+    try {
+      const members = selectedSetMembers();
+      if (members && !setBlockedMessage(members)) {
+        const ctx = setContext();
+        const aligned = findAlignedOpenings(ctx.features, setSnapCandidates(ctx, new THREE.Vector3())).filter(withinSetReach);
+        if (planMates(aligned, ctx.ignore).length > 0) kind = 'auto';
+      }
+    } catch {
+      kind = 'manual';
+    }
+    joinCacheRef.current = { key, parts: instancesRef.current, kind };
+    return kind;
   };
   const lastInteractionRef = useRef('');
   /** Sends the state to App when it differs from the last one sent (pointer moves don't re-render App). */
