@@ -1,7 +1,7 @@
 # responsive-layout Specification
 
 ## Purpose
-TBD - created by archiving change responsive-layout. Update Purpose after archive.
+How the app lays itself out on tablets and phones as well as desktops: which layout each window width gets (desktop, tablet with a floating icon toolbar and one side panel, phone with drawers), how the toolbar, library, Outline and properties fit each one, and that switching between them keeps the build, the selection and the camera.
 
 ## Requirements
 
