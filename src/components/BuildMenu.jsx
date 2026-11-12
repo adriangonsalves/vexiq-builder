@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { ATTACHMENT_EVERY_MAX, UPPER_BLOCKED } from '../utils/chainPath.js';
+import HelpQ from '../help/HelpQ.jsx';
 
 /**
  * Lets a modal <dialog> be dragged by the element these props go on (its header). The offset is kept
@@ -57,7 +58,7 @@ const ordinalOf = (n) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['th', '
  * remembered by the caller while the page is open. Build calls onBuild({ attachment, every, slack });
  * Cancel, Esc or a click outside builds nothing.
  */
-export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'traction', every = 1, slack = 'lower', slackMm = null, upperBlocked = false, onClose, onBuild }) {
+export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'traction', every = 1, slack = 'lower', slackMm = null, upperBlocked = false, onClose, onBuild, onHelp }) {
   const ref = useRef(null);
   const [att, setAtt] = useState(attachment);
   const [spacing, setSpacing] = useState(every);
@@ -88,6 +89,7 @@ export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'tractio
     <dialog ref={ref} closedby="any" className="settings-dialog" aria-labelledby="chainBuilderTitle">
       <div className="settings-header">
         <strong id="chainBuilderTitle">{track ? 'Track builder' : 'Chain builder'}</strong>
+        <HelpQ tool={track ? 'Track builder' : 'Chain builder'} onHelp={onHelp} className="help-q-head" />
         <button type="button" className="icon-btn" onClick={() => ref.current?.close()} aria-label="Close" title="Cancel (Esc)">
           <X size={16} />
         </button>
@@ -180,7 +182,7 @@ export function ChainBuilderDialog({ open, kind = 'chain', attachment = 'tractio
  * names the parts the chain would still pass through. Build is enabled only when every row has a
  * choice; `onBuild(choices)` may return (or resolve to) a reason the route can't work.
  */
-export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onHighlight, onClose, onBuild, checkRoute = null }) {
+export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onHighlight, onClose, onBuild, checkRoute = null, onHelp }) {
   const ref = useRef(null);
   const [choices, setChoices] = useState({});
   const [error, setError] = useState(null);
@@ -253,6 +255,7 @@ export function ChainRouteDialog({ open, enclosed = [], initialRoute = null, onH
     <dialog ref={ref} closedby="any" className="settings-dialog chain-route-dialog" aria-labelledby="chainRouteTitle">
       <div className="settings-header" {...drag} title="Drag to move">
         <strong id="chainRouteTitle">Chain builder</strong>
+        <HelpQ tool="Chain builder" onHelp={onHelp} className="help-q-head" />
         <button type="button" className="icon-btn" onClick={() => ref.current?.close()} aria-label="Close" title="Cancel (Esc)">
           <X size={16} />
         </button>

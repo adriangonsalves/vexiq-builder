@@ -387,7 +387,7 @@ export default function AssemblyOutliner({
   };
 
   return (
-    <section className="outliner-section">
+    <section className="outliner-section" data-help="outline">
       <div className="panel-header" style={{ padding: '10px 14px' }}>
         <div className="panel-title-row">
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -398,6 +398,7 @@ export default function AssemblyOutliner({
             <button
               type="button"
               className={`icon-btn locate-btn ${pinned ? 'active' : ''}`}
+              data-help="outline-locate"
               disabled={!primaryId}
               aria-pressed={pinned}
               aria-label="Locate the selection"

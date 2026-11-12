@@ -7,6 +7,7 @@ import {
   Columns2,
   Cuboid,
   ChevronDown,
+  CircleHelp,
   Glasses,
   SlidersHorizontal,
   Library as LibraryIcon,
@@ -84,6 +85,10 @@ import {
 import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
 import LibraryDialog from './components/LibraryDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
+import HelpFrame from './help/HelpFrame.jsx';
+import HelpQ from './help/HelpQ.jsx';
+import { useHelpRoute } from './help/useHelpRoute.js';
+import { START_PAGE } from './help/pageList.js';
 import backend from './backend/index.js';
 import useOffline, { formatMB } from './offline/useOffline.js';
 import { assetUrl } from './utils/assetUrl.js';
@@ -163,6 +168,23 @@ const VIEW_LAYOUTS = ['single', 'four', 'stereo'];
 const VIEW_DIRECTIONS = ['+x', '-x', '+y', '-y', '+z', '-z'];
 const PANELS_HIDDEN_KEY = 'vexiq.panelsHidden';
 const DRAWER_PINNED_KEY = 'vexiq.drawerPinned.';
+// Help guide choices kept in this browser (openspec in-app-help, design.md section 8)
+const WELCOME_SEEN_KEY = 'vexiq.help.welcomeSeen';
+const HELP_INPUT_KEY = 'vexiq.help.input';
+const readLocal = (key) => {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const writeLocal = (key, value) => {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // storage unavailable: the choice just isn't remembered
+  }
+};
 const LIBRARY_VIEW_KEY = 'vexiq.libraryView';
 const RECENT_CATEGORY = 'Recent';
 const TILE_TIP_DELAY_MS = 250;
@@ -273,6 +295,108 @@ export default function App() {
   // Medium and small layouts (openspec responsive-layout)
   const layoutSize = useLayoutSize();
   const compactLayout = layoutSize !== 'large';
+
+  // --- Help guide (openspec in-app-help) ---
+  // The open page follows the address (#help/<page>); the guide's code and pages load on first open
+  const help = useHelpRoute();
+  // A modal dialog (Bend sheet, Load…, Settings) blocks the page: Help opened from one goes on top of it
+  const [helpModal, setHelpModal] = useState(false);
+  const [helpInputChoice, setHelpInputChoice] = useState(() => readLocal(HELP_INPUT_KEY));
+  const helpInput = helpInputChoice === 'mouse' || helpInputChoice === 'touch' ? helpInputChoice : layoutSize !== 'large' || lastInputRef.current === 'touch' ? 'touch' : 'mouse';
+  const chooseHelpInput = useCallback((value) => {
+    setHelpInputChoice(value);
+    writeLocal(HELP_INPUT_KEY, value);
+  }, []);
+  const [welcomeShown, setWelcomeShown] = useState(() => !help.openedByLink && readLocal(WELCOME_SEEN_KEY) !== '1');
+  const helpReturnFocusRef = useRef(null);
+  const otherModalOpen = () => [...document.querySelectorAll('dialog')].some((d) => d.open && !d.classList.contains('help-modal') && d.matches(':modal'));
+  const openHelpAt = useCallback(
+    (page, section) => {
+      const active = document.activeElement;
+      if (active && !active.closest?.('.help-panel')) helpReturnFocusRef.current = active;
+      setHelpModal(otherModalOpen());
+      setHelpWhy(null);
+      help.openHelp(page, section);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [help.openHelp]
+  );
+  const closeHelp = help.close;
+  // Help opens on what the builder is doing (openspec in-app-help, design.md section 12): the snapshot is
+  // read now, from state that is already here, and the guide's own code works out the page
+  const [helpWhy, setHelpWhy] = useState(null); // { reason, page, section } while the guide shows its "Because you're ..." line
+  const helpSnapshotRef = useRef(null);
+  const openHelpHere = useCallback(async () => {
+    const { snapshot, hasAssistant } = helpSnapshotRef.current();
+    let hit = null;
+    let reason = '';
+    try {
+      const [ctx, content, tags] = await Promise.all([import('./help/context.js'), import('./help/content.js'), import('./help/tags.js')]);
+      hit = content.helpTarget(content.sitePages({ hasAssistant }), ctx.helpContext(snapshot));
+      reason = hit ? tags.SITUATIONS.find((x) => x.id === hit.situation)?.reason || '' : '';
+    } catch {
+      hit = null;
+    }
+    if (hit) {
+      openHelpAt(hit.page, hit.section);
+      setHelpWhy({ reason, page: hit.page, section: hit.section || null });
+    } else openHelpAt();
+  }, [openHelpAt]);
+  const goHelp = useCallback(
+    (page, section, options) => {
+      setHelpWhy(null);
+      help.go(page, section, options);
+    },
+    [help.go]
+  );
+  useEffect(() => {
+    if (!help.open) setHelpWhy(null);
+  }, [help.open]);
+  useEffect(() => {
+    if (help.open) {
+      // Opening Help any way puts the welcome card away for good
+      setWelcomeShown(false);
+      writeLocal(WELCOME_SEEN_KEY, '1');
+      return;
+    }
+    setHelpModal(false);
+    const back = helpReturnFocusRef.current;
+    helpReturnFocusRef.current = null;
+    if (back?.isConnected) back.focus?.({ preventScroll: true });
+  }, [help.open]);
+  // `?` opens and closes the guide, except while typing (from a dialog it opens on top of the dialog)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const active = document.activeElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(active?.tagName) || active?.isContentEditable) return;
+      e.preventDefault();
+      if (help.open) closeHelp();
+      else openHelpHere();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [help.open, closeHelp, openHelpHere]);
+  // Show me: flash the control for two seconds (on a phone the guide covers the view, so it closes first)
+  const flashTimerRef = useRef(null);
+  const flashControl = useCallback(
+    (el) => {
+      const run = () => {
+        el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+        document.querySelectorAll('.help-flash').forEach((other) => other.classList.remove('help-flash'));
+        void el.offsetWidth; // restart the animation
+        el.classList.add('help-flash');
+        clearTimeout(flashTimerRef.current);
+        flashTimerRef.current = setTimeout(() => el.classList.remove('help-flash'), 2000);
+      };
+      if (layoutSize === 'small') {
+        helpReturnFocusRef.current = null;
+        closeHelp();
+        requestAnimationFrame(() => requestAnimationFrame(run));
+      } else run();
+    },
+    [layoutSize, closeHelp]
+  );
   // The side panel's lower half shows the Outline or the chosen item's properties
   const [sidePanelView, setSidePanelView] = useState('outline');
   const outlineScrollRef = useRef(0);
@@ -329,7 +453,8 @@ export default function App() {
       return undefined;
     }
     const check = () => {
-      const panel = panelsHidden ? 0 : document.querySelector('.panel-left, .panel-right')?.offsetWidth || 320;
+      const helpPanel = document.querySelector('.workspace-grid.help-open > .help-panel');
+      const panel = helpPanel ? helpPanel.offsetWidth : panelsHidden ? 0 : document.querySelector('.panel-left, .panel-right')?.offsetWidth || 320;
       const room = window.innerWidth - panel - 24;
       // A margin either way so it doesn't flicker at the boundary
       setToolbarDocked((docked) => (docked ? bar.scrollWidth + 16 > room : bar.scrollWidth > room));
@@ -339,7 +464,7 @@ export default function App() {
     observer.observe(document.documentElement);
     check();
     return () => observer.disconnect();
-  }, [layoutSize, panelsHidden]);
+  }, [layoutSize, panelsHidden, help.open, helpModal]);
   // Clearing the selection while properties show goes back to the Outline
   useEffect(() => {
     if (selectedIds.length === 0 && sidePanelView === 'properties') showOutline();
@@ -2899,8 +3024,43 @@ export default function App() {
     }
   };
 
+  // What the builder is doing, for Help (read only when Help opens; nothing here changes the app)
+  helpSnapshotRef.current = () => {
+    const parts = selectedIds.map((id) => instances.find((i) => i.instanceId === id)).filter(Boolean);
+    return {
+      hasAssistant: backend.hasAssistant,
+      snapshot: {
+        panels: {
+          band: Boolean(band.session),
+          chain: builderDialog?.kind === 'chain',
+          track: builderDialog?.kind === 'track',
+          bend: Boolean(bendDialog || bendHoles),
+          explode: explodeMode !== 'off',
+          play: Boolean(play),
+          drop: Boolean(play && playDropReport),
+          audit: auditOpen,
+          blueprint: Boolean(blueprintData),
+          timeline: timelineVisible,
+          buildLibrary: libraryOpen,
+          settings: settingsOpen,
+          offline: settingsOpen && settingsFocus === 'offline'
+        },
+        viewLayout,
+        interaction: interaction ? { session: interaction.session, fitsKind: interaction.fitsKind, fit: interaction.fit, placing: interaction.placing } : null,
+        pointerTool,
+        bar: { selectMode, boxSelect, worldAxes, freeMove, grow: Boolean(growLayers), exactPick, turnMenu: Boolean(document.querySelector('[aria-label="Turn step"]')) },
+        transformMode,
+        groupSelected: parts.length > 0 && selectedGroupIds.length > 0 && parts.every((i) => i.groupId && groups.has(i.groupId)),
+        selection: parts.map((i) => {
+          const entry = catalogMap.get(i.partId);
+          return { name: entry?.name || '', category: entry?.category || '' };
+        })
+      }
+    };
+  };
+
   return (
-    <div className="app-shell" data-layout={layoutSize} data-toolbar={toolbarDocked ? 'docked' : 'floating'}>
+    <div className="app-shell" data-layout={layoutSize} data-toolbar={toolbarDocked ? 'docked' : 'floating'} data-help-open={help.open && !helpModal ? 'true' : undefined}>
       {/* Top Modeler Toolbar */}
       <header ref={topbarRef} className="topbar">
         <div className="brand">
@@ -2947,6 +3107,7 @@ export default function App() {
               type="button"
               className="btn"
               onClick={handleUndo}
+              data-help="undo"
               disabled={historyPosition.currentStep === 0}
               title="Undo (Ctrl/Cmd+Z)"
               aria-label="Undo"
@@ -2957,6 +3118,7 @@ export default function App() {
               type="button"
               className="btn"
               onClick={handleRedo}
+              data-help="redo"
               disabled={historyPosition.currentStep >= historyPosition.totalSteps}
               title="Redo (Shift+Ctrl/Cmd+Z or Ctrl+Y)"
               aria-label="Redo"
@@ -2967,6 +3129,7 @@ export default function App() {
               type="button"
               className={`btn ${timelineVisible ? 'active' : ''}`}
               onClick={toggleTimeline}
+              data-help="history"
               title="History: show the build as a timeline you can scrub and play"
               aria-label="History"
               aria-pressed={timelineVisible}
@@ -3042,6 +3205,7 @@ export default function App() {
               type="button"
               className="btn"
               onClick={() => setFocusTrigger((c) => c + 1)}
+              data-help="focus"
               title="Frame Selected or All Parts (Shortcut: F)"
               aria-label="Focus"
             >
@@ -3051,6 +3215,7 @@ export default function App() {
             <button
               type="button"
               className={`btn wide-toggle ${panelsHidden ? 'active' : ''}`}
+              data-help="wide"
               aria-label={panelsHidden ? 'Show panels' : 'Wide view'}
               onClick={() => setPanelsHidden((v) => !v)}
               title={panelsHidden ? 'Show the parts library and Inspector' : 'Hide the side panels for a wide view'}
@@ -3073,6 +3238,7 @@ export default function App() {
                 title={viewLayout === 'stereo' ? "View options (the view cube's menu, which is hidden in Stereo)" : "View options (the view cube's menu)"}
                 aria-haspopup="menu"
                 aria-label="View"
+                data-help="view"
               >
                 <Glasses size={14} />
                 <span className="btn-text">View</span>
@@ -3093,10 +3259,22 @@ export default function App() {
           />
           <button
             type="button"
+            className={`btn btn-outline ${help.open ? 'active' : ''}`}
+            onClick={() => (help.open ? closeHelp() : openHelpHere())}
+            title="Help (?)"
+            aria-label="Help"
+            aria-pressed={help.open}
+            data-help="help"
+          >
+            <CircleHelp size={14} />
+          </button>
+          <button
+            type="button"
             className={`btn btn-outline ${settingsOpen ? 'active' : ''}`}
             onClick={() => setSettingsOpen(true)}
             title="Settings"
             aria-label="Settings"
+            data-help="settings"
           >
             <SettingsIcon size={14} />
           </button>
@@ -3111,13 +3289,14 @@ export default function App() {
           `side-${sidePanelView}`,
           `tab-${sideTab}`,
           openDrawer ? `drawer-${openDrawer}` : '',
-          openDrawer && drawerPinned[openDrawer] ? 'drawer-pinned' : ''
+          openDrawer && drawerPinned[openDrawer] ? 'drawer-pinned' : '',
+          help.open && !helpModal ? 'help-open' : ''
         ]
           .filter(Boolean)
           .join(' ')}
       >
         {/* Left Sidebar: 478-Part VEX IQ Catalog with 3D Thumbnails */}
-        <aside className="panel panel-left">
+        <aside className="panel panel-left" data-help="library">
           <div className="panel-header">
             <div className="panel-title-row">
               <span>VEX IQ Part Library</span>
@@ -3154,6 +3333,7 @@ export default function App() {
               <input
                 type="search"
                 className="search-input"
+                data-help="library-search"
                 placeholder="Search Brain, Motor, Sensor, 228-..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -3239,6 +3419,7 @@ export default function App() {
         <main
           ref={viewportAreaRef}
           className={`viewport-container layout-${viewLayout}`}
+          data-help="view-area"
           onPointerDown={layoutSize === 'small' ? closeUnpinnedDrawer : undefined}
         >
           {bendBanner && !phoneLayout && (
@@ -3359,10 +3540,11 @@ export default function App() {
               onThrottle={handlePlayThrottle}
               onHover={setPlayHover}
               onClose={closePlay}
+              onHelp={() => openHelpAt('play-mode')}
             />
           )}
 
-          {band.session && <BandBuilderPanel band={band} touch={interaction?.input === 'touch'} />}
+          {band.session && <BandBuilderPanel band={band} touch={interaction?.input === 'touch'} onHelp={() => openHelpAt('rubber-bands')} />}
 
           {explodeMode !== 'off' && (
             <ExplodePanel
@@ -3372,6 +3554,7 @@ export default function App() {
               onAmount={setExplodeAmount}
               onGrab={() => setExplodePlaying(false)}
               onClose={closeExplode}
+              onHelp={() => openHelpAt('explode')}
             />
           )}
 
@@ -3479,12 +3662,12 @@ export default function App() {
           </div>
 
           {timelineVisible && (
-            <HistoryTimeline history={history} onMoveTo={handleMoveTo} onPreview={handlePreview} />
+            <HistoryTimeline history={history} onMoveTo={handleMoveTo} onPreview={handlePreview} onHelp={() => openHelpAt('undo-history')} />
           )}
 
           {!timelineVisible && (
             <div className="viewport-hud-bottom">
-              <div className="shortcuts-bar">
+              <div className="shortcuts-bar" data-help="shortcuts-strip">
                 <span>
                   <kbd className="kbd">LMB</kbd> Select / Orbit
                 </span>
@@ -3530,6 +3713,27 @@ export default function App() {
             </div>
           )}
 
+          <div className="help-cube-spot" data-help="view-cube" aria-hidden="true" hidden={viewLayout !== 'single' || immersive} />
+
+          {welcomeShown && !help.open && (
+            <div className="welcome-card" role="region" aria-label="Welcome">
+              <span>New here? Build your first thing in 5 minutes.</span>
+              <button type="button" className="btn btn-primary-action" onClick={() => openHelpAt(START_PAGE)}>
+                Start
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => {
+                  setWelcomeShown(false);
+                  writeLocal(WELCOME_SEEN_KEY, '1');
+                }}
+              >
+                Not now
+              </button>
+            </div>
+          )}
+
           <ContextToolbar
             items={barList}
             on={barOn}
@@ -3541,7 +3745,7 @@ export default function App() {
             side={phoneLayout ? 'left' : 'right'}
             onInputKind={(kind) => viewControlsRef.current?.input?.(kind)}
             stepper={stepper}
-            measureKey={`${auditOpen}|${timelineVisible}|${viewLayout}|${layoutSize}|${toolbarDocked}|${band.session ? 'band' : ''}`}
+            measureKey={`${auditOpen}|${timelineVisible}|${viewLayout}|${layoutSize}|${toolbarDocked}|${band.session ? 'band' : ''}|${help.open && !helpModal ? 'help' : ''}`}
           />
 
           <AuditPanel
@@ -3556,6 +3760,7 @@ export default function App() {
             onFix={handleAuditFix}
             onRefresh={() => runAuditQuiet(instances)}
             onClose={toggleAuditPanel}
+            onHelp={() => openHelpAt('check-and-fix')}
           />
         </main>
 
@@ -3594,7 +3799,7 @@ export default function App() {
           />
 
           {/* Part Inspector */}
-          <section className="inspector-section scroller">
+          <section className="inspector-section scroller" data-help="properties">
             <div className="panel-header" style={{ padding: '10px 14px' }}>
               {compactLayout && (
                 <button type="button" className="btn btn-outline inspector-back" onClick={showOutline} aria-label="Back to Outline">
@@ -3850,7 +4055,7 @@ export default function App() {
                         <button type="button" className="btn btn-outline" onClick={() => band.editBand(selectedInstance)} title="Drag the band's spot handles to other spots, or a run onto a gear's rim to put it through a gap">
                           Edit route
                         </button>
-                        <button type="button" className="btn btn-outline" onClick={() => flattenBand(selectedInstance)} title="Take the band off its spots: a flat ring where it is">
+                        <button type="button" className="btn btn-outline" data-help="band-flatten" onClick={() => flattenBand(selectedInstance)} title="Take the band off its spots: a flat ring where it is">
                           Flatten
                         </button>
                       </div>
@@ -3954,6 +4159,7 @@ export default function App() {
                         <button
                           type="button"
                           className="btn btn-primary-action"
+                          data-help="auto-fasten"
                           disabled={isRunningAction}
                           onClick={() =>
                             handleRunSmartAction('auto_fasten', {
@@ -4057,6 +4263,7 @@ export default function App() {
                       <button
                         type="button"
                         className="btn btn-primary-action"
+                        data-help="snap-mate"
                         disabled={isRunningAction || !mateTargetInst}
                         onClick={() =>
                           handleRunSmartAction('mate_parts', {
@@ -4180,6 +4387,7 @@ export default function App() {
                         <button
                           type="button"
                           className="btn btn-outline"
+                          data-help="mirror-z"
                           style={{ fontSize: 11, padding: '5px 4px' }}
                           disabled={isRunningAction}
                           onClick={() =>
@@ -4196,6 +4404,7 @@ export default function App() {
                         <button
                           type="button"
                           className="btn btn-outline"
+                          data-help="mirror-x"
                           style={{ fontSize: 11, padding: '5px 4px' }}
                           disabled={isRunningAction}
                           onClick={() =>
@@ -4212,6 +4421,7 @@ export default function App() {
                         <button
                           type="button"
                           className="btn btn-outline"
+                          data-help="mirror-all-z"
                           style={{ fontSize: 11, padding: '5px 4px' }}
                           disabled={isRunningAction}
                           onClick={() =>
@@ -4355,6 +4565,7 @@ export default function App() {
                 key={name}
                 type="button"
                 role="tab"
+                data-help={`${name}-tab`}
                 className={`side-tab ${sideTab === name ? 'active' : ''}`}
                 aria-selected={sideTab === name}
                 onClick={() => setSideTab(name)}
@@ -4377,6 +4588,7 @@ export default function App() {
                 key={name}
                 type="button"
                 className={`btn ${openDrawer === name ? 'active' : ''}`}
+                data-help={`${name}-button`}
                 aria-pressed={openDrawer === name}
                 onClick={() => setOpenDrawer((open) => (open === name ? null : name))}
               >
@@ -4385,6 +4597,20 @@ export default function App() {
               </button>
             ))}
           </nav>
+        )}
+
+        {help.open && (
+          <HelpFrame
+            modal={helpModal}
+            route={{ page: help.page, section: help.section }}
+            go={goHelp}
+            why={helpWhy}
+            onClose={closeHelp}
+            input={helpInput}
+            onInput={chooseHelpInput}
+            hasAssistant={backend.hasAssistant}
+            onFlash={flashControl}
+          />
         )}
       </div>
 
@@ -4418,6 +4644,7 @@ export default function App() {
         slackMm={builderDialog?.slackMm ?? null}
         upperBlocked={Boolean(builderDialog?.upperBlocked)}
         onClose={closeBuilderDialog}
+        onHelp={() => openHelpAt('chain-and-track')}
         onBuild={({ attachment, every, slack }) => {
           const { kind, slackMm, route } = builderDialog;
           if (kind === 'track') {
@@ -4441,6 +4668,7 @@ export default function App() {
         loadChoices={() => backend.runAction('sheet_bend_choices', { instances }, { sheetId: bendDialog.sheetId, targetId: bendDialog.targetId })}
         onPreview={previewBend}
         onClose={closeBendDialog}
+        onHelp={() => openHelpAt('plastic-sheets')}
         onApply={async (choice) => {
           setBendPreview(null);
           const data = await handleRunSmartAction('bend_sheet', { sheetId: bendDialog.sheetId, targetId: bendDialog.targetId, choice: choice.name });
@@ -4459,6 +4687,7 @@ export default function App() {
         initialRoute={chainRoute}
         onHighlight={handleHighlightAttention}
         onClose={closeChainRouteDialog}
+        onHelp={() => openHelpAt('chain-and-track')}
         checkRoute={async (chosenRoute) => {
           // The parts the chain would pass through with these answers, for the dialog's note
           const data = await planChainRoute(chosenRoute);
@@ -4490,6 +4719,7 @@ export default function App() {
         onDuplicate={handleDuplicateBuild}
         onDelete={handleDeleteBuild}
         onOpenFile={handleOpenFile}
+        onHelp={() => openHelpAt('saving')}
       />
       {offline.offer && offline.status === 'off' && (
         <div className="offline-update-banner" role="status">
@@ -4547,6 +4777,7 @@ export default function App() {
         setEnvironmentReflections={setEnvironmentReflections}
         reflectionIntensity={reflectionIntensity}
         setReflectionIntensity={setReflectionIntensity}
+        onHelp={() => openHelpAt('offline')}
       />
 
       {/* Native light-dismiss dialog for the 3-view blueprint (the audit is the panel in the 3D view) */}
@@ -4563,6 +4794,7 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn-outline"
+                data-help="blueprint-open-svg"
                 disabled={!blueprintData}
                 onClick={() => window.open(blueprintData.blueprintUrl, '_blank', 'noopener,noreferrer')}
               >

@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Copy, FolderOpen, Pencil, Trash2, Upload, X } from 'lucide-react';
 import { changedAgo } from '../utils/buildLibrary.js';
+import HelpQ from '../help/HelpQ.jsx';
 
 /**
  * File → Load… (openspec build-library): every build saved in this browser, newest first, with its
  * picture, name, when it changed and its part count; Open (or double-click), Rename, Duplicate and
  * Delete, and Open from computer… for a .vexiq.json file.
  */
-export default function LibraryDialog({ open, onClose, builds, currentId, available, onOpen, onRename, onDuplicate, onDelete, onOpenFile }) {
+export default function LibraryDialog({ open, onClose, builds, currentId, available, onOpen, onRename, onDuplicate, onDelete, onOpenFile, onHelp }) {
   const ref = useRef(null);
   const fileRef = useRef(null);
   const [renaming, setRenaming] = useState(null); // { id, draft }
@@ -50,7 +51,8 @@ export default function LibraryDialog({ open, onClose, builds, currentId, availa
       <div className="settings-header">
         <strong id="libraryTitle">Your builds</strong>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button type="button" className="btn btn-outline" onClick={() => fileRef.current?.click()} title="Open a .vexiq.json file as a new build">
+          <HelpQ tool="your builds" onHelp={onHelp} />
+          <button type="button" className="btn btn-outline" data-help="library-open-from-computer" onClick={() => fileRef.current?.click()} title="Open a .vexiq.json file as a new build">
             <Upload size={14} />
             Open from computer…
           </button>
@@ -112,17 +114,17 @@ export default function LibraryDialog({ open, onClose, builds, currentId, availa
                 </span>
               </div>
               <div className="library-actions">
-                <button type="button" className="btn btn-outline" onClick={() => onOpen(b.id)} disabled={b.id === currentId} title="Open this build">
+                <button type="button" className="btn btn-outline" data-help="build-open" onClick={() => onOpen(b.id)} disabled={b.id === currentId} title="Open this build">
                   <FolderOpen size={13} />
                   Open
                 </button>
-                <button type="button" className="icon-btn" onClick={() => setRenaming({ id: b.id, draft: b.name })} title="Rename" aria-label={`Rename ${b.name}`}>
+                <button type="button" className="icon-btn" data-help="build-rename" onClick={() => setRenaming({ id: b.id, draft: b.name })} title="Rename" aria-label={`Rename ${b.name}`}>
                   <Pencil size={13} />
                 </button>
-                <button type="button" className="icon-btn" onClick={() => onDuplicate(b.id)} title="Duplicate" aria-label={`Duplicate ${b.name}`}>
+                <button type="button" className="icon-btn" data-help="build-duplicate" onClick={() => onDuplicate(b.id)} title="Duplicate" aria-label={`Duplicate ${b.name}`}>
                   <Copy size={13} />
                 </button>
-                <button type="button" className="icon-btn danger" onClick={() => onDelete(b.id)} title="Delete" aria-label={`Delete ${b.name}`}>
+                <button type="button" className="icon-btn danger" data-help="build-delete" onClick={() => onDelete(b.id)} title="Delete" aria-label={`Delete ${b.name}`}>
                   <Trash2 size={13} />
                 </button>
               </div>

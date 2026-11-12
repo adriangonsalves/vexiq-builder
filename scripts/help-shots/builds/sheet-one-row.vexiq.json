@@ -1,0 +1,152 @@
+{
+  "version": "1.1",
+  "pitchUnitMm": 12.7,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "instances": [
+    {
+      "instanceId": "inst-1794459218506-0-u1oh",
+      "partId": "2x8-beam-228-2500-023-162",
+      "label": "2x8 Beam #1",
+      "position": [
+        0,
+        3.175,
+        0
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#858b8b",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        3.175,
+        0
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794459218506-1-1d1d",
+      "partId": "6x6-plastic-sheet-228-2500-2711-269",
+      "label": "6x6 Plastic Sheet #1",
+      "position": [
+        0,
+        6.35,
+        25.4
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#8fd0ee",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        6.35,
+        25.4
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794459218506-2-0e0m",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "1x1 Connector Pin #1",
+      "position": [
+        -31.75,
+        6.35,
+        -6.35
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#0075c9",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -31.75,
+        6.35,
+        -6.35
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794459218506-3-50in",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "1x1 Connector Pin #2",
+      "position": [
+        31.75,
+        6.35,
+        -6.35
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": "#0075c9",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        31.75,
+        6.35,
+        -6.35
+      ],
+      "lastValidRotation": [
+        90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794459218506-4-9mzf",
+      "partId": "1x8-beam-228-2500-007-69",
+      "label": "1x8 Beam #1",
+      "position": [
+        0,
+        -15.875,
+        47
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#acafae",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        -15.875,
+        47
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    }
+  ]
+}

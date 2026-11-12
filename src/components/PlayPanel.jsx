@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { LANDINGS } from '../sim/impact.js';
+import HelpQ from '../help/HelpQ.jsx';
 
 /**
  * The Play panel (openspec play-mode): one throttle per Smart Motor, from full reverse through stop
@@ -31,7 +32,8 @@ export default function PlayPanel({
   onResetDrop,
   onThrottle,
   onHover,
-  onClose
+  onClose,
+  onHelp
 }) {
   const [holds, setHolds] = useState(() => new Set());
   const [showWarnings, setShowWarnings] = useState(false);
@@ -78,6 +80,7 @@ export default function PlayPanel({
         >
           {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
+        <HelpQ tool="Play mode" onHelp={onHelp} />
         <button type="button" className="explode-close" style={{ marginLeft: 0 }} onClick={onClose} title="Stop playing and put every part back (Esc)" aria-label="Close Play mode">
           <X size={14} />
         </button>
@@ -104,7 +107,7 @@ export default function PlayPanel({
                 >
                   <div className="explode-panel-row">
                     <span className="play-motor-name" title={m.label}>{m.label}</span>
-                    <label className="play-motor-hold" title="Keep this motor's throttle where you let go of it (double-click the slider to stop it)">
+                    <label className="play-motor-hold" data-help="play-hold" title="Keep this motor's throttle where you let go of it (double-click the slider to stop it)">
                       <input type="checkbox" checked={held} onChange={(e) => toggleHold(m.id, e.target.checked)} />
                       Hold
                     </label>
@@ -114,6 +117,7 @@ export default function PlayPanel({
                   </div>
                   <input
                     className="explode-slider play-throttle"
+                    data-help="play-throttle"
                     type="range"
                     min={-100}
                     max={100}
@@ -161,11 +165,11 @@ export default function PlayPanel({
                       </option>
                     ))}
                   </select>
-                  <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: 11 }} disabled={dropUnavailable} onClick={startDrop} title={dropUnavailable ? 'The server is running older code without the joints the drop test needs: restart the dev server' : 'Lift the robot and drop it, landing as chosen'}>
+                  <button type="button" className="btn btn-outline" data-help="play-drop" style={{ padding: '2px 8px', fontSize: 11 }} disabled={dropUnavailable} onClick={startDrop} title={dropUnavailable ? 'The server is running older code without the joints the drop test needs: restart the dev server' : 'Lift the robot and drop it, landing as chosen'}>
                     Drop
                   </button>
                   {dropReport?.active && (
-                    <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => onResetDrop?.()} title="Put the robot back together where it was">
+                    <button type="button" className="btn btn-outline" data-help="play-reset" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => onResetDrop?.()} title="Put the robot back together where it was">
                       Reset
                     </button>
                   )}

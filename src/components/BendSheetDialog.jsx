@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useDialogDrag } from './BuildMenu.jsx';
+import HelpQ from '../help/HelpQ.jsx';
 
 /**
  * Bend sheet (openspec shaped-parts-and-sheet-bending): a draggable dialog over a light backdrop, so
@@ -10,7 +11,7 @@ import { useDialogDrag } from './BuildMenu.jsx';
  * Apply calls `onApply(choice)`, which may return (or resolve to) a reason it didn't work. With no
  * target (a bent sheet alone) only Flatten is offered; `bent` shows Flatten beside the choices.
  */
-export default function BendSheetDialog({ open, sheetLabel, targetLabel = null, bent = false, loadChoices, onPreview, onApply, onFlatten, onClose }) {
+export default function BendSheetDialog({ open, sheetLabel, targetLabel = null, bent = false, loadChoices, onPreview, onApply, onFlatten, onClose, onHelp }) {
   const ref = useRef(null);
   const drag = useDialogDrag(ref);
   const [state, setState] = useState({ loading: false, choices: [], reasons: [], error: null });
@@ -76,6 +77,7 @@ export default function BendSheetDialog({ open, sheetLabel, targetLabel = null, 
     <dialog ref={ref} closedby="any" className="settings-dialog chain-route-dialog bend-sheet-dialog" aria-labelledby="bendSheetTitle">
       <div className="settings-header" {...drag} title="Drag to move">
         <strong id="bendSheetTitle">Bend sheet</strong>
+        <HelpQ tool="Bend sheet" onHelp={onHelp} className="help-q-head" />
         <button type="button" className="icon-btn" onClick={() => ref.current?.close()} aria-label="Close" title="Cancel (Esc)">
           <X size={16} />
         </button>
@@ -133,7 +135,7 @@ export default function BendSheetDialog({ open, sheetLabel, targetLabel = null, 
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
           {bent && (
-            <button type="button" className="btn btn-outline" onClick={() => onFlatten?.()} title="Remove the bend: the sheet goes flat again through its held rows">
+            <button type="button" className="btn btn-outline" data-help="bend-flatten" onClick={() => onFlatten?.()} title="Remove the bend: the sheet goes flat again through its held rows">
               Flatten
             </button>
           )}
@@ -141,7 +143,7 @@ export default function BendSheetDialog({ open, sheetLabel, targetLabel = null, 
             Cancel
           </button>
           {targetLabel && (
-            <button type="button" className={`btn ${picked ? 'active' : 'btn-outline'}`} disabled={!picked} onClick={apply}>
+            <button type="button" className={`btn ${picked ? 'active' : 'btn-outline'}`} disabled={!picked} data-help="bend-apply" onClick={apply}>
               Apply
             </button>
           )}

@@ -47,6 +47,7 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, aud
         className={`btn ${at ? 'active' : ''}`}
         onClick={toggle}
         aria-haspopup="menu"
+        data-help="tools"
         aria-expanded={Boolean(at)}
         aria-label="Tools"
         title="Check the build, fix how parts fit together, or build a chain or track round sprockets"

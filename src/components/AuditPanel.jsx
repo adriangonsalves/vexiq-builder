@@ -1,5 +1,6 @@
 import React from 'react';
 import { Magnet, RefreshCw, X } from 'lucide-react';
+import HelpQ from '../help/HelpQ.jsx';
 
 /**
  * The Audit panel: slides up from the bottom of the 3D view and stays open while the user works.
@@ -8,7 +9,7 @@ import { Magnet, RefreshCw, X } from 'lucide-react';
  * finding. `selectedIds` decides which row is highlighted (so picking a part in the 3D view lights
  * its row too). `audit` is null until the first result arrives.
  */
-export default function AuditPanel({ open, audit, issues, problems, busy, note, selectedIds, onSelect, onFix, onRefresh, onClose }) {
+export default function AuditPanel({ open, audit, issues, problems, busy, note, selectedIds, onSelect, onFix, onRefresh, onClose, onHelp }) {
   const selected = new Set(selectedIds);
   const isActive = (issue) => issue.parts.length > 0 && issue.parts.length === selected.size && issue.parts.every((p) => selected.has(p.instanceId));
   const sound = Boolean(audit?.isMechanicallySound);
@@ -28,6 +29,7 @@ export default function AuditPanel({ open, audit, issues, problems, busy, note, 
           </span>
         )}
         <span className="audit-panel-spacer" />
+        <HelpQ tool="Audit" onHelp={onHelp} />
         <button type="button" className="btn btn-outline" onClick={onRefresh} disabled={busy} title="Run the audit again">
           <RefreshCw size={12} />
           Refresh
@@ -75,6 +77,7 @@ export default function AuditPanel({ open, audit, issues, problems, busy, note, 
                   <button
                     type="button"
                     className="btn btn-outline audit-fix-button"
+                    data-help="audit-attempt-fix"
                     disabled={busy}
                     onClick={() => onFix(issue)}
                     title="Run Fix assembly on this part to line up its pins and holes and seat it"

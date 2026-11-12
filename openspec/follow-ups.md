@@ -53,3 +53,17 @@ Low-priority items left open when a change was closed. Pick one up by proposing 
 5. **A drop runs well below real time.** The frame with the impact holds the screen still for about 1 s on the Clawbot and 1.2 s on Flop (the solve, the split into pieces and setting up their collisions). After it, Flop's frames take about 65 ms each, because Rapier gets 12 passes per step during a drop so loose pieces don't sink into each other. Fewer passes (8) would be quicker, with a little more sinking in.
 6. **Loose pieces can still sit 3–4 mm into each other after a hard drop.** Each part collides as a simplified outline that fills in its holes and gaps, so touching parts look slightly embedded. Closer outlines (split into a few convex pieces) would fix it at some cost.
 
+
+## From in-app-help (round three, 2026-11-12)
+
+1. **Advanced options and Keep branches (for you to decide):** with Keep branches chosen, turning Advanced options off leaves branching on, because `isLinearHistory` in `src/utils/appSettings.js` ignores the switch. Settings then says undone steps are dropped, which isn't true. The app-settings spec doesn't settle it, so nothing was changed.
+2. **"Snap & Mate to Port" in the app vs the guide's ban on "Port" (for you to decide):** the guide calls it "Snap & Mate". Either rename it in the app or allow the exact title on the `advanced-tools` page.
+3. **Stereo full screen has no way out by touch.** Only Esc leaves it. A small on-screen exit button is needed.
+4. **Two belt chips are both labelled "2x30 mm belt"** (silicone and rubber), so Show me and the pages can't tell them apart. Give them different labels.
+5. **The Track builder says "Traction Link" but its message says "grippers".** Pick one word.
+6. **Help from a modal dialog works only with the `?` key.** The toolbar is behind a modal dialog (Settings, builder dialogs, Bend sheet), so a mouse or touch user can use the dialog's own question mark but not the toolbar Help button. `?` now opens Help on top of the dialog; a touch user has no key. Consider a Help button inside each modal dialog.
+7. **The Turn step choice is only seen by Help when it is open at the moment Help opens.** Selecting the toolbar Help button closes the choice first, so only `?` opens Help on it.
+8. **Throttle and Hold (Play mode) are one control per motor.** Show me flashes the first one on screen.
+9. **Group name, Hide all and Lock all are in Properties, not the Outline.** The pages that name them under the Outline should say Properties; check in group 7.
+10. **Pages not yet fitted to the app's real part names for context:** six look-alike parts (Landing Gear Beam and Panel, Ball Pin Bushing, Shaft Bushing, Scarab Thrust Washer, XL Turntable Ring Gear Bushing) are given no kind on purpose, so selecting them opens Help as if nothing were selected.
+11. **Spec scenario "Open from the toolbar" says Help opens on home with a part selected**, which conflicts with "A gear selected" (opens Gears). The code follows "Help opens on what you're doing"; the older scenario's wording needs updating when the change is archived.

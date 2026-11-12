@@ -63,7 +63,7 @@ export default function ViewMenu({ at, onClose, view }) {
           >
             Cross-eyed
           </MenuItem>
-          <label className="popover-slider" title="Stereo depth: how far apart the two eye positions are">
+          <label className="popover-slider" data-help="stereo-depth" title="Stereo depth: how far apart the two eye positions are">
             Depth
             <input type="range" min="0.25" max="3" step="0.25" value={stereoDepth} onChange={(e) => setStereoDepth(e.target.value)} />
             <span>{Number(stereoDepth).toFixed(2)}×</span>

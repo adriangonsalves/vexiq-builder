@@ -1,0 +1,152 @@
+{
+  "version": "1.1",
+  "pitchUnitMm": 12.7,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "instances": [
+    {
+      "instanceId": "inst-1794458297185-0-4mmt",
+      "partId": "2x8-beam-228-2500-023-162",
+      "label": "2x8 Beam #1",
+      "position": [
+        0,
+        3.175,
+        0
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#858b8b",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        3.175,
+        0
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794458297185-1-nd4e",
+      "partId": "4x-pitch-shaft-228-2500-120-234",
+      "label": "4x Pitch Shaft #1",
+      "position": [
+        -19.05,
+        18,
+        6.35
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#e2e8f0",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -19.05,
+        18,
+        6.35
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794458297185-2-l003",
+      "partId": "4x-pitch-shaft-228-2500-120-234",
+      "label": "4x Pitch Shaft #2",
+      "position": [
+        6.35,
+        18,
+        6.35
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#e2e8f0",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        6.35,
+        18,
+        6.35
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794458297185-3-ir87",
+      "partId": "36-tooth-gear-228-2500-214-328",
+      "label": "36 Tooth Gear #1",
+      "position": [
+        -19.05,
+        8.269,
+        6.35
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#0075c9",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -19.05,
+        8.269,
+        6.35
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794458297185-4-3gu8",
+      "partId": "12-tooth-gear-228-2500-213-290",
+      "label": "12 Tooth Gear #1",
+      "position": [
+        6.35,
+        8.268,
+        6.35
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#0075c9",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        6.35,
+        8.268,
+        6.35
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    }
+  ]
+}

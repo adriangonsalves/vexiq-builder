@@ -3,9 +3,9 @@ import { X } from 'lucide-react';
 import OfflineSection from './OfflineSection.jsx';
 
 /** One labeled on/off switch row. */
-function SwitchRow({ label, hint, checked, onChange }) {
+function SwitchRow({ label, hint, checked, onChange, help }) {
   return (
-    <label className="settings-row">
+    <label className="settings-row" data-help={help}>
       <span className="settings-row-text">
         <span className="settings-row-label">{label}</span>
         {hint && <span className="settings-row-hint">{hint}</span>}
@@ -38,7 +38,8 @@ export default function SettingsPanel({
   environmentReflections = true,
   setEnvironmentReflections,
   reflectionIntensity = 0.75,
-  setReflectionIntensity
+  setReflectionIntensity,
+  onHelp
 }) {
   const ref = useRef(null);
   const offlineRef = useRef(null);
@@ -81,20 +82,22 @@ export default function SettingsPanel({
       <div className="settings-body">
         <section className="settings-section">
           <h3>Display</h3>
-          <SwitchRow label="Shadows" hint="Soft shadows from the main light" checked={shadows} onChange={setShadows} />
+          <SwitchRow help="settings-shadows" label="Shadows" hint="Soft shadows from the main light" checked={shadows} onChange={setShadows} />
           <SwitchRow
+            help="settings-ambient-occlusion"
             label="Ambient occlusion"
             hint="Darkens creases and inside corners (uses more graphics power)"
             checked={ambientOcclusion}
             onChange={setAmbientOcclusion}
           />
           <SwitchRow
+            help="settings-environment-reflections"
             label="Environment reflections"
             hint="Studio lighting and reflections on metal shafts and surfaces"
             checked={environmentReflections}
             onChange={setEnvironmentReflections}
           />
-          <div className={`settings-slider-row ${!environmentReflections ? 'is-disabled' : ''}`}>
+          <div className={`settings-slider-row ${!environmentReflections ? 'is-disabled' : ''}`} data-help="settings-reflection-brightness">
             <label className="settings-slider-label">
               <span className="settings-row-text">
                 <span className="settings-row-label">Reflection brightness</span>
@@ -152,13 +155,13 @@ export default function SettingsPanel({
           </section>
         )}
 
-        {offline?.supported && <OfflineSection offline={offline} sectionRef={offlineRef} />}
+        {offline?.supported && <OfflineSection offline={offline} sectionRef={offlineRef} onHelp={onHelp} />}
 
         <section className="settings-section">
           <h3>Advanced options</h3>
           <SwitchRow
             label="Show advanced options"
-            hint="Smart assembly tools, part metadata, history branches and assistant settings"
+            hint={hasAssistant ? 'Smart assembly tools, part metadata, history branches and assistant settings' : 'Smart assembly tools, part metadata and history branches'}
             checked={settings.advanced}
             onChange={(v) => onChange({ advanced: v })}
           />

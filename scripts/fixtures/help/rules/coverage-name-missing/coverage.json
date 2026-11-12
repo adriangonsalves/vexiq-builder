@@ -1,0 +1,44 @@
+[
+  {
+    "feature": "Quick add",
+    "kind": "button",
+    "page": "quick-start",
+    "section": "",
+    "name": "Add"
+  },
+  {
+    "feature": "Gear turn",
+    "kind": "gesture",
+    "page": "gears",
+    "section": "",
+    "name": "Tap the gear"
+  },
+  {
+    "feature": "Gear slip",
+    "kind": "tip",
+    "page": "gears",
+    "section": "if-gears-slip",
+    "name": "closer"
+  },
+  {
+    "feature": "Move",
+    "kind": "button",
+    "page": "context-bar",
+    "section": "every-button-on-the-bar",
+    "name": "Move"
+  },
+  {
+    "feature": "Sample",
+    "kind": "starter",
+    "page": "saving",
+    "section": "",
+    "name": "Sample"
+  },
+  {
+    "feature": "X",
+    "kind": "button",
+    "page": "gears",
+    "section": "",
+    "name": "Zebra"
+  }
+]

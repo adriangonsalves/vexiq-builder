@@ -1,0 +1,668 @@
+/* The Help guide's own styles (openspec in-app-help), loaded with the help chunk. Where the panel sits
+   in each layout is in src/styles.css (.help-panel), since that must work before the chunk loads. */
+
+.help-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  outline: none;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.help-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 4px 10px;
+}
+
+.help-head-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.help-head-home {
+  color: var(--text-primary);
+  font-size: 17px;
+  padding-left: 4px;
+}
+
+.help-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.help-icon-btn:hover {
+  background: var(--bg-panel-elevated);
+}
+
+.help-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 10px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.help-search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-app);
+  color: var(--text-secondary);
+}
+
+.help-search:focus-within {
+  outline: 2px solid var(--accent);
+}
+
+.help-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.help-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.help-switch button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: none;
+  background: var(--bg-app);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.help-switch button.on {
+  background: var(--accent);
+  color: #fff;
+}
+
+.help-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: 12px 16px 32px;
+}
+
+.help-body > * {
+  max-width: 70ch;
+}
+
+.help-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.help-root :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Home page */
+.help-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-panel-elevated);
+  color: var(--text-primary);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.help-card:hover {
+  border-color: var(--accent);
+}
+
+.help-card-big {
+  flex-wrap: wrap;
+  padding: 12px;
+  border: 2px solid var(--accent);
+  background: linear-gradient(160deg, rgba(59, 130, 246, 0.22), var(--bg-panel-elevated) 70%);
+  margin-bottom: 16px;
+}
+
+.help-card-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  background: var(--bg-app);
+}
+
+.help-card-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  margin-top: 2px;
+  color: #93c5fd;
+}
+
+.help-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.help-card-big strong {
+  font-size: 19px;
+}
+
+.help-card-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #93c5fd;
+}
+
+.help-card-summary {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.help-group h2 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  margin: 18px 0 8px;
+}
+
+.help-cards {
+  display: grid;
+  gap: 8px;
+}
+
+/* Search results */
+.help-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.help-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-panel-elevated);
+  color: var(--text-primary);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.help-result-title {
+  font-weight: 700;
+}
+
+.help-result-section {
+  font-weight: 500;
+  color: #93c5fd;
+}
+
+.help-result-snippet {
+  font-size: 14px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.help-link-btn {
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #93c5fd;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* A page */
+.help-page h1 {
+  font-size: 22px;
+  line-height: 1.25;
+  margin: 4px 0 10px;
+  outline: none;
+}
+
+.help-top p,
+.help-more-body p {
+  margin: 0 0 10px;
+}
+
+.help-top ol,
+.help-top ul,
+.help-more-body ol,
+.help-more-body ul {
+  padding-left: 24px;
+  margin: 0 0 12px;
+}
+
+.help-top li,
+.help-more-body li {
+  margin-bottom: 10px;
+}
+
+.help-top a,
+.help-more-body a {
+  color: #93c5fd;
+}
+
+.help-top table,
+.help-more-body table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+  margin: 0 0 12px;
+  display: block;
+  overflow-x: auto;
+}
+
+.help-top th,
+.help-top td,
+.help-more-body th,
+.help-more-body td {
+  border: 1px solid var(--border-strong);
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.help-key {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--bg-app);
+  font: 600 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+}
+
+.help-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 2px;
+  padding: 1px 9px;
+  border: 1px solid rgba(147, 197, 253, 0.5);
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.16);
+  color: #bfdbfe;
+  font: 600 14px/1.6 inherit;
+  font-family: inherit;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.help-chip::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fbbf24;
+}
+
+.help-badge,
+.help-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #111827;
+  font: 800 13px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  box-shadow: 0 0 0 2px #111827;
+  vertical-align: middle;
+}
+
+.help-shot {
+  position: relative;
+  margin: 8px 0 4px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: var(--bg-app);
+}
+
+.help-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.help-mark {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.help-tip,
+.help-warn {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 4px solid #22c55e;
+  border-radius: 6px;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.help-warn {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.help-tip p,
+.help-warn p {
+  margin: 0;
+}
+
+.help-mores {
+  margin-top: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.help-more {
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-panel-elevated);
+}
+
+.help-more summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.help-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.help-more summary::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-secondary);
+  border-bottom: 2px solid var(--text-secondary);
+  transform: rotate(-45deg);
+  transition: transform 0.12s ease;
+}
+
+.help-more[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.help-more summary h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.help-more-body {
+  padding: 0 12px 4px;
+}
+
+.help-prevnext {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.help-prevnext button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  max-width: 48%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.help-next {
+  margin-left: auto;
+  text-align: right;
+}
+
+.help-prevnext small {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.help-hint,
+.help-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px 10px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  background: #1f2937;
+  font-size: 15px;
+}
+
+.help-toast {
+  position: absolute;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-color: var(--accent);
+  z-index: 2;
+  margin: 0;
+}
+
+.help-hint span {
+  flex: 1;
+}
+
+/* A picture shown large over everything */
+.help-enlarged {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(2, 6, 23, 0.88);
+  cursor: zoom-out;
+}
+
+.help-enlarged-frame {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.help-enlarged-frame img {
+  display: block;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+}
+
+.help-enlarged-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.help-results-empty p {
+  margin: 8px 0 0;
+}
+
+/* Medium and small: every control at least 44 px */
+.app-shell:not([data-layout="large"]) .help-icon-btn,
+.app-shell:not([data-layout="large"]) .help-switch button,
+.app-shell:not([data-layout="large"]) .help-search,
+.help-modal .help-icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.app-shell:not([data-layout="large"]) .help-chip {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+}
+
+.app-shell:not([data-layout="large"]) .help-search input {
+  align-self: stretch;
+}
+
+.app-shell:not([data-layout="large"]) .help-shot {
+  min-height: 44px;
+}
+
+/* Links in the text get a 44 px tall tap area without changing the line spacing */
+.app-shell:not([data-layout="large"]) .help-top a,
+.app-shell:not([data-layout="large"]) .help-more-body a {
+  display: inline-block;
+  min-width: 44px;
+  padding: 13px 0;
+  margin: -13px 0;
+}
+
+/* The "Because you're ..." line when Help opened on what the builder was doing */
+.help-because {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--help-note-bg, rgba(59, 130, 246, 0.12));
+  font-size: 0.9rem;
+}
+.help-because-home {
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.help-related {
+  margin-top: 24px;
+}
+
+.help-related h2 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.help-related ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-related button {
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}

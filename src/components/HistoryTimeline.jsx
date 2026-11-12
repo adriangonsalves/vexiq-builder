@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GitBranch, Pause, Play, SkipForward } from 'lucide-react';
 import { applyOps, branchesAt, currentLine, pathTo } from '../utils/buildHistory.js';
+import HelpQ from '../help/HelpQ.jsx';
 
 // Mark colors per step source (see the legend in the bar)
 export const SOURCE_COLORS = { app: '#60a5fa', mcp: '#f59e0b', assistant: '#c084fc', action: '#34d399' };
@@ -39,7 +40,7 @@ function buildPositions(line) {
  * Scrubbing previews (read-only) through `onPreview(parts | null, info)`; stopping on a step's
  * boundary calls `onMoveTo(stepId | null)` to make it the current step.
  */
-export default function HistoryTimeline({ history, onMoveTo, onPreview }) {
+export default function HistoryTimeline({ history, onMoveTo, onPreview, onHelp }) {
   const line = useMemo(() => currentLine(history), [history]);
   const positions = useMemo(() => buildPositions(line), [line]);
   const headStep = useMemo(() => pathTo(history, history.headId).length, [history]);
@@ -292,12 +293,13 @@ export default function HistoryTimeline({ history, onMoveTo, onPreview }) {
   return (
     <div className="history-timeline" role="region" aria-label="Build history timeline">
       <div className="history-controls">
-        <button type="button" className="btn" onClick={togglePlay} disabled={positions.length < 2} title={playing ? 'Pause' : 'Play the build from the start'} aria-label={playing ? 'Pause' : 'Play'}>
+        <HelpQ tool="History" onHelp={onHelp} />
+        <button type="button" className="btn" data-help="play" onClick={togglePlay} disabled={positions.length < 2} title={playing ? 'Pause' : 'Play the build from the start'} aria-label={playing ? 'Pause' : 'Play'}>
           {playing ? <Pause size={14} /> : <Play size={14} />}
         </button>
         <div className="toolbar-group history-speed" role="group" aria-label="Playback speed">
           {SPEEDS.map((v) => (
-            <button key={v} type="button" className={`btn ${speed === v ? 'active' : ''}`} onClick={() => setSpeed(v)}>
+            <button key={v} type="button" className={`btn ${speed === v ? 'active' : ''}`} data-help={`speed-${v}`} onClick={() => setSpeed(v)}>
               {v}×
             </button>
           ))}
@@ -393,7 +395,7 @@ export default function HistoryTimeline({ history, onMoveTo, onPreview }) {
       {midStep && !playing && (
         <div className="history-banner" role="status">
           Showing step {shown.step} part-way ({shown.opCount} of {line[shown.step - 1].ops.length} parts). This view can't be edited.
-          <button type="button" className="btn btn-outline" onClick={() => commitPosition(boundaryIndexOfStep.get(shown.step))}>
+          <button type="button" className="btn btn-outline" data-help="go-to-end-of-step" onClick={() => commitPosition(boundaryIndexOfStep.get(shown.step))}>
             <SkipForward size={12} />
             Go to end of step
           </button>

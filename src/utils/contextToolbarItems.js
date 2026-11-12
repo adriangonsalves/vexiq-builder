@@ -10,6 +10,38 @@ export const BAR_IDS = [
 
 export const WHEEL_IDS = ['wheel', 'stepUp', 'stepDown', 'turnStep', 'worldArrows', 'pinsOnly', 'commit', 'cancel'];
 
+// The bar's buttons (src/components/ContextToolbar.jsx): name, one line on what it does, and the keys
+// or mouse gesture that do the same. Here as plain data so the help check can read the names.
+export const BAR_TIPS = {
+  move: ['Move', 'Slide the part along its arrows', 'W'],
+  rotate: ['Rotate', 'Turn the part with its rings', 'E · right-click the part'],
+  addToSelection: ['Add to selection', 'Tap parts to add or take them out', 'Shift + click'],
+  markHole: ['Mark a hole', 'Tap the hole or pin end the next part goes in', 'Alt + click'],
+  join: ['Manual Join', 'Pick the hole the part goes into', 'Double-click the part'],
+  autoJoin: ['Auto Join', "Push the part into what it's lined up with", 'Double-click the part'],
+  stampCopies: ['Stamp copies', 'Put a copy of this part in each hole you pick', 'Ctrl/Cmd + double-click'],
+  worldArrows: ['World arrows', 'Arrows follow the room, not the part', 'Hold Alt'],
+  freeMove: ['Free move', 'Stop parts jumping onto holes', 'Hold Alt while dragging'],
+  turnStep: ['Turn step', 'How far each turn step goes', null],
+  growSelection: ['Grow selection', 'Add the parts joined to this one, layer by layer', 'Shift + wheel'],
+  onePartOfGroup: ['One part of a group', 'Pick a single part inside the group', 'Shift + Alt + click'],
+  duplicate: ['Duplicate', 'Make a copy next to it', 'D'],
+  delete: ['Delete', 'Remove it (Undo brings it back)', 'Del'],
+  wheel: ['Wheel', 'Turn it for the next or previous one', 'Mouse wheel'],
+  stepUp: ['Next', 'Step to the next one', 'R'],
+  stepDown: ['Previous', 'Step back one', 'Shift + R'],
+  cancel: ['Cancel', 'Stop without changing anything', 'Esc'],
+  pinsOnly: ['Pins only', 'Only follow pins and shafts', 'Ctrl/Cmd + Shift + wheel']
+};
+export const COMMIT_TIPS = {
+  fits: ['Put it in', 'Put the part in at the fit shown', 'Click the lit hole'],
+  stamp: ['Put a copy in', 'Insert a copy at the fit shown and keep going', 'Ctrl/Cmd + double-click'],
+  bendFits: ['Keep', 'Keep this bend', 'Enter'],
+  ring: ['Done', 'Finish turning with this ring', 'Esc'],
+  layers: ['Done', 'Keep this selection', null],
+  band: ['Add this spot', 'Add the lit spot to the band', 'Click the spot']
+};
+
 const item = (id, state = 'off', disabledReason = null) => ({ id, state, disabledReason });
 const disabled = (id, reason) => item(id, 'disabled', reason);
 

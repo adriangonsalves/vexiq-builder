@@ -1,0 +1,23 @@
+[
+  {
+    "feature": "Quick add",
+    "kind": "button",
+    "page": "quick-start",
+    "section": "",
+    "name": "Add"
+  },
+  {
+    "feature": "Move",
+    "kind": "button",
+    "page": "context-bar",
+    "section": "every-button-on-the-bar",
+    "name": "Move"
+  },
+  {
+    "feature": "Sample",
+    "kind": "starter",
+    "page": "saving",
+    "section": "",
+    "name": "Sample"
+  }
+]

@@ -420,8 +420,11 @@ function vexiqMcpBridgePlugin() {
 }
 
 // The static site (openspec static-lite-site) takes only these from public/: no saved build,
-// settings or blueprint (sheet-patterns.json is the printed lattice on clear plastic sheets)
-const STATIC_PUBLIC_FILES = ['catalog.json', 'part-metadata.json', 'sheet-patterns.json', 'models'];
+// settings or blueprint (sheet-patterns.json is the printed lattice on clear plastic sheets). `help`
+// holds the Help guide's pictures (openspec in-app-help); its `fixture-` pictures, for checking the
+// panel, go in only with VITE_HELP_FIXTURES=1.
+const STATIC_PUBLIC_FILES = ['catalog.json', 'part-metadata.json', 'sheet-patterns.json', 'models', 'help'];
+const keepStaticFile = (src) => Boolean(process.env.VITE_HELP_FIXTURES) || !/[\\/]help[\\/]shots[\\/]fixture-[^\\/]*$/.test(src);
 
 /** Copies STATIC_PUBLIC_FILES into the static build (in place of all of public/). */
 function copyStaticPublicFilesPlugin() {
@@ -434,7 +437,7 @@ function copyStaticPublicFilesPlugin() {
     },
     writeBundle() {
       for (const file of STATIC_PUBLIC_FILES) {
-        fs.cpSync(path.join(__dirname, 'public', file), path.join(outDir, file), { recursive: true });
+        fs.cpSync(path.join(__dirname, 'public', file), path.join(outDir, file), { recursive: true, filter: keepStaticFile });
       }
     }
   };
