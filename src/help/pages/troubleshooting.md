@@ -32,7 +32,7 @@ Many buttons show only when they fit what is selected. Select a part, or a group
 Builds live in this browser only. Choose **File → Load…** to see the saved ones. A different browser or a cleared browser has none. Export your builds to keep copies. See [Saving and sharing](help:saving).
 
 ## The app is slow
-Turn off Shadows and Ambient occlusion in Settings. Close 4-View if it is on. Big builds take longer. See [Settings](help:settings).
+In **Settings**, check that Shadows and Ambient occlusion are off. If the view shows four pictures, right-click the view cube and choose **Single**. Big builds take longer. See [Settings](help:settings).
 
 ## Explode leaves some parts in place
 The Robot Brain stays still, or the biggest part if there is no brain. See [Explode](help:explode).
@@ -59,7 +59,7 @@ Pin one or two rows flat first, and select the part to curve it onto. If no row 
 Unlock it in the Outline, then try again. See [The Outline and Properties](help:outline).
 
 ## The Audit says a pin is loose
-The pin isn't in a hole on one end. Select its row and press [[Attempt Fix]]. See [Check and fix your build](help:check-and-fix).
+The pin isn't seated in any part. Select its row and press [[Attempt Fix]]. See [Check and fix your build](help:check-and-fix).
 
 ## I can't drag a part from the Library on my tablet
 That doesn't work by touch yet. Mark a hole, then tap the part in the Library. Close Help first to see the Library. See [Tablets and phones](help:tablets-and-phones).

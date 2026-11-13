@@ -66,6 +66,6 @@ Each line shows the key or mouse move, then what it does. Touch users get the sa
 - {{`?`|Tap **Help**}}: open or close Help.
 
 ## When keys don't work
-Letter keys do nothing while you type in a box or while Settings or the Audit window is open. In Play mode only `Esc`, `P` and `1` `2` `3` work.
+Letter keys do nothing while you type in a box or while Settings is open. In Play mode only `Esc`, `P` and `1` `2` `3` work.
 
 Press `Esc` again for the next job. It leaves full screen first, then Play mode, then hides arrows, then closes Explode. After that it turns off a bar tool, and last it deselects.

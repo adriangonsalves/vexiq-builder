@@ -11,7 +11,7 @@ devOnly: false
 ---
 The Outline lists every part in your build. Properties shows the part you picked.
 
-1. {{Find the **Outline** [[Outline]] (1) beside the 3D view.|Close Help, then open the **Outline** [[Outline]] (1).}} Each row is one part.
+1. {{Find the Outline [[Outline]] (1) beside the 3D view. Its title says Assembly Outliner.|Close Help, then open the **Outline** [[Outline]] (1).}} Each row is one part.
    ![The Outline with its list of parts marked](shot:outline-list)
 2. Type a few letters of a part's name or number in the search box (1). Only matching rows stay.
    ![The Outline with "beam" typed in the search box](shot:outline-search)
@@ -28,7 +28,7 @@ The search box looks at a part's label, its catalog name and its number. The tit
 A group is a folder. Tap its arrow to open or close it. Its number is how many parts it holds. Picking the folder picks the whole group. Picking a row inside picks just that part. The eye and padlock on a folder act on every part inside. A dash means only some parts are hidden or locked. A hidden part stays in your build but is not drawn. A locked part can't be moved.
 
 ## Rename a group
-Pick the group. In Properties, change the name in the [[Group name]] box, then press `Enter` or tap away. An empty name is refused. `Esc` puts the old name back. The app can't rename a single part yet. Its label stays as it is.
+Pick the group. In Properties, change the name in the [[Group name]] box, then press `Enter` or tap away. An empty name is refused. The app can't rename a single part yet. Its label stays as it is.
 
 ## Locate and the base name
 A long list is hard to search by eye. Press [[Locate]] (the small target above the list) and the picked part's row scrolls into view. It opens a closed folder if it has to. Hold [[Locate]] for half a second to keep it following your picks. Hold it again to stop. The picked row also shows its base name: the catalog name and number of the part.
@@ -46,3 +46,15 @@ Help covers the Outline while it is open, so close Help first. On a tablet the O
 
 Tap a row and Properties take the Outline's place. Tap **Outline** (1) at the top to go back. The list stays where you scrolled it. Clearing your pick also goes back.
 ![Properties on a tablet with the Outline back button marked](shot:outline-properties-touch)
+
+## Clearing the search and the whole build
+Press the small cross in the Outline search box. Clear search shows every part again.
+
+Clear All, next to the list title, removes every part from the build. Use it to start over. Undo brings the parts back.
+
+## The Selected list and its buttons
+When parts are selected, a Selected list opens above the Outline. Tap its title to open or close it. Each row has a cross, Unselect, that takes that part out of the selection.
+
+The buttons beside it work on everything selected. The colour square picks a colour, and Custom Color opens a picker. Clone the selected parts copies them. Delete the selected parts removes them. The link at the end, Clear, unselects everything. Undo brings back a delete.
+
+The tick box on each row of the list is Add to the selection. It turns into Unselect when the row is already picked.

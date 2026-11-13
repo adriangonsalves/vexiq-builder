@@ -43,3 +43,8 @@ Select the band to see its size and stretch in Properties. **Edit route** moves 
 
 ## Bands in Play mode
 A band follows its parts when they move. In [Play mode](help:play-mode) it pulls on them, harder when it stretches more.
+
+## Wraps and taking a spot off
+In the Band builder list, Fewer wraps and More wraps change how many times the band goes round a spot, from 1 to 3.
+
+Take this spot off removes a spot from the band. In the 3D view, right-click a spot, or Alt+click it, to do the same. Drag a band's handle onto another spot to move where it hooks on.

@@ -62,3 +62,6 @@ To put a part into a hole by touch, mark the hole first.
 5. Tap the tick [[Tick]] to keep it, or the cross to cancel.
 
 With a mouse, hold `Alt` and click a hole instead.
+
+## Clearing the search
+Press the small cross at the right of the Library search box. Clear search shows every part again.

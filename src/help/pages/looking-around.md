@@ -21,7 +21,7 @@ Turn, slide and zoom the 3D view to see your build from any side.
 <!-- more -->
 
 ## Using the view cube
-The view cube sits in the top right corner of the 3D view and turns as you turn the view. The faces say Front, Back, Top and Bottom. The two sides say +Z and −Z.
+The view cube sits in the top right corner of the 3D view and turns as you turn the view. Four faces are named Front, Back, Top and Bottom. The other two say +Z and −Z.
 
 {{Click|Tap}} a face to look straight at it. {{Click|Tap}} an edge to look between two faces. {{Click|Tap}} a corner for a three-quarter view. {{Double-click|Double-tap}} any of them to look from the opposite side.
 

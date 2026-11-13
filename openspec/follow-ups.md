@@ -61,9 +61,20 @@ Low-priority items left open when a change was closed. Pick one up by proposing 
 3. **Stereo full screen has no way out by touch.** Only Esc leaves it. A small on-screen exit button is needed.
 4. **Two belt chips are both labelled "2x30 mm belt"** (silicone and rubber), so Show me and the pages can't tell them apart. Give them different labels.
 5. **The Track builder says "Traction Link" but its message says "grippers".** Pick one word.
-6. **Help from a modal dialog works only with the `?` key.** The toolbar is behind a modal dialog (Settings, builder dialogs, Bend sheet), so a mouse or touch user can use the dialog's own question mark but not the toolbar Help button. `?` now opens Help on top of the dialog; a touch user has no key. Consider a Help button inside each modal dialog.
+6. **Decided, keep as it is (the user tried it): Help from a modal dialog works only with the `?` key.** The toolbar is behind a modal dialog (Settings, builder dialogs, Bend sheet), so a mouse or touch user can use the dialog's own question mark but not the toolbar Help button. `?` now opens Help on top of the dialog; a touch user has no key. Consider a Help button inside each modal dialog.
 7. **The Turn step choice is only seen by Help when it is open at the moment Help opens.** Selecting the toolbar Help button closes the choice first, so only `?` opens Help on it.
 8. **Throttle and Hold (Play mode) are one control per motor.** Show me flashes the first one on screen.
 9. **Group name, Hide all and Lock all are in Properties, not the Outline.** The pages that name them under the Outline should say Properties; check in group 7.
 10. **Pages not yet fitted to the app's real part names for context:** six look-alike parts (Landing Gear Beam and Panel, Ball Pin Bushing, Shaft Bushing, Scarab Thrust Washer, XL Turntable Ring Gear Bushing) are given no kind on purpose, so selecting them opens Help as if nothing were selected.
 11. **Spec scenario "Open from the toolbar" says Help opens on home with a part selected**, which conflicts with "A gear selected" (opens Gears). The code follows "Help opens on what you're doing"; the older scenario's wording needs updating when the change is archived.
+12. **Idea:** short animations for steps that are hard to show in a still picture (the chain sagging, a band stretching, Play mode); the offline download is about 105 MB, so pictures should stay small.
+13. **A page inside a closed section loads its pictures only when opened** (browser lazy loading), so the first open of a section may show a blank picture for a moment on a slow connection.
+14. **Group name box: Esc keeps the typed name and also unselects the group** (`SetInspector.jsx`). Expected: Esc puts the old name back.
+15. **Attempt Fix on a "holds only one part" row says "Lined up…"**, but the warning count stays the same after Refresh.
+16. **The view cube's Show me chip finds nothing in 4-View** (its marker is hidden there).
+17. **Gear train builder: the default start hole fails** ("No matching pin_hole found") on a 2x10 beam; it works only from a beam end.
+18. **Smart Assembly hole lists show raw ids** like `hole.thru.14_-2_0` (Advanced options).
+19. **On a phone the history branch list runs a few pixels past the right edge.**
+20. **The capture driver's `text:` spec can't find a button that has an icon as well as text** (`scripts/help-shots/app.mjs`).
+21. **The help-content spec's Explode entry names direction choices the app doesn't have**; the page is right, so fix the spec text when archiving.
+22. **Read-through still to finish** (in-app-help tasks 6.2–6.9, 7.2, 7.3): touch passes on the Basics pages; Track builder, Band builder and Bend sheet steps; gear meshing; the shortcuts and troubleshooting sample; `words`; reading every page at 420 and 390 px; tapping every Show me chip.

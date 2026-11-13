@@ -25,7 +25,7 @@ The app fits itself to your screen. Everything a mouse does is on the screen by 
 A computer (wider than about 1180 pixels) has the Library and Outline beside the 3D view. A tablet has one side panel with Library and Outline tabs. A phone has the 3D view across the whole screen. Turning the device switches layouts and keeps your build.
 
 ## The icon toolbar
-On a tablet and phone the toolbar shows icons only. Press and hold one to see its name. On a phone it scrolls sideways. Select, Tools, Snap and File open their menus from their icons. **View** opens the view options, since there may be no right mouse button.
+On a tablet and phone the toolbar shows icons only, and a touch screen doesn't show their names. The Show me buttons in Help point to each one. On a phone it scrolls sideways. Select, Tools, Snap and File open their menus from their icons. **View** opens the view options, since there may be no right mouse button.
 
 ## Tabs, drawers and pins
 On a tablet, tap a part in the Outline and its Properties show in place of the Outline. Tap **← Outline** to go back. On a phone, the Library and Outline open as drawers. A pin keeps a drawer open, with the 3D view shrinking above it. An unpinned drawer closes when you tap the view. Pins are remembered in this browser. Help takes the place of the Library and Outline on a tablet and fills the phone screen, so close Help to see the Library.

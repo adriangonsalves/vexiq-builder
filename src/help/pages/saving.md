@@ -32,9 +32,9 @@ Clearing the browser's data, or using a different browser or computer, loses you
 ## What Load… can do
 Each build shows a picture, its name, when it changed and how many parts it has. The one you are in says "Open now".
 - [[Open]] switches to that build. Double-clicking it works too.
-- [[Rename]] lets you type a new name.
-- [[Duplicate]] makes a copy, named with "copy" at the end.
-- [[Delete]] asks first, then removes it.
+- [[Rename]] (the pencil) lets you type a new name.
+- [[Duplicate]] (two squares) makes a copy, named with "copy" at the end.
+- [[Delete]] (the bin) asks first, then removes it.
 - [[Open from computer…]] adds a build file as a new build.
 
 You can also rename from the build's name at the top.

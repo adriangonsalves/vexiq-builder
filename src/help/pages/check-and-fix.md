@@ -38,3 +38,6 @@ Seven counters sit under the title: Overlaps, Loose pins, Half-seated, Unpinned,
 
 ## Tools → Fix assembly on its own
 Select a part, then choose **Tools → Fix assembly** [[Tools → Fix assembly]]. It lines up pins and holes that nearly fit, and seats them. The side with fewer parts moves, and never a side with a locked part. It won't move more than 10 mm or turn more than 25°. If it can't, a message says why, for example "Move the parts closer first".
+
+## Closing the Audit panel
+{{Click|Tap}} the **X** (Close the audit panel) at the top right of the Audit panel when you have finished reading. The findings come back when you choose **Tools → Audit** again.

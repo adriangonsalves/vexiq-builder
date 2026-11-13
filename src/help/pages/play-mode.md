@@ -15,9 +15,9 @@ Play mode runs your Smart Motors so you can see what turns. Nothing in your buil
 2. Drag a motor's throttle slider (1) right to go forward and left to go back.
    ![The Play panel with a throttle slider marked](shot:play-panel)
 3. Let go, and the motor stops. Tick [[Hold]] to keep it running.
-4. Press `Esc` to leave. Every part goes back.
+4. {{Press `Esc` to leave.|Tap the X at the top right of the Play panel to leave.}} Every part goes back.
 
-> **Tip** Double-click a slider to stop that motor.
+> **Tip** {{Double-click a slider to stop that motor.|Drag a slider back to the middle to stop that motor.}}
 
 <!-- more -->
 
@@ -31,10 +31,15 @@ A motor stops and says **Stalled** when what it turns hits something, or when a 
 Tick **Simulate gravity**. A floor appears under the robot, and loose or one-pin parts fall onto it. **Limit speed by load** slows a motor under a heavy load. Wheels don't drive the robot along the floor yet.
 
 ## The Drop test
-Choose a **Drop height** and a **Landing**, then press [[Drop]]. [[Reset]] puts the robot back. **Slow motion** plays it slower. If nothing breaks it says "Survived a drop intact". Otherwise it lists the joints that let go, the parts that came off and the ones hanging by one pin. **Highlight loose parts** lights them. The strengths are estimates.
+Choose a **Drop height** and a **Landing**, then press [[Drop]]. [[Reset]] puts the robot back. **Slow motion** plays it slower. If nothing breaks it says, for example, "Survived a 0.5 m drop intact". Otherwise it lists the joints that let go, the parts that came off and the ones hanging by one pin. **Highlight loose parts** lights them. The strengths are estimates.
 
 ## Bands pulling
 A band shows grey when slack, green when snug, amber when tight and red when too far. In Play mode it pulls on the parts it holds. See [Rubber bands and belts](help:rubber-bands).
 
 ## If the physics won't start
 A grey "no collisions" tag shows. Parts still turn by gear ratio but don't stop each other, and gravity and the Drop test are hidden.
+
+## Folding the Play panel and the Findings list
+Press the small arrow at the top of the Play panel to fold it down: Collapse Play panel shows more of the robot. Press it again to Expand Play panel.
+
+After a Drop, {{click|tap}} **Findings** to open or close the list of joints that let go and parts that came off. It starts closed on small screens.

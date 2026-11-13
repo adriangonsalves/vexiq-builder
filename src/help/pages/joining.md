@@ -24,18 +24,18 @@ Select a part and the holes it lines up with light up. Then join it.
 <!-- more -->
 
 ## Stepping through fits
-A part can often go in several ways. The wheel bar shows a thumb wheel with [[Next]], [[Previous]], **Put it in** and [[Cancel]]. {{Turn the mouse wheel, or press `R` and `Shift` + `R`, to step through the fits.|Drag the wheel or tap Next and Previous to step through the fits.}} The count, like 2 / 6, says which fit you see.
+A part can often go in several ways. The wheel bar shows a thumb wheel with [[Next]], [[Previous]], **Put it in** and [[Cancel]]. {{Turn the mouse wheel, or press `R` and `Shift` + `R`, to step through the fits.|Drag the wheel or tap Next and Previous to step through the fits.}} The count beside the wheel shows which fit you are on and how many there are.
 
 ## Mark a hole, then add from the library
 <!-- answers: mark-hole -->
-**Mark a hole** [[Mark a hole]] picks the hole or pin end the next part goes into. {{Hold `Alt` and click it.|Tap Mark a hole, then tap the hole.}} Then choose a part in the Library: it appears seated in that hole. {{Click in the 3D view to keep it.|Tap the tick to keep it.}} A tablet reader closes Help first to see the Library.
+**Mark a hole** [[Mark a hole]] picks the hole or pin end the next part goes into. {{Hold `Alt` and click it.|Tap Mark a hole, then tap the hole.}} Then choose a part in the Library: it goes straight into that hole. On a tablet, close Help first to see the Library.
 
 ## A gear, hub or pulley on an axle
 These have a hole in the middle instead of pins. Select one, then {{click|tap}} **Manual Join** and pick the end of an axle. The part slides on until it touches.
 
 ## Sliding the battery into the Gen 1 brain
 <!-- answers: battery -->
-Select the Robot Battery, then {{click|tap}} **Auto Join**. It slides into the brain's bay, however far away it was. {{You can also double-click the brain while the battery is selected.|}} The strip says "Slid … into …". With a brain in the build, the button always reads **Auto Join**. A "something is in the way" message means another part blocks the bay.
+Select the Robot Battery, then {{click|tap}} **Auto Join**. It slides into the brain's bay, however far away it was. {{You can also double-click the brain while the battery is selected.|}} The strip says "Slid … into …". With a brain in the build, the button reads **Auto Join** for the battery, even far away. A "something is in the way" message means another part blocks the bay.
 
 ## Tight fits and overlaps
 Some VEX parts fit with almost no gap. The app calls that a tight fit and leaves the part alone. A part that really passes into another turns grey and shows a button to put it back.

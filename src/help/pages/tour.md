@@ -35,3 +35,8 @@ The toolbar shows icons only. **Library** and **Outline** are two tabs on the le
 The 3D view fills the screen. The toolbar scrolls sideways. The Library and Outline open as drawers from buttons, and Help fills the whole screen. The context bar sits on the left edge, clear of the view cube. Warnings wait behind a button at the top left.
 
 ![The phone screen with the toolbar, 3D view, context bar and view cube marked](shot:tour-phone)
+
+## Buttons at the top of Help
+Type in the Search help box to find a page. Press Help home to go back to the list of pages. Press Copy link to copy a web link to the page you are reading, so you can share it.
+
+The Mouse and Touch switch (Wording for: Mouse, Wording for: Touch) changes the steps to fit a mouse or a finger.

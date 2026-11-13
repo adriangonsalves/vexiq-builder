@@ -31,7 +31,7 @@ Save the app and every part on this device, then build with no internet.
 
 A download can also stop on its own. The section tells you why, for example "No internet connection. Connect and try again." or "There isn’t enough space on this device." Fix that, then press **Resume**.
 
-Before the download starts, the section shows its size, about 100 MB, and the free space. [[Cancel]] there saves nothing.
+Before the download starts, the section shows its size, about 105 MB, and the free space. [[Cancel]] there saves nothing.
 
 ## Install on Chrome or Edge
 When the download ends, the section shows how to install. You can also press **Install the app** at the bottom.
@@ -68,6 +68,6 @@ Press **Download update**, or **Later**. Until you update, the app keeps working
 Turn **Use offline** off. The app asks "Remove the offline copy? The app will need the internet again. Your builds stay." Your builds stay saved in this browser.
 
 ## Seeing and keeping what you have
-**Available offline** also shows next to the build's name. Select it to open the Offline section.
+{{**Available offline** also shows next to the build's name. Select it to open the Offline section.|The build's name and the **Available offline** note are hidden on a tablet or phone. Open **Settings** to see the Offline section.}}
 
 Your builds live only in this browser on this device. Use [[File → Export]] as your backup, as [Saving and sharing](help:saving#why-to-export) explains. Some browsers clear saved data if the app isn't used for a while. The section warns you when this one may. Installing the app makes it less likely.

@@ -13,9 +13,9 @@ Explode spreads your robot apart, so you can see every part and how it goes toge
 
 1. Choose **Tools → Explode** [[Tools → Explode]] (1). {{Or press `X`.|}} A ring fills while the app works out how to take it apart.
    ![The Tools menu with Explode marked](shot:explode-menu)
-2. The parts slide apart on their own. Drag the slider (1) to go back and forth.
+2. The parts slide apart on their own. Drag the [[Explode slider]] (1) to go back and forth.
    ![The Explode panel with its slider marked](shot:explode-panel)
-3. To put every part back, select the close button (1). {{Or press `X` or `Esc`.|}}
+3. To put every part back, {{click|tap}} the close button (1). {{Or press `X` or `Esc`.|}}
    ![The Explode panel with its close button marked](shot:explode-close)
 
 <!-- more -->

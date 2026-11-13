@@ -40,3 +40,6 @@ A sheet on a sheet sits a hair above it. A sheet pressed a little into a part fl
 
 ## Picking holes yourself
 With only one flat sheet selected, choose **Tools → Bend sheet…**. {{Click a hole on the sheet, then a hole on the other part.|Tap a hole on the sheet, then a hole on the other part.}} Keep the fit you like. The phone layout can't show this banner yet.
+
+## The Shape line in Properties
+Select a bent sheet. Properties shows a Shape line that says how it is curved. Use Tools → Bend sheet to change it, or Flatten to straighten it.

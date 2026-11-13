@@ -6,9 +6,11 @@ Build VEX IQ robots in your browser from the official parts. Place parts, snap t
 
 What the app does is in [features.md](features.md). Notes on how real pieces fit together are in [AGENTS.md](AGENTS.md).
 
+The **?** button in the toolbar opens Help: short pages with pictures and a Show me button that flashes the real control. It opens on what you are doing and works offline.
+
 ## Use it offline
 
-On the site, open **Settings → Offline** and turn on **Use offline**. It downloads the app and every part (about 94 MB), then shows how to install it: **Install app** in Chrome or Edge, or Share → **Add to Home Screen** on an iPad or iPhone (do this first there, then turn on Use offline inside the Home Screen app). When a new version is published, the app asks you to download it again. Builds are kept only in your browser, so use **File → Export** to keep a copy.
+On the site, open **Settings → Offline** and turn on **Use offline**. It downloads the app and every part (about 105 MB), then shows how to install it: **Install app** in Chrome or Edge, or Share → **Add to Home Screen** on an iPad or iPhone (do this first there, then turn on Use offline inside the Home Screen app). When a new version is published, the app asks you to download it again. Builds are kept only in your browser, so use **File → Export** to keep a copy.
 
 ## Run it yourself
 

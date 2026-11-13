@@ -5,9 +5,9 @@
 
 ---
 
-## 1. 478-Part VEX IQ CAD Library & Semantic Catalog
+## 1. 482-Part VEX IQ CAD Library & Semantic Catalog
 
-- **Complete Official Part Coverage (`479` Parts):**
+- **Complete Official Part Coverage (`482` Parts):**
   - Converted from STEP CAD models (`VEX-IQ-All-Parts` & `VEX-IQ-All-Control`) into centered, millimeter-accurate `.glb` meshes (`public/models/`) and indexed in [`public/catalog.json`](file:///Users/adriangonsalves/projects/vexiq_builder/public/catalog.json) + [`public/part-metadata.json`](file:///Users/adriangonsalves/projects/vexiq_builder/public/part-metadata.json).
   - **Categories:**
     - `Beams & Plates` (1x/2x/4x Beams, Specialty Beams, Corner Connectors, Plates)
@@ -167,8 +167,13 @@
   - **Environment reflections & brightness (Settings → Display, on by default):** studio reflections at full strength on metal shafts, and a third of that on plastic. The switch toggles them on or off, and the **Reflection brightness** slider (0% to 200%, default 75%) sets their strength.
   - Projection, layout, cross-eyed, depth, shadows, AO, environment reflections and reflection intensity are saved with the viewport settings and add no history steps. The camera position itself isn't saved.
 - **Semantic Port & Axis Overlay (`Axes` Toggle):**
-  - Renders color-coded 3D axis lines and origin markers (`pin_hole`, `shaft_bore`, `shaft_socket`, `pin_peg`) directly over each part in the viewport.
+  - Renders color-coded 3D axis lines and origin markers (`pin_hole`, `shaft_bore`, `shaft_socket`, `pin_peg`) directly over the selected part in the viewport.
 - **Keyboard Shortcuts:**
+  - `?`: Open Help on what you're doing (see Help below)
+  - `Ctrl/Cmd+Z`: Undo · `Ctrl+Y` or `Shift+Ctrl/Cmd+Z`: Redo
+  - `B`: Box select on or off
+  - `R` / `Shift+R` (and the wheel): step through the fits while placing, hole picking or the Band builder; `Enter` keeps the fit shown
+  - Alt+click: set the target hole · Shift+click: add a part to the selection or take it out
   - `W`: Move Tool (`translate`)
   - `E`: Rotate Tool (`rotate`)
   - Right-click the selected part: switch between Move and Rotate
@@ -177,9 +182,9 @@
   - `D` / `Cmd+D`: Duplicate selected part
   - `F`: Focus camera on selected part (or full assembly); also reframes the 4-View small views
   - `P`: Perspective / orthographic
-  - `1` / `2` / `3`: Look from +X (front) / +Y (top) / +Z (side); with `Shift`, from the opposite side
+  - `1` / `2` / `3` (top-row digits only): Look from +X (front) / +Y (top) / +Z (side); with `Shift`, from the opposite side
   - `Del` / `Backspace`: Delete selected part
-  - `Esc`: Hide mate arrows if shown; otherwise close the Explode panel / revert intersecting part & deselect
+  - `Esc`: leaves Play mode or full screen first; then closes the Explode panel; then turns off an armed context-bar tool; then Box select / Select mode (keeping the selection); otherwise hides mate arrows, reverts an intersecting part and deselects
   - Double-click selected part: Mate with lined-up holes / pins (shows direction arrows when there is more than one way); with nothing lined up, pick any hole to insert into (a gear, hub or pulley: an axle end or hole to go onto)
   - `C`: Select Connected · `G`: Group · `Shift+G`: Ungroup · `Ctrl/Cmd+A`: Select all visible parts · `Shift`+wheel: grow or shrink the selection by joints (`Shift+Ctrl/Cmd`+wheel: pins and shafts only)
 
@@ -466,7 +471,7 @@ Shared history code: [`src/utils/buildHistory.js`](file:///Users/adriangonsalves
 
 ## 5b. Static Site (no server)
 
-- **Build it:** `npm run build:static` writes plain files to `dist-static/` for any static host (GitHub Pages, Netlify, Cloudflare Pages, S3). For a sub-folder, set the base path: `VEXIQ_BASE=/vexiq/ npm run build:static`. The site is about 92 MB, mostly `models/`. It holds only `catalog.json`, `part-metadata.json` and `models/` from `public/`, never the saved build, settings or blueprint.
+- **Build it:** `npm run build:static` writes plain files to `dist-static/` for any static host (GitHub Pages, Netlify, Cloudflare Pages, S3). For a sub-folder, set the base path: `VEXIQ_BASE=/vexiq/ npm run build:static`. The site is about 105 MB, mostly `models/`. It holds only `catalog.json`, `part-metadata.json` and `models/` from `public/`, never the saved build, settings or blueprint.
 - **What works:** everything you build with. The part library, placing and moving parts, every smart action (auto-fasten, mate, gear trains, chain and track builder with its over/under and slack questions, mirror, Select Connected, audit and blueprint), Explode, undo/redo and the timeline, and the build library.
 - **How:** the assembly engine's core (`src/engine/core.js`, the same code the MCP server uses) runs in two Web Workers (`src/engine/worker.js`), one for actions and one for explode plans, so the page stays responsive. A worker downloads only the part models an action needs, and keeps them for the visit. `src/backend/` picks the dev bridge or the static version when the app is built, so the static site makes no `/api` requests.
 - **Saving:** builds stay in the visitor's browser (the build library). A reload opens the most recently saved build, with its history. Settings stay in this browser's local storage.
@@ -474,11 +479,11 @@ Shared history code: [`src/utils/buildHistory.js`](file:///Users/adriangonsalves
 
 ### Offline use and installing (static site only)
 
-- **Settings → Offline → Use offline** (off by default) makes the site work with no internet. Turning it on shows the download size (about 94 MB) and how much space the browser has, and refuses if there isn't enough. **Download** saves the app, the catalog, part metadata, every part model, the icons and the web app manifest, with a progress bar ("41 of 94 MB"), **Cancel**, and **Resume**, which fetches only what isn't saved yet. A lost connection, a full device or a file that fails three times stops it with the reason.
+- **Settings → Offline → Use offline** (off by default) makes the site work with no internet. Turning it on shows the download size (about 105 MB) and how much space the browser has, and refuses if there isn't enough. **Download** saves the app, the catalog, part metadata, every part model, the icons and the web app manifest, with a progress bar ("41 of 105 MB"), **Cancel**, and **Resume**, which fetches only what isn't saved yet. A lost connection, a full device or a file that fails three times stops it with the reason.
 - **Available offline:** shown in Settings and as a green label next to the part count once the copy is complete and current. Selecting the label opens the Offline section. Offline, the whole site works: library thumbnails, any part, every smart action, Explode, Audit with blueprint, saving, Load… and Export.
 - **Keeping it:** the download asks the browser for persistent storage and says whether it agreed. The section always reminds that builds live only in this browser and that **File → Export** is the backup. If the browser clears the copy, the section says so and offers Resume.
 - **Installing:** after the download (or from **Install the app**), steps for this browser: an **Install app** button in Chrome and Edge, Share → **Add to Home Screen** on iPad and iPhone, File → **Add to Dock** in Safari on a Mac, or a note that this browser can't install it. Installed, it opens in its own window. On iPad and iPhone a Home Screen app keeps its own storage, so in Safari the steps come first, with how to move builds across (Export, then Load… → Open from computer…) and **Download in Safari anyway**.
-- **Installed without the download:** however the app was installed (Install app, the browser's own install button, Add to Home Screen), opening it as an installed app with Use offline off and a connection shows "Use VEX IQ without internet? Downloads the app and all parts (about 94 MB)." with **Download** (space check, then it downloads straight away with Settings open at Offline) and **Not now** (asked again next time it opens; after two Not nows it stops asking). The install steps say the app will offer this.
+- **Installed without the download:** however the app was installed (Install app, the browser's own install button, Add to Home Screen), opening it as an installed app with Use offline off and a connection shows "Use VEX IQ without internet? Downloads the app and all parts (about 105 MB)." with **Download** (space check, then it downloads straight away with Settings open at Offline) and **Not now** (asked again next time it opens; after two Not nows it stops asking). The install steps say the app will offer this.
 - **New versions:** while Use offline is on, the app checks for a newer published version on opening, on coming back online and on returning to it (at most once a minute; offline never counts). A newer one hides the label and shows "A new version of VEX IQ Builder is out. Download it to keep using it offline." with **Download update** and **Later** (Later hides it for that version until the app is next opened). The app keeps running the downloaded version until the new one is complete, then saves the build and reloads into it. Unchanged files are copied from the old copy, so a script-only release fetches a few MB.
 - **Turning it off** asks first, then deletes the copy and the service worker. Builds and settings stay.
 - **How:** the static build writes `offline-manifest.json` (every file with its size and hash, and a version made from them; `scripts/offline-manifest.mjs`), `manifest.webmanifest`, icons and `sw.js`. The page downloads into a cache per version (`src/offline/download.js`, `useOffline.js`) and the service worker (`src/offline/sw.js`), registered only while Use offline is on, answers from the active version's cache. `node scripts/check-offline-manifest.mjs` checks the built list.
@@ -496,6 +501,14 @@ Shared history code: [`src/utils/buildHistory.js`](file:///Users/adriangonsalves
   - The report gives parts placed, left out and why, duplicates, part types placed by an unchecked rule, and the audit summary.
 - **The CAD frame table (`public/cad-frames.json`, `src/engine/cadFrames.js`):** for each CAD part number, how the library model sits relative to VEX's: by its box centre (`rule: "centre"`, most parts) or its own origin (`"origin"` with `offsetMm`), and a `turn`. `source` says how it was found: `pins` (checked against seated pins and holes in a real build, the 2026-27 Herobot Flop), `mesh` (matched to VEX's model of the part) or `default` (unchecked). A part number with no entry uses the box centre and is reported as unchecked.
 - **`node scripts/fit-cad-frames.mjs <project> [--write] [--only pn,pn]`** downloads a project's archive once (`.cache/cad-projects/`), decodes its Draco part meshes and finds, for each part number, the quarter turn and offset that lay the library model on VEX's. It writes `mesh` entries whose mean distance is at most `0.5 mm` (never over a `pins` entry), lists poor matches, and says how each existing entry compares.
+
+## 5d. Help (openspec in-app-help)
+
+- **The guide:** the **?** button in the toolbar (or the `?` key) opens a Help panel inside the app: 32 short pages for middle-schoolers, grouped on a home page, each with steps, pictures and **Show me** chips that flash the real control without pressing it. Large and medium layouts show it beside the build (the build stays usable); a phone fills the screen below the toolbar. It works with no internet (pages are text in the app's own files; pictures are in the offline download). Search on the home page and in every page header matches the start of words, title first, then keywords, then text; with no match it offers the home page. A wording switch changes the names of controls for the screen in use. Addresses like `#help/gears/<section>` open a page and can be copied with **Copy link**; Back returns to where you were.
+- **Help in context:** Help opens on the page for what you're doing: a tool or panel that is open, an armed context-bar button, Rotate mode, or the kind of part selected (a gear, a chain link, a motor and so on), with a "Because you're …" line and a **Help home** link. Opening it never changes the build, selection, tool or camera. Pages and sections carry topic `tags:` and `answers:` claims (`src/help/tags.js`: `TOPIC_TAGS` and `SITUATIONS`); `helpContext` and `partKindTag` (`src/help/context.js`) work out the situation and `helpTarget` (`src/help/content.js`) picks the page or section. Related pages (up to three, most shared tags) end each page. Tool panels and dialogs have their own small **?** button (named "Help with <tool>").
+- **Where things live:** pages in `src/help/pages/*.md` (writing rules in `src/help/WRITING.md`); the controls Show me can flash in `src/help/controls.js`; which features have a page in `src/help/coverage.json`; pictures in `public/help/shots/` with their marks in `shots.json`, made from the shot lists in `scripts/help-shots/shots-*.mjs`.
+- **Checks:** `node scripts/check-help.mjs` (page rules, links, coverage, pictures), `node scripts/check-help-tags.mjs` (tags and claims), `node scripts/check-help-context.mjs` (situations).
+- **Retake pictures:** build the preview (`VEXIQ_BASE=/vexiq-builder/ npm run build:static`), then `node scripts/capture-help-shots.mjs [name…]` (needs Chrome installed; it uses a new empty profile and does not touch the dev server).
 
 ---
 
