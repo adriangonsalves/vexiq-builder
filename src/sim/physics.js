@@ -275,6 +275,8 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   }
   // Meshing gears, chained sprockets, and parts sharing a hinge's pin or shaft never collide by their outlines
   for (const l of graph.links) if (l.gears) touchingParts.add(pairKey(l.gears[0], l.gears[1]));
+  // Gears just out of mesh don't drive each other, so their smooth shells mustn't rub either
+  for (const [a, b] of graph.nearGears || []) touchingParts.add(pairKey(a, b));
   for (const [a, b] of graph.hingePairs || []) touchingParts.add(pairKey(a, b));
   const { w: world, bodies: rb, partOfCollider, bodyColliders } = buildWorld(false);
   const skip = new Set();
@@ -354,7 +356,9 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       // Each gear's body turns about its gear's axis (its shaft), so weigh it about that line
       const invA = 1 / inertiaAbout(A, axisA, pointA);
       const invB = l.kind === 'rack' ? B.invMass() : 1 / inertiaAbout(B, axisB, pointB);
-      const mass = k * k * invA + invB;
+      // A worm (side a) is never pushed back by its gear: the whole correction goes to the gear, so
+      // the gear follows the worm and a load on the gear can't turn either (openspec right-angle-gears)
+      const mass = l.oneWay ? invB : k * k * invA + invB;
       if (mass > 0) active.push({ l, i, A, B, axisA, axisB, pointA, pointB, k, mass });
     });
     // Whole sweeps over every link, not each link to the end in turn: a train of gears of very
@@ -364,7 +368,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         const speedB = l.kind === 'rack' ? toV3(B.linvel()).dot(axisB) : spin(l.b, axisB);
         const error = k * spin(l.a, axisA) - speedB + (catchUp ? (DRIFT_GAIN * drift.get(i)) / dt : 0);
         const lambda = -error / mass;
-        turnAboutLine(A, axisA, pointA, k * lambda);
+        if (!l.oneWay) turnAboutLine(A, axisA, pointA, k * lambda);
         if (B.isDynamic()) {
           if (l.kind === 'rack') B.applyImpulse(vec(axisB.clone().multiplyScalar(-lambda)), true);
           else turnAboutLine(B, axisB, pointB, -lambda);
@@ -403,6 +407,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         const cur = queue[i];
         for (const l of graph.links) {
           if (l.kind === 'rack' || (l.a !== cur && l.b !== cur)) continue;
+          if (l.oneWay && l.a !== cur) continue; // a gear doesn't turn its worm
           const forward = l.a === cur;
           const next = forward ? l.b : l.a;
           if (factor.has(next) || !rb.get(next)?.isDynamic()) continue;
@@ -460,6 +465,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         const curEntry = entries.get(cur);
         for (const l of graph.links) {
           if (l.kind === 'rack' || (l.a !== cur && l.b !== cur)) continue;
+          if (l.oneWay && l.a !== cur) continue; // a gear doesn't turn its worm
           const forward = l.a === cur;
           const next = forward ? l.b : l.a;
           if (next === holder || entries.has(next) || !rb.get(next)?.isDynamic()) continue;

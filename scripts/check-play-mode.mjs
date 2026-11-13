@@ -136,6 +136,107 @@ const shaftInputs = (offDeg) => ({
   inputs.meshes.push({ a: 'gear', b: 'idler', kind: 'near', offMm: 1.5 });
   const g = buildBodyGraph(inputs);
   check('gears 1.5 mm out of mesh: reported, not linked', !g.links.length && g.warnings.some((w) => /out of mesh/.test(w.text)));
+  check('  and listed so their collision shells are kept apart', g.nearGears?.length === 1 && g.nearGears[0].join() === 'gear,idler', JSON.stringify(g.nearGears));
+}
+
+// --- Gears at 90° (openspec right-angle-gears) -----------------------------------------------------
+{
+  const { findPart } = await import('../mcp/assembly-engine.mjs');
+  const { meshRatio, meshRelation, meshSpots, worldToothed } = await import('../src/utils/gearMeshing.js');
+  const real = (name) => findPart(name);
+  /** A partner at the origin and a gear at its first mesh spot, as world toothed parts. */
+  const pairAt = (gearName, partnerName, partnerRot, startRot) => {
+    const P = real(partnerName);
+    const G = real(gearName);
+    const partner = worldToothed(P, [0, 0, 0], partnerRot, 'partner');
+    const spot = meshSpots(G, { position: [30, 30, 30], rotation: startRot }, partner, P)[0];
+    return { gear: worldToothed(G, spot.position, spot.quaternion, 'gear'), partner };
+  };
+  /** Where two meshed parts touch, each one's surface speed there for a turn of 1 rad/s of `a`. */
+  const surfaceSpeeds = (a, b, ratio) => {
+    const rel = meshRelation(b, a);
+    const P = rel.contact;
+    const speedOf = (part, w) => {
+      if (part.kind === 'worm') return part.axis.clone().multiplyScalar((w * part.hand * part.leadMm) / (2 * Math.PI)); // the thread slides along the worm
+      const origin = part.kind === 'bevel' ? part.apex : part.center;
+      return new THREE.Vector3().crossVectors(part.axis, P.clone().sub(origin)).multiplyScalar(w);
+    };
+    return { a: speedOf(a, 1), b: speedOf(b, ratio) };
+  };
+  // Bevel pair, crown with 12 tooth, worm with 36 tooth: the ratio from the meshing rule makes the
+  // teeth move together where they meet (along the direction the teeth slide past each other)
+  for (const [label, gearName, partnerName, partnerRot, startRot, expect] of [
+    ['18 to 18 tooth bevel', '18 Tooth Bevel Gear', '18 Tooth Bevel Gear', [-90, 0, 0], [0, 0, 0], 1],
+    ['12 tooth onto the 36 tooth crown', '36 Tooth Crown Gear', '12 Tooth Gear', [0, 90, 0], [0, 0, 0], 1 / 3],
+    ['worm onto a 36 tooth gear', '36 Tooth Gear', 'Worm Gear', [0, 90, 0], [0, 0, 0], 1 / 36]
+  ]) {
+    const { gear, partner } = pairAt(gearName, partnerName, partnerRot, startRot);
+    const r = meshRatio(partner, gear);
+    const { a, b } = surfaceSpeeds(partner, gear, r);
+    // Along the line both teeth move on (the worm's axis, or across both gears' radii): the same way,
+    // and the same speed within 1% (the contact is taken at the middle of the crown's tooth ring,
+    // a little inside the radius its 36 teeth give)
+    const along = partner.kind === 'worm' ? partner.axis : a.clone().normalize();
+    const [sa, sb] = [a.dot(along), b.dot(along)];
+    check(
+      `${label}: speed ratio ${r?.toFixed(4)} (${expect.toFixed(4)} in size), teeth moving together where they meet`,
+      r != null && Math.abs(Math.abs(r) - expect) < 1e-3 && Math.sign(sa) === Math.sign(sb) && Math.abs(sa - sb) <= 0.01 * Math.abs(sa),
+      `${a.toArray()} vs ${b.toArray()}`
+    );
+  }
+  // A spur pair through the same method
+  {
+    const G12 = real('12 Tooth Gear');
+    const G36 = real('36 Tooth Gear');
+    const a = worldToothed(G12, [0, 0, 0], [0, 0, 0], 'a');
+    let b = worldToothed(G36, [25.4, 0, 0], [0, 0, 0], 'b');
+    const rel = meshRelation(b, a);
+    b = worldToothed(G36, [25.4, 0, 0], [0, 0, rel.exactDeg - THREE.MathUtils.radToDeg(Math.atan2(b.toothDir.dot(new THREE.Vector3(-1, 0, 0)), b.toothDir.dot(new THREE.Vector3(0, 1, 0))))], 'b');
+    check(`spur 12 to 36 through the meshing rule: ${meshRatio(a, b)?.toFixed(4)} = −1/3`, Math.abs(meshRatio(a, b) + 1 / 3) < 1e-3);
+  }
+
+  // Play mode links: a motor shaft with gear 'gear' (axis Z), the second gear on its own shaft (axis X)
+  const X = [1, 0, 0];
+  const cornerInputs = (second, mesh) => {
+    const inputs = shaftInputs(0);
+    inputs.parts.push(part('shaft2', { fastener: true }), part(second, { gear: { teeth: 18, type: 'bevel' } }));
+    inputs.seated.push(seat('shaft2', 'plate', [30, 0, 30], X, 'shaft', 'pin_hole'), seat('shaft2', second, [20, 0, 30], X, 'shaft', 'shaft_bore'));
+    inputs.groups.push({ axis: X, point: [30, 0, 30], shaftIds: ['shaft2'], members: [{ id: 'shaft2', hub: false, offDeg: 0 }, { id: second, hub: false, offDeg: 0 }] });
+    inputs.meshes.push(mesh);
+    return inputs;
+  };
+  const rpmOf = (k, g, body, axis) => (k.spin(bodyOf(g, body), axis) * 60) / (2 * Math.PI);
+  {
+    const g = buildBodyGraph(cornerInputs('bevel2', { a: 'gear', b: 'bevel2', kind: 'bevel', ratio: -1, axisA: Z, axisB: X }));
+    const k = createKinematic(g);
+    k.step(0.1, new Map([['motor', 1]]));
+    check('bevel gears turn a corner: the second shaft turns at 120 rpm', Math.abs(Math.abs(rpmOf(k, g, 'bevel2', X)) - 120) < 1e-6 && !k.status().motor.stalled, JSON.stringify(g.links));
+  }
+  {
+    const g = buildBodyGraph(cornerInputs('crown', { a: 'gear', b: 'crown', kind: 'crown', ratio: 1 / 3, axisA: Z, axisB: X }));
+    const k = createKinematic(g);
+    k.step(0.1, new Map([['motor', 1]]));
+    check('12 tooth into the crown gear: its shaft turns at 40 rpm', Math.abs(Math.abs(rpmOf(k, g, 'crown', X)) - 40) < 1e-6);
+  }
+  {
+    // The worm on the motor shaft drives the 36 tooth gear
+    const g = buildBodyGraph(cornerInputs('wheel36', { a: 'gear', b: 'wheel36', kind: 'worm', ratio: 1 / 36, axisA: Z, axisB: X, oneWay: true }));
+    const k = createKinematic(g);
+    k.step(0.1, new Map([['motor', 1]]));
+    const fwd = rpmOf(k, g, 'wheel36', X);
+    k.step(0.1, new Map([['motor', -1]]));
+    const back = rpmOf(k, g, 'wheel36', X);
+    check(`a worm turns its 36 tooth gear at 120/36 rpm (${fwd.toFixed(3)}), and reversing reverses it`, Math.abs(Math.abs(fwd) - 120 / 36) < 1e-6 && Math.abs(back + fwd) < 1e-6 && !k.status().motor.stalled);
+    check('  the link is one way, worm first', g.links[0]?.oneWay === true && g.links[0].gears[0] === 'gear');
+  }
+  {
+    // The motor turns the 36 tooth gear; the worm sits on a free shaft: it can't be turned that way
+    const g = buildBodyGraph(cornerInputs('worm', { a: 'worm', b: 'gear', kind: 'worm', ratio: 1 / 36, axisA: X, axisB: Z, oneWay: true }));
+    const k = createKinematic(g);
+    k.step(0.1, new Map([['motor', 1]]));
+    check('a motor turning the gear can\'t turn the worm: stalled, nothing turns', k.status().motor.stalled && k.status().motor.rpm === 0 && rpmOf(k, g, 'worm', X) === 0);
+    check('  and Play mode lists why', g.warnings.some((w) => /a worm can only be turned from its own shaft/.test(w.text)), JSON.stringify(g.warnings));
+  }
 }
 
 // --- Clawbot ----------------------------------------------------------------------------------------

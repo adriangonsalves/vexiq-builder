@@ -8,13 +8,17 @@
 import * as THREE from 'three';
 import { buildWorldMatrix, checkCandidateCollision, getCatalog, jointGraph, partOf, playInputs, touchesAny, worldFeaturesFor } from './core.js';
 import { buildBodyGraph } from '../sim/bodyGraph.js';
-import { clearSpotAlongLine, insertFitsOpening, worldPartBox } from '../utils/pinHoleAlignment.js';
+import { clearSpotAlongLine, findSeatedPairs, insertFitsOpening, worldPartBox } from '../utils/pinHoleAlignment.js';
 import { groupsOf } from '../utils/partGroups.js';
 import { quaternionToEulerDeg } from '../utils/gearMeshing.js';
+import { layoutGearTrain, squareShaftInMotor } from '../utils/placementFit.js';
 
 export const NEAR_ANGLE_DEG = 20; // axes this far apart can still be a pair
 export const NEAR_LINE_MM = 4.5; // how far off its line a feature can be
 export const NEAR_GAP_MM = 4; // how far apart along the line
+const NEAR_LIMITS = { angle: NEAR_ANGLE_DEG, line: NEAR_LINE_MM, gap: NEAR_GAP_MM };
+// After a pin goes in, holes this close are lined up too (openspec precise-placement)
+export const AFTER_INSERT_LIMITS = { angle: 3, line: 1, gap: 4 };
 const REGION_MM = 20; // pairs are looked for within the selected part's box grown by this much
 const DONE_LINE_MM = 0.05; // a pair this close (and DONE_ANGLE_DEG) is already lined up
 const DONE_ANGLE_DEG = 0.3;
@@ -59,7 +63,7 @@ function missOf(a, b) {
 }
 
 /** Every near pair between features `sideA` and `sideB` (lists of world features). */
-function nearPairs(sideA, sideB) {
+function nearPairs(sideA, sideB, limits = NEAR_LIMITS) {
   const pairs = [];
   for (const a of sideA) {
     for (const b of sideB) {
@@ -67,7 +71,7 @@ function nearPairs(sideA, sideB) {
       const kind = pairKind(a, b);
       if (!kind) continue;
       const miss = missOf(a, b);
-      if (miss.angle > NEAR_ANGLE_DEG || miss.line > NEAR_LINE_MM || miss.gap > NEAR_GAP_MM) continue;
+      if (miss.angle > limits.angle || miss.line > limits.line || miss.gap > limits.gap) continue;
       const done = miss.line <= DONE_LINE_MM && miss.angle <= DONE_ANGLE_DEG;
       pairs.push({ a, b, kind, done, cost: miss.line + miss.angle * 0.2 });
     }
@@ -236,6 +240,57 @@ function solveLines(pairs, keep) {
   return T;
 }
 
+/**
+ * The slide along and turn about a fixed shaft line (`constraint`: { axis, point }, world) that best
+ * puts each pair's moving line on its fixed line (openspec precise-placement): least squares in the
+ * two numbers (slide mm, turn rad), relinearised a few times. Returns the Matrix4.
+ */
+function solveSlideTurn(pairs, constraint) {
+  const a = constraint.axis.clone().normalize();
+  const c = constraint.point.clone();
+  const samples = [];
+  for (const { m, f } of pairs) {
+    const mid = onLine(midOf(f), m.origin, m.axis);
+    samples.push({ p: mid.clone().addScaledVector(m.axis, SAMPLE_MM), f });
+    samples.push({ p: mid.clone().addScaledVector(m.axis, -SAMPLE_MM), f });
+  }
+  const make = (s, theta) =>
+    new THREE.Matrix4()
+      .makeTranslation(-c.x, -c.y, -c.z)
+      .premultiply(new THREE.Matrix4().makeRotationAxis(a, theta))
+      .premultiply(new THREE.Matrix4().makeTranslation(c.x + a.x * s, c.y + a.y * s, c.z + a.z * s));
+  const perp = (v, axis) => v.clone().sub(axis.clone().multiplyScalar(v.dot(axis)));
+  let s = 0;
+  let theta = 0;
+  for (let iter = 0; iter < 20; iter++) {
+    const T = make(s, theta);
+    let jss = 1e-9;
+    let jst = 0;
+    let jtt = 1e-9;
+    let rs = 0;
+    let rt = 0;
+    for (const { p, f } of samples) {
+      const q = p.clone().applyMatrix4(T);
+      const fa = f.axis.clone().normalize();
+      const r = perp(q.clone().sub(f.origin), fa);
+      const js = perp(a, fa);
+      const jt = perp(a.clone().cross(q.clone().sub(c)), fa);
+      jss += js.dot(js);
+      jst += js.dot(jt);
+      jtt += jt.dot(jt);
+      rs += js.dot(r);
+      rt += jt.dot(r);
+    }
+    const det = jss * jtt - jst * jst;
+    const ds = -(jtt * rs - jst * rt) / det;
+    const dt = -(jss * rt - jst * rs) / det;
+    s += ds;
+    theta += dt;
+    if (Math.abs(ds) < 1e-7 && Math.abs(dt) < 1e-9) break;
+  }
+  return make(s, theta);
+}
+
 /** How far a pair's moving line is from its fixed line after `T` (mm, the worse of its two ends). */
 function residual({ m, f }, T) {
   const c = onLine(midOf(f), m.origin, m.axis);
@@ -353,13 +408,16 @@ function setName(ids, byId, groups) {
  * Lines up the `moving` side (a Set of ids) on the `fixed` side as one rigid piece and seats it (steps
  * 3-5 of fixAssembly). `featuresOfSet(ids)` gives the world features to pair (already limited to the
  * region looked at); `visible` the parts that can be overlapped. Saves nothing. Returns
- * { ok: true, pairs, movedParts } (the moving parts at their new poses) or { ok: false, reason, error }
- * with reason 'none' | 'disagree' | 'too-far' | 'done'.
+ * { ok: true, pairs, movedParts, turnDeg } (the moving parts at their new poses) or { ok: false, reason,
+ * error } with reason 'none' | 'disagree' | 'too-far' | 'done'. With `constraint` ({ axis, point }: a
+ * shaft the moving side rides on), it only slides along and turns about that shaft.
  */
-function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, label }) {
+function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, label, constraint = null, limits = NEAR_LIMITS, onlyPart = null }) {
   // 3. Every pair between the two sides near the selected part, moving feature first
-  let pairs = nearPairs(featuresOfSet(moving), featuresOfSet(fixed)).map((p) => ({ m: p.a, f: p.b, kind: p.kind, done: p.done }));
-  if (pairs.length === 0) {
+  let pairs = nearPairs(featuresOfSet(moving), featuresOfSet(fixed), limits).map((p) => ({ m: p.a, f: p.b, kind: p.kind, done: p.done }));
+  // Only pairs of `onlyPart` count as ones to line up (others already lined up still hold their place)
+  if (onlyPart) pairs = pairs.filter((p) => p.done || p.m.instanceId === onlyPart || p.f.instanceId === onlyPart);
+  if (pairs.length === 0 || (onlyPart && pairs.every((p) => p.done))) {
     return { ok: false, reason: 'none', error: `No pins or holes near ${label} are nearly lined up with another part.` };
   }
 
@@ -369,7 +427,8 @@ function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, l
   const keep = [[0, 0, 0], [60, 0, 0], [-60, 0, 0], [0, 60, 0], [0, -60, 0], [0, 0, 60], [0, 0, -60]].map((d) => centre.clone().add(new THREE.Vector3(...d)));
   // Pairs that disagree with the rest (a hole pattern nearly half a pitch off pairs both ways) are
   // dropped worst first until every pair is within OUTLIER_MM of its line
-  let T = solveLines(pairs, keep);
+  const solve = (list) => (constraint ? solveSlideTurn(list, constraint) : solveLines(list, keep));
+  let T = solve(pairs);
   for (;;) {
     const worst = pairs.reduce((w, p) => {
       const r = residual(p, T);
@@ -380,9 +439,9 @@ function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, l
     if (pairs.length === 0) {
       return { ok: false, reason: 'disagree', error: `The pins and holes near ${label} don't agree on one way to line up. Move the parts closer first.` };
     }
-    T = solveLines(pairs, keep);
+    T = solve(pairs);
   }
-  T = squareUp(T, pairs, byId, centre) ?? T;
+  if (!constraint) T = squareUp(T, pairs, byId, centre) ?? T;
   const turnDeg = THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, Math.abs(new THREE.Quaternion().setFromRotationMatrix(T).w))));
   const moveMm = centre.clone().applyMatrix4(T).distanceTo(centre);
   if (turnDeg > MAX_TURN_DEG || moveMm > MAX_MOVE_MM) {
@@ -400,7 +459,8 @@ function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, l
   // Moving onto the pins stops at first contact, so tight fits count as touching here
   const isClearAt = (d, axis) => at(d, axis).every((c) => !touchesAny(c, others));
   const axis = pairs[0].f.axis.clone();
-  const parallel = pairs.every((p) => Math.abs(p.f.axis.dot(axis)) >= PARALLEL_DOT);
+  // A side riding on a shaft only slides along that shaft
+  const parallel = pairs.every((p) => Math.abs(p.f.axis.dot(axis)) >= PARALLEL_DOT) && (!constraint || Math.abs(constraint.axis.dot(axis)) >= PARALLEL_DOT);
   let slide = 0;
   if (parallel) {
     const moved = pairs.map((p) => ({ ...p, m: moveFeature(p.m, T) }));
@@ -497,9 +557,119 @@ function fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, l
     return p.position.every((v, k) => Math.abs(v + axis.getComponent(k) * slide - i.position[k]) < 0.005) && p.rotation.every((r, k) => Math.abs(r - i.rotation[k]) < 0.01);
   });
   if (unchanged) return { ok: false, reason: 'done', error: `${label} is already lined up and seated.` };
-  return { ok: true, pairs, movedParts: at(slide, axis) };
-
+  return { ok: true, pairs, movedParts: at(slide, axis), turnDeg };
 }
+
+/**
+ * Gear meshes Play mode sees (openspec precise-placement): [{ gear, partner }] both ways round, from
+ * the body graph's gear and rack links.
+ */
+function meshPairsOf(play) {
+  const out = [];
+  for (const l of play.links || []) {
+    if ((l.kind !== 'gear' && l.kind !== 'rack') || !Array.isArray(l.gears) || l.gears.length !== 2) continue;
+    out.push({ gear: l.gears[0], partner: l.gears[1] }, { gear: l.gears[1], partner: l.gears[0] });
+  }
+  return out;
+}
+
+/** The first mesh a set of parts would break by moving on its own: a gear in it meshed with one outside. */
+const meshBrokenBy = (ids, meshes) => meshes.find((m) => ids.has(m.gear) && !ids.has(m.partner)) || null;
+
+/**
+ * Pieces of `side` (a Set of ids) that ride on a shaft through their round holes and can slide along
+ * and turn about it without moving a meshed gear (openspec precise-placement): for each axle hinge
+ * inside the side, the bodies on one side of it, when they hold no gear meshed with one outside them.
+ * Returns [{ ids: Set, constraint: { axis, point }, hinge }].
+ */
+function slidePieces(play, side, meshes) {
+  const bodyOf = new Map(play.bodies.map((b) => [b.id, b]));
+  const inSide = (b) => b && b.parts.length > 0 && b.parts.every((p) => side.has(p));
+  const hinges = play.hinges.filter((h) => inSide(bodyOf.get(h.a)) && inSide(bodyOf.get(h.b)));
+  const pieces = [];
+  const seen = new Set();
+  for (const h of hinges) {
+    if (h.kind !== 'axle') continue;
+    for (const [from, other] of [[h.b, h.a], [h.a, h.b]]) {
+      const reached = new Set([from]);
+      const queue = [from];
+      while (queue.length) {
+        const cur = queue.pop();
+        for (const g of hinges) {
+          if (g === h) continue;
+          const next = g.a === cur ? g.b : g.b === cur ? g.a : null;
+          if (next && !reached.has(next)) {
+            reached.add(next);
+            queue.push(next);
+          }
+        }
+      }
+      if (reached.has(other)) continue; // joined round the hinge some other way: it can't slide
+      const ids = new Set([...reached].flatMap((id) => bodyOf.get(id).parts));
+      // Every part of the side that isn't in a body goes with neither piece; a piece with a meshed gear can't move
+      if (ids.size === 0 || ids.size >= side.size || meshBrokenBy(ids, meshes)) continue;
+      const key = [...ids].sort().join(',');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pieces.push({ ids, hinge: h, constraint: { axis: new THREE.Vector3(...h.axis).normalize(), point: new THREE.Vector3(...h.point) } });
+    }
+  }
+  return pieces;
+}
+
+/**
+ * For a shaft or gear `instanceId` (openspec precise-placement): the gear train it belongs to laid out
+ * again from its start (layoutGearTrain), gears moved onto holes and turned to mesh, beams and motors
+ * never moved. Kept only when it changes something and makes no new overlap. Returns null or
+ * { patches: [{ instanceId, position, rotation, isIntersecting, ... }], message, moved }.
+ */
+function trainLayout(state, instanceId) {
+  const instances = (state.instances || []).filter((i) => i.visible !== false && partOf(i));
+  const inst = instances.find((i) => i.instanceId === instanceId);
+  if (!inst || !/gear|shaft/i.test(partOf(inst)?.category || '')) return null;
+  const others = instances.filter((i) => i.instanceId !== instanceId);
+  const touching = findSeatedPairs(worldFeaturesFor(inst), others.flatMap((i) => worldFeaturesFor(i))).map((p) => (p.insert.instanceId === instanceId ? p.opening.instanceId : p.insert.instanceId));
+  const startIds = [instanceId, ...touching];
+  const r = layoutGearTrain({ instances, startIds, partOf, featuresOf: worldFeaturesFor });
+  if (!r.patches.length) return null;
+  const byPatch = new Map(r.patches.map((p) => [p.instanceId, p]));
+  const next = instances.map((i) => (byPatch.has(i.instanceId) ? { ...i, ...byPatch.get(i.instanceId) } : i));
+  const patches = [];
+  for (const p of r.patches) {
+    const was = new Set(checkCandidateCollision(instances.find((i) => i.instanceId === p.instanceId), instances).collidingWith.map((w) => w.instanceId));
+    const now = next.find((i) => i.instanceId === p.instanceId);
+    const hits = checkCandidateCollision(now, next).collidingWith.filter((w) => !was.has(w.instanceId));
+    if (hits.length) return null;
+    const { isIntersecting } = checkCandidateCollision(now, next);
+    patches.push({ ...p, isIntersecting, ...(isIntersecting ? {} : { lastValidPosition: [...p.position], lastValidRotation: [...p.rotation] }) });
+  }
+  return { patches, message: r.messages.join('. '), moved: r.moved };
+}
+
+/**
+ * Every Smart Motor near `region` tilted off the shaft in its socket gets the shaft (and what's fixed
+ * on it) turned square into it, the motor body staying (openspec precise-placement, squareShaftInMotor).
+ * Returns { instances, squared: [{ motorId, shaftId, ids, message }], refused: [message] }.
+ */
+function squareMotors(instances, region) {
+  const squared = [];
+  const refused = [];
+  let list = instances;
+  for (const inst of instances) {
+    if (inst.visible === false || !partOf(inst)?.hubSpecs) continue;
+    const box = worldPartBox(partOf(inst), buildWorldMatrix(inst.position, inst.rotation));
+    if (region && box && !box.intersectsBox(region)) continue;
+    const visible = list.filter((i) => i.visible !== false && partOf(i));
+    const r = squareShaftInMotor({ instances: visible, motorId: inst.instanceId, partOf, featuresOf: worldFeaturesFor });
+    if (r?.refused) refused.push(r.refused);
+    if (!r?.patches) continue;
+    const byPatch = new Map(r.patches.map((p) => [p.instanceId, p]));
+    list = list.map((i) => (byPatch.has(i.instanceId) ? { ...i, position: byPatch.get(i.instanceId).position, rotation: byPatch.get(i.instanceId).rotation } : i));
+    squared.push({ motorId: inst.instanceId, shaftId: r.shaftId, ids: r.patches.map((p) => p.instanceId), message: r.message });
+  }
+  return { instances: list, squared, refused };
+}
+
 
 /**
  * The overlaps a move would make: `movedParts` (the moving side at its new poses) against everything
@@ -519,10 +689,67 @@ function newOverlaps(instances, byId, movedParts) {
 }
 
 /**
- * Lines up the selected part's block with the block it is nearly mated to (see file comment).
+ * Lines up the selected part's block with the block it is nearly mated to (see file comment). Smart
+ * Motors near the part are squared on their shafts first (openspec precise-placement).
  * Returns { ok, state, record, stepLabel, message, moved: [ids], pairs } or { ok: false, error }.
  */
 export function fixAssembly(state, { instanceId } = {}) {
+  const result = fixWithMotors(state, { instanceId });
+  if (result.ok) return result;
+  // Nothing else could be fixed: a gear or shaft in a gear train has its train laid out again (gears
+  // onto holes and meshed; beams and motors stay)
+  const selected = (state.instances || []).find((i) => i.instanceId === instanceId);
+  const laid = selected && selected.visible !== false && partOf(selected) ? trainLayout(state, instanceId) : null;
+  if (!laid) return result;
+  const byPatch = new Map(laid.patches.map((p) => [p.instanceId, p]));
+  return {
+    ok: true,
+    record: true,
+    stepLabel: `Fix assembly: laid out the gear train of ${selected.label}`,
+    message: `${laid.message}.`,
+    moved: laid.moved,
+    pairs: 0,
+    state: { ...state, instances: state.instances.map((i) => (byPatch.has(i.instanceId) ? { ...i, ...byPatch.get(i.instanceId) } : i)), updatedAt: new Date().toISOString() }
+  };
+}
+
+function fixWithMotors(state, { instanceId } = {}) {
+  const selected = (state.instances || []).find((i) => i.instanceId === instanceId);
+  const part = selected && partOf(selected);
+  if (!selected || selected.visible === false || !part) return fixBlocks(state, { instanceId });
+  const region = worldPartBox(part, buildWorldMatrix(selected.position, selected.rotation)).expandByScalar(REGION_MM);
+  const { instances, squared, refused } = squareMotors(state.instances, region);
+  if (squared.length === 0) {
+    const result = fixBlocks(state, { instanceId });
+    // Say why a tilted motor's shaft was left as it is
+    if (!refused.length) return result;
+    return result.ok ? { ...result, message: `${result.message} ${refused.join('. ')}.` } : { ...result, error: `${result.error} ${refused.join('. ')}.` };
+  }
+  const squaredState = { ...state, instances };
+  const squaredIds = new Set(squared.flatMap((s) => s.ids));
+  const squaredText = squared.map((s) => s.message).join('. ');
+  const result = fixBlocks(squaredState, { instanceId });
+  if (result.ok) {
+    return { ...result, message: `${squaredText}. ${result.message}`, moved: [...new Set([...squaredIds, ...result.moved])] };
+  }
+  const flagged = instances.map((i) => {
+    if (!squaredIds.has(i.instanceId)) return i;
+    const { isIntersecting } = checkCandidateCollision(i, instances);
+    return { ...i, isIntersecting, ...(isIntersecting ? {} : { lastValidPosition: [...i.position], lastValidRotation: [...i.rotation] }) };
+  });
+  const quietReasons = new Set(['nothing', 'done']);
+  return {
+    ok: true,
+    record: true,
+    stepLabel: `Fix assembly: ${squaredText.charAt(0).toLowerCase()}${squaredText.slice(1)}`,
+    message: `${squaredText}.${result.error && !quietReasons.has(result.reason) && !/no pins or holes/i.test(result.error) ? ` ${result.error}` : ''}`,
+    moved: [...squaredIds],
+    pairs: 0,
+    state: { ...squaredState, instances: flagged, updatedAt: new Date().toISOString() }
+  };
+}
+
+function fixBlocks(state, { instanceId, limits = NEAR_LIMITS, acrossOnly = false, onlyPart = null } = {}) {
   const { catalogById } = getCatalog();
   const instances = state.instances || [];
   const byId = new Map(instances.map((i) => [i.instanceId, i]));
@@ -532,7 +759,12 @@ export function fixAssembly(state, { instanceId } = {}) {
   const selectedPart = partOf(selected);
   if (!selectedPart) return { ok: false, error: `${selected.label} isn't in the part library.` };
 
-  const graph = jointGraph(state);
+  // Blocks are joined by pins, shafts and pegs in holes (and groups). Meshing gears and parts that only
+  // touch don't join them (openspec precise-placement): a meshed gear never moves with the other side
+  // anyway, and either would hide holes nearly lined up across a gear train or a part resting against another
+  const play = buildBodyGraph(playInputs(state, { braceTolerance: false }));
+  const meshes = meshPairsOf(play);
+  const graph = jointGraph(state, { pinnedOnly: true });
   const blocks = blocksOf(state, graph);
   const visible = instances.filter((i) => i.visible !== false && blocks.has(i.instanceId));
   const region = worldPartBox(selectedPart, buildWorldMatrix(selected.position, selected.rotation)).expandByScalar(REGION_MM);
@@ -554,13 +786,15 @@ export function fixAssembly(state, { instanceId } = {}) {
   let sideP = null;
   const ownIds = new Set(blockIds(ownBlock));
   const outside = nearby.filter((i) => !ownIds.has(i.instanceId)).map((i) => i.instanceId);
-  const firstPairs = nearPairs(featuresOfSet(ownIds), featuresOfSet(outside)).filter((p) => !p.done);
+  const firstPairs = nearPairs(onlyPart ? featuresOf(onlyPart) : featuresOfSet(ownIds), featuresOfSet(outside), limits).filter((p) => !p.done);
   if (firstPairs.length > 0) {
     const counts = new Map();
     for (const p of firstPairs) counts.set(blocks.get(p.b.instanceId), (counts.get(blocks.get(p.b.instanceId)) || 0) + 1);
     const partnerBlock = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
     sideS = ownIds;
     sideP = new Set(blockIds(partnerBlock));
+  } else if (acrossOnly) {
+    return { ok: false, reason: 'nothing', error: `No other part's holes are nearly lined up with ${selected.label}.` };
   } else {
     // 2. Inside its own block: the selected part, and what hangs only off it, against the rest
     const others = [...ownIds].filter((id) => id !== instanceId);
@@ -585,43 +819,132 @@ export function fixAssembly(state, { instanceId } = {}) {
     }
   }
 
-  // 2. Which side moves: the smaller, never one with a locked part
+  // 2. Which side moves: the smaller, never one with a locked part. A side that would carry a gear out
+  // of its mesh doesn't move as one piece (openspec precise-placement): the parts held rigidly with
+  // what the pairs line up with on the other side, or parts riding on a shaft (sliding along it,
+  // turning about it), move instead.
   const locked = (ids) => [...ids].some((id) => byId.get(id).locked);
+  // A piece can't take part of a group with it
+  const splitsGroup = (ids) => [...ids].some((id) => byId.get(id).groupId && instances.some((i) => i.groupId === byId.get(id).groupId && !ids.has(i.instanceId)));
   let moving = sideS.size <= sideP.size ? sideS : sideP;
   if (locked(moving)) moving = moving === sideS ? sideP : sideS;
   if (locked(moving)) return { ok: false, error: 'Both blocks have a locked part, so neither can be moved.' };
   let fixed = moving === sideS ? sideP : sideS;
-
-  let fit = fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, label: selected.label });
-  if (!fit.ok) return { ok: false, error: fit.error };
-
-  // A fix that makes parts overlap that didn't before: try moving the other side (with the parts
-  // joined to it) instead, and keep whichever side leaves fewer new overlaps
-  let swapped = null; // { was: names of the side first tried, hits: its new overlaps }
   const hitsOf = (f) => newOverlaps(instances, byId, f.movedParts);
-  const firstHits = hitsOf(fit);
-  if (firstHits.size > 0) {
-    // The other side's pieces: the parts held rigidly together with each part the pairs lined up with
-    // (a claw, not the whole robot it hangs on), never one with a locked part. The piece that leaves
-    // the fewest new overlaps wins, when that is fewer than moving the first side does.
-    const bodies = buildBodyGraph(playInputs(state, { braceTolerance: false })).bodies;
+  // The other side's pieces: the parts held rigidly together with each part of `side` that `pairs` line
+  // up with (a claw, not the whole robot it hangs on), never one with a locked part or a meshed gear
+  const bodyPieces = (side, against, pairFeatures) => {
     const tried = new Set();
-    let best = null;
-    for (const id of new Set(fit.pairs.map((p) => p.f.instanceId))) {
-      const body = bodies.find((b) => b.parts.includes(id));
-      const piece = new Set(body?.parts.filter((p) => fixed.has(p)));
-      if (!body || tried.has(body.id) || piece.size === 0 || piece.size >= fixed.size || locked(piece)) continue;
+    const out = [];
+    for (const id of new Set(pairFeatures.map((f) => f.instanceId))) {
+      const body = play.bodies.find((b) => b.parts.includes(id));
+      const piece = new Set(body?.parts.filter((p) => side.has(p)));
+      if (!body || tried.has(body.id) || piece.size === 0 || piece.size >= side.size || locked(piece) || splitsGroup(piece) || meshBrokenBy(piece, meshes)) continue;
       tried.add(body.id);
-      const rest = new Set([...moving, ...[...fixed].filter((p) => !piece.has(p))]);
-      const other = fitMoving({ byId, catalogById, visible, moving: piece, fixed: rest, featuresOfSet, label: selected.label });
-      if (!other.ok) continue;
-      const hits = hitsOf(other).size;
-      if (hits < firstHits.size && (!best || hits < best.hits || (hits === best.hits && piece.size < best.piece.size))) best = { piece, rest, other, hits };
+      out.push({ ids: piece, rest: new Set([...against, ...[...side].filter((p) => !piece.has(p))]) });
     }
-    if (best) {
-      swapped = { was: setName([...moving], byId, groupsOf(instances)), hits: [...firstHits] };
-      [moving, fixed, fit] = [best.piece, best.rest, best.other];
+    return out;
+  };
+  // A piece split off a block keeps its joints to the rest: it may not change how deep any pin or peg in
+  // them is seated (a connector pressed onto the beam it hangs on). A shaft through a round hole can
+  // slide, so it doesn't count. True when `movedParts` (the piece `ids` at new poses) would.
+  const SEAT_KEEP_MM = 0.1;
+  const seatDepthChanged = (ids, movedParts) => {
+    const movedById = new Map(movedParts.map((c) => [c.instanceId, c]));
+    const pieceFeatures = [...ids].flatMap((id) => worldFeaturesFor(byId.get(id)));
+    // Every part touching the piece, however far from the selected part (a motor's own shaft)
+    const boxOf = (i) => worldPartBox(partOf(i), buildWorldMatrix(i.position, i.rotation));
+    const pieceBoxes = [...ids].map((id) => boxOf(byId.get(id))?.expandByScalar(1)).filter(Boolean);
+    const restFeatures = visible
+      .filter((i) => !ids.has(i.instanceId) && partOf(i))
+      .filter((i) => {
+        const box = boxOf(i);
+        return box && pieceBoxes.some((b) => b.intersectsBox(box));
+      })
+      .flatMap((i) => worldFeaturesFor(i));
+    const movedFeatures = new Map();
+    const movedFeature = (f) => {
+      if (!movedFeatures.has(f.instanceId)) movedFeatures.set(f.instanceId, worldFeaturesFor(movedById.get(f.instanceId)));
+      return movedFeatures.get(f.instanceId).find((g) => g.featureId === f.featureId);
+    };
+    for (const p of findSeatedPairs(pieceFeatures, restFeatures)) {
+      const insertMoves = ids.has(p.insert.instanceId);
+      if (!movedById.has((insertMoves ? p.insert : p.opening).instanceId)) continue;
+      const ins = insertMoves ? movedFeature(p.insert) : p.insert;
+      const op = insertMoves ? p.opening : movedFeature(p.opening);
+      if (!ins || !op) continue;
+      // Every kept joint stays on its line (a motor never leaves the shaft in its socket)
+      if (findSeatedPairs([ins], [op]).length === 0) return true;
+      if (p.insert.kind === 'shaft' && !p.opening.flatDir) continue;
+      const before = p.insert.origin.clone().sub(p.opening.origin).dot(p.opening.axis);
+      const after = ins.origin.clone().sub(op.origin).dot(op.axis);
+      if (Math.abs(after - before) > SEAT_KEEP_MM) return true;
     }
+    return false;
+  };
+  // Fewest new overlaps, then least turn, then fewest parts
+  const better = (a, b) => !b || a.hits < b.hits || (a.hits === b.hits && (a.fit.turnDeg < b.fit.turnDeg - 0.01 || (Math.abs(a.fit.turnDeg - b.fit.turnDeg) <= 0.01 && a.ids.size < b.ids.size)));
+
+  let fit = null;
+  let swapped = null; // { was: name of the side first tried, why: what moving it would have done }
+  const blockedBy = meshBrokenBy(moving, meshes);
+  if (!blockedBy) {
+    fit = fitMoving({ byId, catalogById, visible, moving, fixed, featuresOfSet, limits, onlyPart, label: selected.label });
+    if (!fit.ok) return { ok: false, error: fit.error };
+    // A fix that makes parts overlap that didn't before: try moving a piece of the other side instead,
+    // and keep it when it leaves fewer new overlaps
+    const firstHits = hitsOf(fit);
+    if (firstHits.size > 0) {
+      let best = null;
+      for (const piece of bodyPieces(fixed, moving, fit.pairs.map((p) => p.f))) {
+        const other = fitMoving({ byId, catalogById, visible, moving: piece.ids, fixed: piece.rest, featuresOfSet, limits, onlyPart, label: selected.label });
+        if (!other.ok || seatDepthChanged(piece.ids, other.movedParts)) continue;
+        const cand = { ...piece, fit: other, hits: hitsOf(other).size };
+        if (cand.hits < firstHits.size && better(cand, best)) best = cand;
+      }
+      if (best) {
+        swapped = { was: setName([...moving], byId, groupsOf(instances)), why: `would have overlapped ${[...firstHits][0].split(' / ')[1]}` };
+        [moving, fixed, fit] = [best.ids, best.rest, best.fit];
+      }
+    }
+  } else {
+    const other = moving === sideS ? sideP : sideS;
+    const near = nearPairs(featuresOfSet(moving), featuresOfSet(other), limits).filter((p) => !p.done && (!onlyPart || p.a.instanceId === onlyPart || p.b.instanceId === onlyPart));
+    const candidates = [
+      ...bodyPieces(other, moving, near.map((p) => p.b)),
+      ...[moving, other].flatMap((side) =>
+        slidePieces(play, side, meshes)
+          .filter((p) => !locked(p.ids) && !splitsGroup(p.ids))
+          .map((p) => ({ ids: p.ids, rest: side === moving ? other : moving, constraint: p.constraint }))
+      )
+    ];
+    let best = null;
+    let lastError = null;
+    for (const c of candidates) {
+      const f = fitMoving({ byId, catalogById, visible, moving: c.ids, fixed: c.rest, featuresOfSet, limits, onlyPart, label: selected.label, constraint: c.constraint || null });
+      if (!f.ok) {
+        if (f.reason !== 'none') lastError = f;
+        continue;
+      }
+      if (seatDepthChanged(c.ids, f.movedParts)) continue;
+      const cand = { ...c, fit: f, hits: hitsOf(f).size };
+      if (better(cand, best)) best = cand;
+    }
+    if (!best) {
+      if (lastError?.reason === 'done') return { ok: false, error: lastError.error };
+      // Name what's out of line, by how much, and the gear that keeps it there
+      const worst = near.map((p) => ({ p, miss: missOf(p.a, p.b) })).sort((x, y) => y.miss.line - x.miss.line)[0];
+      const what = worst
+        ? `${byId.get(worst.p.a.instanceId).label} is ${worst.miss.line.toFixed(2)} mm and ${worst.miss.angle.toFixed(1)}° out of line with ${byId.get(worst.p.b.instanceId).label}`
+        : `${selected.label} is out of line`;
+      return {
+        ok: false,
+        reason: 'meshed',
+        error: `${what}. Nothing can move to line them up without taking ${byId.get(blockedBy.gear).label} out of mesh with ${byId.get(blockedBy.partner).label}.`
+      };
+    }
+    swapped = { was: setName([...moving], byId, groupsOf(instances)), why: `would have taken ${byId.get(blockedBy.gear).label} out of mesh with ${byId.get(blockedBy.partner).label}` };
+    [moving, fixed, fit] = [best.ids, best.rest, best.fit];
   }
   const { pairs } = fit;
 
@@ -651,7 +974,7 @@ export function fixAssembly(state, { instanceId } = {}) {
   const overlapping = movedParts.filter((c) => c.isIntersecting).map((c) => c.label);
   const message =
     `Lined up ${lined} pin${lined === 1 ? '' : 's'} and hole${lined === 1 ? '' : 's'}: moved ${movedName} onto ${onto}` +
-    (swapped ? ` (moving ${swapped.was} would have overlapped ${swapped.hits[0].split(' / ')[1]})` : '') +
+    (swapped ? ` (moving ${swapped.was} ${swapped.why})` : '') +
     (overlapping.length ? ` (still overlapping: ${overlapping.join(', ')})` : '') +
     '.';
   return {
@@ -665,6 +988,51 @@ export function fixAssembly(state, { instanceId } = {}) {
     pairs: lined,
     state: { ...state, instances: finalInstances, updatedAt: new Date().toISOString() }
   };
+}
+
+/**
+ * After `instanceId` (a pin, peg, shaft or part carrying them) was put into a hole (openspec
+ * precise-placement): when another block has a hole its pins, pegs or shafts nearly reach (within
+ * AFTER_INSERT_LIMITS), lines the parts up by Fix assembly's rules (motors squared, meshed gears never
+ * moved). The holes it just went into stay lined up, since its own block moves as one piece or stays.
+ * Saves nothing. Returns null when there is nothing nearly lined up (or it already is), else
+ * { patches: [{ instanceId, position, rotation, isIntersecting }], message, moved: [ids] } (no patches
+ * and the reason when nothing may move).
+ */
+export function lineUpAfterInsert(state, { instanceId } = {}) {
+  const instances = state.instances || [];
+  const selected = instances.find((i) => i.instanceId === instanceId);
+  const part = selected && partOf(selected);
+  if (!selected || selected.visible === false || !part) return null;
+  // A shaft or gear in a gear train: the train is laid out again, the beam never moving
+  const laid = trainLayout(state, instanceId);
+  if (laid) return laid;
+  const opts = { instanceId, limits: AFTER_INSERT_LIMITS, acrossOnly: true, onlyPart: instanceId };
+  // Is anything nearly lined up at all? (Motors are only squared when there is)
+  const region = worldPartBox(part, buildWorldMatrix(selected.position, selected.rotation)).expandByScalar(REGION_MM);
+  const { instances: squaredInstances, squared } = squareMotors(instances, region);
+  const working = { ...state, instances: squaredInstances };
+  const result = fixBlocks(working, opts);
+  if (!result.ok && (result.reason === 'nothing' || !result.reason || /already lined up/.test(result.error || ''))) return null;
+  if (!result.ok) return { patches: [], message: result.error, moved: [] };
+  // Done by itself after an insert, it never leaves parts overlapping: nothing moves, and it says so
+  if (result.isIntersecting) {
+    const near = result.message.match(/onto (.+?)(?: \(|\.$)/)?.[1];
+    return { patches: [], message: `${selected.label} is nearly lined up with ${near || 'another part'}, but lining them up would make parts overlap, so nothing else moved`, moved: [] };
+  }
+  const before = new Map(instances.map((i) => [i.instanceId, i]));
+  const patches = [];
+  for (const i of result.state.instances) {
+    const was = before.get(i.instanceId);
+    if (!was) continue;
+    const same = i.position.every((v, k) => Math.abs(v - was.position[k]) < 1e-6) && i.rotation.every((v, k) => Math.abs(v - was.rotation[k]) < 1e-6);
+    if (same) continue;
+    const { isIntersecting } = checkCandidateCollision(i, result.state.instances);
+    patches.push({ instanceId: i.instanceId, position: i.position, rotation: i.rotation, isIntersecting, ...(isIntersecting ? {} : { lastValidPosition: [...i.position], lastValidRotation: [...i.rotation] }) });
+  }
+  const squaredText = squared.map((s) => s.message.charAt(0).toLowerCase() + s.message.slice(1));
+  const lined = result.message.replace(/^Lined up/, 'lined up').replace(/\.$/, '');
+  return { patches, message: [...squaredText, lined].join(', '), moved: patches.map((p) => p.instanceId) };
 }
 
 /**

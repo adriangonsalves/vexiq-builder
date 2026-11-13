@@ -17,7 +17,7 @@ import { derivedPartById, shapedPart } from '../utils/shapedParts.js';
 import { SHEET_PRESS_MM, isPlasticSheet } from '../utils/sheetBend.js';
 import { sheetFlexDepth, sheetsStacked } from '../utils/sheetContact.js';
 import { hubMatrix, isShaftInMotorSocket } from '../utils/motorHub.js';
-import { isMeshingGear, meshTurn, worldToothed } from '../utils/gearMeshing.js';
+import { canTurnToMesh, isMeshingRack, meshRelation, meshSpots, meshTurn, quaternionToEulerDeg, rightAngleNearMiss, rightAnglePair, worldToothed } from '../utils/gearMeshing.js';
 import { squareFitRoll } from '../utils/shaftGroups.js';
 import { settlePlacement } from '../utils/placementFit.js';
 import { isTireOnHub } from '../utils/tireFit.js';
@@ -29,6 +29,7 @@ import { createBandOverlay } from './bandOverlay.js';
 const BAND_FOLLOWS = 'A band follows its spots: drag a handle (Edit route) to move it';
 import { spotsNearPoint } from '../utils/bandRoute.js';
 import { isBandPart } from '../utils/bandPath.js';
+import { joinKindFor } from '../utils/contextToolbarItems.js';
 import { setGridPivot, wholeGroupOf } from '../utils/partGroups.js';
 import {
   HOLE_SNAP_AXIAL_REACH_MM,
@@ -49,6 +50,7 @@ import {
   SET_HOLE_SNAP_AXIAL_REACH_MM,
   getLocalFeatures,
   gridPivot,
+  rowPivot,
   boreTargets,
   clearSpotAlongLine,
   insertFitsOpening,
@@ -693,7 +695,7 @@ function createMateArrowOverlay() {
 }
 
 const ROTATE_RING_INNER = 0.85; // gizmo units; the outer edge is at 1.0
-const ROTATE_RING_COLORS = { X: 0xef4444, Y: 0x22c55e, Z: 0x3b82f6, Joint: HOLE_HIGHLIGHT_COLOR };
+const ROTATE_RING_COLORS = { X: 0xef4444, Y: 0x22c55e, Z: 0x3b82f6, Joint: HOLE_HIGHLIGHT_COLOR, Row: HOLE_HIGHLIGHT_COLOR };
 
 /**
  * Builds the Rotate-mode gizmo: up to three flat rings around one pivot, one per turning axis. Each
@@ -769,8 +771,10 @@ function createRotateGizmo() {
   const refreshAnchorLooks = () => {
     anchorLines.forEach((line, i) => {
       const hot = anchorHover?.kind === 'anchor' && anchorHover.index === i;
-      line.material.linewidth = hot ? 4.5 : 2.5;
-      line.material.opacity = hot ? 1 : 0.75;
+      // A hole that holds nothing is drawn thinner and fainter than a pin or shaft that holds the part
+      const held = anchorDefs[i]?.held !== false;
+      line.material.linewidth = hot ? 4.5 : held ? 2.5 : 1.5;
+      line.material.opacity = hot ? 1 : held ? 0.75 : 0.45;
     });
     const hot = anchorHover?.kind === 'default';
     defaultLine.material.linewidth = hot ? 3.5 : 2;
@@ -1308,8 +1312,10 @@ function applyGroupAppearance(group, { baseColor, isSelected, isAttention = fals
       const mat = child.material;
       if (!child.userData.edgeLook) child.userData.edgeLook = { color: mat.color.getHex(), opacity: mat.opacity };
       const { color, opacity } = child.userData.edgeLook;
-      mat.color.setHex(attention ? HOLE_HIGHLIGHT_COLOR : level ? SELECT_COLOR : color);
-      mat.opacity = attention ? 1 : level ? SELECT_EDGE_OPACITY[level] : opacity;
+      // A gear meshed with the selected gear keeps its green or amber edges (openspec precise-placement)
+      const mark = group.userData.meshMark;
+      mat.color.setHex(attention ? HOLE_HIGHLIGHT_COLOR : level ? SELECT_COLOR : mark ? mark.color : color);
+      mat.opacity = attention ? 1 : level ? SELECT_EDGE_OPACITY[level] : mark ? mark.opacity : opacity;
       return;
     }
     if (!child.isMesh || !child.userData.isPartMesh || !child.material) return;
@@ -1337,6 +1343,9 @@ function applyGroupAppearance(group, { baseColor, isSelected, isAttention = fals
       if (attention) {
         mat.color.lerp(ATTENTION_COLOR, 0.35 + 0.35 * attentionPulse);
       }
+      // Meshed with the selected gear: the body takes a green (near miss: amber) tint and glow
+      const meshMark = !attention && !level ? group.userData.meshMark : null;
+      if (meshMark) mat.color.lerp(new THREE.Color(meshMark.color), 0.45);
       // Clear plastic sheets stay see-through; everything else is solid
       const clear = child.userData.clearPlastic;
       mat.transparent = Boolean(clear);
@@ -1346,6 +1355,9 @@ function applyGroupAppearance(group, { baseColor, isSelected, isAttention = fals
         if (attention) {
           mat.emissive.setHex(HOLE_HIGHLIGHT_COLOR);
           mat.emissiveIntensity = 0.45 + 0.55 * attentionPulse;
+        } else if (meshMark) {
+          mat.emissive.setHex(meshMark.color);
+          mat.emissiveIntensity = 0.45;
         } else {
           mat.emissive.setHex(level ? SELECT_COLOR : 0x000000);
           mat.emissiveIntensity = level ? SELECT_GLOW[level] : 0;
@@ -1465,6 +1477,7 @@ export default function Viewport3D({
   onUpdateTransform,
   onUpdateSet,
   onFitSet,
+  onLineUpAfterInsert,
   onRegisterFlushMover,
   onRegisterScreenshot,
   onRegisterPartPoints,
@@ -1568,6 +1581,10 @@ export default function Viewport3D({
   // Hole picking (double-click with nothing lined up): { selId, ... } while picking, else null
   const pickModeRef = useRef(null);
   const pickOverlayRef = useRef(null);
+  const meshSpotOverlayRef = useRef(null);
+  // While dragging a gear: { spot, partnerId, partnerLabel } for the mesh spot it would jump to on
+  // release, or null; `cache` remembers which spots were found free during this drag
+  const meshSpotDragRef = useRef({ current: null, cache: new Map(), ghostFor: null });
   const copyPointerRef = useRef(null); // canvas px of the pointer over the viewport, for the copy preview
   const onCubeMenuRef = useRef(onCubeMenu);
   onCubeMenuRef.current = onCubeMenu;
@@ -1711,6 +1728,8 @@ export default function Viewport3D({
   onUpdateSetRef.current = onUpdateSet;
   const onFitSetRef = useRef(onFitSet);
   onFitSetRef.current = onFitSet;
+  const onLineUpAfterInsertRef = useRef(onLineUpAfterInsert);
+  onLineUpAfterInsertRef.current = onLineUpAfterInsert;
   // Moving several parts as one (openspec outliner-part-groups): the Move arrows sit on this pivot at
   // the set's centre; a drag moves every member from where it started
   const setPivotRef = useRef(null);
@@ -2164,7 +2183,7 @@ export default function Viewport3D({
    */
   const liveFitWhileDragging = (obj, partMeta) => {
     const id = obj.userData.instanceId;
-    if (isMeshingGear(partMeta)) {
+    if (canTurnToMesh(partMeta)) {
       const turn = meshTurn(worldToothed(partMeta, obj.position, obj.quaternion, id), toothedNeighbours(id));
       if (turn && Math.abs(turn.turnDeg) >= 0.005) turnObjectAbout(obj, turn.axis, obj.position, turn.turnDeg);
       return;
@@ -2204,7 +2223,7 @@ export default function Viewport3D({
    * With `copyOf`, the placed part is a new copy of that part (id '__copy__', label '{copy}'), and
    * the original stays where it is.
    */
-  const settleInstances = (placedId, placedPose, { receivingId = null, copyOf = null } = {}) => {
+  const settleInstances = (placedId, placedPose, { receivingId = null, copyOf = null, snap = true } = {}) => {
     if (explodeModeRef.current !== 'off') return { patches: [], messages: [] };
     let list = instancesRef.current.map((i) => (i.instanceId === placedId ? { ...i, ...placedPose } : i));
     let id = placedId;
@@ -2218,6 +2237,7 @@ export default function Viewport3D({
       placedId: id,
       instances: list,
       receivingId,
+      snap,
       partOf: (i) => partFor(i),
       featuresOf: (i) => {
         const meta = partFor(i);
@@ -2250,12 +2270,13 @@ export default function Viewport3D({
     const settleAt = (d) => {
       group.position.copy(start).addScaledVector(direction, d);
       group.updateMatrixWorld(true);
-      return { at: group.position.clone(), settled: settleInstances(id, groupPose(group), options) };
+      // Probes along the push only turn the part; sliding gears into mesh waits for where it lands
+      return { at: group.position.clone(), settled: settleInstances(id, groupPose(group), { ...options, snap: false }) };
     };
     const STEP_MM = 1.5;
     const travel = Math.max(0, travelMm);
     let chosen = null;
-    if (isMeshingGear(partFor(group.userData))) {
+    if (canTurnToMesh(partFor(group.userData))) {
       // The whole push: it goes on past the travel limit while still in an opening
       const reach = Math.max(travel, sweepMm ?? 0);
       for (let d = 0; d <= reach && !chosen; d += Math.max(STEP_MM, reach / 40)) {
@@ -2548,17 +2569,16 @@ export default function Viewport3D({
     group.position.copy(final);
     const notes = commitPlacement(group, { label, receivingId, stepMeta });
     const withNotes = (text) => [text, ...notes].join('. ');
-    if (message) {
-      feedback(withNotes(message));
-      return;
+    let text = message;
+    if (!text) {
+      const stacked = plan.pairs.length > 0 && plan.pairs.every((p) => p.pairKind === 'hole');
+      const partnerIds = new Set(plan.pairs.map(partnerOf));
+      const labels = [...partnerIds].map((id) => instancesRef.current.find((i) => i.instanceId === id)?.label || id);
+      text = `${stacked ? 'Stacked on' : 'Mated with'} ${labels.join(', ')}`;
     }
-    const stacked = plan.pairs.length > 0 && plan.pairs.every((p) => p.pairKind === 'hole');
-
-    const partnerIds = new Set(plan.pairs.map(partnerOf));
-    const labels = [...partnerIds].map(
-      (id) => instancesRef.current.find((i) => i.instanceId === id)?.label || id
-    );
-    feedback(withNotes(`${stacked ? 'Stacked on' : 'Mated with'} ${labels.join(', ')}`));
+    feedback(withNotes(text));
+    // A hole the part's pins nearly reach on another block is lined up in the same step (openspec precise-placement)
+    onLineUpAfterInsertRef.current?.(selId, withNotes(text));
   };
 
   // --- View options (openspec: view-options) --------------------------------------------------------
@@ -2828,7 +2848,7 @@ export default function Viewport3D({
       followOnly,
       measured: getMeshMeasurements(group, partMeta),
       // Gears and racks a gear preview meshes with (a copy also meshes with the original)
-      meshNeighbours: isMeshingGear(partMeta) ? toothedNeighbours(kind === 'copy' ? null : selId) : null,
+      meshNeighbours: canTurnToMesh(partMeta) ? toothedNeighbours(kind === 'copy' ? null : selId) : null,
       startPosition: group.position.clone(),
       startQuaternion: group.quaternion.clone(),
       transformMode: transformModeRef.current,
@@ -2894,6 +2914,54 @@ export default function Viewport3D({
     session.fits = fits;
     session.fitIndex = 0;
     session.fixed = true;
+    pickModeRef.current = session;
+    const transform = transformRef.current;
+    if (transform) {
+      transform.enabled = false;
+      transform.getHelper().visible = false;
+    }
+    hideMateArrows();
+    pickOverlayRef.current?.setGhostSource(group);
+    refreshRotateSetup();
+    renderPick();
+    return true;
+  };
+
+  /** True when a hole or pin end is marked on a part other than `partId`. */
+  const targetOnOtherPart = (partId) => {
+    const target = targetRef.current ? resolveTarget() : null;
+    return Boolean(target && partId && target.opening.instanceId !== partId);
+  };
+
+  /**
+   * The selected part, already in the scene, into the marked hole or pin end (openspec
+   * precise-placement): shown at its best free fit there, wheel / R for the others, a click keeps it
+   * as "Move <part> into <receiving>", Esc leaves it where it was. Any part kind. Returns false when
+   * it doesn't apply (no target, the target is on this part, locked, Explode, picking), true when it
+   * handled the request: a session started, or no free fit (message, nothing moves).
+   */
+  const startTargetMove = () => {
+    if (pickModeRef.current || explodeModeRef.current !== 'off') return false;
+    const selId = selectedIdRef.current;
+    if (!targetOnOtherPart(selId)) return false;
+    const target = resolveTarget();
+    const inst = instancesRef.current.find((i) => i.instanceId === selId);
+    const group = meshMapRef.current.get(selId);
+    if (!group || !inst || inst.locked) return false;
+    const session = buildPickSession('pick', { allowFollowOnly: true });
+    if (!session) return false;
+    const fits = targetFits(session, group, target);
+    if (!fits.length) {
+      const where = target.onShaft ? `on this ${target.opening.kind === 'shaft' ? 'shaft' : 'pin'}` : 'at this hole';
+      onMateFeedbackRef.current?.(`No free fit for ${pickLabelOf(selId)} ${where}`, true);
+      return true;
+    }
+    session.followOnly = false;
+    session.hovered = { ...target, taken: false };
+    session.fits = fits;
+    session.fitIndex = 0;
+    session.fixed = true;
+    session.moveToTarget = true;
     pickModeRef.current = session;
     const transform = transformRef.current;
     if (transform) {
@@ -3113,9 +3181,25 @@ export default function Viewport3D({
     const session = buildPickSession('copy', { insertedKeys: new Map() }); // opening key -> copy id
     if (!session) return false;
     pickModeRef.current = session;
+    hideGizmoWhileStamping(session);
     pickOverlayRef.current?.setGhostSource(meshMapRef.current.get(selId));
     renderPick();
     return true;
+  };
+
+  /**
+   * Stamp copies on the bar: the Move arrows and Rotate rings go away while it's on, so they don't get
+   * in the way of clicking holes (they come back when it ends). Holding Ctrl/Cmd keeps them, as before.
+   */
+  const hideGizmoWhileStamping = (session) => {
+    if (!stampOn()) return;
+    session.hidGizmo = true;
+    const transform = transformRef.current;
+    if (transform) {
+      transform.enabled = false;
+      transform.getHelper().visible = false;
+    }
+    refreshRotateSetup();
   };
 
   /** Leaves hole picking or the copy preview without changing the part, and gives the gizmo back. */
@@ -3137,12 +3221,12 @@ export default function Viewport3D({
       setTimeout(() => onCancelPlaceRef.current?.(request), 0);
     }
     const transform = transformRef.current;
-    if (transform && pick.kind === 'pick') {
+    if (transform && (pick.kind === 'pick' || pick.hidGizmo)) {
       transform.enabled = true;
       transform.getHelper().visible = transform.object !== undefined;
     }
     if (inputElRef.current) inputElRef.current.style.cursor = '';
-    if (pick.kind === 'pick') refreshRotateSetup();
+    if (pick.kind === 'pick' || pick.hidGizmo) refreshRotateSetup();
     emitPickStatus();
   };
 
@@ -3333,7 +3417,7 @@ export default function Viewport3D({
       emitPickStatus();
       return;
     }
-    const verb = pick.place ? 'Add' : 'Insert';
+    const verb = pick.place ? 'Add' : pick.moveToTarget ? 'Move' : 'Insert';
     const label = `${verb} ${pickLabelOf(pick.selId)} into ${pickLabelOf(pick.hovered.opening.instanceId)}`;
     const receivingInstanceId = pick.hovered.opening.instanceId;
     const stepMeta = pick.place ? { mergeKey: pick.place.request.mergeKey, mergeWindowMs: Infinity } : null;
@@ -3342,7 +3426,7 @@ export default function Viewport3D({
     if (pick.fixed) setTarget(null); // the target is filled
     mateSelected(
       { lateral: new THREE.Vector3(), direction: fit.direction, travelMm: fit.travelMm, sweepMm: fit.sweepMm, pairs: [] },
-      { label, message: label.replace(/^(Insert|Add)/, pick.place ? 'Added' : 'Inserted'), receivingId: receivingInstanceId, stepMeta }
+      { label, message: label.replace(/^(Insert|Add|Move)/, pick.place ? 'Added' : pick.moveToTarget ? 'Moved' : 'Inserted'), receivingId: receivingInstanceId, stepMeta }
     );
   };
 
@@ -3420,6 +3504,7 @@ export default function Viewport3D({
       return;
     }
     pickModeRef.current = session;
+    hideGizmoWhileStamping(session);
     pickOverlayRef.current?.setGhostSource(meshMapRef.current.get(session.selId));
     const at = copyPointerRef.current;
     if (at) updatePickHover(at.x, at.y);
@@ -3522,6 +3607,7 @@ export default function Viewport3D({
       onTargetChangeRef.current?.(Boolean(next), next && !next.onShaft ? { instanceId: next.instanceId, portId: next.featureId.replace(/@(lo|hi)$/, '') } : null);
     }
     renderTarget();
+    emitInteraction(); // Join puts the part into the mark while one is set (openspec precise-placement)
   };
 
   /**
@@ -3617,6 +3703,147 @@ export default function Viewport3D({
    * (src/utils/batteryBay.js). Returns false when the selected part and `brainId` aren't a battery
    * and a brain it fits, so the double-click does its usual job.
    */
+  // --- Gears at 90°: mesh spots (openspec right-angle-gears, design §4–5) ---------------------------
+
+  /** The parts in the view that part `id` can mesh with at 90°: [{ id, toothed, meta, label }]. */
+  const rightAnglePartners = (id) => {
+    const inst = instancesRef.current.find((i) => i.instanceId === id);
+    const meta = partFor(inst);
+    if (!canTurnToMesh(meta)) return [];
+    const out = [];
+    for (const [otherId, g] of meshMapRef.current.entries()) {
+      if (otherId === id || !g.visible) continue;
+      const otherInst = instancesRef.current.find((i) => i.instanceId === otherId);
+      const otherMeta = partFor(otherInst);
+      if (!rightAnglePair(meta, otherMeta)) continue;
+      const toothed = worldToothed(otherMeta, g.position, g.quaternion, otherId);
+      if (toothed) out.push({ id: otherId, toothed, meta: otherMeta, label: otherInst?.label || otherId });
+    }
+    return out;
+  };
+
+  const spotPose = (spot) => ({ position: spot.position.toArray().map((v) => Number(v.toFixed(3))), rotation: quaternionToEulerDeg(spot.quaternion) });
+
+  /** Whether `group` at `spot` hits nothing (answers cached per drag in `cache` when given). */
+  const meshSpotFree = (group, spot, cache = null) => {
+    const key = `${spot.position.toArray().map((v) => v.toFixed(2)).join(',')}|${spot.quaternion.toArray().map((v) => v.toFixed(3)).join(',')}`;
+    if (cache?.has(key)) return cache.get(key);
+    const before = groupPose(group);
+    poseGroup(group, spotPose(spot));
+    const free = !checkGroupCollision(group, false, null, null, true); // a tight fit (teeth in contact) is not in the way
+    poseGroup(group, before);
+    cache?.set(key, free);
+    return free;
+  };
+
+  /**
+   * The free mesh spot for the part in `group` nearest `point` (a world point compared with each
+   * spot's box center), within `reachMm`, on `partners` (default: every 90° partner). Returns
+   * { spot, partner } or null; `blocked` is set on the result's caller-visible flag when spots exist
+   * but none is free.
+   */
+  const nearestFreeMeshSpot = (group, point, { partners = null, reachMm = Infinity, cache = null } = {}) => {
+    const id = group.userData.instanceId;
+    const meta = partFor(instancesRef.current.find((i) => i.instanceId === id));
+    const list = [];
+    for (const partner of partners ?? rightAnglePartners(id)) {
+      for (const spot of meshSpots(meta, { position: group.position, quaternion: group.quaternion }, partner.toothed, partner.meta)) {
+        const d = spot.center.distanceTo(point);
+        if (d <= reachMm) list.push({ spot, partner, d });
+      }
+    }
+    list.sort((a, b) => a.d - b.d);
+    const found = list.find((c) => meshSpotFree(group, c.spot, cache));
+    return found ? { spot: found.spot, partner: found.partner } : list.length ? { blocked: true, partner: list[0].partner } : null;
+  };
+
+  /** Moves the selected gear to `spot` on `partner` as one history step, with the mesh message. */
+  const moveToMeshSpot = (group, spot, partner) => {
+    const inst = instancesRef.current.find((i) => i.instanceId === group.userData.instanceId);
+    poseGroup(group, spotPose(spot));
+    const notes = commitPlacement(group, { label: `Move ${inst?.label || 'gear'}` });
+    const said = notes.find((n) => n.startsWith('Meshed')) ? notes : [`Meshed ${inst?.label || 'gear'} with ${partner.label}`, ...notes];
+    onMateFeedbackRef.current?.(said.join('. '));
+  };
+
+  /**
+   * Join a gear to its 90° partner `partnerId` (double-click or the Join button): the selected gear
+   * goes to its free mesh spot nearest `point` (default: nearest the gear). Returns false when the
+   * selected part and `partnerId` can't mesh at 90°, so the gesture does its usual job.
+   */
+  const joinToMeshPartner = (partnerId, point = null) => {
+    const selId = selectedIdRef.current;
+    const group = selId ? meshMapRef.current.get(selId) : null;
+    const inst = instancesRef.current.find((i) => i.instanceId === selId);
+    if (!group || !inst || explodeModeRef.current !== 'off' || selectedIdsRef.current.length > 1) return false;
+    const partner = rightAnglePartners(selId).find((p) => p.id === partnerId);
+    if (!partner) return false;
+    const feedback = (message, isError = false) => onMateFeedbackRef.current?.(message, isError);
+    if (inst.locked) {
+      feedback('Part is locked', true);
+      return true;
+    }
+    group.updateMatrixWorld(true);
+    const from = point ?? boxCenterOf(group);
+    const found = nearestFreeMeshSpot(group, from, { partners: [partner] });
+    if (!found?.spot) {
+      feedback(`No room to mesh ${inst.label} with ${partner.label}`, true);
+      return true;
+    }
+    moveToMeshSpot(group, found.spot, partner);
+    return true;
+  };
+
+  /** A part group's box center in world space. */
+  const boxCenterOf = (group) => {
+    const meta = partFor(instancesRef.current.find((i) => i.instanceId === group.userData.instanceId));
+    group.updateMatrixWorld(true);
+    return new THREE.Vector3(...(meta?.bbox?.center ?? [0, 0, 0])).applyMatrix4(group.matrixWorld);
+  };
+
+  /** The 90° partner within reach of Join for the selected gear (nearest first), or null. */
+  const JOIN_MESH_REACH_MM = 40;
+  const joinMeshPartner = (selId) => {
+    const group = meshMapRef.current.get(selId);
+    if (!group) return null;
+    const here = boxCenterOf(group);
+    let best = null;
+    for (const p of rightAnglePartners(selId)) {
+      const g = meshMapRef.current.get(p.id);
+      const d = boxCenterOf(g).distanceTo(here);
+      if (d <= JOIN_MESH_REACH_MM && (!best || d < best.d)) best = { id: p.id, d };
+    }
+    return best?.id ?? null;
+  };
+
+  /** While dragging: the spot preview for `obj` (a single gear) when it is within half a pitch of a free mesh spot. */
+  const MESH_SPOT_REACH_MM = VEX_PITCH_MM / 2;
+  const updateMeshSpotDrag = (obj, allowed) => {
+    const drag = meshSpotDragRef.current;
+    const overlay = meshSpotOverlayRef.current;
+    let found = null;
+    if (allowed && explodeModeRef.current === 'off') {
+      found = nearestFreeMeshSpot(obj, boxCenterOf(obj), { reachMm: MESH_SPOT_REACH_MM, cache: drag.cache });
+      if (!found?.spot) found = null;
+    }
+    drag.current = found;
+    if (!overlay) return;
+    if (found && drag.ghostFor !== obj) {
+      overlay.setGhostSource(obj);
+      drag.ghostFor = obj;
+    }
+    overlay.showGhost(found ? { position: found.spot.position, quaternion: found.spot.quaternion } : null);
+  };
+  const endMeshSpotDrag = () => {
+    const drag = meshSpotDragRef.current;
+    const found = drag.current;
+    drag.current = null;
+    drag.cache = new Map();
+    drag.ghostFor = null;
+    meshSpotOverlayRef.current?.clear();
+    return found;
+  };
+
   const batteryFitsBrain = (batteryId, brainId) => {
     const partOf = (id) => partFor(instancesRef.current.find((i) => i.instanceId === id));
     return Boolean(brainId && batteryBayPose(partOf(batteryId), partOf(brainId), new THREE.Matrix4()));
@@ -3697,28 +3924,34 @@ export default function Viewport3D({
   };
 
   /**
-   * For one part held on two or more joint lines with a ring selected: shows the joint lines parallel
-   * to that ring (other than the one the rings sit on) as anchors to click, and a dashed line through
-   * the part's default centre once the rings have been moved off it.
+   * For one part with the X/Y/Z rings (free, or held on two or more joint lines) and a ring selected:
+   * shows as anchors to click every line parallel to that ring (other than the one the rings sit on)
+   * through the part's own holes, pins and shafts, the lines that hold it drawn stronger (openspec
+   * precise-placement), and a dashed line through the default centre once the rings are off it.
    */
   const refreshAnchorLines = () => {
     const gizmo = rotateGizmoRef.current;
     const setup = rotateSetupRef.current;
     if (!gizmo) return;
     const ring = selectedRingRef.current;
-    if (!setup?.instanceId || !setup.defaultPivot || (setup.lines?.length ?? 0) < 2 || ring < 0 || !setup.rings[ring]) {
+    if (!setup?.instanceId || !setup.defaultPivot || setup.lines?.length === 1 || ring < 0 || !setup.rings[ring]) {
       if (setup) setup.shownAnchors = [];
       gizmo.setAnchorLines([], null);
       return;
     }
     const axis = setup.rings[ring].axis;
-    const anchors = parallelLines(setup.lines, axis, { exclude: setup.pivot });
+    const held = parallelLines(setup.lines || [], axis, { exclude: setup.pivot }).map((l) => ({ origin: l.origin, axis: l.axis, held: true }));
+    // The part's own hole, pin and shaft lines, each once, leaving out the ones that hold it
+    const own = [];
+    for (const l of parallelLines(setup.ownLines || [], axis, { exclude: setup.pivot })) {
+      const same = (o) => parallelLines([o], l.axis, { exclude: l.origin }).length === 0;
+      if (held.some(same) || own.some(same)) continue;
+      own.push({ origin: l.origin, axis: l.axis, held: false });
+    }
+    const anchors = [...held, ...own];
     setup.shownAnchors = anchors;
     const off = setup.defaultPivot.clone().sub(setup.pivot).projectOnPlane(axis).length() > 0.25;
-    gizmo.setAnchorLines(
-      anchors.map((l) => ({ origin: l.origin, axis: l.axis })),
-      off ? { origin: setup.defaultPivot, axis } : null
-    );
+    gizmo.setAnchorLines(anchors, off ? { origin: setup.defaultPivot, axis } : null);
   };
 
   /**
@@ -4336,7 +4569,7 @@ export default function Viewport3D({
     if (inst.locked) return clear('Part is locked');
     if (inst.shape?.kind === 'band') return clear(BAND_FOLLOWS);
     if (explodeModeRef.current !== 'off') return clear("Can't rotate in Explode view");
-    if (arrowOverlayRef.current?.isShown() || pickModeRef.current?.kind === 'pick' || !group.userData.localBox) return clear();
+    if (arrowOverlayRef.current?.isShown() || pickModeRef.current?.kind === 'pick' || pickModeRef.current?.hidGizmo || !group.userData.localBox) return clear();
 
     group.updateMatrixWorld();
     const selectedFeatures = collectWorldFeatures(
@@ -4358,10 +4591,13 @@ export default function Viewport3D({
       // On the part's own hole grid, so quarter turns keep its holes lined up. Kept in the part's
       // frame between turns: turning about it leaves it in place, and it moves along with the part.
       // The user can move it onto one of the joint lines that hold the part (chooseRotateAnchor).
+      // Held by a row of pins: on the row's line at the pins' depth, so a half turn about the row puts
+      // every pin back in its hole (openspec precise-placement)
+      const row = rowPivot(lines, center);
       defaultPivot =
         samePart && prev.localDefaultPivot
           ? prev.localDefaultPivot.clone().applyMatrix4(group.matrixWorld)
-          : gridPivot(selectedFeatures, center);
+          : row?.pivot ?? gridPivot(selectedFeatures, center);
       pivot = samePart && prev.localPivot ? prev.localPivot.clone().applyMatrix4(group.matrixWorld) : defaultPivot.clone();
       // A ring whose axis runs along a joint line through the pivot turns about that line exactly
       const ringAxis = (worldAxis) => {
@@ -4377,6 +4613,13 @@ export default function Viewport3D({
         { name: 'Y', axis: ringAxis(new THREE.Vector3(0, 1, 0).applyQuaternion(own)) },
         { name: 'Z', axis: ringAxis(new THREE.Vector3(0, 0, 1).applyQuaternion(own)) }
       ];
+      // The row's ring: in place of the ring along it (within 2°), else a fourth ring
+      if (row) {
+        const rowDot = Math.cos(THREE.MathUtils.degToRad(2));
+        const along = rings.find((r) => Math.abs(r.axis.dot(row.axis)) >= rowDot);
+        if (along) along.axis = along.axis.dot(row.axis) < 0 ? row.axis.clone().negate() : row.axis.clone();
+        else rings.push({ name: 'Row', axis: row.axis.clone() });
+      }
     } else {
       const { origin, axis } = lines[0];
       pivot = origin.clone().addScaledVector(axis, center.clone().sub(origin).dot(axis));
@@ -4407,7 +4650,11 @@ export default function Viewport3D({
     const toLocal = group.matrixWorld.clone().invert();
     const localPivot = lines.length !== 1 ? pivot.clone().applyMatrix4(toLocal) : null;
     const localDefaultPivot = defaultPivot ? defaultPivot.clone().applyMatrix4(toLocal) : null;
-    rotateSetupRef.current = { instanceId: selId, pivot, localPivot, defaultPivot, localDefaultPivot, lines, center, rings, angles };
+    // Every hole, pin and shaft line of the part, for the anchors (openspec precise-placement)
+    const ownLines = selectedFeatures
+      .filter((f) => ['pin_hole', 'shaft_bore', 'shaft_socket', 'pin', 'shaft'].includes(f.kind))
+      .map((f) => ({ origin: f.origin.clone(), axis: f.axis.clone().normalize() }));
+    rotateSetupRef.current = { instanceId: selId, pivot, localPivot, defaultPivot, localDefaultPivot, lines, ownLines, center, rings, angles };
     rotateMessageKeyRef.current = '';
     const halfMm = group.userData.localBox.getSize(new THREE.Vector3()).length() / 2 + 10;
     gizmo.show(
@@ -4713,9 +4960,11 @@ export default function Viewport3D({
     if (!ids.length) return null;
     if (ids.length === 1) {
       const selId = ids[0];
+      const inst = instancesRef.current.find((i) => i.instanceId === selId);
+      if (joinKindFor({ count: 1, targetOnOtherPart: !inst?.locked && targetOnOtherPart(selId) }) === 'target') return 'target';
       if (planMates(lastAlignedRef.current, selId).length > 0) return 'auto';
       const fitsABrain = instancesRef.current.some((i) => i.instanceId !== selId && i.visible !== false && batteryFitsBrain(selId, i.instanceId));
-      return fitsABrain ? 'auto' : 'manual';
+      return fitsABrain || joinMeshPartner(selId) ? 'auto' : 'manual';
     }
     const cache = joinCacheRef.current;
     const key = ids.join(',');
@@ -4802,6 +5051,8 @@ export default function Viewport3D({
   const joinSelected = () => {
     if (pickModeRef.current || transformRef.current?.dragging) return;
     const selId = selectedIdRef.current;
+    // A marked hole or pin end on another part comes first (openspec precise-placement)
+    if (selId && selectedIdsRef.current.length <= 1 && startTargetMove()) return;
     if (selId && selectedIdsRef.current.length <= 1 && planMates(lastAlignedRef.current, selId).length === 0) {
       const group = meshMapRef.current.get(selId);
       const brains = instancesRef.current
@@ -4814,6 +5065,9 @@ export default function Viewport3D({
         slideBatteryInto((free ?? brains[0]).id);
         return;
       }
+      // A gear with a 90° partner within reach goes to its nearest mesh spot (openspec right-angle-gears)
+      const partnerId = joinMeshPartner(selId);
+      if (partnerId && joinToMeshPartner(partnerId)) return;
     }
     handleMateRequest();
   };
@@ -5337,6 +5591,10 @@ export default function Viewport3D({
     const targetOverlay = createPickOverlay({ color: TARGET_COLOR, name: '__target__' });
     scene.add(targetOverlay.group);
     targetOverlayRef.current = targetOverlay;
+    // A gear dragged near a 90° partner: a see-through copy at the mesh spot it would jump to
+    const meshSpotOverlay = createPickOverlay({ name: '__mesh_spot__' });
+    scene.add(meshSpotOverlay.group);
+    meshSpotOverlayRef.current = meshSpotOverlay;
     // Band builder: the lit spot, the see-through band and spot handles (openspec rubber-bands)
     const bandOverlay = createBandOverlay();
     scene.add(bandOverlay.group);
@@ -5480,6 +5738,9 @@ export default function Viewport3D({
         }
 
         obj.position.copy(snappedPos);
+        // A gear near a 90° partner and not pulled onto a hole: show where it jumps to on release
+        // (openspec right-angle-gears); a hole snap wins, and Alt or Free move turn it off
+        updateMeshSpotDrag(obj, !noSnapOn() && !snapLine);
         // Turn to mesh / to fit square flats before the collision step (skipped with Alt, like snapping)
         if (!noSnapOn()) {
           liveFitWhileDragging(obj, partMeta);
@@ -5566,6 +5827,7 @@ export default function Viewport3D({
           startSetDrag();
         } else if (transform.object) {
           rebuildOtherFeatures();
+          endMeshSpotDrag();
           straightenedRef.current = false;
           dragStartPosRef.current.copy(transform.object.position);
           dragStartQuatRef.current.copy(transform.object.quaternion);
@@ -5586,15 +5848,22 @@ export default function Viewport3D({
       } else if (transform.object) {
         const obj = transform.object;
         const instId = obj.userData.instanceId;
+        const jump = endMeshSpotDrag();
         if (instId) {
           // A moved part goes through the placement step (square fit, mesh, hub); a hand turn in
           // Rotate mode, or a drag with Alt held, is kept as it is
           const settle = transformModeRef.current === 'translate' && !noSnapOn() && dragMovedRef.current;
-          const notes = commitPlacement(obj, { settle });
-          if (notes.length) onMateFeedbackRef.current?.(notes.join('. '));
+          if (settle && jump?.spot && !instancesRef.current.find((i) => i.instanceId === instId)?.locked) {
+            // Released near a 90° partner: it jumps to the mesh spot shown
+            moveToMeshSpot(obj, jump.spot, jump.partner);
+          } else {
+            const notes = commitPlacement(obj, { settle });
+            if (notes.length) onMateFeedbackRef.current?.(notes.join('. '));
+          }
         }
       }
       if (!event.value) {
+        endMeshSpotDrag(); // no spot preview left behind, however the drag ended
         // Always clear after any drag ends, even when the part was detached mid-drag (selection
         // changed, an undo, or the scene replaced by MCP or another tab); a stuck flag made every
         // later click in the viewport be ignored
@@ -6242,9 +6511,40 @@ export default function Viewport3D({
         cancelPendingSelect();
         return;
       }
+      // A selected gear and a gear it meshes with at 90° double-clicked (in front of the selected
+      // gear, if that is under the pointer too): the gear goes to the mesh spot nearest the click
+      const selAt = underPointer.indexOf(selId);
+      const partnerIds = new Set(rightAnglePartners(selId).map((p) => p.id));
+      const partnerHit = underPointer.find((id, k) => partnerIds.has(id) && (selAt < 0 || k < selAt));
+      if (partnerHit) {
+        setRayFromEvent(e);
+        const hit = raycaster.intersectObject(meshMapRef.current.get(partnerHit), true)[0];
+        if (joinToMeshPartner(partnerHit, hit?.point ?? null)) {
+          cancelPendingSelect();
+          return;
+        }
+      }
+      // A marked hole or pin end comes first (openspec precise-placement): the part double-clicked (the
+      // one in front) is selected and goes there, even when the selected part is behind it
+      const front = underPointer[0];
+      if (front && front !== selId && targetOnOtherPart(front)) {
+        const frontInst = instancesRef.current.find((i) => i.instanceId === front);
+        if (frontInst && !frontInst.locked) {
+          cancelPendingSelect();
+          onSelectRef.current(front);
+          let tries = 0;
+          const go = () => {
+            if (selectedIdRef.current === front) startTargetMove();
+            else if (tries++ < 10) setTimeout(go, 16);
+          };
+          setTimeout(go, 0);
+          return;
+        }
+      }
       // The selected part may be behind another part; anywhere under the pointer counts
       if (!underPointer.includes(selId)) return;
       cancelPendingSelect();
+      if (startTargetMove()) return;
       handleMateRequest();
     };
 
@@ -7226,6 +7526,7 @@ export default function Viewport3D({
       arrowOverlay.dispose();
       pickOverlay.dispose();
       targetOverlay.dispose();
+      meshSpotOverlay.dispose();
       if (pickHoverFrame) cancelAnimationFrame(pickHoverFrame);
       rotateGizmo.dispose();
       angleLabels.dispose();
@@ -7547,6 +7848,49 @@ export default function Viewport3D({
     validateTarget();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instances]);
+
+  // Meshed gears on the selected gear (openspec precise-placement): the edges of gears meshed with the
+  // one selected turn green, and of 90° gears just out of mesh with it amber; they ride on the parts
+  const meshMarksRef = useRef(new Map()); // instance id -> 'meshed' | 'near'
+  const MESH_MARK_STYLE = { meshed: { color: 0x16a34a, opacity: 1 }, near: { color: 0xf59e0b, opacity: 1 } };
+  const refreshMeshMarks = () => {
+    const next = new Map();
+    const ids = selectedIdsRef.current;
+    const sel = ids.length === 1 ? instancesRef.current.find((i) => i.instanceId === ids[0]) : null;
+    const selMeta = sel ? partFor(sel) : null;
+    if (sel && sel.visible !== false && explodeModeRef.current === 'off' && (canTurnToMesh(selMeta) || isMeshingRack(selMeta))) {
+      const mine = worldToothed(selMeta, sel.position, sel.rotation, sel.instanceId);
+      for (const other of mine ? instancesRef.current : []) {
+        if (other.instanceId === sel.instanceId || other.visible === false) continue;
+        const t = worldToothed(partFor(other), other.position, other.rotation, other.instanceId);
+        if (!t) continue;
+        if (meshRelation(mine, t) || meshRelation(t, mine)) next.set(other.instanceId, 'meshed');
+        else if (rightAngleNearMiss(mine, t)) next.set(other.instanceId, 'near');
+      }
+    }
+    const prev = meshMarksRef.current;
+    for (const id of new Set([...prev.keys(), ...next.keys()])) {
+      if (prev.get(id) === next.get(id)) continue;
+      const group = meshMapRef.current.get(id);
+      const inst = instancesRef.current.find((i) => i.instanceId === id);
+      const partMeta = inst ? partFor(inst) : null;
+      if (!group || !partMeta) continue;
+      // The mark lives on the part, so every restyle (selection, overlap) keeps it
+      group.userData.meshMark = MESH_MARK_STYLE[next.get(id)] ?? null;
+      applyGroupAppearance(group, {
+        baseColor: resolvePartBaseColor(inst, partMeta),
+        isSelected: selectLevel(selectedIdsRef.current, id),
+        isAttention: attentionIdsRef.current.includes(id),
+        isIntersecting: Boolean(group.userData.isIntersecting)
+      });
+    }
+    meshMarksRef.current = next;
+    renderFrameRef.current?.();
+  };
+  useEffect(() => {
+    refreshMeshMarks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instances, selectedIds, explodeMode]);
 
   useEffect(() => {
     const pick = pickModeRef.current;

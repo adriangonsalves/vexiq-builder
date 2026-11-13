@@ -12,8 +12,11 @@ import {
 } from '../mcp/assembly-engine.mjs';
 import { getLocalFeatures, measurePinEnds, SHAFT_FASTENER_TYPES, THIN_PART_MAX_MM } from '../src/utils/pinHoleAlignment.js';
 import {
+  measureBevelGear,
+  measureCrownGear,
   measureMotorHub,
   measureOpeningShape,
+  measureWormGear,
   measureRack,
   measureShaftFlat,
   measureSpurGear,
@@ -659,6 +662,19 @@ function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasu
     const m = measureRack(part);
     if (m.measured) rackSpecs = m;
     else unmeasured.push(`${part.name}: ${m.reason}`);
+  } else if (['bevel', 'crown', 'worm'].includes(gearSpecs?.gearType)) {
+    // Gears that mesh at 90° (openspec right-angle-gears)
+    const m =
+      gearSpecs.gearType === 'bevel'
+        ? measureBevelGear(part, gearSpecs.teeth)
+        : gearSpecs.gearType === 'crown'
+          ? measureCrownGear(part, gearSpecs.teeth)
+          : measureWormGear(part);
+    if (m.measured) Object.assign(gearSpecs, m);
+    else {
+      gearSpecs.measured = false;
+      unmeasured.push(`${part.name}: ${m.reason}`);
+    }
   }
 
   for (const port of ports) {

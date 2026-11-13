@@ -23,9 +23,9 @@ import {
   planMates
 } from '../utils/pinHoleAlignment.js';
 import { hubFrame, hubMatrix, isShaftInMotorSocket, splitHubTriangles } from '../utils/motorHub.js';
-import { isMeshingGear, meshRelation, meshTurn, quaternionToEulerDeg, turnQuaternion, worldToothed } from '../utils/gearMeshing.js';
+import { canTurnToMesh, meshRelation, meshTurn, quaternionToEulerDeg, meshRatio, rightAngleMeshKind, rightAngleNearMiss, turnQuaternion, worldToothed } from '../utils/gearMeshing.js';
 import { groupOf, shaftGroups, squareFitRoll, turnGroup } from '../utils/shaftGroups.js';
-import { settlePlacement, turnAboutLine } from '../utils/placementFit.js';
+import { motorShaftTilt, settlePlacement, turnAboutLine } from '../utils/placementFit.js';
 import { isTireOnHub } from '../utils/tireFit.js';
 import { seatedBatteryBay } from '../utils/batteryBay.js';
 import { areChainNeighbours, isChainFit, isChainPart, isGripperOnLink, isLink, isLinkOnSprocket, unsupportedBends } from '../utils/chainFit.js';
@@ -959,7 +959,7 @@ function findJoints(state) {
         ...nf,
         worldCenter,
         worldAxis,
-        teeth: nf.part.gearSpecs.teeth,
+        teeth: nf.part.gearSpecs.teeth ?? nf.part.gearSpecs.starts,
         pitchRadiusMm: nf.part.gearSpecs.pitchRadiusMm
       };
     });
@@ -983,6 +983,25 @@ function findJoints(state) {
       if (Math.abs(radialDist - expectedDist) <= 2.0) {
         meshedGearPairs.push([gA, gB]);
         link(gA.inst.instanceId, gB.inst.instanceId);
+      }
+    }
+  }
+  // Gears that mesh at 90° (openspec right-angle-gears), and 90° pairs a little out of mesh
+  const nearMeshPairs = [];
+  {
+    const toothedOf = new Map(placedGears.map((g) => [g.inst.instanceId, worldToothed(g.part, g.inst.position, g.inst.rotation, g.inst.instanceId)]));
+    for (let i = 0; i < placedGears.length; i++) {
+      for (let j = i + 1; j < placedGears.length; j++) {
+        const [gA, gB] = [placedGears[i], placedGears[j]];
+        const [tA, tB] = [toothedOf.get(gA.inst.instanceId), toothedOf.get(gB.inst.instanceId)];
+        const kind = rightAngleMeshKind(tA, tB);
+        if (kind) {
+          meshedGearPairs.push([gA, gB, kind]);
+          link(gA.inst.instanceId, gB.inst.instanceId);
+          continue;
+        }
+        const miss = rightAngleNearMiss(tA, tB);
+        if (miss) nearMeshPairs.push({ a: gA.inst.label, b: gB.inst.label, kind: miss.pair, offMm: miss.offMm });
       }
     }
   }
@@ -1032,7 +1051,8 @@ function findJoints(state) {
     chainOnSprocket,
     chainJoins,
     placedGears,
-    meshedGearPairs
+    meshedGearPairs,
+    nearMeshPairs
   };
 }
 
@@ -1268,6 +1288,15 @@ export function playInputs(state, { braceTolerance = true } = {}) {
         const boxB = found.rawWorldBoxes.get(b.instanceId);
         if (!boxB || !boxA.clone().expandByScalar(1).intersectsBox(boxB)) continue;
         for (const pair of findNearSeatedPairs(found.featuresById.get(a.instanceId), found.featuresById.get(b.instanceId), { maxLineMm: 0.75, maxAngleDeg: 2 })) {
+          // A flexed brace pin sits well inside its hole; a tip that only grazes a hole's mouth (a pin
+          // poking 0.1 mm past a gear into the beam above) holds nothing (openspec precise-placement)
+          const axis = pair.insert.axis.clone().normalize();
+          const span = (f) => [f.start.dot(axis), f.end.dot(axis)].sort((x, y) => x - y);
+          const [iLo, iHi] = span(pair.insert);
+          const [oLo, oHi] = span(pair.opening);
+          const overlap = Math.min(iHi, oHi) - Math.max(iLo, oLo);
+          if (overlap < BRACE_MIN_OVERLAP_MM) continue;
+          pair.overlapMm = overlap;
           seated.push({
             insert: pair.insert.instanceId,
             opening: pair.opening.instanceId,
@@ -1307,10 +1336,28 @@ export function playInputs(state, { braceTolerance = true } = {}) {
     .map((i) => worldToothed(partOf(i), i.position, i.rotation, i.instanceId))
     .filter(Boolean);
   const meshes = [];
+  // Gears at 90° (openspec right-angle-gears): the signed speed ratio comes from the meshing rule
+  // itself; a worm is always side a and drives one way only
+  for (let i = 0; i < toothed.length; i++) {
+    for (let j = i + 1; j < toothed.length; j++) {
+      let [p, q] = [toothed[i], toothed[j]];
+      const kind = rightAngleMeshKind(p, q);
+      if (kind) {
+        if (q.kind === 'worm') [p, q] = [q, p];
+        const ratio = meshRatio(p, q);
+        if (ratio == null) continue;
+        meshes.push({ a: p.instanceId, b: q.instanceId, kind, ratio: Math.round(ratio * 1e6) / 1e6, axisA: vec(p.axis), axisB: vec(q.axis), ...(kind === 'worm' ? { oneWay: true } : {}) });
+        continue;
+      }
+      const miss = rightAngleNearMiss(p, q);
+      if (miss) meshes.push({ a: p.instanceId, b: q.instanceId, kind: 'near', offMm: miss.offMm });
+    }
+  }
   for (const g of toothed) {
     if (g.kind !== 'gear') continue;
     for (const o of toothed) {
       if (o === g || (o.kind === 'gear' && o.instanceId < g.instanceId)) continue;
+      if (o.kind !== 'gear' && o.kind !== 'rack') continue; // 90° partners are linked above
       if (!meshRelation(g, o)) {
         // Gears side by side, a little too near or far to mesh, are reported
         if (o.kind !== 'gear' || Math.abs(g.axis.dot(o.axis)) < 0.999) continue;
@@ -1595,7 +1642,8 @@ export function auditAssembly(state) {
     batteryBays,
     chainBends,
     placedGears,
-    meshedGearPairs
+    meshedGearPairs,
+    nearMeshPairs
   } = found;
 
   const collisions = [];
@@ -1823,10 +1871,25 @@ export function auditAssembly(state) {
       label: w.inst.label
     }));
 
+  // Smart Motors tilted off the shaft in their socket (openspec precise-placement)
+  const tiltedMotors = [];
+  for (const inst of visible) {
+    if (!partOf(inst)?.hubSpecs) continue;
+    const socket = (featuresById.get(inst.instanceId) || []).find((f) => f.kind === 'shaft_socket');
+    if (!socket) continue;
+    const others = visible.filter((o) => o.instanceId !== inst.instanceId).flatMap((o) => featuresById.get(o.instanceId) || []);
+    const tilt = motorShaftTilt(socket, others);
+    if (tilt && tilt.angleDeg > MOTOR_TILT_AUDIT_DEG) {
+      const shaft = visible.find((o) => o.instanceId === tilt.shaft.instanceId);
+      tiltedMotors.push({ instanceId: inst.instanceId, label: inst.label, shaftId: shaft?.instanceId, shaft: shaft?.label, angleDeg: Number(tilt.angleDeg.toFixed(2)) });
+    }
+  }
+
   return {
     totalInstances: visible.length,
     isMechanicallySound:
       collisions.length === 0 &&
+      tiltedMotors.length === 0 &&
       floatingFasteners.length === 0 &&
       halfSeatedFasteners.length === 0 &&
       unsecuredParts.length === 0 &&
@@ -1841,6 +1904,8 @@ export function auditAssembly(state) {
     floatingFasteners,
     halfSeatedFastenerCount: halfSeatedFasteners.length,
     halfSeatedFasteners,
+    tiltedMotorCount: tiltedMotors.length,
+    tiltedMotors,
     unsecuredPartCount: unsecuredParts.length,
     unsecuredParts,
     underSecuredHeavyPartCount: underSecuredHeavyParts.length,
@@ -1860,6 +1925,9 @@ export function auditAssembly(state) {
     kinematics: {
       motorCount: motors.length,
       meshedGearPairCount: meshedGearPairs.length,
+      meshedGearPairs: meshedGearPairs.map(([a, b, kind]) => ({ a: a.inst.label, b: b.inst.label, kind: kind || 'spur' })),
+      // 90° pairs within 3 mm of meshing but out of mesh (openspec right-angle-gears)
+      nearMeshPairs,
       totalWheelCount: wheels.length,
       drivenWheelCount: allDrivenWheelIds.size,
       unpoweredWheels,
@@ -1867,6 +1935,12 @@ export function auditAssembly(state) {
     }
   };
 }
+
+// In Play, a pin a little off a hole's line (a diagonal brace) only counts as in it this deep
+const BRACE_MIN_OVERLAP_MM = 1;
+
+// A Smart Motor tilted further than this off the shaft in its socket is listed by the audit
+const MOTOR_TILT_AUDIT_DEG = 0.2;
 
 const FASTENER_TYPES = new Set(['connector_pin', 'standoff', 'straight_shaft', 'capped_shaft', 'motor_shaft']);
 
@@ -2671,6 +2745,7 @@ export function summarizeAudit(audit) {
     tightFitCount: audit.tightFitCount,
     floatingFastenerCount: audit.floatingFastenerCount,
     halfSeatedFastenerCount: audit.halfSeatedFastenerCount,
+    tiltedMotorCount: audit.tiltedMotorCount,
     unsecuredPartCount: audit.unsecuredPartCount,
     underSecuredHeavyPartCount: audit.underSecuredHeavyPartCount,
     disconnectedIslandCount: audit.disconnectedIslandCount,
@@ -2683,6 +2758,7 @@ export function summarizeAudit(audit) {
         tightFits: audit.tightFits.map((t) => `${t.label} x ${t.withLabel}`),
         floating: names(audit.floatingFasteners),
         halfSeated: names(audit.halfSeatedFasteners),
+        tiltedMotors: (audit.tiltedMotors || []).map((m) => `${m.label} ${m.angleDeg}° off ${m.shaft}`),
         unsecured: names(audit.unsecuredParts),
         underSecuredHeavy: names(audit.underSecuredHeavyParts),
         disconnected: audit.disconnectedIslands.map((island) => island.map((p) => p.label).join(', ')),
@@ -3221,7 +3297,7 @@ function insertIntoOpening(part, insert, target, others, instanceId) {
     return { at, settled: settlePlacedInstance(moving, [...others, moving], target.instanceId) };
   };
   let chosen = null;
-  if (isMeshingGear(part)) {
+  if (canTurnToMesh(part)) {
     for (let d = 0; d <= sweep && !chosen; d += Math.max(1.5, sweep / 40)) {
       const probe = settleAt(d);
       if (probe.settled.mesh) chosen = probe;

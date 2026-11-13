@@ -151,9 +151,9 @@ The button SHALL turn off once a target is set, moved or cleared, when it is tap
 - **THEN** no target is set, the message says the hole already has a part in it, and the button is still armed
 
 ### Requirement: Join
-The Join button SHALL be called **Auto Join**, with its own icon, while the selection is lined up with something it can be pushed into (the mate a double-click would do now, with or without arrows), or is a Robot Battery that fits a Robot Brain with a free bay; otherwise it SHALL be called **Manual Join**, with a different icon, because tapping it starts hole picking. The name, icon and tip SHALL follow as the part is moved into or out of line. Both are the same button in the same place.
+The Join button SHALL be called **Auto Join**, with its own icon, while the selection is lined up with something it can be pushed into (the mate a double-click would do now, with or without arrows), or is a Robot Battery that fits a Robot Brain with a free bay; otherwise it SHALL be called **Manual Join**, with a different icon, because tapping it starts hole picking. The name, icon and tip SHALL follow as the part is moved into or out of line. Both are the same button in the same place. While a target is marked and one part is selected that isn't the part the target is on, the button SHALL be Auto Join and its tip SHALL say it puts the part into the marked hole.
 
-Tapping Join SHALL do what double-clicking the selected part does: mate it with what it is lined up with, show the mate arrows when there is more than one way, or start hole picking when nothing is lined up (see pin-mating and hole-pick-insert); for a group or several parts, mate the set as double-clicking one of them does. With a Robot Battery selected and nothing lined up, Join SHALL slide it into the nearest Robot Brain it fits whose bay is free, as double-clicking that brain does. The same messages SHALL be shown as for the double-click ("Mated with …", "Nothing lined up to mate with", "Part is locked"). Double-click SHALL keep working.
+Tapping Join SHALL do what double-clicking the selected part does: put it into the marked target when one is set (see pin-mating), otherwise mate it with what it is lined up with, show the mate arrows when there is more than one way, or start hole picking when nothing is lined up (see pin-mating and hole-pick-insert); for a group or several parts, mate the set as double-clicking one of them does. With a Robot Battery selected and nothing lined up, Join SHALL slide it into the nearest Robot Brain it fits whose bay is free, as double-clicking that brain does. The same messages SHALL be shown as for the double-click ("Mated with …", "Nothing lined up to mate with", "Part is locked", "No free fit for … at this hole"). Double-click SHALL keep working.
 
 #### Scenario: Auto or Manual
 - **WHEN** a pin is selected with its tip lined up over a beam hole
@@ -170,6 +170,10 @@ Tapping Join SHALL do what double-clicking the selected part does: mate it with 
 #### Scenario: Join a battery
 - **WHEN** a Robot Battery is selected, one Robot Brain with a free bay is in the build, and the user taps Join
 - **THEN** the battery slides into the brain's bay
+
+#### Scenario: Join into the mark on a tablet
+- **WHEN** a motor hole is marked with Mark a hole, the user taps a pin standing in a beam and then taps Join
+- **THEN** the pin is shown seated in the marked hole and the bar turns into the wheel bar for its fits
 
 ### Requirement: Stamp copies
 Tapping Stamp copies SHALL turn it on. While it is on the view SHALL behave as it does with Ctrl or Cmd held (see copy-insert): the hole near the pointer is lit, a see-through copy is shown at the best fit, and the fits can be stepped through. With a mouse, one click on a lit hole that isn't taken SHALL insert a copy there, as Ctrl/Cmd+double-click does; on a touch screen a copy is inserted as "Touch taps show the fit before placing" says. Clicks and taps SHALL NOT change the selection while it is on. It SHALL stay on after a copy is inserted, so more can be stamped, and SHALL turn off when it is tapped again, on `Esc`, when the selection changes, or when Explode or Play mode is turned on. Holding Ctrl or Cmd and double-clicking SHALL keep working as before.

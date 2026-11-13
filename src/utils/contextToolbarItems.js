@@ -61,3 +61,20 @@ export function barItems({ selection, transformMode, locked, explode, playing, p
   if (some) items.push(item('duplicate'), item('delete'));
   return items;
 }
+
+/** The Join button's tip for each kind: [name, what it does, keys] (openspec context-toolbar, precise-placement). */
+export const JOIN_TIPS = {
+  manual: ['Manual Join', 'Pick the hole the part goes into', 'Double-click the part'],
+  auto: ['Auto Join', "Push the part into what it's lined up with", 'Double-click the part'],
+  target: ['Auto Join', 'Put the part into the marked hole', 'Double-click the part']
+};
+
+/**
+ * Which Join the bar shows: 'target' when one part is selected and a hole or pin end is marked on
+ * another part (Join puts it there, before anything it lines up with), else 'auto' when it is lined up
+ * with something it can be pushed into, else 'manual'.
+ */
+export function joinKindFor({ count, targetOnOtherPart = false, linedUp = false }) {
+  if (count === 1 && targetOnOtherPart) return 'target';
+  return linedUp ? 'auto' : 'manual';
+}

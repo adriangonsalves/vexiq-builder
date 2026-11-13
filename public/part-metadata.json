@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-11-07T20:38:46.573Z",
+  "generatedAt": "2026-11-12T21:35:35.478Z",
   "partCount": 482,
   "totalVerifiedPorts": 4242,
   "parts": {
@@ -96204,12 +96204,20 @@
       "gearSpecs": {
         "gearType": "bevel",
         "teeth": 12,
-        "pitchRadiusMm": 9.685,
+        "pitchRadiusMm": 8.166,
         "phaseOffsetDeg": 15,
         "boreAxis": [
           0,
           0,
           1
+        ],
+        "measured": true,
+        "conePointZ": 0,
+        "coneAngleDeg": 46.24,
+        "toothPhaseDeg": 15,
+        "faceSpanMm": [
+          -10.7,
+          -6.5
         ]
       },
       "fastenerSpecs": null,
@@ -116959,12 +116967,20 @@
       "gearSpecs": {
         "gearType": "bevel",
         "teeth": 18,
-        "pitchRadiusMm": 9.8,
+        "pitchRadiusMm": 8.482,
         "phaseOffsetDeg": 10,
         "boreAxis": [
           0,
           0,
           1
+        ],
+        "measured": true,
+        "conePointZ": 0,
+        "coneAngleDeg": 45.43,
+        "toothPhaseDeg": 10,
+        "faceSpanMm": [
+          -10.3,
+          -6.5
         ]
       },
       "fastenerSpecs": null,
@@ -119829,13 +119845,25 @@
       "gearSpecs": {
         "gearType": "crown",
         "teeth": 36,
-        "pitchRadiusMm": 20.105,
+        "pitchRadiusMm": 18.905,
         "phaseOffsetDeg": 5,
         "boreAxis": [
           0,
           0,
           1
-        ]
+        ],
+        "measured": true,
+        "diametralPitch": 24,
+        "moduleMm": 1.0583,
+        "toothFace": -1,
+        "tipPlaneZ": -3.525,
+        "pitchPlaneZ": -2.467,
+        "ringRadiiMm": [
+          17.91,
+          19.91
+        ],
+        "toothSpacingMm": 3.325,
+        "toothPhaseDeg": 5
       },
       "fastenerSpecs": null,
       "mountingRules": {
@@ -152268,13 +152296,27 @@
       "gearSpecs": {
         "gearType": "worm",
         "teeth": null,
-        "pitchRadiusMm": 7.29,
+        "pitchRadiusMm": 6.35,
         "phaseOffsetDeg": 0,
         "boreAxis": [
           0,
           0,
           1
-        ]
+        ],
+        "measured": true,
+        "diametralPitch": 24,
+        "moduleMm": 1.0583,
+        "threadSpacingMm": 3.325,
+        "leadMm": 3.325,
+        "starts": 1,
+        "hand": 1,
+        "tipRadiusMm": 7.292,
+        "rootRadiusMm": 4.983,
+        "threadSpanMm": [
+          0.1,
+          18.94
+        ],
+        "threadPhaseMm": 2.494
       },
       "fastenerSpecs": null,
       "mountingRules": {

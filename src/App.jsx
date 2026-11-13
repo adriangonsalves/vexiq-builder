@@ -1360,6 +1360,29 @@ export default function App() {
   };
   // A dragged set's release fit (openspec group-snapping): the fitted poses from the engine, nothing saved
   const handleFitSet = (ids, poses) => backend.runAction('fit_set', { instances }, { ids, poses });
+
+  // After a pin goes in (mate, Join, hole picking, the marked hole, a copy), a hole it nearly reaches on
+  // another block is lined up in the same history step (openspec precise-placement). The request waits
+  // for the insert to reach `instances`, then the engine works out the moves.
+  const pendingLineUpRef = useRef(null); // { id, text, at }
+  const handleLineUpAfterInsert = useCallback((id, text) => {
+    pendingLineUpRef.current = { id, text, at: Date.now() };
+  }, []);
+  useEffect(() => {
+    const request = pendingLineUpRef.current;
+    if (!request) return;
+    pendingLineUpRef.current = null;
+    if (Date.now() - request.at > 2000 || lockedRef.current) return;
+    const snapshot = instances;
+    backend
+      .runAction('line_up_after_insert', { instances: snapshot }, { instanceId: request.id })
+      .then((result) => {
+        if (!result?.message || instancesForBandRef.current !== snapshot) return;
+        if (result.patches?.length) setInstances((prev) => applyPatches(prev, result.patches), { mergeIntoHead: true });
+        setActionFeedback({ message: `${request.text}, and ${result.message}`, isError: !result.patches?.length });
+      })
+      .catch(() => {});
+  }, [instances]);
   const handleSetSetFlag = (field, value) => {
     const verb = field === 'visible' ? (value ? 'Show' : 'Hide') : value ? 'Lock' : 'Unlock';
     const wanted = new Set(selectedIds);
@@ -1728,6 +1751,7 @@ export default function App() {
     });
     startPlacing([copy.instanceId]);
     setActionFeedback({ message: withNotes(`Inserted ${copy.label} into ${receivingLabel}`), isError: false });
+    handleLineUpAfterInsert(copy.instanceId, withNotes(`Inserted ${copy.label} into ${receivingLabel}`));
     return copy.instanceId;
   };
 
@@ -3280,6 +3304,7 @@ export default function App() {
               locked ? noop : (ids, patches, { kind, note, label }) => handleUpdateSet(ids, patches, { label: label || `${kind === 'turn' ? 'Turn' : 'Move'} ${setName}${note ? `. ${note}` : ''}` })
             }
             onFitSet={locked ? null : handleFitSet}
+            onLineUpAfterInsert={locked ? null : handleLineUpAfterInsert}
             onRegisterFlushMover={handleRegisterFlushMover}
             onRegisterScreenshot={handleRegisterScreenshot}
             onRegisterPartPoints={handleRegisterPartPoints}

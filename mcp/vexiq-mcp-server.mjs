@@ -31,6 +31,7 @@ import {
 } from './assembly-engine.mjs';
 import { bendSheet, sheetBendChoices } from '../src/engine/sheetBending.js';
 import { placeBand } from '../src/engine/bandRouting.js';
+import { meshRightAngle } from '../src/engine/rightAngleGears.js';
 import { bandReport } from '../src/utils/bandRoute.js';
 import { describeShape } from '../src/utils/shapedParts.js';
 import { MCP_OFF_MESSAGE } from '../src/utils/appSettings.js';
@@ -552,6 +553,23 @@ const TOOLS = [
         }
       },
       required: ['supportBeamId', 'startPortId', 'gears']
+    }
+  },
+  {
+    name: 'mesh_right_angle',
+    description:
+      "Put a gear in mesh with a gear it meshes with at 90°: a bevel gear with a bevel gear of the same tooth count, the 36 Tooth Crown Gear with a standard spur gear (12-60 Tooth, not high strength), or the Worm Gear with a standard spur gear (the worm lies along the gear's edge in its tooth plane; it drives the gear, the gear can't turn it). Give the gear to move (instanceId) or a gear to add (part), and the partner (targetInstanceId). Without spot it changes nothing and lists the mesh spots, a quarter turn apart round the partner so a shaft through the gear lines up with the holes: [{ spot, axis (the gear's axis direction), center, blocked, blockedBy }]. With spot (a number from the list) it puts the gear there, turned so the teeth fit, as one undo step; supports (shaft, beams) can be added afterwards. place_part and place_parts also turn these gears to mesh when they land in mesh range.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        instanceId: { type: 'string', description: 'A gear already in the build to move into mesh.' },
+        part: { type: 'string', description: 'A gear to add instead (part number or name).' },
+        targetInstanceId: { type: 'string', description: 'The gear to mesh with.' },
+        spot: { type: 'number', description: 'The mesh spot to use, from a listing call.' },
+        label: { type: 'string', description: 'Label for an added gear.' },
+        color: { type: 'string', description: 'Color for an added gear.' }
+      },
+      required: ['targetInstanceId']
     }
   },
   {
@@ -1888,6 +1906,16 @@ async function executeTool(name, args = {}) {
       placedGears: res.placedGears,
       placedShafts: res.placedShafts
     };
+  }
+
+  if (name === 'mesh_right_angle') {
+    const state = readAssemblyState();
+    const res = meshRightAngle(state, args);
+    if (!res.ok) return { isError: true, error: res.error, ...(res.spots ? { spots: res.spots } : {}) };
+    if (!res.state) return { ok: true, spots: res.spots };
+    await writeAssemblyState(res.state, { stepLabel: res.stepLabel });
+    const { state: _s, record: _r, stepLabel: _l, ...reply } = res;
+    return { ...reply, audit: summarizeAudit(auditAssembly(readAssemblyState())) };
   }
 
   if (name === 'mirror_subassembly') {

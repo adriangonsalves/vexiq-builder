@@ -58,6 +58,18 @@ check('real build: sound exactly when there are no problems', real.isMechanicall
   check('audit: a standoff 0.53 mm off a beam hole is one tight fit, no overlap', pivot.collisionCount === 0 && pivot.tightFitCount === 1, JSON.stringify(pivot.tightFits));
   check('  naming the standoff and the beam', [pivot.tightFits[0]?.label, pivot.tightFits[0]?.withLabel].sort().join() === 'Pivot Beam,Pivot Standoff');
   check('  and the tight fit is not a problem in the dialog', problemCount(auditIssues(pivot).filter((i) => i.kind === 'tight-fit')) === 0);
+
+  // A Smart Motor tilted 0.9° off its shaft (openspec precise-placement), from the 90° gear test rig
+  const shaft = at('ws', 'Worm shaft', '4x Pitch Shaft', [121.999, 65.4, -0.005], [8.53, -90, 0]);
+  const motorAt = (rotation, position) => ({ ...at('m', 'Smart Motor #2', 'VEX IQ Smart Motor', position, rotation), socketAngleDeg: -22.63 });
+  const tilted = auditAssembly({ instances: [shaft, motorAt([-180, -0.9, 90], [137.904, 55.875, -0.031])] });
+  check('audit: a motor 0.9° off its shaft is listed', tilted.tiltedMotorCount === 1 && Math.abs(tilted.tiltedMotors[0].angleDeg - 0.9) < 0.1 && tilted.tiltedMotors[0].shaft === 'Worm shaft', JSON.stringify(tilted.tiltedMotors));
+  const tiltIssue = auditIssues(tilted).find((i) => i.kind === 'tilted-motor');
+  check('  as a problem naming the shaft, fixable from the motor', tiltIssue?.level === 'problem' && /Smart Motor #2 is tilted 0\.9\d?° off Worm shaft/.test(tiltIssue.title) && tiltIssue.fixIds[0] === 'm', JSON.stringify(tiltIssue));
+  const { settlePlacedInstance, applyPosePatches } = await import('../mcp/assembly-engine.mjs');
+  const before = [shaft, motorAt([-180, -0.9, 90], [137.904, 55.875, -0.031])];
+  const squared = applyPosePatches(before, settlePlacedInstance(before[1], before).patches);
+  check('  a squared motor is not listed', auditAssembly({ instances: squared }).tiltedMotorCount === 0);
 }
 
 console.log(failures === 0 ? '\nAll audit issue checks passed.' : `\n${failures} audit issue check(s) failed.`);

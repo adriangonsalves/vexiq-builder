@@ -2,7 +2,7 @@
  * Node check for src/utils/contextToolbarItems.js (which buttons the context bar shows).
  * Run: node scripts/check-context-toolbar.mjs   (exits 1 on any failure)
  */
-import { barItems } from '../src/utils/contextToolbarItems.js';
+import { JOIN_TIPS, barItems, joinKindFor } from '../src/utils/contextToolbarItems.js';
 
 let failures = 0;
 const check = (label, ok, detail = '') => {
@@ -187,6 +187,17 @@ const step3 = ['wheel', 'stepUp', 'stepDown'];
 {
   const got = barItems(wheel('fits', {}, { playing: true }));
   check('wheel session while Play: bar still hidden ([])', got.length === 0, show(got));
+}
+
+// Join with a marked hole (openspec precise-placement)
+{
+  check('Join with a mark on another part: target kind', joinKindFor({ count: 1, targetOnOtherPart: true }) === 'target');
+  check('  even when the part is also lined up', joinKindFor({ count: 1, targetOnOtherPart: true, linedUp: true }) === 'target');
+  check('  its tip says it puts the part into the marked hole, named Auto Join', JOIN_TIPS.target[0] === 'Auto Join' && /marked hole/.test(JOIN_TIPS.target[1]));
+  check('no mark, lined up: auto', joinKindFor({ count: 1, linedUp: true }) === 'auto');
+  check('no mark, nothing lined up: manual', joinKindFor({ count: 1 }) === 'manual');
+  check('several parts with a mark: not the target kind', joinKindFor({ count: 2, targetOnOtherPart: true }) === 'manual');
+  check('Join is on the bar for one part while a mark is set', barItems(base({ selection: sel(), hasTarget: true })).some((i) => i.id === 'join'));
 }
 
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nall checks passed');

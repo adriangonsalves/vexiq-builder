@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { angleAbout, directionAt, refAxes, wrapDeg } from './axisFrame.js';
-import { isMeshingGear, meshTurn, worldToothed } from './gearMeshing.js';
+import { canTurnToMesh, meshTurn, worldToothed } from './gearMeshing.js';
 
 /**
  * Pin/shaft-to-opening alignment math for the viewport's aligned-hole highlights.
@@ -1174,6 +1174,59 @@ export function clearSpotAlongLine(isClearAt, reachMm, { stepMm = LINE_SETTLE_ST
   return near;
 }
 
+// Joint lines this close to one plane, and this parallel, form a row (openspec precise-placement)
+export const ROW_PLANE_MM = 0.25;
+export const ROW_PARALLEL_DEG = 2;
+
+/**
+ * For a part held on two or more joint lines (findEngagedJoints `lines`) that are parallel and lie in
+ * one row: the line along the row, square to the pins, crossing every held line at the middle of where
+ * its pin, peg or shaft overlaps its opening (the average depth over the lines). A 180° turn about it
+ * puts every pin back in its opening. `pivot` is the point on it nearest `center`. Returns
+ * { pivot, axis } or null when the lines aren't a row.
+ */
+export function rowPivot(lines, center) {
+  if (!lines || lines.length < 2) return null;
+  const a = lines[0].axis.clone().normalize();
+  const minDot = Math.cos(THREE.MathUtils.degToRad(ROW_PARALLEL_DEG));
+  if (lines.some((l) => Math.abs(l.axis.clone().normalize().dot(a)) < minDot)) return null;
+  // Each line's middle of overlap
+  const points = lines.map((line) => {
+    const mids = line.pairs
+      .map(({ insert, opening }) => {
+        const spans = coaxialSpans(insert, opening);
+        if (!spans) return null;
+        const t = (Math.max(spans.iMin, spans.oMin) + Math.min(spans.iMax, spans.oMax)) / 2;
+        return insert.origin.clone().addScaledVector(insert.axis, t);
+      })
+      .filter(Boolean);
+    if (!mids.length) return line.origin.clone();
+    return mids.reduce((s, p) => s.add(p), new THREE.Vector3()).divideScalar(mids.length);
+  });
+  const across = points.map((p) => p.clone().sub(a.clone().multiplyScalar(p.dot(a))));
+  // The row runs between the two lines furthest apart
+  let far = [0, 1];
+  let farDist = -1;
+  for (let i = 0; i < across.length; i++) {
+    for (let j = i + 1; j < across.length; j++) {
+      const d = across[i].distanceTo(across[j]);
+      if (d > farDist) [farDist, far] = [d, [i, j]];
+    }
+  }
+  if (farDist < 1) return null;
+  const q0 = across[far[0]];
+  const dir = across[far[1]].clone().sub(q0).normalize();
+  const offRow = (q) => {
+    const v = q.clone().sub(q0);
+    return v.sub(dir.clone().multiplyScalar(v.dot(dir))).length();
+  };
+  if (across.some((q) => offRow(q) > ROW_PLANE_MM)) return null;
+  const depth = points.reduce((s, p) => s + p.dot(a), 0) / points.length;
+  const c = center.clone().sub(a.clone().multiplyScalar(center.dot(a)));
+  const pivot = q0.clone().addScaledVector(dir, c.clone().sub(q0).dot(dir)).addScaledVector(a, depth);
+  return { pivot, axis: dir };
+}
+
 const GRID_PIVOT_SAME_MM = 0.3;
 export function gridPivot(features, center, { gridMm = VEX_PITCH_MM / 2 } = {}) {
   if (!features.length) return center.clone();
@@ -1457,7 +1510,7 @@ export function listInsertFits({ partMeta, measured = null, instanceId, hovered,
         if (!pose) continue;
         // A spur gear in mesh range at its seated pose is shown at its meshing turn (gear-meshing),
         // when it turns about the insert's own line (else the turn would take the insert off the hole)
-        if (meshNeighbours?.length && isMeshingGear(partMeta)) meshPreviewTurn(pose, partMeta, n, PICK_GAP_MM + depth + Math.max(0, f.tMax - f.tMin), meshNeighbours, f);
+        if (meshNeighbours?.length && canTurnToMesh(partMeta)) meshPreviewTurn(pose, partMeta, n, PICK_GAP_MM + depth + Math.max(0, f.tMax - f.tMin), meshNeighbours, f);
         const duplicate = fits.some(
           (g) => g.position.distanceTo(pose.position) < 0.01 && g.quaternion.angleTo(pose.quaternion) < THREE.MathUtils.degToRad(0.1)
         );
@@ -1590,7 +1643,7 @@ export function listBoreFits({ partMeta, measured = null, instanceId, hovered, r
       for (let q = 0; q < 4; q++) {
         const pose = insertPose({ ...base, rollRad: (q * Math.PI) / 2 + offset });
         if (!pose) continue;
-        if (meshNeighbours?.length && isMeshingGear(partMeta)) meshPreviewTurn(pose, partMeta, n, sweepMm, meshNeighbours, f);
+        if (meshNeighbours?.length && canTurnToMesh(partMeta)) meshPreviewTurn(pose, partMeta, n, sweepMm, meshNeighbours, f);
         const duplicate = fits.some(
           (g) => g.position.distanceTo(pose.position) < 0.01 && g.quaternion.angleTo(pose.quaternion) < THREE.MathUtils.degToRad(0.1)
         );

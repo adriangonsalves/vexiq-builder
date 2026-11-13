@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { Check, Copy, Move, RotateCw, Trash2, X } from 'lucide-react';
 import PopoverMenu, { MenuItem } from './PopoverMenu.jsx';
 import ThumbWheel from './ThumbWheel.jsx';
+import { JOIN_TIPS } from '../utils/contextToolbarItems.js';
 import {
   AddToSelectionIcon,
   FreeMoveIcon,
@@ -82,7 +83,7 @@ function iconFor(id, { on, hasTarget, turnStep, joinKind }) {
     case 'markHole':
       return <MarkHoleIcon set={hasTarget} />;
     case 'join':
-      return joinKind === 'auto' ? <AutoJoinIcon /> : <ManualJoinIcon />;
+      return joinKind === 'auto' || joinKind === 'target' ? <AutoJoinIcon /> : <ManualJoinIcon />;
     case 'stampCopies':
       return <StampCopiesIcon />;
     case 'worldArrows':
@@ -216,7 +217,7 @@ export default function ContextToolbar({ items, on = {}, hasTarget = false, turn
   const tipText = (id) => {
     if (id === 'commit') return COMMIT_TIPS[stepper?.commitTip || stepper?.kind] || [id, '', null];
     // The step buttons name R / Shift+R only in the sessions R steps
-    if (id === 'join' && joinKind === 'auto') return TIPS.autoJoin;
+    if (id === 'join' && JOIN_TIPS[joinKind]) return JOIN_TIPS[joinKind];
     if ((id === 'stepUp' || id === 'stepDown') && stepper) return [TIPS[id][0], TIPS[id][1], stepper.stepKeys ? stepper.stepKeys[id === 'stepUp' ? 0 : 1] : 'Mouse wheel'];
     return TIPS[id] || [id, '', null];
   };

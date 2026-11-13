@@ -99,6 +99,12 @@ export function createKinematic(graph) {
             continue;
           }
         } else {
+          // A worm (side a) turns its gear, but the gear can't turn the worm: asked to, it jams
+          // (reached from the gear after the worm set it, it's only the same mesh seen from the other end)
+          if (l.oneWay && !forward) {
+            if (!speedOf.has(other) && Math.abs(spinAbout(cur, v3(l.axisB))) > SAME) jam(motor);
+            continue;
+          }
           const [mine, theirs] = forward ? [v3(l.axisA), v3(l.axisB)] : [v3(l.axisB), v3(l.axisA)];
           const ratio = forward ? l.ratio : 1 / l.ratio;
           const spinWanted = l.sign * ratio * spinAbout(cur, mine);

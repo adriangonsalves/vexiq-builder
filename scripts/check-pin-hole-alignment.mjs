@@ -1280,5 +1280,44 @@ for (const name of ['Rubber Shaft Collar', 'Rubber Shaft Collar v1']) {
   check('target fits: a pin on a pin end has none', rules(pinMeta, pinTarget, pinFeats).length === 0);
 }
 
+// --- Row pivot: a part held by a row of pins turns about the row (openspec precise-placement) ---
+{
+  const { findEngagedJoints, findSeatedPairs, rowPivot } = await import('../src/utils/pinHoleAlignment.js');
+  const { quaternionToEulerDeg } = await import('../src/utils/gearMeshing.js');
+  const at = (id, query, position, rotation) => ({ instanceId: id, label: id, partId: findPart(query).id, position, rotation, visible: true });
+  const beam = at('beam', '2x4 Beam', [38.096, -3.924, -0.598], [-90, 0, 0.9]);
+  const corner = at('corner', '2x Wide, 2x2 Corner Connector (Weak)', [44.545, -0.822, 5.651], [90, 0, 89.1]);
+  const { lines } = findEngagedJoints(worldFeaturesFor(corner), worldFeaturesFor(beam));
+  check('row: the corner connector is held by its two pegs on two lines', lines.length === 2, String(lines.length));
+  const center = new THREE.Vector3(...corner.position);
+  const row = rowPivot(lines, center);
+  check('  they form a row with a pivot', Boolean(row));
+  if (row) {
+    const a = lines[0].axis.clone().normalize();
+    check('  the row runs square to the pegs', Math.abs(row.axis.dot(a)) < 1e-6);
+    // The pivot is at the middle of each peg's overlap with its hole
+    const pair = lines[0].pairs[0];
+    const ins = pair.insert;
+    const op = pair.opening;
+    const t = (p) => p.clone().sub(ins.origin).dot(ins.axis);
+    const lo = Math.max(Math.min(t(ins.start), t(ins.end)), Math.min(t(op.start), t(op.end)));
+    const hi = Math.min(Math.max(t(ins.start), t(ins.end)), Math.max(t(op.start), t(op.end)));
+    check('  at the middle of where the pegs overlap their holes', Math.abs(t(row.pivot) - (lo + hi) / 2) < 0.05, `${t(row.pivot).toFixed(3)} vs ${((lo + hi) / 2).toFixed(3)}`);
+    // Turn it 180° about the row: both pegs are back in the beam, with no overlap
+    const q = new THREE.Quaternion().setFromAxisAngle(row.axis, Math.PI);
+    const pos = new THREE.Vector3(...corner.position).sub(row.pivot).applyQuaternion(q).add(row.pivot);
+    const rot = quaternionToEulerDeg(q.multiply(new THREE.Quaternion().setFromRotationMatrix(buildWorldMatrix([0, 0, 0], corner.rotation))));
+    const flipped = { ...corner, position: pos.toArray(), rotation: rot };
+    const seated = findSeatedPairs(worldFeaturesFor(flipped), worldFeaturesFor(beam));
+    check('  turned 180° about the row, both pegs are still in the beam', seated.length === 2, String(seated.length));
+    check('  and it overlaps nothing', !checkCandidateCollision(flipped, [beam, flipped]).isIntersecting);
+  }
+  // Three lines not in one plane: no row
+  const line = (x, y) => ({ origin: new THREE.Vector3(x, y, 0), axis: new THREE.Vector3(0, 0, 1), pairs: [] });
+  check('row: three pin lines in an L are not a row', rowPivot([line(0, 0), line(12.7, 0), line(0, 12.7)], new THREE.Vector3()) === null);
+  check('row: two pin lines are a row', Boolean(rowPivot([line(0, 0), line(12.7, 0)], new THREE.Vector3())));
+  check('row: a single line is not', rowPivot([line(0, 0)], new THREE.Vector3()) === null);
+}
+
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

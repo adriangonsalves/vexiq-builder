@@ -225,7 +225,9 @@ for (const from of ['Beam', 'Pin 1', 'Plate']) {
     check('  the arm stays where it was', JSON.stringify(after.get(arm.instanceId).position) === JSON.stringify(arm.position) && JSON.stringify(after.get(arm.instanceId).rotation) === JSON.stringify(arm.rotation), JSON.stringify(armMove));
     check('  nothing overlaps afterwards', overlapsOf(r.state.instances, r.state.instances.map((i) => i.instanceId)).length === 0, overlapsOf(r.state.instances, r.state.instances.map((i) => i.instanceId)).join(', '));
     check('  the pins are now in the arm', jointGraph(r.state).edges.some(([a, b]) => [a, b].includes(named('Claw R Pin 1').instanceId) && [a, b].includes(arm.instanceId)));
-    check('  the message says why the other side moved', /would have overlapped/.test(r.message), r.message);
+    // The claw only touches the arm, so it is its own (smaller) block and moves straight away (openspec
+    // precise-placement); when another side is tried first, the message says why it didn't move
+    check('  the message names the claw as what moved', /moved Claw 3x3 Beam R/.test(r.message) && (!/\(moving /.test(r.message) || /would have (overlapped|taken .+ out of mesh with)/.test(r.message)), r.message);
     check('  one history step, named for the claw', r.record && /Fix assembly: Claw/.test(r.stepLabel), r.stepLabel);
   }
   function named2(m) {

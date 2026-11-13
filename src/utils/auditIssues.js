@@ -47,6 +47,9 @@ export function auditIssues(audit) {
       fixIds
     );
   }
+  for (const m of audit.tiltedMotors || []) {
+    add('tilted-motor', 'problem', `${m.label} is tilted ${m.angleDeg}° off ${m.shaft}`, 'A motor sits square on its shaft. Fix assembly squares it up without moving the shaft.', [part(m)], [m.instanceId]);
+  }
   for (const p of audit.unsecuredParts || []) {
     add('unsecured', 'problem', `${p.label} is not pinned to anything`, 'No pin or shaft holds it.', [part(p)]);
   }

@@ -11,6 +11,7 @@ import { refAxes, wrapDeg } from '../src/utils/axisFrame.js';
  */
 
 export const RAY_COUNT = 1440; // 0.25° steps
+const VEX_PITCH_MM = 12.7;
 // VEX IQ spur gears come in three tooth sizes: high strength (16 DP), standard (24 DP: 24 teeth on a
 // 1-pitch diameter) and the 34 DP pair. A measured tooth size is snapped to the nearest of these.
 export const DIAMETRAL_PITCHES = [16, 24, 34];
@@ -305,6 +306,300 @@ export function measureRack(part) {
     faceSpanMm: faceTs.length
       ? [round(Math.min(...faceTs) - 0.1, 2), round(Math.max(...faceTs) + 0.1, 2)]
       : [round(min[best.ai], 2), round(max[best.ai], 2)]
+  };
+}
+
+/** Least-squares line y = a + b·x through points [[x, y]]. */
+function fitLine(points) {
+  const n = points.length;
+  const mx = points.reduce((s, p) => s + p[0], 0) / n;
+  const my = points.reduce((s, p) => s + p[1], 0) / n;
+  let sxy = 0;
+  let sxx = 0;
+  for (const [x, y] of points) {
+    sxy += (x - mx) * (y - my);
+    sxx += (x - mx) ** 2;
+  }
+  const b = sxx ? sxy / sxx : 0;
+  return { a: my - b * mx, b };
+}
+
+/**
+ * The nearest VEX IQ tooth size to a measured module, or null when none is within DP_TOLERANCE.
+ * Returns { dp, moduleMm }.
+ */
+function snapModule(rawModule) {
+  const rawDp = 25.4 / rawModule;
+  const dp = DIAMETRAL_PITCHES.reduce((a, b) => (Math.abs(b - rawDp) < Math.abs(a - rawDp) ? b : a));
+  if (Math.abs(dp - rawDp) / dp > DP_TOLERANCE) return null;
+  return { dp, moduleMm: 25.4 / dp };
+}
+
+const BEVEL_CONE_AGREE_MM = 0.5; // the root line's and the tip line's cone points must agree this well
+
+/**
+ * Straight bevel gear teeth about the part's local Z axis (openspec right-angle-gears, design §1).
+ * Slices across the tooth band give each height's tip and root radius; straight lines through the
+ * root radii and through the tip radii (on the side of the band where the teeth narrow toward the
+ * apex) reach radius 0 at the cone point. Returns { measured: true, teeth, conePointZ, coneAngleDeg,
+ * pitchRadiusMm, toothPhaseDeg, faceSpanMm } or { measured: false, reason }.
+ */
+export function measureBevelGear(part, teeth) {
+  if (!teeth || teeth < 6) return { measured: false, reason: 'no tooth count' };
+  const cast = makeRaycaster(part);
+  const axis = new THREE.Vector3(0, 0, 1);
+  const { min, max } = part.bbox;
+  const startR = Math.max(...[min[0], min[1], max[0], max[1]].map(Math.abs)) * 1.5 + 2;
+  const slices = [];
+  for (let z = min[2] + 0.2; z <= max[2] - 0.2 + 1e-6; z += 0.2) {
+    const { thetas, radii } = inwardProfile(cast, new THREE.Vector3(0, 0, z), axis, startR, 720);
+    const { tip, root } = tipAndRoot(thetas, radii, teeth);
+    if (!(tip - root > 0.4)) continue;
+    const clipped = radii.map((r) => (r == null ? null : Math.min(tip, Math.max(root, r))));
+    const { amplitude } = fourierPhase(thetas, clipped, teeth);
+    if (amplitude >= MIN_TOOTH_AMPLITUDE * (tip - root)) slices.push({ z, tip, root });
+  }
+  if (slices.length < 3) return { measured: false, reason: 'no tooth pattern found' };
+  // The teeth narrow toward the apex: keep the band from the widest tip onward in that direction
+  const widest = slices.reduce((a, b) => (b.tip > a.tip ? b : a));
+  const rootFit = fitLine(slices.map((s) => [s.z, s.root]));
+  const towardApex = Math.sign(-rootFit.b) || 1; // +1 when radii shrink as z grows
+  const narrowing = slices.filter((s) => (s.z - widest.z) * towardApex >= -1e-6);
+  if (narrowing.length < 3) return { measured: false, reason: 'tooth band too short to find the cone point' };
+  // A stray slice (a hole through the web) is dropped from the root line after a first fit
+  const firstRoot = fitLine(narrowing.map((s) => [s.z, s.root]));
+  const rootPoints = narrowing.filter((s) => Math.abs(firstRoot.a + firstRoot.b * s.z - s.root) <= 0.3);
+  // High strength teeth are cut flat by the outer cylinder near the heel: only slices below it count
+  const tipPoints = narrowing.filter((s) => s.tip < widest.tip - 0.05);
+  if (rootPoints.length < 3 || tipPoints.length < 2) return { measured: false, reason: 'tooth band too short to find the cone point' };
+  const rootLine = fitLine(rootPoints.map((s) => [s.z, s.root]));
+  const tipLine = fitLine(tipPoints.map((s) => [s.z, s.tip]));
+  const apexRoot = -rootLine.a / rootLine.b;
+  const apexTip = -tipLine.a / tipLine.b;
+  if (!Number.isFinite(apexRoot) || !Number.isFinite(apexTip)) return { measured: false, reason: 'no cone point' };
+  if (Math.abs(apexRoot - apexTip) > BEVEL_CONE_AGREE_MM) {
+    return { measured: false, reason: `root and tip lines meet the axis ${Math.abs(apexRoot - apexTip).toFixed(2)} mm apart` };
+  }
+  // VEX parts are drawn on the pitch grid: a cone point within 0.4 mm of an eighth-pitch step is
+  // taken to be on it (the fits drift a few tenths on these small tooth bands)
+  const rawApex = (apexRoot + apexTip) / 2;
+  const gridApex = Math.round(rawApex / (VEX_PITCH_MM / 8)) * (VEX_PITCH_MM / 8);
+  const conePointZ = Math.abs(rawApex - gridApex) <= 0.4 ? gridApex : rawApex;
+  const coneAngleDeg = THREE.MathUtils.radToDeg(Math.atan((Math.abs(rootLine.b) + Math.abs(tipLine.b)) / 2));
+  const faceLo = Math.min(...slices.map((s) => s.z)) - 0.2;
+  const faceHi = Math.max(...slices.map((s) => s.z)) + 0.2;
+  const mid = narrowing[Math.floor(narrowing.length / 2)];
+  const { thetas, radii } = inwardProfile(cast, new THREE.Vector3(0, 0, mid.z), axis, startR);
+  const clipped = radii.map((r) => (r == null ? null : Math.min(mid.tip, Math.max(mid.root, r))));
+  const { phaseDeg } = fourierPhase(thetas, clipped, teeth);
+  return {
+    measured: true,
+    teeth,
+    conePointZ: round(conePointZ),
+    coneAngleDeg: round(coneAngleDeg, 2),
+    pitchRadiusMm: round((widest.tip + widest.root) / 2),
+    toothPhaseDeg: round(phaseDeg, 2),
+    faceSpanMm: [round(faceLo, 2), round(faceHi, 2)]
+  };
+}
+
+/**
+ * Crown gear teeth on one face, about the part's local Z axis (design §1): rays come down the axis
+ * onto rings of several radii from each face; the face whose heights show a `teeth`-fold pattern
+ * carries the teeth. Returns { measured: true, teeth, diametralPitch, moduleMm, toothFace (±1 along
+ * Z), tipPlaneZ, pitchPlaneZ, ringRadiiMm, pitchRadiusMm, toothSpacingMm, toothPhaseDeg } or
+ * { measured: false, reason }.
+ */
+export function measureCrownGear(part, teeth) {
+  if (!teeth || teeth < 6) return { measured: false, reason: 'no tooth count' };
+  const cast = makeRaycaster(part);
+  const axis = new THREE.Vector3(0, 0, 1);
+  const [u, v] = refAxes(axis);
+  const { min, max } = part.bbox;
+  const outer = Math.min(...[min[0], min[1], max[0], max[1]].map(Math.abs));
+  const ringAt = (face, r, count = 720) => {
+    const start = face > 0 ? max[2] + 2 : min[2] - 2;
+    const thetas = [];
+    const heights = []; // how far out toward `face` the surface is
+    for (let i = 0; i < count; i++) {
+      const th = (i / count) * Math.PI * 2;
+      const origin = u.clone().multiplyScalar(r * Math.cos(th)).addScaledVector(v, r * Math.sin(th)).setZ(start);
+      const d = cast(origin, new THREE.Vector3(0, 0, -face));
+      thetas.push(th);
+      heights.push(d == null ? null : face * (start - face * d));
+    }
+    return { thetas, heights };
+  };
+  let best = null;
+  for (const face of [1, -1]) {
+    const rings = [];
+    for (let r = outer * 0.3; r <= outer - 0.15 + 1e-6; r += 0.25) {
+      const { thetas, heights } = ringAt(face, r);
+      const { tip, root } = tipAndRoot(thetas, heights, teeth);
+      if (!(tip - root > 0.5)) continue;
+      const clipped = heights.map((h) => (h == null ? null : Math.min(tip, Math.max(root, h))));
+      const { amplitude } = fourierPhase(thetas, clipped, teeth);
+      if (amplitude >= MIN_TOOTH_AMPLITUDE * (tip - root)) rings.push({ r, tip, root, amplitude });
+    }
+    if (rings.length >= 3 && (!best || rings.length > best.rings.length)) best = { face, rings };
+  }
+  if (!best) return { measured: false, reason: 'no face tooth pattern found' };
+  // Rings at the edges of the tooth ring only catch part of each tooth
+  const deepest = Math.max(...best.rings.map((g) => g.tip - g.root));
+  const face = best.face;
+  const rings = best.rings.filter((g) => g.tip - g.root >= 0.7 * deepest);
+  const tip = median(rings.map((g) => g.tip));
+  const root = median(rings.map((g) => g.root));
+  const snapped = snapModule((tip - root) / 2.25);
+  if (!snapped) return { measured: false, reason: `tooth depth ${(tip - root).toFixed(2)} mm is not a VEX IQ gear size` };
+  const inner = Math.min(...rings.map((g) => g.r)) - 0.125;
+  const outerR = Math.max(...rings.map((g) => g.r)) + 0.125;
+  const midR = (inner + outerR) / 2;
+  const { thetas, heights } = ringAt(face, midR, RAY_COUNT);
+  const clipped = heights.map((h) => (h == null ? null : Math.min(tip, Math.max(root, h))));
+  const { phaseDeg } = fourierPhase(thetas, clipped, teeth);
+  // Heights are measured outward along `face`; back to Z
+  const tipPlaneZ = face * tip;
+  return {
+    measured: true,
+    teeth,
+    diametralPitch: snapped.dp,
+    moduleMm: round(snapped.moduleMm, 4),
+    toothFace: face,
+    tipPlaneZ: round(tipPlaneZ),
+    pitchPlaneZ: round(tipPlaneZ - face * snapped.moduleMm),
+    ringRadiiMm: [round(inner, 2), round(outerR, 2)],
+    pitchRadiusMm: round(midR),
+    toothSpacingMm: round(Math.PI * snapped.moduleMm),
+    toothPhaseDeg: round(phaseDeg, 2)
+  };
+}
+
+const WORM_SPACING_AGREE_MM = 0.05; // the thread spacing found at each angle must agree this well
+
+/**
+ * Worm thread about the part's local Z axis (design §1). At angles round the axis (refAxes frame),
+ * inward rays along the length give radius against position: a wave whose period is the thread
+ * spacing, and whose crest moves along the axis from one angle to the next by the lead.
+ * `hand` is +1 when turning the worm by +θ about +Z moves a crest (seen at a fixed direction) by
+ * +lead·θ/360 along Z. Returns { measured: true, diametralPitch, moduleMm, threadSpacingMm, leadMm,
+ * starts, hand, tipRadiusMm, rootRadiusMm, pitchRadiusMm, threadSpanMm, threadPhaseMm } or
+ * { measured: false, reason }.
+ */
+export function measureWormGear(part) {
+  const cast = makeRaycaster(part);
+  const axis = new THREE.Vector3(0, 0, 1);
+  const [u, v] = refAxes(axis);
+  const { min, max } = part.bbox;
+  const startR = Math.max(...[min[0], min[1], max[0], max[1]].map(Math.abs)) + 3;
+  const STEP = 0.02;
+  const ANGLES = 12;
+  const profiles = [];
+  for (let j = 0; j < ANGLES; j++) {
+    const th = (j / ANGLES) * Math.PI * 2;
+    const dir = u.clone().multiplyScalar(Math.cos(th)).addScaledVector(v, Math.sin(th));
+    const zs = [];
+    const rs = [];
+    for (let z = min[2] + 0.1; z <= max[2] - 0.1 + 1e-6; z += STEP) {
+      const d = cast(dir.clone().multiplyScalar(startR).setZ(z), dir.clone().negate());
+      zs.push(z);
+      rs.push(d == null || d > startR ? null : startR - d);
+    }
+    profiles.push({ th, zs, rs });
+  }
+  const all = profiles.flatMap((p) => p.rs).filter((r) => r != null);
+  const tip = Math.max(...all);
+  const root = Math.min(...all);
+  if (!(tip - root > 0.5)) return { measured: false, reason: 'no thread found' };
+  const clip = (rs) => rs.map((r) => (r == null ? null : Math.min(tip, Math.max(root, r))));
+  // The period with the strongest wave, scanned round each VEX IQ tooth spacing
+  const strength = (period) =>
+    profiles.reduce((s, p) => s + fourierPhase(p.zs.map((z) => (2 * Math.PI * z) / period), clip(p.rs), 1).amplitude, 0);
+  let bestPeriod = null;
+  for (const dp of DIAMETRAL_PITCHES) {
+    const spacing = (Math.PI * 25.4) / dp;
+    for (let f = 0.9; f <= 1.1 + 1e-9; f += 0.0025) {
+      const s = strength(spacing * f);
+      if (!bestPeriod || s > bestPeriod.s) bestPeriod = { period: spacing * f, s };
+    }
+  }
+  const period = bestPeriod.period;
+  const snapped = snapModule(period / Math.PI);
+  if (!snapped || Math.abs(period - Math.PI * snapped.moduleMm) / (Math.PI * snapped.moduleMm) > 0.02) {
+    return { measured: false, reason: `thread spacing ${period.toFixed(3)} mm is not a VEX IQ tooth spacing` };
+  }
+  // Each angle's crests (the middle of each run at the tip): their spacing must agree round the
+  // worm (a clean, regular thread), and where the first one sits gives the lead
+  const crestLevel = tip - 0.15 * (tip - root);
+  const found = profiles
+    .map((p) => {
+      const centers = [];
+      let start = null;
+      p.rs.forEach((r, i) => {
+        const high = r != null && r >= crestLevel;
+        if (high && start == null) start = i;
+        if ((!high || i === p.rs.length - 1) && start != null) {
+          const end = high ? i : i - 1;
+          // Runs cut off by the worm's ends don't show the crest's middle
+          if (start > 0 && end < p.rs.length - 1) centers.push((p.zs[start] + p.zs[end]) / 2);
+          start = null;
+        }
+      });
+      if (centers.length < 3) return null;
+      const fit = fitLine(centers.map((c) => [Math.round((c - centers[0]) / period), c]));
+      return { th: p.th, spacing: fit.b, crest: fit.a };
+    })
+    .filter(Boolean);
+  if (found.length < profiles.length / 2) return { measured: false, reason: 'too few thread crests found' };
+  const own = found.map((f) => f.spacing);
+  if (Math.max(...own) - Math.min(...own) > WORM_SPACING_AGREE_MM) {
+    return { measured: false, reason: `thread spacing differs round the worm by ${(Math.max(...own) - Math.min(...own)).toFixed(3)} mm` };
+  }
+  const meanSpacing = own.reduce((x, y) => x + y, 0) / own.length;
+  if (Math.abs(meanSpacing - Math.PI * snapped.moduleMm) / (Math.PI * snapped.moduleMm) > 0.02) {
+    return { measured: false, reason: `thread spacing ${meanSpacing.toFixed(3)} mm is not a VEX IQ tooth spacing` };
+  }
+  // Crest position along Z at each angle, brought into one period and unwrapped round the turn
+  const crests = found.map((f) => mod(f.crest, meanSpacing));
+  const unwrapped = [crests[0]];
+  for (let j = 1; j < crests.length; j++) {
+    let c = crests[j];
+    while (c - unwrapped[j - 1] > meanSpacing / 2) c -= meanSpacing;
+    while (c - unwrapped[j - 1] < -meanSpacing / 2) c += meanSpacing;
+    unwrapped.push(c);
+  }
+  const line = fitLine(found.map((f, j) => [THREE.MathUtils.radToDeg(f.th), unwrapped[j]]));
+  // Crest at part angle θ sits at z0 + c·θ; turning the part by +δ brings part angle θ−δ to a fixed
+  // direction, so the crest seen there moves by −c·δ
+  const leadMm = Math.abs(line.b) * 360;
+  const starts = Math.max(1, Math.round(leadMm / meanSpacing));
+  if (Math.abs(leadMm - starts * meanSpacing) > 0.1 * meanSpacing) {
+    return { measured: false, reason: `lead ${leadMm.toFixed(2)} mm is not a whole number of thread spacings` };
+  }
+  const hand = -Math.sign(line.b) || 1;
+  // The threaded length: where some angle reaches near the tip
+  const reach = tip - 0.3 * (tip - root);
+  const threaded = profiles[0].zs.filter((z, i) => profiles.some((p) => p.rs[i] != null && p.rs[i] >= reach));
+  const spacing = Math.PI * snapped.moduleMm;
+  // Pitch radius: tip minus one module (6.23 mm on the VEX IQ worm) is within 0.2 mm of an
+  // eighth-pitch step, and the worm meshes free of contact at that step too (25.4 mm from a 36 Tooth
+  // Gear, checked 2026-11-12), so it is taken to be drawn on the grid: shafts then land in holes.
+  const rawPitch = tip - snapped.moduleMm;
+  const gridPitch = Math.round(rawPitch / (VEX_PITCH_MM / 8)) * (VEX_PITCH_MM / 8);
+  const pitchRadiusMm = Math.abs(rawPitch - gridPitch) <= 0.2 ? gridPitch : rawPitch;
+  return {
+    measured: true,
+    diametralPitch: snapped.dp,
+    moduleMm: round(snapped.moduleMm, 4),
+    threadSpacingMm: round(spacing),
+    leadMm: round(starts * spacing),
+    starts,
+    hand,
+    tipRadiusMm: round(tip),
+    rootRadiusMm: round(root),
+    pitchRadiusMm: round(pitchRadiusMm),
+    threadSpanMm: [round(Math.min(...threaded), 2), round(Math.max(...threaded), 2)],
+    threadPhaseMm: round(mod(line.a, spacing), 3)
   };
 }
 

@@ -325,9 +325,13 @@ export function buildBodyGraph(inputs) {
 
   // Gears, racks and chains drive each other
   const links = [];
+  // Gears just out of mesh: their smooth collision shells would rub and drag each other, so they are
+  // kept from colliding as well as from driving (openspec play-mode)
+  const nearGears = [];
   for (const m of meshes) {
     if (m.kind === 'near') {
       warnings.push({ partId: m.b, text: `${labelOf(m.a)} and ${labelOf(m.b)} are ${m.offMm} mm out of mesh, so they don't drive each other.` });
+      nearGears.push([m.a, m.b]);
       continue;
     }
     const a = bodyOf(m.a);
@@ -338,6 +342,10 @@ export function buildBodyGraph(inputs) {
     }
     if (m.kind === 'gear') {
       links.push({ kind: 'gear', a, b, gears: [m.a, m.b], ratio: m.teethA / m.teethB, sign: -Math.sign(dot(m.axisA, m.axisB)) || -1, axisA: m.axisA, axisB: m.axisB });
+    } else if (m.kind === 'bevel' || m.kind === 'crown' || m.kind === 'worm') {
+      // Gears at 90° (openspec right-angle-gears): `ratio` is signed (b about axisB per a about
+      // axisA); a worm (always a) drives its gear one way only
+      links.push({ kind: 'gear', pair: m.kind, a, b, gears: [m.a, m.b], ratio: Math.abs(m.ratio), sign: Math.sign(m.ratio) || -1, axisA: m.axisA, axisB: m.axisB, ...(m.oneWay ? { oneWay: true } : {}) });
     } else {
       links.push({ kind: 'rack', a, b, gears: [m.a, m.b], axisA: m.axisA, direction: m.direction, mmPerRad: m.mmPerRad });
     }
@@ -355,6 +363,27 @@ export function buildBodyGraph(inputs) {
     }
   }
 
+  // A motor whose train reaches a worm only from the gear's side can't turn it
+  for (const l of links.filter((x) => x.oneWay)) {
+    for (const m of motors) {
+      const h = hinges.find((x) => x.id === m.hinge);
+      if (!h) continue;
+      const reached = new Set([h.b]);
+      for (let k = 0, queue = [h.b]; k < queue.length; k++) {
+        for (const o of links) {
+          if (o.oneWay) continue;
+          const next = o.a === queue[k] ? o.b : o.b === queue[k] ? o.a : null;
+          if (next && !reached.has(next)) {
+            reached.add(next);
+            queue.push(next);
+          }
+        }
+      }
+      if (reached.has(l.b) && !reached.has(l.a)) {
+        warnings.push({ partId: m.id, text: `${m.label} can't turn ${labelOf(l.gears[0])}: a worm can only be turned from its own shaft.` });
+      }
+    }
+  }
   // Pieces: bodies joined by hinges. The largest piece, and any piece with a Smart Motor driving a
   // shaft, holds one body still (no floor yet): the one carrying most such motors, as motors sit on
   // the frame, else the largest. Other pieces aren't joined to the robot: they stay still, block
@@ -464,6 +493,7 @@ export function buildBodyGraph(inputs) {
     bays,
     shaftPairs,
     links,
+    nearGears,
     motors,
     still,
     pins: [...pinLike],

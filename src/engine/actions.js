@@ -23,13 +23,14 @@ import {
   playInputs
 } from './core.js';
 import { buildBodyGraph } from '../sim/bodyGraph.js';
-import { fitSet, fixAssembly } from './fixAssembly.js';
+import { fitSet, fixAssembly, lineUpAfterInsert } from './fixAssembly.js';
 import { bendSheet, sheetBendChoices } from './sheetBending.js';
 import { placeBand, rerouteBands } from './bandRouting.js';
+import { meshRightAngle } from './rightAngleGears.js';
 import { followBands } from '../utils/bandRoute.js';
 import { withBandFlags } from './bandFit.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet', 'play_setup', 'place_band', 'band_routes', 'band_flags'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'line_up_after_insert', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet', 'play_setup', 'place_band', 'band_routes', 'band_flags', 'mesh_right_angle'];
 
 export function runAction(action, state, params = {}) {
   const result = runActionOnce(action, state, params);
@@ -292,6 +293,12 @@ function runActionOnce(action, state, params = {}) {
     return fixAssembly(state, { instanceId: params.instanceId || state.selectedId });
   }
 
+  // After a pin goes in, line up a hole it nearly reaches (openspec precise-placement): patches, nothing saved
+  if (action === 'line_up_after_insert') {
+    const result = lineUpAfterInsert(state, { instanceId: params.instanceId });
+    return result ? { ok: true, ...result } : { ok: true, patches: [], message: '' };
+  }
+
   // A dragged set's release fit (openspec group-snapping): the fitted poses, nothing saved
   if (action === 'fit_set') {
     return fitSet(state, { ids: params.ids, poses: params.poses });
@@ -323,6 +330,9 @@ function runActionOnce(action, state, params = {}) {
     if (!found.ok) return found;
     return { ...found, choices: found.choices.map(({ id, name, row, face, missMm, stretchMm, layers, note, shape, targetPorts, holesMatched }) => ({ id, name, row, face, missMm, stretchMm, layers, note, shape, targetPorts, holesMatched })) };
   }
+  // Gears at 90° (openspec right-angle-gears): list a gear's mesh spots round a partner, or put it at one
+  if (action === 'mesh_right_angle') return meshRightAngle(state, params);
+
   if (action === 'bend_sheet') {
     return bendSheet(state, {
       sheetId: params.sheetId,

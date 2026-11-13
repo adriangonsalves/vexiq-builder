@@ -53,3 +53,9 @@ Low-priority items left open when a change was closed. Pick one up by proposing 
 5. **A drop runs well below real time.** The frame with the impact holds the screen still for about 1 s on the Clawbot and 1.2 s on Flop (the solve, the split into pieces and setting up their collisions). After it, Flop's frames take about 65 ms each, because Rapier gets 12 passes per step during a drop so loose pieces don't sink into each other. Fewer passes (8) would be quicker, with a little more sinking in.
 6. **Loose pieces can still sit 3–4 mm into each other after a hard drop.** Each part collides as a simplified outline that fills in its holes and gaps, so touching parts look slightly embedded. Closer outlines (split into a few convex pieces) would fix it at some cost.
 
+
+## From right-angle-gears (in progress 2026-11-12)
+
+1. **Differential Gear housings:** the bevel gears inside the Differential Gear and Differential Gear (High Strength) don't seat or mesh, and Play mode doesn't turn the two axles through them. The housings aren't measured as gears.
+2. **Loose spur gears jumping into mesh beside spur gears:** only 90° pairs jump to a mesh spot when dragged near their partner; two spur gears still get their position from holes and shafts and only turn their teeth.
+3. **context-toolbar's Join requirement doesn't mention gears:** Join is Auto Join for a gear with a 90° partner within 40 mm and moves it to its nearest mesh spot (specified in right-angle-gears "Joining a gear to its partner"). Add a cross-reference line the next time the context-toolbar spec changes.

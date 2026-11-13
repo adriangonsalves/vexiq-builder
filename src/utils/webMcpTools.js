@@ -248,6 +248,32 @@ export function registerVexIqWebMcpTools(contextRef) {
       annotations: { readOnlyHint: false }
     },
     {
+      name: 'mesh_right_angle',
+      description:
+        "Puts a gear in mesh with a gear it meshes with at 90° (as the MCP server's mesh_right_angle does): a bevel gear with a bevel gear of the same tooth count, the 36 Tooth Crown Gear with a standard spur gear, or the Worm Gear with a standard spur gear (the worm drives the gear, never the other way). Give instanceId (a gear to move) or part (a gear to add) and targetInstanceId. Without spot it lists the mesh spots [{ spot, axis, center, blocked, blockedBy }] and changes nothing; with spot it puts the gear there, meshed, as one undo step.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          instanceId: { type: 'string', description: 'A gear already in the build to move into mesh.' },
+          part: { type: 'string', description: 'A gear to add instead (part number or name).' },
+          targetInstanceId: { type: 'string', description: 'The gear to mesh with.' },
+          spot: { type: 'number', description: 'The mesh spot to use, from a listing call.' },
+          label: { type: 'string' },
+          color: { type: 'string' }
+        },
+        required: ['targetInstanceId']
+      },
+      async execute(args = {}) {
+        const ctx = contextRef.current;
+        if (!ctx) return { error: 'Application context is not ready.' };
+        const data = await ctx.runAction('mesh_right_angle', args);
+        if (!data?.ok) return { error: data?.error || 'Could not mesh the gear.', ...(data?.spots ? { spots: data.spots } : {}) };
+        const { state, record, stepLabel, ...reply } = data;
+        return reply;
+      },
+      annotations: { readOnlyHint: false }
+    },
+    {
       name: 'clear_assembly',
       description:
         'Resets the 3D workspace by removing all placed parts or restoring the starter assembly.',

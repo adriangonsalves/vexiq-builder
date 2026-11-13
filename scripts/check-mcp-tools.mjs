@@ -1156,6 +1156,70 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
 }
 
 // ---------------------------------------------------------------------------
+// right-angle-gears: mesh_right_angle lists spots then places; wrong pairs; place_parts meshes a worm
+// ---------------------------------------------------------------------------
+{
+  const names = (await rpc('tools/list')).result?.tools?.map((t) => t.name) || [];
+  check('tools/list has mesh_right_angle', names.includes('mesh_right_angle'));
+  writeState({ ...emptyState(), instances: [mk('Bevel A', '18 Tooth Bevel Gear', [0, 0, 0], [-90, 0, 0])] });
+  let res = await call('mesh_right_angle', { part: '18 Tooth Bevel Gear', targetInstanceId: 'Bevel A' });
+  check(
+    'mesh_right_angle without a spot lists four spots and adds nothing',
+    res.data?.ok && res.data.spots?.length === 4 && readState().instances.length === 1,
+    JSON.stringify(res.data).slice(0, 300)
+  );
+  res = await call('mesh_right_angle', { part: '18 Tooth Bevel Gear', targetInstanceId: 'Bevel A', spot: 2, label: 'Bevel B' });
+  const audit = (await call('audit_assembly')).data;
+  check(
+    '  with spot 2 it adds the gear there, meshed, and the audit finds no overlap',
+    res.data?.ok && res.data.spot === 2 && /^Meshed Bevel B with Bevel A/.test(res.data.message || '') && readState().instances.length === 2 && audit.collisionCount === 0,
+    JSON.stringify({ reply: res.data, collisions: audit.collisions })
+  );
+  // Supports added later: a shaft through the meshed gear's bore, then a beam on the shaft
+  res = await call('place_parts', {
+    parts: [
+      { partQuery: '4x Pitch Shaft', ref: 's', label: 'Axle', insert: { into: { instanceId: res.data?.instanceId, port: 'sq.thru.0_0_-3' } } },
+      { partQuery: '1x2 Beam', label: 'Support', insert: { sourcePort: 'hole_1', into: { ref: 's', port: 'shaft' } } }
+    ],
+    verbose: true
+  });
+  const supported = (await call('audit_assembly')).data;
+  const { findPart: fpB } = await import('../mcp/assembly-engine.mjs');
+  const { meshRelation: relB, worldToothed: wtB } = await import('../src/utils/gearMeshing.js');
+  const byLabel = (l) => readState().instances.find((i) => i.label === l);
+  const [ba, bb] = [byLabel('Bevel A'), byLabel('Bevel B')];
+  const stillMeshed = ba && bb && relB(wtB(fpB('18 Tooth Bevel Gear'), bb.position, bb.rotation, 'b'), wtB(fpB('18 Tooth Bevel Gear'), ba.position, ba.rotation, 'a'));
+  check(
+    '  a shaft pushed through it afterwards fits its bore, a beam goes on the shaft, the gear stays meshed and is on the shaft',
+    res.data?.parts?.every((p) => p.status === 'placed') && stillMeshed && jointOf(supported, 'Axle').includes('Bevel B') && jointOf(supported, 'Axle').includes('Support'),
+    JSON.stringify({ parts: res.data?.parts, axle: jointOf(supported, 'Axle'), meshed: Boolean(stillMeshed) })
+  );
+
+  writeState({ ...emptyState(), instances: [mk('Worm', 'Worm Gear', [0, 0, 0])] });
+  res = await call('mesh_right_angle', { part: '24 Tooth Sprocket', targetInstanceId: 'Worm' });
+  check('mesh_right_angle with a sprocket and a worm is refused, naming the pairs that mesh', res.isError && /pairs that do/.test(res.data?.error || '') && /Worm Gear with a standard spur gear/.test(res.data?.error || ''), JSON.stringify(res.data));
+
+  // A worm pushed onto a shaft that lies where it meshes with a 36 Tooth Gear, rollDeg 0
+  const { findPart: fp } = await import('../mcp/assembly-engine.mjs');
+  const { meshSpots, worldToothed, quaternionToEulerDeg } = await import('../src/utils/gearMeshing.js');
+  const g36 = mk('Gear', '36 Tooth Gear', [0, 0, 0]);
+  const spot = meshSpots(fp('Worm Gear'), { position: [30, 0, 0], rotation: [0, 90, 0] }, worldToothed(fp('36 Tooth Gear'), [0, 0, 0], [0, 0, 0], 'Gear'), fp('36 Tooth Gear'))[0];
+  const mid = spot.position.clone().addScaledVector(spot.axis, 9.525);
+  const shaft = mk('Shaft', '4x Pitch Shaft', mid.toArray(), quaternionToEulerDeg(spot.quaternion));
+  writeState({ ...emptyState(), instances: [g36, shaft] });
+  res = await call('place_parts', { parts: [{ partQuery: 'Worm Gear', label: 'Worm', insert: { into: { instanceId: 'Shaft', port: 'shaft' }, rollDeg: 0 } }], verbose: true });
+  const wormReply = res.data?.parts?.[0];
+  const wormInst = readState().instances.find((i) => i.label === 'Worm');
+  const { meshRelation } = await import('../src/utils/gearMeshing.js');
+  const rel = wormInst && meshRelation(worldToothed(fp('Worm Gear'), wormInst.position, wormInst.rotation, 'Worm'), worldToothed(fp('36 Tooth Gear'), [0, 0, 0], [0, 0, 0], 'Gear'));
+  check(
+    'place_parts pushes a Worm Gear onto a shaft beside a 36 Tooth Gear: meshed, and the reply says the roll was changed',
+    wormReply?.status === 'placed' && rel && wormReply.rollReplaced,
+    JSON.stringify(wormReply)
+  );
+}
+
+// ---------------------------------------------------------------------------
 server.stdin.end();
 server.kill();
 await stopBridge().catch(() => {});
