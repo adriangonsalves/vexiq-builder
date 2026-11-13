@@ -13,7 +13,7 @@ A band or belt goes round the spots you pick, in order. The app draws it and tel
 
 1. Choose **Tools → Band builder** [[Tools → Band builder]] (2).
    ![The Tools menu with Band builder marked](shot:bands-menu)
-2. {{Click|Tap}} a post, pin, pulley, tooth gap or beam end. {{Click|Tap it again}} to hook the band on.
+2. {{Click a post, pin, pulley, tooth gap or beam end to hook the band on.|Tap a post, pin, pulley, tooth gap or beam end to light it. Tap it again to hook the band on.}}
 3. Pick the next spots in the order the band goes round.
 4. Choose a size, or leave **Choose for me**.
    ![The Band builder panel](shot:bands-panel)
@@ -30,7 +30,7 @@ Bands are #32, #64 and #117B. Belts are 2x30 mm, 2x40 mm, 2x50 mm and 2x60 mm. T
 A standoff or pin is a post. A pulley has a groove. A gear or sprocket has numbered tooth gaps; the number turns with the gear. A beam has its ends, corners and edges. The little picture of a gear shows the numbers.
 
 ## Going another way round
-**Outside** and **Inside** choose which side of a spot the band goes. **Other way round** shows the next way past the parts between, over them or under them. With two spots the band goes there and back. With three or more it makes a loop. Choose **Goes** to force one.
+**Outside** and **Inside** choose which side of a spot the band goes. **Other way round** shows the next way past the parts between, over them or under them. With two spots the band goes there and back. With three or more it makes a loop. Under **Goes**, choose **There and back** or **Loop** to force one. **Other way round** is greyed when there is no other way. **Cross** on a spot makes the band cross over on its way to the next spot, like a figure 8.
 
 ## Stretch colours and refusals
 Grey is slack, green is snug, amber is tight, red is too far. A band that would hang loose is refused, and the message says which size fits. A band that must pass through a part asks **Over** or **Under**.
@@ -45,6 +45,6 @@ Select the band to see its size and stretch in Properties. **Edit route** moves 
 A band follows its parts when they move. In [Play mode](help:play-mode) it pulls on them, harder when it stretches more.
 
 ## Wraps and taking a spot off
-In the Band builder list, Fewer wraps and More wraps change how many times the band goes round a spot, from 1 to 3.
+In the Band builder list, Fewer wraps (**−**) and More wraps (**+**) sit beside a spot. They set how many times the band goes round it, from 1× to 3×.
 
-Take this spot off removes a spot from the band. In the 3D view, right-click a spot, or Alt+click it, to do the same. Drag a band's handle onto another spot to move where it hooks on.
+Take this spot off (the bin button) removes a spot from the band. In the 3D view, right-click a spot, or Alt+click it, to do the same. Drag a band's handle onto another spot to move where it hooks on.

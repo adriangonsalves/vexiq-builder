@@ -26,7 +26,7 @@ Build a driven wheel in the order the parts really go on. An axle is the same th
 ## Plain shafts, motor shafts and the stop ring
 A motor shaft, like the 2x Pitch Motor Shaft, has a stop ring near one end. The ring can't pass through a hole. The short end past the ring goes into the motor's socket. The long end comes out the other side of the plate and carries the wheel or gear.
 
-Put the shaft through the plate before the motor goes on. If it goes in with the ring the wrong way, step through the other fits, as shown in [Stepping through fits](help:joining#stepping-through-fits). Then the ring sits between the plate and the motor, and the shaft can't fall out. A plain shaft has no ring.
+Put the shaft through the plate before the motor goes on. Then the ring sits between the plate and the motor, and the shaft can't fall out. If the shaft goes in with the ring the wrong way round, step through the other fits, as shown in [Stepping through fits](help:joining#stepping-through-fits). A plain shaft has no ring.
 
 ## A free axle
 A motor shaft with no motor is a free axle. Put its stop ring against one face of the beam or plate it goes through. The long end carries the wheel.

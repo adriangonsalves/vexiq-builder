@@ -53,12 +53,12 @@ export default [
   },
   {
     name: 'sheets-menu', layout: 'large', build: BUILDS + 'sheet-one-row.vexiq.json',
-    async setup(app) { await app.select(['6x6 Plastic Sheet #1', '2x8 Beam #1']); await app.openMenu('Tools'); },
+    async setup(app) { await app.select(['6x6 Plastic Sheet #1', '1x8 Beam #1']); await app.openMenu('Tools'); },
     crop: ['control:Tools', 'menu:Tools'], marks: ['control:Tools', 'menuitem:Bend sheet…']
   },
   {
     name: 'sheets-dialog', layout: 'large', build: BUILDS + 'sheet-one-row.vexiq.json',
-    async setup(app) { await app.select(['6x6 Plastic Sheet #1', '2x8 Beam #1']); await app.menu('Tools', 'Bend sheet…'); await app.sleep(1500); },
+    async setup(app) { await app.select(['6x6 Plastic Sheet #1', '1x8 Beam #1']); await app.menu('Tools', 'Bend sheet…'); await app.sleep(1500); },
     crop: ['dialog:Bend sheet'], marks: ['dialog:Bend sheet', 'button:Apply']
   },
   {

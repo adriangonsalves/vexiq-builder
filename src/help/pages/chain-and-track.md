@@ -23,10 +23,12 @@ Chain and track go round sprockets. The app builds the whole loop for you.
 <!-- more -->
 
 ## When the Chain builder is greyed out
-Point at the greyed item to read why. "Select two or more sprockets in one plane" means pick more sprockets, or move one along its shaft. "The sprockets' axles aren't parallel" means one sprocket is tilted.
+Point at the greyed item to read why. "Select two or more sprockets in one plane" means pick more sprockets, or move one along its shaft. "The sprockets' axles aren't parallel" means one sprocket is tilted. "Chain and track fit sprockets, not gears" means you picked gears.
 
 ## Standoffs and parts in the way
 A standoff you select with the sprockets is a smooth round guide for the chain. Any other part you select, like a beam, is something the chain bends round. A part inside the loop or in a run's way gets an **Under** and **Over** question: does the chain pass below it or above it? **Build** stays greyed until every part has an answer.
+
+A message after the build can say "In the way" and name a part. The chain is built, but that part is in its path. Select it with the sprockets, or move it, then build again.
 
 ## If the chain sags
 The builder never makes a chain too tight. If it needs a longer loop, a window asks **Slack on** the **Lower run** or **Upper run**. The message says how far to move a sprocket for an exact fit. Move it that way and build again.
