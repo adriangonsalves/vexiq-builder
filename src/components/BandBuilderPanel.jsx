@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Minus, Plus, Route, Shuffle, Trash2, Undo2, X } from 'lucide-react';
 import { BAND_SPECS } from '../utils/bandPath.js';
 import { STRETCH_COLORS } from '../sim/bandStrength.js';
+import HelpQ from '../help/HelpQ.jsx';
 
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 
@@ -11,7 +12,7 @@ const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
  * size, Other way round, the parts-in-the-way question, and the ring close-up of each gear, sprocket or
  * pulley on the route. Every key action has a button here, for touch.
  */
-export default function BandBuilderPanel({ band, touch = false }) {
+export default function BandBuilderPanel({ band, touch = false, onHelp }) {
   const { session, sizes, readout, entryLabel, ringParts } = band;
   const [ringIndex, setRingIndex] = useState(0);
   if (!session) return null;
@@ -23,6 +24,7 @@ export default function BandBuilderPanel({ band, touch = false }) {
     <div className="band-panel" role="dialog" aria-label="Band builder">
       <div className="band-panel-row">
         <strong className="band-panel-title">{editing ? 'Edit band' : 'Band builder'}</strong>
+        <HelpQ tool="Band builder" onHelp={onHelp} />
         <button type="button" className="explode-close" onClick={band.close} title="Cancel (Esc)" aria-label="Cancel">
           <X size={14} />
         </button>
@@ -182,7 +184,7 @@ export default function BandBuilderPanel({ band, touch = false }) {
             <Route size={13} /> Other way round{band.ways && band.ways.count > 1 ? ` (${band.ways.index + 1} of ${band.ways.count})` : ''}
           </button>
         )}
-        <button type="button" className="btn btn-primary-action" onClick={() => band.finish()} disabled={session.route.length < 2} title="Close the band and add it (Enter)">
+        <button type="button" className="btn btn-primary-action" data-help="band-done" onClick={() => band.finish()} disabled={session.route.length < 2} title="Close the band and add it (Enter)">
           Done
         </button>
       </div>

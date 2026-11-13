@@ -36,6 +36,7 @@ export default function SetInspector({ group, parts, pivot, snapPitchFactor, onR
             className="cad-input"
             value={draft}
             aria-label="Group name"
+            data-help="group-name"
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commitName}
             onKeyDown={(e) => {
@@ -118,11 +119,11 @@ export default function SetInspector({ group, parts, pivot, snapPitchFactor, onR
           <span>{parts.length} parts</span>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button type="button" className="btn btn-outline" style={{ fontSize: 11 }} onClick={() => onSetFlag('visible', hidden === parts.length)}>
+          <button type="button" className="btn btn-outline" style={{ fontSize: 11 }} data-help="group-hide-all" onClick={() => onSetFlag('visible', hidden === parts.length)}>
             {hidden === parts.length ? <Eye size={12} /> : <EyeOff size={12} />}
             {hidden === parts.length ? 'Show all' : 'Hide all'}
           </button>
-          <button type="button" className="btn btn-outline" style={{ fontSize: 11 }} onClick={() => onSetFlag('locked', locked !== parts.length)}>
+          <button type="button" className="btn btn-outline" style={{ fontSize: 11 }} data-help="group-lock-all" onClick={() => onSetFlag('locked', locked !== parts.length)}>
             {locked === parts.length ? <Unlock size={12} /> : <Lock size={12} />}
             {locked === parts.length ? 'Unlock all' : 'Lock all'}
           </button>

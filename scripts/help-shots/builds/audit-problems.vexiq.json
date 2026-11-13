@@ -1,0 +1,94 @@
+{
+  "version": "1.1",
+  "pitchUnitMm": 12.7,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "instances": [
+    {
+      "instanceId": "inst-1794458298344-0-6ose",
+      "partId": "2x8-beam-228-2500-023-162",
+      "label": "2x8 Beam #1",
+      "position": [
+        0,
+        3.175,
+        0
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#858b8b",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        3.175,
+        0
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794458298344-1-628i",
+      "partId": "2x8-beam-228-2500-023-162",
+      "label": "2x8 Beam #2",
+      "position": [
+        30,
+        3.175,
+        4
+      ],
+      "rotation": [
+        -90,
+        0,
+        20
+      ],
+      "color": "#858b8b",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        30,
+        3.175,
+        4
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        20
+      ]
+    },
+    {
+      "instanceId": "inst-1794458298344-2-s3xt",
+      "partId": "1x1-connector-pin-228-2500-060-31",
+      "label": "1x1 Connector Pin #1",
+      "position": [
+        -20,
+        30,
+        45
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#0075c9",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -20,
+        30,
+        45
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

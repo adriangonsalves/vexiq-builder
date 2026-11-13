@@ -31,6 +31,7 @@ export default function ToolbarMenu({ label, icon: Icon, options, value, onChang
         aria-haspopup="menu"
         aria-expanded={Boolean(at)}
         aria-label={`${label}: ${current?.label ?? 'none'}`}
+        data-help={label.toLowerCase()}
       >
         {Icon && <Icon size={14} />}
         <span className="toolbar-menu-label btn-text">{label}:</span>

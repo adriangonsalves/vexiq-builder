@@ -1,6 +1,7 @@
 import React from 'react';
 import { Share } from 'lucide-react';
 import { formatMB } from '../offline/useOffline.js';
+import HelpQ from '../help/HelpQ.jsx';
 
 const dateText = (at) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null);
 
@@ -54,7 +55,7 @@ function InstallSteps({ kind, onInstall, downloaded }) {
  * size check, download progress, the copy's state, keeping the data, backups and installing.
  * `offline` is what useOffline returns.
  */
-export default function OfflineSection({ offline, sectionRef }) {
+export default function OfflineSection({ offline, sectionRef, onHelp }) {
   const { status, progress, space, stop, notice, updating, downloadedAt, persisted, install } = offline;
   const on = status !== 'off';
   const nothingSaved = status === 'checking' || status === 'confirm' || status === 'ios-first';
@@ -68,8 +69,11 @@ export default function OfflineSection({ offline, sectionRef }) {
   const percent = progress.total ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
 
   return (
-    <section className="settings-section offline-section" ref={sectionRef}>
-      <h3>Offline</h3>
+    <section className="settings-section offline-section" ref={sectionRef} data-help="settings-offline">
+      <h3 className="offline-heading">
+        Offline
+        <HelpQ tool="Offline" onHelp={onHelp} />
+      </h3>
       <label className="settings-row">
         <span className="settings-row-text">
           <span className="settings-row-label">Use offline</span>

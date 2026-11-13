@@ -16,6 +16,7 @@ import {
   TurnStepIcon,
   WorldArrowsIcon
 } from './toolbarIcons.jsx';
+import { BAR_TIPS as TIPS, COMMIT_TIPS } from '../utils/contextToolbarItems.js';
 
 /**
  * The context bar in the 3D view (openspec context-toolbar): a column of icon buttons on the right
@@ -33,36 +34,6 @@ const TURN_STEPS = [
 ];
 export const turnStepLabel = (deg) => TURN_STEPS.find((s) => s.value === deg)?.label ?? `${deg}°`;
 
-// Name, one line on what it does, and the keys or mouse gesture that do the same
-const TIPS = {
-  move: ['Move', 'Slide the part along its arrows', 'W'],
-  rotate: ['Rotate', 'Turn the part with its rings', 'E · right-click the part'],
-  addToSelection: ['Add to selection', 'Tap parts to add or take them out', 'Shift + click'],
-  markHole: ['Mark a hole', 'Tap the hole or pin end the next part goes in', 'Alt + click'],
-  join: ['Manual Join', 'Pick the hole the part goes into', 'Double-click the part'],
-  autoJoin: ['Auto Join', "Push the part into what it's lined up with", 'Double-click the part'],
-  stampCopies: ['Stamp copies', 'Put a copy of this part in each hole you pick', 'Ctrl/Cmd + double-click'],
-  worldArrows: ['World arrows', 'Arrows follow the room, not the part', 'Hold Alt'],
-  freeMove: ['Free move', 'Stop parts jumping onto holes', 'Hold Alt while dragging'],
-  turnStep: ['Turn step', 'How far each turn step goes', null],
-  growSelection: ['Grow selection', 'Add the parts joined to this one, layer by layer', 'Shift + wheel'],
-  onePartOfGroup: ['One part of a group', 'Pick a single part inside the group', 'Shift + Alt + click'],
-  duplicate: ['Duplicate', 'Make a copy next to it', 'D'],
-  delete: ['Delete', 'Remove it (Undo brings it back)', 'Del'],
-  wheel: ['Wheel', 'Turn it for the next or previous one', 'Mouse wheel'],
-  stepUp: ['Next', 'Step to the next one', 'R'],
-  stepDown: ['Previous', 'Step back one', 'Shift + R'],
-  cancel: ['Cancel', 'Stop without changing anything', 'Esc'],
-  pinsOnly: ['Pins only', 'Only follow pins and shafts', 'Ctrl/Cmd + Shift + wheel']
-};
-const COMMIT_TIPS = {
-  fits: ['Put it in', 'Put the part in at the fit shown', 'Click the lit hole'],
-  stamp: ['Put a copy in', 'Insert a copy at the fit shown and keep going', 'Ctrl/Cmd + double-click'],
-  bendFits: ['Keep', 'Keep this bend', 'Enter'],
-  ring: ['Done', 'Finish turning with this ring', 'Esc'],
-  layers: ['Done', 'Keep this selection', null],
-  band: ['Add this spot', 'Add the lit spot to the band', 'Click the spot']
-};
 const SEPARATED = new Set(['addToSelection', 'join', 'duplicate']); // a divider above these
 // Switches and modes, which show on or off (aria-pressed); the rest are actions
 const TOGGLES = new Set(['move', 'rotate', 'addToSelection', 'markHole', 'stampCopies', 'worldArrows', 'freeMove', 'growSelection', 'onePartOfGroup', 'pinsOnly']);
@@ -350,7 +321,7 @@ export default function ContextToolbar({ items, on = {}, hasTarget = false, turn
     const extras = items.filter((i) => ['turnStep', 'worldArrows', 'pinsOnly', 'commit', 'cancel'].includes(i.id));
     const wheel = has('wheel');
     body = (
-      <div className={`ctx-bar ctx-bar-wheel ${side === 'left' ? 'ctx-bar-left' : ''} ${place.room < 420 ? 'wide' : ''}`} role="toolbar" aria-label="Wheel" aria-orientation="vertical" {...shared}>
+      <div className={`ctx-bar ctx-bar-wheel ${side === 'left' ? 'ctx-bar-left' : ''} ${place.room < 420 ? 'wide' : ''}`} role="toolbar" aria-label="Wheel" aria-orientation="vertical" data-help="context-bar" {...shared}>
         {wheel && (
           <div className="ctx-wheel-group">
             {stepper.readout && (
@@ -366,7 +337,7 @@ export default function ContextToolbar({ items, on = {}, hasTarget = false, turn
     );
   } else {
     body = (
-      <div className={`ctx-bar ${side === 'left' ? 'ctx-bar-left' : ''}`} role="toolbar" aria-label="Context bar" aria-orientation="vertical" {...shared}>
+      <div className={`ctx-bar ${side === 'left' ? 'ctx-bar-left' : ''}`} role="toolbar" aria-label="Context bar" aria-orientation="vertical" data-help="context-bar" {...shared}>
         {items.map(button)}
       </div>
     );

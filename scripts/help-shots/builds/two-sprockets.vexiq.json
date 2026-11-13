@@ -1,0 +1,152 @@
+{
+  "version": "1.1",
+  "pitchUnitMm": 12.7,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "instances": [
+    {
+      "instanceId": "inst-1794458297607-0-8myt",
+      "partId": "2x8-beam-228-2500-023-162",
+      "label": "2x8 Beam #1",
+      "position": [
+        0,
+        3.175,
+        0
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#858b8b",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        3.175,
+        0
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794458297607-1-0e3a",
+      "partId": "4x-pitch-shaft-228-2500-120-234",
+      "label": "4x Pitch Shaft #1",
+      "position": [
+        -44.45,
+        18,
+        6.35
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#e2e8f0",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -44.45,
+        18,
+        6.35
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794458297607-2-egbn",
+      "partId": "4x-pitch-shaft-228-2500-120-234",
+      "label": "4x Pitch Shaft #2",
+      "position": [
+        31.75,
+        18,
+        6.35
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#e2e8f0",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        31.75,
+        18,
+        6.35
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794458297607-3-2c7b",
+      "partId": "16-tooth-sprocket-228-2500-233-305",
+      "label": "16 Tooth Sprocket #1",
+      "position": [
+        -44.45,
+        9.525,
+        6.35
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#f96b02",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        -44.45,
+        9.525,
+        6.35
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794458297607-4-kwih",
+      "partId": "16-tooth-sprocket-228-2500-233-305",
+      "label": "16 Tooth Sprocket #2",
+      "position": [
+        31.75,
+        9.525,
+        6.35
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#f96b02",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        31.75,
+        9.525,
+        6.35
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    }
+  ]
+}

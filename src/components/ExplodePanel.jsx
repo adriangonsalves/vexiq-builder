@@ -1,5 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import HelpQ from '../help/HelpQ.jsx';
 
 /**
  * The Explode panel (openspec explode-view). While the take-apart is being worked out it shows a ring
@@ -7,13 +8,14 @@ import { X } from 'lucide-react';
  * (built) to 100% (fully apart). Pressing the slider (or its keys) hands it to the user, stopping
  * the play.
  */
-export default function ExplodePanel({ amount, ready, progress, onAmount, onGrab, onClose }) {
+export default function ExplodePanel({ amount, ready, progress, onAmount, onGrab, onClose, onHelp }) {
   const percent = Math.round(amount * 100);
   return (
     <div className="explode-panel" role="group" aria-label="Explode">
       <div className="explode-panel-row">
         <span className="explode-panel-title">Explode</span>
-        <button type="button" className="explode-close" onClick={onClose} title="Put the parts back (X or Esc)" aria-label="Close Explode">
+        <HelpQ tool="Explode" onHelp={onHelp} />
+        <button type="button" className="explode-close" data-help="explode-close" onClick={onClose} title="Put the parts back (X or Esc)" aria-label="Close Explode">
           <X size={14} />
         </button>
       </div>
@@ -21,6 +23,7 @@ export default function ExplodePanel({ amount, ready, progress, onAmount, onGrab
         <div className="explode-panel-row">
           <input
             className="explode-slider"
+            data-help="explode-slider"
             type="range"
             min={0}
             max={100}

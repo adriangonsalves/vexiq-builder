@@ -1,0 +1,2795 @@
+[
+ {
+  "feature": "Top toolbar → VEX IQ",
+  "kind": "toolbar",
+  "page": "offline",
+  "section": "install-on-chrome-or-edge",
+  "name": "VEX IQ"
+ },
+ {
+  "feature": "Top toolbar, build name → Build name (click to rename)",
+  "kind": "toolbar",
+  "page": "tour",
+  "section": "",
+  "name": "Build name"
+ },
+ {
+  "feature": "Top toolbar → Undo",
+  "kind": "toolbar",
+  "page": "assistant",
+  "section": "colors-on-the-timeline",
+  "name": "Undo"
+ },
+ {
+  "feature": "Top toolbar → Redo",
+  "kind": "toolbar",
+  "page": "settings",
+  "section": "what-show-advanced-options-adds",
+  "name": "Redo"
+ },
+ {
+  "feature": "Top toolbar → History",
+  "kind": "toolbar",
+  "page": "assistant",
+  "section": "",
+  "name": "History"
+ },
+ {
+  "feature": "Top toolbar → Select",
+  "kind": "toolbar",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "Select"
+ },
+ {
+  "feature": "Top toolbar → Tools",
+  "kind": "toolbar",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "Tools"
+ },
+ {
+  "feature": "Top toolbar → Snap: 1P",
+  "kind": "toolbar",
+  "page": "moving",
+  "section": "",
+  "name": "Snap: 1P"
+ },
+ {
+  "feature": "Top toolbar → Snap: 0.5P",
+  "kind": "toolbar",
+  "page": "moving",
+  "section": "",
+  "name": "0.5P"
+ },
+ {
+  "feature": "Top toolbar → Snap: 0.25P",
+  "kind": "toolbar",
+  "page": "moving",
+  "section": "",
+  "name": "0.25P"
+ },
+ {
+  "feature": "Top toolbar → Snap: Free",
+  "kind": "toolbar",
+  "page": "moving",
+  "section": "",
+  "name": "1P, 0.5P, 0.25P or Free"
+ },
+ {
+  "feature": "Top toolbar → Focus",
+  "kind": "toolbar",
+  "page": "looking-around",
+  "section": "",
+  "name": "Focus"
+ },
+ {
+  "feature": "Top toolbar → Wide",
+  "kind": "toolbar",
+  "page": "pins-and-connectors",
+  "section": "the-two-corner-connectors-and-which-way-they-face",
+  "name": "Wide"
+ },
+ {
+  "feature": "Top toolbar → Panels",
+  "kind": "toolbar",
+  "page": "views",
+  "section": "wide-and-panels",
+  "name": "Panels"
+ },
+ {
+  "feature": "Top toolbar → View",
+  "kind": "toolbar",
+  "page": "advanced-tools",
+  "section": "the-axes-overlay",
+  "name": "View"
+ },
+ {
+  "feature": "Top toolbar → File",
+  "kind": "toolbar",
+  "page": "offline",
+  "section": "if-a-download-stops",
+  "name": "File"
+ },
+ {
+  "feature": "Top toolbar → Help",
+  "kind": "toolbar",
+  "page": "tour",
+  "section": "on-a-tablet",
+  "name": "Help"
+ },
+ {
+  "feature": "Top toolbar → Settings",
+  "kind": "toolbar",
+  "page": "settings",
+  "section": "",
+  "name": "Settings"
+ },
+ {
+  "feature": "Top toolbar, small screens → Library",
+  "kind": "toolbar",
+  "page": "library",
+  "section": "",
+  "name": "Library"
+ },
+ {
+  "feature": "Top toolbar, small screens → Outline",
+  "kind": "toolbar",
+  "page": "outline",
+  "section": "",
+  "name": "Outline"
+ },
+ {
+  "feature": "Top toolbar, small screens → Pin drawer open",
+  "kind": "toolbar",
+  "page": "tablets-and-phones",
+  "section": "tabs-drawers-and-pins",
+  "name": "A pin keeps a drawer open"
+ },
+ {
+  "feature": "Top toolbar, small screens → Unpin drawer",
+  "kind": "toolbar",
+  "page": "tablets-and-phones",
+  "section": "tabs-drawers-and-pins",
+  "name": "An unpinned drawer"
+ },
+ {
+  "feature": "Top bar status → Available offline",
+  "kind": "toolbar",
+  "page": "offline",
+  "section": "",
+  "name": "Available offline"
+ },
+ {
+  "feature": "Side panel tabs (medium layout) → Library",
+  "kind": "toolbar",
+  "page": "library",
+  "section": "",
+  "name": "Library"
+ },
+ {
+  "feature": "Side panel tabs (medium layout) → Outline",
+  "kind": "toolbar",
+  "page": "outline",
+  "section": "",
+  "name": "Outline"
+ },
+ {
+  "feature": "3D view top bar → Clear (selection)",
+  "kind": "toolbar",
+  "page": "selecting",
+  "section": "select-all-none-and-invert",
+  "name": "Select None"
+ },
+ {
+  "feature": "3D view top bar → Revert Pose",
+  "kind": "toolbar",
+  "page": "moving",
+  "section": "when-a-part-overlaps-and-changing-colour",
+  "name": "Revert Pose"
+ },
+ {
+  "feature": "3D view top bar → Cancel Placement",
+  "kind": "toolbar",
+  "page": "moving",
+  "section": "when-a-part-overlaps-and-changing-colour",
+  "name": "Cancel Placement"
+ },
+ {
+  "feature": "3D view message strip → Keep",
+  "kind": "toolbar",
+  "page": "context-bar",
+  "section": "the-tick-buttons",
+  "name": "Keep"
+ },
+ {
+  "feature": "3D view message strip → Cancel",
+  "kind": "toolbar",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Cancel"
+ },
+ {
+  "feature": "3D view message strip → Stop",
+  "kind": "toolbar",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "Stop"
+ },
+ {
+  "feature": "3D view, phone → Warnings",
+  "kind": "toolbar",
+  "page": "tablets-and-phones",
+  "section": "messages-on-a-phone",
+  "name": "Warnings"
+ },
+ {
+  "feature": "3D view bottom shortcuts strip → E Rotate",
+  "kind": "toolbar",
+  "page": "context-bar",
+  "section": "buttons-that-are-always-there",
+  "name": "E Rotate"
+ },
+ {
+  "feature": "Welcome card → Start",
+  "kind": "toolbar",
+  "page": "advanced-tools",
+  "section": "auto-fasten-joint",
+  "name": "Start"
+ },
+ {
+  "feature": "Welcome card → Not now",
+  "kind": "toolbar",
+  "page": "offline",
+  "section": "install-on-chrome-or-edge",
+  "name": "Not now"
+ },
+ {
+  "feature": "Offline banner → Use VEX IQ without internet?",
+  "kind": "toolbar",
+  "page": "offline",
+  "section": "install-on-chrome-or-edge",
+  "name": "Use VEX IQ without internet?"
+ },
+ {
+  "feature": "Offline banner → Download",
+  "kind": "toolbar",
+  "page": "offline",
+  "section": "",
+  "name": "Download"
+ },
+ {
+  "feature": "Offline banner → Not now",
+  "kind": "toolbar",
+  "page": "offline",
+  "section": "install-on-chrome-or-edge",
+  "name": "Not now"
+ },
+ {
+  "feature": "Offline banner → Download update",
+  "kind": "toolbar",
+  "page": "offline",
+  "section": "new-versions",
+  "name": "Download update"
+ },
+ {
+  "feature": "Offline banner → Later",
+  "kind": "toolbar",
+  "page": "offline",
+  "section": "new-versions",
+  "name": "Later"
+ },
+ {
+  "feature": "History timeline → Play",
+  "kind": "toolbar",
+  "page": "gears",
+  "section": "what-turns-in-play-mode",
+  "name": "Play"
+ },
+ {
+  "feature": "History timeline → Pause",
+  "kind": "toolbar",
+  "page": "undo-history",
+  "section": "play-and-its-speeds",
+  "name": "Pause"
+ },
+ {
+  "feature": "History timeline → 1×",
+  "kind": "toolbar",
+  "page": "undo-history",
+  "section": "",
+  "name": "1×"
+ },
+ {
+  "feature": "History timeline → 2×",
+  "kind": "toolbar",
+  "page": "undo-history",
+  "section": "",
+  "name": "2×"
+ },
+ {
+  "feature": "History timeline → 4×",
+  "kind": "toolbar",
+  "page": "undo-history",
+  "section": "",
+  "name": "4×"
+ },
+ {
+  "feature": "History timeline → Go to end of step",
+  "kind": "toolbar",
+  "page": "undo-history",
+  "section": "a-big-step-plays-part-by-part",
+  "name": "Go to end of step"
+ },
+ {
+  "feature": "History timeline → App",
+  "kind": "toolbar",
+  "page": "advanced-tools",
+  "section": "cad-information",
+  "name": "App"
+ },
+ {
+  "feature": "History timeline → MCP",
+  "kind": "toolbar",
+  "page": "assistant",
+  "section": "",
+  "name": "MCP"
+ },
+ {
+  "feature": "History timeline → Assistant",
+  "kind": "toolbar",
+  "page": "assistant",
+  "section": "",
+  "name": "Assistant"
+ },
+ {
+  "feature": "History timeline → Smart action",
+  "kind": "toolbar",
+  "page": "assistant",
+  "section": "colors-on-the-timeline",
+  "name": "Smart action"
+ },
+ {
+  "feature": "Select menu → Select mode",
+  "kind": "menu",
+  "page": "outline",
+  "section": "checkboxes-in-select-mode",
+  "name": "Select mode"
+ },
+ {
+  "feature": "Select menu → Box select",
+  "kind": "menu",
+  "page": "selecting",
+  "section": "box-select",
+  "name": "Box select"
+ },
+ {
+  "feature": "Select menu → Select Connected",
+  "kind": "menu",
+  "page": "selecting",
+  "section": "select-connected",
+  "name": "Select Connected"
+ },
+ {
+  "feature": "Select menu → Select All",
+  "kind": "menu",
+  "page": "selecting",
+  "section": "select-all-none-and-invert",
+  "name": "Select All"
+ },
+ {
+  "feature": "Select menu → Select None",
+  "kind": "menu",
+  "page": "selecting",
+  "section": "select-all-none-and-invert",
+  "name": "Select None"
+ },
+ {
+  "feature": "Select menu → Invert Selection",
+  "kind": "menu",
+  "page": "selecting",
+  "section": "select-all-none-and-invert",
+  "name": "Invert Selection"
+ },
+ {
+  "feature": "Select menu → Group",
+  "kind": "menu",
+  "page": "selecting",
+  "section": "",
+  "name": "Group"
+ },
+ {
+  "feature": "Select menu → Ungroup",
+  "kind": "menu",
+  "page": "selecting",
+  "section": "",
+  "name": "Ungroup"
+ },
+ {
+  "feature": "Tools menu → Check and fit",
+  "kind": "menu",
+  "page": "check-and-fix",
+  "section": "tools-fix-assembly-on-its-own",
+  "name": "Fix assembly"
+ },
+ {
+  "feature": "Tools menu → Fix assembly",
+  "kind": "menu",
+  "page": "check-and-fix",
+  "section": "tools-fix-assembly-on-its-own",
+  "name": "Fix assembly"
+ },
+ {
+  "feature": "Tools menu → Audit",
+  "kind": "menu",
+  "page": "check-and-fix",
+  "section": "",
+  "name": "Audit"
+ },
+ {
+  "feature": "Tools menu → Blueprint",
+  "kind": "menu",
+  "page": "blueprint",
+  "section": "",
+  "name": "Blueprint"
+ },
+ {
+  "feature": "Tools menu → Explode",
+  "kind": "menu",
+  "page": "explode",
+  "section": "",
+  "name": "Explode"
+ },
+ {
+  "feature": "Tools menu → Play mode",
+  "kind": "menu",
+  "page": "gears",
+  "section": "what-turns-in-play-mode",
+  "name": "Play mode"
+ },
+ {
+  "feature": "Tools menu → Build",
+  "kind": "menu",
+  "page": "advanced-tools",
+  "section": "mirror-left-to-right",
+  "name": "Build"
+ },
+ {
+  "feature": "Tools menu → Chain builder",
+  "kind": "menu",
+  "page": "chain-and-track",
+  "section": "",
+  "name": "Chain builder"
+ },
+ {
+  "feature": "Tools menu → Track builder…",
+  "kind": "menu",
+  "page": "chain-and-track",
+  "section": "",
+  "name": "Track builder…"
+ },
+ {
+  "feature": "Tools menu → Bend sheet…",
+  "kind": "menu",
+  "page": "plastic-sheets",
+  "section": "",
+  "name": "Bend sheet…"
+ },
+ {
+  "feature": "Tools menu → Band builder",
+  "kind": "menu",
+  "page": "rubber-bands",
+  "section": "",
+  "name": "Band builder"
+ },
+ {
+  "feature": "Tools menu → Band between these",
+  "kind": "menu",
+  "page": "rubber-bands",
+  "section": "band-between-these-and-belt-round-these",
+  "name": "Band between these"
+ },
+ {
+  "feature": "Tools menu → Belt round these",
+  "kind": "menu",
+  "page": "rubber-bands",
+  "section": "band-between-these-and-belt-round-these",
+  "name": "Belt round these"
+ },
+ {
+  "feature": "Tools menu → Flatten band",
+  "kind": "menu",
+  "page": "rubber-bands",
+  "section": "changing-or-removing-a-band",
+  "name": "Flatten band"
+ },
+ {
+  "feature": "Snap menu → 1P",
+  "kind": "menu",
+  "page": "moving",
+  "section": "",
+  "name": "1P"
+ },
+ {
+  "feature": "Snap menu → 0.5P",
+  "kind": "menu",
+  "page": "moving",
+  "section": "",
+  "name": "0.5P"
+ },
+ {
+  "feature": "Snap menu → 0.25P",
+  "kind": "menu",
+  "page": "moving",
+  "section": "",
+  "name": "0.25P"
+ },
+ {
+  "feature": "Snap menu → Free",
+  "kind": "menu",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "Free"
+ },
+ {
+  "feature": "View menu / view cube right-click → Projection",
+  "kind": "menu",
+  "page": "views",
+  "section": "",
+  "name": "Orthographic"
+ },
+ {
+  "feature": "View menu / view cube right-click → Perspective",
+  "kind": "menu",
+  "page": "looking-around",
+  "section": "where-the-view-cubes-menu-is",
+  "name": "Perspective"
+ },
+ {
+  "feature": "View menu / view cube right-click → Orthographic",
+  "kind": "menu",
+  "page": "views",
+  "section": "",
+  "name": "Orthographic"
+ },
+ {
+  "feature": "View menu / view cube right-click → Layout",
+  "kind": "menu",
+  "page": "plastic-sheets",
+  "section": "picking-holes-yourself",
+  "name": "Layout"
+ },
+ {
+  "feature": "View menu / view cube right-click → Single",
+  "kind": "menu",
+  "page": "context-bar",
+  "section": "buttons-for-selected-parts",
+  "name": "Single"
+ },
+ {
+  "feature": "View menu / view cube right-click → 4-View",
+  "kind": "menu",
+  "page": "looking-around",
+  "section": "where-the-view-cubes-menu-is",
+  "name": "4-View"
+ },
+ {
+  "feature": "View menu / view cube right-click → Stereo",
+  "kind": "menu",
+  "page": "looking-around",
+  "section": "using-the-view-cube",
+  "name": "Stereo"
+ },
+ {
+  "feature": "View menu / view cube right-click → Cross-eyed",
+  "kind": "menu",
+  "page": "views",
+  "section": "stereo-cross-eyed-depth-and-full-screen",
+  "name": "Cross-eyed"
+ },
+ {
+  "feature": "View menu / view cube right-click → Depth",
+  "kind": "menu",
+  "page": "views",
+  "section": "stereo-cross-eyed-depth-and-full-screen",
+  "name": "Depth"
+ },
+ {
+  "feature": "View menu / view cube right-click → Full screen",
+  "kind": "menu",
+  "page": "shortcuts",
+  "section": "when-keys-dont-work",
+  "name": "Full screen"
+ },
+ {
+  "feature": "View menu / view cube right-click → Grid",
+  "kind": "menu",
+  "page": "views",
+  "section": "the-grid",
+  "name": "Grid"
+ },
+ {
+  "feature": "View menu / view cube right-click → Axes",
+  "kind": "menu",
+  "page": "advanced-tools",
+  "section": "the-axes-overlay",
+  "name": "Axes"
+ },
+ {
+  "feature": "File menu → New",
+  "kind": "menu",
+  "page": "blueprint",
+  "section": "",
+  "name": "New"
+ },
+ {
+  "feature": "File menu → Starter",
+  "kind": "menu",
+  "page": "saving",
+  "section": "the-starters",
+  "name": "Starter"
+ },
+ {
+  "feature": "File menu → Load…",
+  "kind": "menu",
+  "page": "offline",
+  "section": "install-on-an-ipad-or-iphone",
+  "name": "Load…"
+ },
+ {
+  "feature": "File menu → Export",
+  "kind": "menu",
+  "page": "offline",
+  "section": "",
+  "name": "Export"
+ },
+ {
+  "feature": "File menu → Delete this build…",
+  "kind": "menu",
+  "page": "saving",
+  "section": "delete-this-build",
+  "name": "Delete this build…"
+ },
+ {
+  "feature": "Context bar, Turn step menu → 15°",
+  "kind": "menu",
+  "page": "moving",
+  "section": "turning-with-rings",
+  "name": "15°"
+ },
+ {
+  "feature": "Context bar, Turn step menu → 45°",
+  "kind": "menu",
+  "page": "moving",
+  "section": "turning-with-rings",
+  "name": "45°"
+ },
+ {
+  "feature": "Context bar, Turn step menu → 90°",
+  "kind": "menu",
+  "page": "moving",
+  "section": "turning-with-rings",
+  "name": "90°"
+ },
+ {
+  "feature": "Context bar, Turn step menu → Free",
+  "kind": "menu",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "Free"
+ },
+ {
+  "feature": "Context bar → Move",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-that-are-always-there",
+  "name": "Move"
+ },
+ {
+  "feature": "Context bar → Rotate",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-that-are-always-there",
+  "name": "Rotate"
+ },
+ {
+  "feature": "Context bar → Add to selection",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-that-are-always-there",
+  "name": "Add to selection"
+ },
+ {
+  "feature": "Context bar → Mark a hole",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-that-are-always-there",
+  "name": "Mark a hole"
+ },
+ {
+  "feature": "Context bar → Manual Join",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-selected-parts",
+  "name": "Manual Join"
+ },
+ {
+  "feature": "Context bar → Auto Join",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-selected-parts",
+  "name": "Auto Join"
+ },
+ {
+  "feature": "Context bar → Stamp copies",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "Stamp copies"
+ },
+ {
+  "feature": "Context bar → World arrows",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "World arrows"
+ },
+ {
+  "feature": "Context bar → Free move",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "Free move"
+ },
+ {
+  "feature": "Context bar → Turn step: 15°/45°/90°/Free",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "Turn step"
+ },
+ {
+  "feature": "Context bar → Grow selection",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-selected-parts",
+  "name": "Grow selection"
+ },
+ {
+  "feature": "Context bar → One part of a group",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-selected-parts",
+  "name": "One part of a group"
+ },
+ {
+  "feature": "Context bar → Duplicate",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "",
+  "name": "Duplicate"
+ },
+ {
+  "feature": "Context bar → Delete",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "",
+  "name": "Delete"
+ },
+ {
+  "feature": "Wheel bar (turning a ring, stepping fits or layers) → Wheel",
+  "kind": "context-bar",
+  "page": "check-and-fix",
+  "section": "the-counters",
+  "name": "Wheel"
+ },
+ {
+  "feature": "Wheel bar (turning a ring, stepping fits or layers) → Next",
+  "kind": "context-bar",
+  "page": "joining",
+  "section": "stepping-through-fits",
+  "name": "Next"
+ },
+ {
+  "feature": "Wheel bar (turning a ring, stepping fits or layers) → Previous",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Previous"
+ },
+ {
+  "feature": "Wheel bar (turning a ring, stepping fits or layers) → Turn step",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "Turn step"
+ },
+ {
+  "feature": "Wheel bar (turning a ring, stepping fits or layers) → World arrows",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "World arrows"
+ },
+ {
+  "feature": "Wheel bar (turning a ring, stepping fits or layers) → Pins only",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Pins only"
+ },
+ {
+  "feature": "Wheel bar (turning a ring, stepping fits or layers) → Cancel",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Cancel"
+ },
+ {
+  "feature": "Wheel bar, commit button (changes with the task) → Put it in",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "the-tick-buttons",
+  "name": "Put it in"
+ },
+ {
+  "feature": "Wheel bar, commit button (changes with the task) → Put a copy in",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "Put a copy in"
+ },
+ {
+  "feature": "Wheel bar, commit button (changes with the task) → Keep",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "the-tick-buttons",
+  "name": "Keep"
+ },
+ {
+  "feature": "Wheel bar, commit button (changes with the task) → Done",
+  "kind": "context-bar",
+  "page": "blueprint",
+  "section": "",
+  "name": "Done"
+ },
+ {
+  "feature": "Wheel bar, commit button (changes with the task) → Add this spot",
+  "kind": "context-bar",
+  "page": "context-bar",
+  "section": "the-tick-buttons",
+  "name": "Add this spot"
+ },
+ {
+  "feature": "Library panel → VEX IQ Part Library",
+  "kind": "panel",
+  "page": "library",
+  "section": "",
+  "name": "Library search box"
+ },
+ {
+  "feature": "Library panel → List view",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "cad-information",
+  "name": "List"
+ },
+ {
+  "feature": "Library panel → Grid view",
+  "kind": "panel",
+  "page": "views",
+  "section": "the-grid",
+  "name": "Grid view"
+ },
+ {
+  "feature": "Library panel → Search Brain, Motor, Sensor, 228-...",
+  "kind": "panel",
+  "page": "library",
+  "section": "",
+  "name": "Library search box"
+ },
+ {
+  "feature": "Library panel → Clear search",
+  "kind": "panel",
+  "page": "library",
+  "section": "clearing-the-search",
+  "name": "Clear search"
+ },
+ {
+  "feature": "Library panel → Recent",
+  "kind": "panel",
+  "page": "library",
+  "section": "categories-and-recent",
+  "name": "Recent"
+ },
+ {
+  "feature": "Library panel, small screens → Category filters toggle",
+  "kind": "panel",
+  "page": "library",
+  "section": "categories-and-recent",
+  "name": "category buttons"
+ },
+ {
+  "feature": "Library panel, small screens → Category pills (name (count))",
+  "kind": "panel",
+  "page": "library",
+  "section": "categories-and-recent",
+  "name": "category buttons"
+ },
+ {
+  "feature": "Outline panel → Assembly Outliner",
+  "kind": "panel",
+  "page": "outline",
+  "section": "",
+  "name": "Outline"
+ },
+ {
+  "feature": "Outline panel → Locate the selection",
+  "kind": "panel",
+  "page": "outline",
+  "section": "locate-and-the-base-name",
+  "name": "Locate"
+ },
+ {
+  "feature": "Outline panel → Clear All",
+  "kind": "panel",
+  "page": "outline",
+  "section": "clearing-the-search-and-the-whole-build",
+  "name": "Clear All"
+ },
+ {
+  "feature": "Outline panel → Search label, part name, 228-...",
+  "kind": "panel",
+  "page": "outline",
+  "section": "searching-the-list",
+  "name": "search"
+ },
+ {
+  "feature": "Outline panel → Clear search",
+  "kind": "panel",
+  "page": "library",
+  "section": "clearing-the-search",
+  "name": "Clear search"
+ },
+ {
+  "feature": "Outline panel → Selected (N)",
+  "kind": "panel",
+  "page": "outline",
+  "section": "the-selected-list-and-its-buttons",
+  "name": "Selected list"
+ },
+ {
+  "feature": "Outline panel → Hide / Show (eye)",
+  "kind": "panel",
+  "page": "outline",
+  "section": "",
+  "name": "the eye"
+ },
+ {
+  "feature": "Outline panel → Lock / Unlock",
+  "kind": "panel",
+  "page": "outline",
+  "section": "",
+  "name": "padlock"
+ },
+ {
+  "feature": "Outline panel → Colour of the selected parts",
+  "kind": "panel",
+  "page": "outline",
+  "section": "the-selected-list-and-its-buttons",
+  "name": "colour square"
+ },
+ {
+  "feature": "Outline panel → Custom color",
+  "kind": "panel",
+  "page": "outline",
+  "section": "the-selected-list-and-its-buttons",
+  "name": "Custom Color"
+ },
+ {
+  "feature": "Outline panel → Clone the selected parts",
+  "kind": "panel",
+  "page": "outline",
+  "section": "the-selected-list-and-its-buttons",
+  "name": "Clone the selected parts"
+ },
+ {
+  "feature": "Outline panel → Delete the selected parts",
+  "kind": "panel",
+  "page": "outline",
+  "section": "the-selected-list-and-its-buttons",
+  "name": "Delete the selected parts"
+ },
+ {
+  "feature": "Outline panel → Unselect",
+  "kind": "panel",
+  "page": "outline",
+  "section": "the-selected-list-and-its-buttons",
+  "name": "Unselect"
+ },
+ {
+  "feature": "Outline panel → Add to the selection",
+  "kind": "panel",
+  "page": "outline",
+  "section": "the-selected-list-and-its-buttons",
+  "name": "Add to the selection"
+ },
+ {
+  "feature": "Outline panel → Open / Close group folder",
+  "kind": "panel",
+  "page": "outline",
+  "section": "folders-hide-and-lock",
+  "name": "open or close it"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Part Inspector",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "Properties"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Back to Outline",
+  "kind": "panel",
+  "page": "explode",
+  "section": "",
+  "name": "to go back"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Clone",
+  "kind": "panel",
+  "page": "outline",
+  "section": "what-properties-shows",
+  "name": "Clone"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Delete",
+  "kind": "panel",
+  "page": "context-bar",
+  "section": "",
+  "name": "Delete"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Position (mm)",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "Position"
+ },
+ {
+  "feature": "Properties (Part Inspector) → X",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "X"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Y",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "Y"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Z",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "mirror-left-to-right",
+  "name": "Z"
+ },
+ {
+  "feature": "Properties (Part Inspector) → -X",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "-X"
+ },
+ {
+  "feature": "Properties (Part Inspector) → +X",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "+X"
+ },
+ {
+  "feature": "Properties (Part Inspector) → -Y",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "-Y"
+ },
+ {
+  "feature": "Properties (Part Inspector) → +Y",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "+Y"
+ },
+ {
+  "feature": "Properties (Part Inspector) → -Z",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "-Z"
+ },
+ {
+  "feature": "Properties (Part Inspector) → +Z",
+  "kind": "panel",
+  "page": "looking-around",
+  "section": "using-the-view-cube",
+  "name": "+Z"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Rotation (deg)",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "angles"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Quick 90° Flip",
+  "kind": "panel",
+  "page": "outline",
+  "section": "what-properties-shows",
+  "name": "quarter-turn buttons"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Rotate X +90°",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "Rotate X +90°"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Rotate Y +90°",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "Rotate Y +90°"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Rotate Z +90°",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "Rotate Z +90°"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Shape",
+  "kind": "panel",
+  "page": "plastic-sheets",
+  "section": "the-shape-line-in-properties",
+  "name": "Shape"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Part Color",
+  "kind": "panel",
+  "page": "moving",
+  "section": "typing-a-position-nudging-and-colour",
+  "name": "colour squares"
+ },
+ {
+  "feature": "Properties (Part Inspector) → Custom Color",
+  "kind": "panel",
+  "page": "moving",
+  "section": "when-a-part-overlaps-and-changing-colour",
+  "name": "Custom Color"
+ },
+ {
+  "feature": "Properties, strung band → Band",
+  "kind": "panel",
+  "page": "copying",
+  "section": "copying-a-group",
+  "name": "Band"
+ },
+ {
+  "feature": "Properties, strung band → Size",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "cad-information",
+  "name": "Size"
+ },
+ {
+  "feature": "Properties, strung band → Inside",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "going-another-way-round",
+  "name": "Inside"
+ },
+ {
+  "feature": "Properties, strung band → Outside",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "going-another-way-round",
+  "name": "Outside"
+ },
+ {
+  "feature": "Properties, strung band → Cross",
+  "kind": "panel",
+  "page": "context-bar",
+  "section": "buttons-that-stay-on-and-buttons-for-one-use",
+  "name": "Cross"
+ },
+ {
+  "feature": "Properties, strung band → Edit route",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "changing-or-removing-a-band",
+  "name": "Edit route"
+ },
+ {
+  "feature": "Properties, strung band → Flatten",
+  "kind": "panel",
+  "page": "plastic-sheets",
+  "section": "",
+  "name": "Flatten"
+ },
+ {
+  "feature": "Properties, advanced options only → Smart Assembly & Fastening",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "Smart Assembly & Fastening"
+ },
+ {
+  "feature": "Properties, advanced options only → Auto-Fasten Joint (Pins)",
+  "kind": "panel",
+  "page": "settings",
+  "section": "what-show-advanced-options-adds",
+  "name": "Auto-Fasten Joint"
+ },
+ {
+  "feature": "Properties, advanced options only → Auto-Fasten Pins",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "auto-fasten-joint",
+  "name": "Auto-Fasten Pins"
+ },
+ {
+  "feature": "Properties, advanced options only → Max 12",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "auto-fasten-joint",
+  "name": "Maximum connector pins"
+ },
+ {
+  "feature": "Properties, advanced options only → Snap & Mate to Port",
+  "kind": "panel",
+  "page": "settings",
+  "section": "what-show-advanced-options-adds",
+  "name": "Snap & Mate to Port"
+ },
+ {
+  "feature": "Properties, advanced options only → Snap & Mate Selected Part",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "snap-mate",
+  "name": "Snap & Mate Selected Part"
+ },
+ {
+  "feature": "Properties, advanced options only → Roll 0°",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "snap-mate",
+  "name": "Roll"
+ },
+ {
+  "feature": "Properties, advanced options only → Normal Dir",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "snap-mate",
+  "name": "Flip"
+ },
+ {
+  "feature": "Properties, advanced options only → Flipped 180°",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "snap-mate",
+  "name": "Flip"
+ },
+ {
+  "feature": "Properties, advanced options only → Mesh Gear Train on Selected Beam",
+  "kind": "panel",
+  "page": "gears",
+  "section": "building-a-row-of-gears-fast",
+  "name": "gear train builder"
+ },
+ {
+  "feature": "Properties, advanced options only → Symmetry Mirror",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "mirror-left-to-right",
+  "name": "Mirror"
+ },
+ {
+  "feature": "Properties, advanced options only → Mirror Z (L↔R)",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "mirror-left-to-right",
+  "name": "Mirror Z (L↔R)"
+ },
+ {
+  "feature": "Properties, advanced options only → Mirror X (F↔R)",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "mirror-left-to-right",
+  "name": "Mirror X (F↔R)"
+ },
+ {
+  "feature": "Properties, advanced options only → Mirror All Z",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "mirror-left-to-right",
+  "name": "Mirror All Z"
+ },
+ {
+  "feature": "Group inspector → Group name",
+  "kind": "panel",
+  "page": "outline",
+  "section": "rename-a-group",
+  "name": "Group name"
+ },
+ {
+  "feature": "Group inspector → Centre (mm)",
+  "kind": "panel",
+  "page": "outline",
+  "section": "what-properties-shows",
+  "name": "centre of the group"
+ },
+ {
+  "feature": "Group inspector → Quick 90° Turn",
+  "kind": "panel",
+  "page": "outline",
+  "section": "what-properties-shows",
+  "name": "quarter turns"
+ },
+ {
+  "feature": "Group inspector → Hide all",
+  "kind": "panel",
+  "page": "outline",
+  "section": "what-properties-shows",
+  "name": "Hide all"
+ },
+ {
+  "feature": "Group inspector → Show all",
+  "kind": "panel",
+  "page": "outline",
+  "section": "what-properties-shows",
+  "name": "Hide all"
+ },
+ {
+  "feature": "Group inspector → Lock all",
+  "kind": "panel",
+  "page": "outline",
+  "section": "what-properties-shows",
+  "name": "Lock all"
+ },
+ {
+  "feature": "Group inspector → Unlock all",
+  "kind": "panel",
+  "page": "outline",
+  "section": "what-properties-shows",
+  "name": "Lock all"
+ },
+ {
+  "feature": "Audit panel → Audit",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "",
+  "name": "Audit"
+ },
+ {
+  "feature": "Audit panel → Refresh",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "the-counters",
+  "name": "Refresh"
+ },
+ {
+  "feature": "Audit panel → Close the audit panel",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "closing-the-audit-panel",
+  "name": "Close the audit panel"
+ },
+ {
+  "feature": "Audit panel → Attempt Fix",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "",
+  "name": "Attempt Fix"
+ },
+ {
+  "feature": "Audit panel → Overlaps",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "the-counters",
+  "name": "Overlaps"
+ },
+ {
+  "feature": "Audit panel → Loose pins",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "the-counters",
+  "name": "Loose pins"
+ },
+ {
+  "feature": "Audit panel → Half-seated",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "",
+  "name": "Half-seated"
+ },
+ {
+  "feature": "Audit panel → Unpinned",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "the-counters",
+  "name": "Unpinned"
+ },
+ {
+  "feature": "Audit panel → Under-fastened",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "the-counters",
+  "name": "Under-fastened"
+ },
+ {
+  "feature": "Audit panel → Not joined",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "the-counters",
+  "name": "Not joined"
+ },
+ {
+  "feature": "Audit panel → Overhanging shafts",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "the-counters",
+  "name": "Overhanging shafts"
+ },
+ {
+  "feature": "Audit panel → Drive",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "the-counters",
+  "name": "Drive"
+ },
+ {
+  "feature": "Audit panel → Mechanically sound (0 issues)",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "",
+  "name": "Mechanically sound"
+ },
+ {
+  "feature": "Blueprint dialog → 3-View Orthographic Blueprint",
+  "kind": "panel",
+  "page": "blueprint",
+  "section": "",
+  "name": "Blueprint"
+ },
+ {
+  "feature": "Blueprint dialog → Open Full SVG",
+  "kind": "panel",
+  "page": "blueprint",
+  "section": "",
+  "name": "Open Full SVG"
+ },
+ {
+  "feature": "Blueprint dialog → Close",
+  "kind": "panel",
+  "page": "blueprint",
+  "section": "",
+  "name": "Close"
+ },
+ {
+  "feature": "Explode panel → Explode",
+  "kind": "panel",
+  "page": "explode",
+  "section": "",
+  "name": "Explode"
+ },
+ {
+  "feature": "Explode panel → How far apart",
+  "kind": "panel",
+  "page": "views",
+  "section": "stereo-cross-eyed-depth-and-full-screen",
+  "name": "How far apart"
+ },
+ {
+  "feature": "Explode panel → Close Explode",
+  "kind": "panel",
+  "page": "shortcuts",
+  "section": "tools-and-help",
+  "name": "Close Explode"
+ },
+ {
+  "feature": "Play panel → Play",
+  "kind": "panel",
+  "page": "gears",
+  "section": "what-turns-in-play-mode",
+  "name": "Play"
+ },
+ {
+  "feature": "Play panel → Collapse Play panel",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "folding-the-play-panel-and-the-findings-list",
+  "name": "Collapse Play panel"
+ },
+ {
+  "feature": "Play panel → Expand Play panel",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "folding-the-play-panel-and-the-findings-list",
+  "name": "Expand Play panel"
+ },
+ {
+  "feature": "Play panel → Close Play mode",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "",
+  "name": "Press Esc to leave"
+ },
+ {
+  "feature": "Play panel → Hold",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "loose-and-half-seated-pins",
+  "name": "Hold"
+ },
+ {
+  "feature": "Play panel → Throttle slider",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "",
+  "name": "Throttle slider"
+ },
+ {
+  "feature": "Play panel → Limit speed by load",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "simulate-gravity-and-the-floor",
+  "name": "Limit speed by load"
+ },
+ {
+  "feature": "Play panel → Simulate gravity",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "simulate-gravity-and-the-floor",
+  "name": "Simulate gravity"
+ },
+ {
+  "feature": "Play panel → Drop test",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "if-the-physics-wont-start",
+  "name": "Drop test"
+ },
+ {
+  "feature": "Play panel → Drop height",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "the-drop-test",
+  "name": "Drop height"
+ },
+ {
+  "feature": "Play panel → Landing",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "the-drop-test",
+  "name": "Landing"
+ },
+ {
+  "feature": "Play panel → Drop",
+  "kind": "panel",
+  "page": "history-branches",
+  "section": "linear-or-keep-branches",
+  "name": "Drop"
+ },
+ {
+  "feature": "Play panel → Reset",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "the-drop-test",
+  "name": "Reset"
+ },
+ {
+  "feature": "Play panel → Slow motion",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "the-drop-test",
+  "name": "Slow motion"
+ },
+ {
+  "feature": "Play panel → Highlight loose parts",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "the-drop-test",
+  "name": "Highlight loose parts"
+ },
+ {
+  "feature": "Play panel → Findings",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "closing-the-audit-panel",
+  "name": "Findings"
+ },
+ {
+  "feature": "Play panel → Flat",
+  "kind": "panel",
+  "page": "gears",
+  "section": "square-shafts-and-the-motor-hub",
+  "name": "Flat"
+ },
+ {
+  "feature": "Play panel → Front",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "mirror-left-to-right",
+  "name": "Front"
+ },
+ {
+  "feature": "Play panel → Back",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "closing-the-audit-panel",
+  "name": "Back"
+ },
+ {
+  "feature": "Play panel → Left side",
+  "kind": "panel",
+  "page": "copying",
+  "section": "mirror-makes-the-other-side",
+  "name": "Left side"
+ },
+ {
+  "feature": "Play panel → Right side",
+  "kind": "panel",
+  "page": "copying",
+  "section": "mirror-makes-the-other-side",
+  "name": "Right side"
+ },
+ {
+  "feature": "Play panel → Corner",
+  "kind": "panel",
+  "page": "library",
+  "section": "adding-onto-a-marked-hole",
+  "name": "Corner"
+ },
+ {
+  "feature": "Band builder panel → Band builder",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "",
+  "name": "Band builder"
+ },
+ {
+  "feature": "Band builder panel → Edit band",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "changing-or-removing-a-band",
+  "name": "Edit route"
+ },
+ {
+  "feature": "Band builder panel → Band size",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "",
+  "name": "Choose for me"
+ },
+ {
+  "feature": "Band builder panel → Choose for me",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "",
+  "name": "Choose for me"
+ },
+ {
+  "feature": "Band builder panel → Inside",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "going-another-way-round",
+  "name": "Inside"
+ },
+ {
+  "feature": "Band builder panel → Outside",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "going-another-way-round",
+  "name": "Outside"
+ },
+ {
+  "feature": "Band builder panel → Cross",
+  "kind": "panel",
+  "page": "context-bar",
+  "section": "buttons-that-stay-on-and-buttons-for-one-use",
+  "name": "Cross"
+ },
+ {
+  "feature": "Band builder panel → Take this spot off",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "wraps-and-taking-a-spot-off",
+  "name": "Take this spot off"
+ },
+ {
+  "feature": "Band builder panel → Fewer wraps",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "wraps-and-taking-a-spot-off",
+  "name": "Fewer wraps"
+ },
+ {
+  "feature": "Band builder panel → More wraps",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "wraps-and-taking-a-spot-off",
+  "name": "More wraps"
+ },
+ {
+  "feature": "Band builder panel → There and back",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "going-another-way-round",
+  "name": "There and back"
+ },
+ {
+  "feature": "Band builder panel → Loop",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "",
+  "name": "Loop"
+ },
+ {
+  "feature": "Band builder panel → Use it",
+  "kind": "panel",
+  "page": "library",
+  "section": "adding-by-touch",
+  "name": "Use it"
+ },
+ {
+  "feature": "Band builder panel → Over",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "auto-fasten-joint",
+  "name": "Over"
+ },
+ {
+  "feature": "Band builder panel → Under",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "",
+  "name": "Under"
+ },
+ {
+  "feature": "Band builder panel → Back",
+  "kind": "panel",
+  "page": "check-and-fix",
+  "section": "closing-the-audit-panel",
+  "name": "Back"
+ },
+ {
+  "feature": "Band builder panel → Other way round",
+  "kind": "panel",
+  "page": "rubber-bands",
+  "section": "going-another-way-round",
+  "name": "Other way round"
+ },
+ {
+  "feature": "Band builder panel → Done",
+  "kind": "panel",
+  "page": "blueprint",
+  "section": "",
+  "name": "Done"
+ },
+ {
+  "feature": "Band builder panel → Cancel",
+  "kind": "panel",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Cancel"
+ },
+ {
+  "feature": "Bend sheet dialog → Bend sheet",
+  "kind": "panel",
+  "page": "plastic-sheets",
+  "section": "",
+  "name": "Bend sheet"
+ },
+ {
+  "feature": "Bend sheet dialog → Where to anchor the sheet",
+  "kind": "panel",
+  "page": "plastic-sheets",
+  "section": "anchoring-more-rows",
+  "name": "anchor"
+ },
+ {
+  "feature": "Bend sheet dialog → Flatten",
+  "kind": "panel",
+  "page": "plastic-sheets",
+  "section": "",
+  "name": "Flatten"
+ },
+ {
+  "feature": "Bend sheet dialog → Cancel",
+  "kind": "panel",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Cancel"
+ },
+ {
+  "feature": "Bend sheet dialog → Apply",
+  "kind": "panel",
+  "page": "plastic-sheets",
+  "section": "",
+  "name": "Apply"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Chain builder",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "",
+  "name": "Chain builder"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Track builder",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "",
+  "name": "Track builder"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Attachment",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "track-builder-and-its-attachments",
+  "name": "Attachment"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Traction Link",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "track-builder-and-its-attachments",
+  "name": "Traction Link"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Short Intake Flap",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "track-builder-and-its-attachments",
+  "name": "Short Intake Flap"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Medium Intake Flap",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "track-builder-and-its-attachments",
+  "name": "Medium Intake Flap"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Long Intake Flap",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "track-builder-and-its-attachments",
+  "name": "Long Intake Flap"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → None",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "track-builder-and-its-attachments",
+  "name": "None"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Every",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "auto-fasten-joint",
+  "name": "Every"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Slack on",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "if-the-chain-sags",
+  "name": "Slack on"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Lower run",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "if-the-chain-sags",
+  "name": "Lower run"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Upper run",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "if-the-chain-sags",
+  "name": "Upper run"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Cancel",
+  "kind": "panel",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Cancel"
+ },
+ {
+  "feature": "Chain builder dialog / Track builder dialog → Build",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "mirror-left-to-right",
+  "name": "Build"
+ },
+ {
+  "feature": "Chain builder over/under dialog → Under",
+  "kind": "panel",
+  "page": "chain-and-track",
+  "section": "",
+  "name": "Under"
+ },
+ {
+  "feature": "Chain builder over/under dialog → Over",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "auto-fasten-joint",
+  "name": "Over"
+ },
+ {
+  "feature": "Chain builder over/under dialog → Build",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "mirror-left-to-right",
+  "name": "Build"
+ },
+ {
+  "feature": "Chain builder over/under dialog → Cancel",
+  "kind": "panel",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Cancel"
+ },
+ {
+  "feature": "Your builds dialog (File → Load…) → Your builds",
+  "kind": "panel",
+  "page": "offline",
+  "section": "turn-it-off",
+  "name": "Your builds"
+ },
+ {
+  "feature": "Your builds dialog (File → Load…) → Open from computer…",
+  "kind": "panel",
+  "page": "offline",
+  "section": "install-on-an-ipad-or-iphone",
+  "name": "Open from computer…"
+ },
+ {
+  "feature": "Your builds dialog (File → Load…) → Open",
+  "kind": "panel",
+  "page": "blueprint",
+  "section": "",
+  "name": "Open"
+ },
+ {
+  "feature": "Your builds dialog (File → Load…) → Rename",
+  "kind": "panel",
+  "page": "outline",
+  "section": "rename-a-group",
+  "name": "Rename"
+ },
+ {
+  "feature": "Your builds dialog (File → Load…) → Duplicate",
+  "kind": "panel",
+  "page": "context-bar",
+  "section": "",
+  "name": "Duplicate"
+ },
+ {
+  "feature": "Your builds dialog (File → Load…) → Delete",
+  "kind": "panel",
+  "page": "saving",
+  "section": "what-load-can-do",
+  "name": "Delete"
+ },
+ {
+  "feature": "Your builds dialog (File → Load…) → Open now",
+  "kind": "panel",
+  "page": "saving",
+  "section": "what-load-can-do",
+  "name": "Open now"
+ },
+ {
+  "feature": "Your builds dialog (File → Load…) → Close",
+  "kind": "panel",
+  "page": "blueprint",
+  "section": "",
+  "name": "Close"
+ },
+ {
+  "feature": "Settings dialog → Settings",
+  "kind": "panel",
+  "page": "settings",
+  "section": "",
+  "name": "Settings"
+ },
+ {
+  "feature": "Settings dialog → Close settings",
+  "kind": "panel",
+  "page": "history-branches",
+  "section": "",
+  "name": "Close settings"
+ },
+ {
+  "feature": "Settings dialog → Display",
+  "kind": "panel",
+  "page": "settings",
+  "section": "",
+  "name": "Display"
+ },
+ {
+  "feature": "Settings dialog → History",
+  "kind": "panel",
+  "page": "assistant",
+  "section": "",
+  "name": "History"
+ },
+ {
+  "feature": "Settings dialog → Assistant (MCP)",
+  "kind": "panel",
+  "page": "assistant",
+  "section": "",
+  "name": "Assistant (MCP)"
+ },
+ {
+  "feature": "Settings dialog → Advanced options",
+  "kind": "panel",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "Advanced options"
+ },
+ {
+  "feature": "Offline section (Settings, static site) → Offline",
+  "kind": "panel",
+  "page": "offline",
+  "section": "",
+  "name": "Offline"
+ },
+ {
+  "feature": "Offline section (Settings, static site) → Use offline",
+  "kind": "panel",
+  "page": "offline",
+  "section": "",
+  "name": "Use offline"
+ },
+ {
+  "feature": "Offline section (Settings, static site) → Download",
+  "kind": "panel",
+  "page": "offline",
+  "section": "",
+  "name": "Download"
+ },
+ {
+  "feature": "Offline section (Settings, static site) → Cancel",
+  "kind": "panel",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Cancel"
+ },
+ {
+  "feature": "Offline section (Settings, static site) → Resume",
+  "kind": "panel",
+  "page": "offline",
+  "section": "if-a-download-stops",
+  "name": "Resume"
+ },
+ {
+  "feature": "Offline section (Settings, static site) → Download update",
+  "kind": "panel",
+  "page": "offline",
+  "section": "new-versions",
+  "name": "Download update"
+ },
+ {
+  "feature": "Offline section (Settings, static site) → Download in Safari anyway",
+  "kind": "panel",
+  "page": "offline",
+  "section": "install-on-an-ipad-or-iphone",
+  "name": "Download in Safari anyway"
+ },
+ {
+  "feature": "Offline section (Settings, static site) → Install app",
+  "kind": "panel",
+  "page": "offline",
+  "section": "install-on-chrome-or-edge",
+  "name": "Install app"
+ },
+ {
+  "feature": "Offline section (Settings, static site) → Install the app",
+  "kind": "panel",
+  "page": "offline",
+  "section": "install-on-chrome-or-edge",
+  "name": "Install the app"
+ },
+ {
+  "feature": "Offline section (Settings, static site) → Add to Home Screen",
+  "kind": "panel",
+  "page": "offline",
+  "section": "install-on-an-ipad-or-iphone",
+  "name": "Add to Home Screen"
+ },
+ {
+  "feature": "Help panel → Help",
+  "kind": "panel",
+  "page": "tour",
+  "section": "on-a-tablet",
+  "name": "Help"
+ },
+ {
+  "feature": "Help panel → Search help",
+  "kind": "panel",
+  "page": "tour",
+  "section": "buttons-at-the-top-of-help",
+  "name": "Search help"
+ },
+ {
+  "feature": "Help panel → Help home",
+  "kind": "panel",
+  "page": "tour",
+  "section": "buttons-at-the-top-of-help",
+  "name": "Help home"
+ },
+ {
+  "feature": "Help panel → Copy link",
+  "kind": "panel",
+  "page": "tour",
+  "section": "buttons-at-the-top-of-help",
+  "name": "Copy link"
+ },
+ {
+  "feature": "Help panel → Close help",
+  "kind": "panel",
+  "page": "tour",
+  "section": "on-a-tablet",
+  "name": "Help"
+ },
+ {
+  "feature": "Help panel → Wording for: Mouse",
+  "kind": "panel",
+  "page": "tour",
+  "section": "buttons-at-the-top-of-help",
+  "name": "Wording for: Mouse"
+ },
+ {
+  "feature": "Help panel → Wording for: Touch",
+  "kind": "panel",
+  "page": "tour",
+  "section": "buttons-at-the-top-of-help",
+  "name": "Wording for: Touch"
+ },
+ {
+  "feature": "Settings → Display → Shadows",
+  "kind": "setting",
+  "page": "settings",
+  "section": "",
+  "name": "Shadows"
+ },
+ {
+  "feature": "Settings → Display → Ambient occlusion",
+  "kind": "setting",
+  "page": "settings",
+  "section": "what-the-display-switches-do",
+  "name": "Ambient occlusion"
+ },
+ {
+  "feature": "Settings → Display → Environment reflections",
+  "kind": "setting",
+  "page": "settings",
+  "section": "what-the-display-switches-do",
+  "name": "Environment reflections"
+ },
+ {
+  "feature": "Settings → Display → Reflection brightness",
+  "kind": "setting",
+  "page": "settings",
+  "section": "what-the-display-switches-do",
+  "name": "Reflection brightness"
+ },
+ {
+  "feature": "Settings → History (advanced options on) → Linear",
+  "kind": "setting",
+  "page": "history-branches",
+  "section": "linear-or-keep-branches",
+  "name": "Linear"
+ },
+ {
+  "feature": "Settings → History (advanced options on) → Keep branches",
+  "kind": "setting",
+  "page": "history-branches",
+  "section": "",
+  "name": "Keep branches"
+ },
+ {
+  "feature": "Settings → Assistant (MCP) (advanced options on, not static site) → Let the assistant change the build",
+  "kind": "setting",
+  "page": "assistant",
+  "section": "",
+  "name": "Let the assistant change the build"
+ },
+ {
+  "feature": "Settings → Offline (static site) → Use offline",
+  "kind": "setting",
+  "page": "offline",
+  "section": "",
+  "name": "Use offline"
+ },
+ {
+  "feature": "Settings → Advanced options → Show advanced options",
+  "kind": "setting",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "Show advanced options"
+ },
+ {
+  "feature": "File → Starter → Sample starter",
+  "kind": "starter",
+  "page": "saving",
+  "section": "the-starters",
+  "name": "Sample starter"
+ },
+ {
+  "feature": "File → Starter → Speedbot 2.0",
+  "kind": "starter",
+  "page": "saving",
+  "section": "the-starters",
+  "name": "Speedbot 2.0"
+ },
+ {
+  "feature": "File → Starter → BaseBot",
+  "kind": "starter",
+  "page": "saving",
+  "section": "the-starters",
+  "name": "BaseBot"
+ },
+ {
+  "feature": "File → Starter → Clawbot",
+  "kind": "starter",
+  "page": "saving",
+  "section": "the-starters",
+  "name": "Clawbot"
+ },
+ {
+  "feature": "File → Starter → Flop",
+  "kind": "starter",
+  "page": "saving",
+  "section": "the-starters",
+  "name": "Flop"
+ },
+ {
+  "feature": "Ctrl/Cmd+Z",
+  "kind": "shortcut",
+  "page": "shortcuts",
+  "section": "copying-deleting-and-undoing",
+  "name": "Ctrl + Z"
+ },
+ {
+  "feature": "Shift+Ctrl/Cmd+Z",
+  "kind": "shortcut",
+  "page": "shortcuts",
+  "section": "copying-deleting-and-undoing",
+  "name": "Shift + Ctrl + Z"
+ },
+ {
+  "feature": "Ctrl+Y",
+  "kind": "shortcut",
+  "page": "shortcuts",
+  "section": "copying-deleting-and-undoing",
+  "name": "Ctrl + Y"
+ },
+ {
+  "feature": "?",
+  "kind": "shortcut",
+  "page": "chain-and-track",
+  "section": "standoffs-and-parts-in-the-way",
+  "name": "?"
+ },
+ {
+  "feature": "P",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "P"
+ },
+ {
+  "feature": "1",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "auto-fasten-joint",
+  "name": "1"
+ },
+ {
+  "feature": "2",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "auto-fasten-joint",
+  "name": "2"
+ },
+ {
+  "feature": "3",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "auto-fasten-joint",
+  "name": "3"
+ },
+ {
+  "feature": "Shift+1",
+  "kind": "shortcut",
+  "page": "shortcuts",
+  "section": "looking-around",
+  "name": "Shift + 1"
+ },
+ {
+  "feature": "Shift+2",
+  "kind": "shortcut",
+  "page": "shortcuts",
+  "section": "looking-around",
+  "name": "Shift + 1 2 3"
+ },
+ {
+  "feature": "Shift+3",
+  "kind": "shortcut",
+  "page": "shortcuts",
+  "section": "looking-around",
+  "name": "Shift + 1 2 3"
+ },
+ {
+  "feature": "Ctrl/Cmd+A",
+  "kind": "shortcut",
+  "page": "shortcuts",
+  "section": "selecting",
+  "name": "Ctrl + A"
+ },
+ {
+  "feature": "B",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "B"
+ },
+ {
+  "feature": "C",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "C"
+ },
+ {
+  "feature": "G",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "G"
+ },
+ {
+  "feature": "Shift+G",
+  "kind": "shortcut",
+  "page": "selecting",
+  "section": "",
+  "name": "Shift + G"
+ },
+ {
+  "feature": "Esc",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "buttons-that-stay-on-and-buttons-for-one-use",
+  "name": "Esc"
+ },
+ {
+  "feature": "W",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "W"
+ },
+ {
+  "feature": "E",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "E"
+ },
+ {
+  "feature": "X",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "X"
+ },
+ {
+  "feature": "F",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "F"
+ },
+ {
+  "feature": "D",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "D"
+ },
+ {
+  "feature": "Delete",
+  "kind": "shortcut",
+  "page": "chain-and-track",
+  "section": "the-chain-is-one-group",
+  "name": "Delete"
+ },
+ {
+  "feature": "Backspace",
+  "kind": "shortcut",
+  "page": "shortcuts",
+  "section": "copying-deleting-and-undoing",
+  "name": "Backspace"
+ },
+ {
+  "feature": "R",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "R"
+ },
+ {
+  "feature": "Shift+R",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Shift + R"
+ },
+ {
+  "feature": "Enter",
+  "kind": "shortcut",
+  "page": "library",
+  "section": "dragging-a-part-into-the-view",
+  "name": "Enter"
+ },
+ {
+  "feature": "Esc",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "buttons-that-stay-on-and-buttons-for-one-use",
+  "name": "Esc"
+ },
+ {
+  "feature": "Enter",
+  "kind": "shortcut",
+  "page": "library",
+  "section": "dragging-a-part-into-the-view",
+  "name": "Enter"
+ },
+ {
+  "feature": "Backspace",
+  "kind": "shortcut",
+  "page": "shortcuts",
+  "section": "copying-deleting-and-undoing",
+  "name": "Backspace"
+ },
+ {
+  "feature": "Esc",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "buttons-that-stay-on-and-buttons-for-one-use",
+  "name": "Esc"
+ },
+ {
+  "feature": "R",
+  "kind": "shortcut",
+  "page": "advanced-tools",
+  "section": "",
+  "name": "R"
+ },
+ {
+  "feature": "Shift+R",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "the-wheel-bar",
+  "name": "Shift + R"
+ },
+ {
+  "feature": "X or Esc",
+  "kind": "shortcut",
+  "page": "explode",
+  "section": "",
+  "name": "X or Esc"
+ },
+ {
+  "feature": "Esc",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "buttons-that-stay-on-and-buttons-for-one-use",
+  "name": "Esc"
+ },
+ {
+  "feature": "Esc",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "buttons-that-stay-on-and-buttons-for-one-use",
+  "name": "Esc"
+ },
+ {
+  "feature": "Shift+click",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "buttons-that-are-always-there",
+  "name": "Shift + click"
+ },
+ {
+  "feature": "Shift+Alt+click",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "buttons-for-selected-parts",
+  "name": "Shift + Alt + click"
+ },
+ {
+  "feature": "Alt+click",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "buttons-that-are-always-there",
+  "name": "Alt + click"
+ },
+ {
+  "feature": "Ctrl/Cmd+double-click",
+  "kind": "shortcut",
+  "page": "shortcuts",
+  "section": "joining",
+  "name": "Ctrl + double-click"
+ },
+ {
+  "feature": "Hold Alt",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "buttons-for-one-part",
+  "name": "Hold Alt"
+ },
+ {
+  "feature": "Shift+wheel",
+  "kind": "shortcut",
+  "page": "context-bar",
+  "section": "buttons-for-selected-parts",
+  "name": "Shift + wheel"
+ },
+ {
+  "feature": "Drag (orbit)",
+  "kind": "gesture",
+  "page": "shortcuts",
+  "section": "looking-around",
+  "name": "Drag empty space"
+ },
+ {
+  "feature": "Right-drag (pan)",
+  "kind": "gesture",
+  "page": "shortcuts",
+  "section": "looking-around",
+  "name": "Right-drag"
+ },
+ {
+  "feature": "Mouse wheel (zoom)",
+  "kind": "gesture",
+  "page": "copying",
+  "section": "stamp-copies-and-its-fits",
+  "name": "Mouse wheel"
+ },
+ {
+  "feature": "Click (select a part)",
+  "kind": "gesture",
+  "page": "library",
+  "section": "adding-onto-a-marked-hole",
+  "name": "Click a part"
+ },
+ {
+  "feature": "Double-click a part (join)",
+  "kind": "gesture",
+  "page": "context-bar",
+  "section": "buttons-for-selected-parts",
+  "name": "Double-click the part"
+ },
+ {
+  "feature": "Double-click a part, with a battery selected and a brain (slide battery in)",
+  "kind": "gesture",
+  "page": "joining",
+  "section": "sliding-the-battery-into-the-gen-1-brain",
+  "name": "double-click the brain"
+ },
+ {
+  "feature": "Right-click a selected part (Move/Rotate)",
+  "kind": "gesture",
+  "page": "context-bar",
+  "section": "buttons-that-are-always-there",
+  "name": "Right-click the part"
+ },
+ {
+  "feature": "Click a lit hole (insert)",
+  "kind": "gesture",
+  "page": "shortcuts",
+  "section": "joining",
+  "name": "Click a lit hole"
+ },
+ {
+  "feature": "Drag a box (left to right: wholly inside; right to left: touching)",
+  "kind": "gesture",
+  "page": "selecting",
+  "section": "box-select",
+  "name": "Right to left"
+ },
+ {
+  "feature": "Drag an arrow",
+  "kind": "gesture",
+  "page": "moving",
+  "section": "",
+  "name": "Drag an arrow"
+ },
+ {
+  "feature": "Drag a coloured square (plane drag)",
+  "kind": "gesture",
+  "page": "moving",
+  "section": "arrows-and-the-flat-squares",
+  "name": "flat squares"
+ },
+ {
+  "feature": "Drag a ring",
+  "kind": "gesture",
+  "page": "moving",
+  "section": "",
+  "name": "Drag a ring"
+ },
+ {
+  "feature": "Click a ring",
+  "kind": "gesture",
+  "page": "moving",
+  "section": "turning-with-rings",
+  "name": "Click a ring"
+ },
+ {
+  "feature": "Wheel over a selected ring (turn one step)",
+  "kind": "gesture",
+  "page": "shortcuts",
+  "section": "moving-and-turning",
+  "name": "Wheel on a selected ring"
+ },
+ {
+  "feature": "Wheel while a hole is lit (step through fits)",
+  "kind": "gesture",
+  "page": "copying",
+  "section": "stamp-copies-and-its-fits",
+  "name": "step through"
+ },
+ {
+  "feature": "Click view cube face/edge/corner",
+  "kind": "gesture",
+  "page": "context-bar",
+  "section": "where-the-bar-is-in-each-layout",
+  "name": "view cube"
+ },
+ {
+  "feature": "Double-click view cube (opposite side)",
+  "kind": "gesture",
+  "page": "looking-around",
+  "section": "using-the-view-cube",
+  "name": "opposite side"
+ },
+ {
+  "feature": "Drag view cube (turn the view)",
+  "kind": "gesture",
+  "page": "looking-around",
+  "section": "using-the-view-cube",
+  "name": "Drag on the cube"
+ },
+ {
+  "feature": "Right-click view cube (view options)",
+  "kind": "gesture",
+  "page": "looking-around",
+  "section": "where-the-view-cubes-menu-is",
+  "name": "Right-click the view cube"
+ },
+ {
+  "feature": "Wheel (zoom small view)",
+  "kind": "gesture",
+  "page": "looking-around",
+  "section": "",
+  "name": "scroll to zoom"
+ },
+ {
+  "feature": "Drag (pan small view)",
+  "kind": "gesture",
+  "page": "views",
+  "section": "the-three-small-views-in-4-view",
+  "name": "drag to slide"
+ },
+ {
+  "feature": "Right-click or Alt+click an anchor (take it off)",
+  "kind": "gesture",
+  "page": "rubber-bands",
+  "section": "wraps-and-taking-a-spot-off",
+  "name": "right-click a spot"
+ },
+ {
+  "feature": "Drag a handle onto a spot",
+  "kind": "gesture",
+  "page": "rubber-bands",
+  "section": "wraps-and-taking-a-spot-off",
+  "name": "Drag a band's handle"
+ },
+ {
+  "feature": "Click a spot twice (touch: tap twice)",
+  "kind": "gesture",
+  "page": "check-and-fix",
+  "section": "the-counters",
+  "name": "it again"
+ },
+ {
+  "feature": "Double-click a throttle slider (stop motor)",
+  "kind": "gesture",
+  "page": "play-mode",
+  "section": "",
+  "name": "Double-click a slider"
+ },
+ {
+  "feature": "Double-click a build card (open)",
+  "kind": "gesture",
+  "page": "saving",
+  "section": "what-load-can-do",
+  "name": "Double-clicking it"
+ },
+ {
+  "feature": "Drag a part from the library into the view",
+  "kind": "gesture",
+  "page": "library",
+  "section": "dragging-a-part-into-the-view",
+  "name": "drag it into the 3D view"
+ },
+ {
+  "feature": "Hover a library tile (zoomed picture)",
+  "kind": "gesture",
+  "page": "context-bar",
+  "section": "",
+  "name": "Rest the pointer"
+ },
+ {
+  "feature": "Ctrl/Cmd+click a row (unselect)",
+  "kind": "gesture",
+  "page": "copying",
+  "section": "",
+  "name": "Hold Ctrl"
+ },
+ {
+  "feature": "Double-click a choice (apply)",
+  "kind": "gesture",
+  "page": "plastic-sheets",
+  "section": "choosing-the-rows",
+  "name": "Double-click a choice"
+ },
+ {
+  "feature": "Hover a choice (preview)",
+  "kind": "gesture",
+  "page": "plastic-sheets",
+  "section": "",
+  "name": "shows how it would curve"
+ },
+ {
+  "feature": "Explode panel → Explode slider",
+  "kind": "panel",
+  "page": "explode",
+  "section": "",
+  "name": "Explode slider"
+ },
+ {
+  "feature": "3D view corner → View cube",
+  "kind": "view",
+  "page": "looking-around",
+  "section": "using-the-view-cube",
+  "name": "View cube"
+ }
+]

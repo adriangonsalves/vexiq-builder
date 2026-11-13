@@ -3395,3 +3395,250 @@ body,
   left: calc(100% + 12px);
   right: auto;
 }
+
+/* Help guide (openspec in-app-help): where the panel sits in each layout. The guide's own styles are in
+   src/help/help.css, loaded with it. Large and medium: a column on the right that the 3D view gives
+   room to; under 1500 px (and always in medium) it takes the side panel's place. Small: the whole
+   screen under the toolbar. */
+.app-shell {
+  --help-width: min(420px, 60vw);
+}
+
+.help-panel {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-strong);
+  color: var(--text-primary);
+}
+
+.workspace-grid.help-open {
+  grid-template-columns: 340px minmax(0, 1fr) var(--help-width);
+}
+
+.workspace-grid.help-open > .panel-right {
+  display: none;
+}
+
+.workspace-grid.help-open.panels-hidden {
+  grid-template-columns: minmax(0, 1fr) var(--help-width);
+}
+
+@media (min-width: 1500px) {
+  .app-shell[data-layout="large"] .workspace-grid.help-open:not(.panels-hidden) {
+    grid-template-columns: 340px minmax(0, 1fr) 330px var(--help-width);
+  }
+
+  .app-shell[data-layout="large"] .workspace-grid.help-open:not(.panels-hidden) > .panel-right {
+    display: flex;
+  }
+}
+
+.app-shell[data-layout="medium"] .workspace-grid.help-open,
+.app-shell[data-layout="medium"] .workspace-grid.help-open.panels-hidden {
+  grid-template-columns: minmax(0, 1fr) var(--help-width);
+  grid-template-areas: "view help" "view help";
+}
+
+.app-shell[data-layout="medium"] .workspace-grid.help-open > .panel-left,
+.app-shell[data-layout="medium"] .workspace-grid.help-open > .panel-right,
+.app-shell[data-layout="medium"] .workspace-grid.help-open > .side-tabs {
+  display: none;
+}
+
+.app-shell[data-layout="medium"] .help-panel {
+  grid-area: help;
+}
+
+.app-shell[data-layout="medium"][data-help-open] .topbar {
+  left: 12px;
+  right: calc(var(--help-width) + 12px);
+}
+
+.app-shell[data-layout="small"] .workspace-grid > .help-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  height: auto;
+  border-left: none;
+}
+
+/* Opened from a question mark in a dialog: a dialog on top of that one, at the right (whole screen on a phone) */
+dialog.help-modal {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: var(--help-width);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.5);
+}
+
+.app-shell[data-layout="small"] dialog.help-modal {
+  width: 100vw;
+  border-left: none;
+}
+
+dialog.help-modal::backdrop {
+  background: rgba(2, 6, 23, 0.25);
+}
+
+/* Loading and failure, before the guide's own styles are there */
+.help-frame-message {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-size: 16px;
+}
+
+.help-frame-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 14px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.help-frame-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.help-frame-body {
+  padding: 16px;
+}
+
+.help-frame-body p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.help-frame-retry {
+  min-height: 44px;
+  font-size: 15px;
+}
+
+/* Show me: the control pulses for two seconds, with no change to the layout */
+.help-flash {
+  animation: help-flash 0.5s ease-in-out 4;
+  outline: 3px solid #fbbf24 !important;
+  outline-offset: 2px;
+  position: relative;
+  z-index: 60;
+}
+
+@keyframes help-flash {
+  50% {
+    outline-color: rgba(251, 191, 36, 0.15);
+    box-shadow: 0 0 0 6px rgba(251, 191, 36, 0.35);
+  }
+}
+
+/* Where the view cube is drawn (it is part of the 3D picture), for Show me to flash */
+.help-cube-spot {
+  position: absolute;
+  top: 60px;
+  right: 12px;
+  width: 110px;
+  height: 110px;
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+/* The question mark on tool panels and dialogs */
+.help-q {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.help-q:hover {
+  color: var(--text-primary);
+  background: var(--bg-panel-elevated);
+}
+
+.app-shell:not([data-layout="large"]) .help-q {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* The welcome card on a first visit: small, over the bottom of the 3D view, blocking nothing else */
+.welcome-card {
+  position: absolute;
+  z-index: 25;
+  left: 12px;
+  right: 12px;
+  bottom: 52px;
+  width: fit-content;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  font-size: 15px;
+}
+
+.welcome-card .btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 40px;
+  font-size: 14px;
+}
+
+/* On a computer the shortcuts strip runs along the bottom of the view: the card sits above it */
+.app-shell[data-layout="large"] .welcome-card {
+  bottom: 132px;
+}
+
+/* On a phone the context bar runs down the left side: the card sits to its right, at the bottom */
+.app-shell[data-layout="small"] .welcome-card {
+  left: 78px;
+  bottom: 12px;
+  margin: 0 0 0 auto;
+  font-size: 14px;
+}
+
+.settings-header .help-q-head {
+  margin-left: auto;
+  margin-right: 6px;
+}
+
+.offline-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

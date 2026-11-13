@@ -44,6 +44,7 @@ export default function SelectMenu({
         className={`btn ${at || selectMode || boxSelect ? 'active' : ''}`}
         onClick={toggle}
         aria-haspopup="menu"
+        data-help="select"
         aria-expanded={Boolean(at)}
         aria-label="Select"
         title={

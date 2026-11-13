@@ -28,7 +28,7 @@ export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport,
   };
   return (
     <>
-      <button ref={buttonRef} type="button" className={`btn ${at ? 'active' : ''}`} onClick={toggle} aria-haspopup="menu" aria-expanded={Boolean(at)} title="New, starters, your saved builds, export" aria-label="File">
+      <button ref={buttonRef} type="button" className={`btn ${at ? 'active' : ''}`} onClick={toggle} aria-haspopup="menu" aria-expanded={Boolean(at)} title="New, starters, your saved builds, export" aria-label="File" data-help="file">
         <FolderOpen size={14} className="compact-only" />
         <span className="btn-text">File</span>
         <ChevronDown size={12} className="btn-caret" />
@@ -81,7 +81,7 @@ export function BuildNameField({ name, onRename }) {
   };
   if (draft === null) {
     return (
-      <button type="button" className="build-name" onClick={() => setDraft(name || '')} title="Click to rename this build">
+      <button type="button" className="build-name" data-help="build-name" onClick={() => setDraft(name || '')} title="Click to rename this build">
         {name || '…'}
       </button>
     );

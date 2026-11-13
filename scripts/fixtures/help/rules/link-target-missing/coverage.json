@@ -1,0 +1,30 @@
+[
+  {
+    "feature": "Quick add",
+    "kind": "button",
+    "page": "quick-start",
+    "section": "",
+    "name": "Add"
+  },
+  {
+    "feature": "Gear turn",
+    "kind": "gesture",
+    "page": "gears",
+    "section": "",
+    "name": "Tap the gear"
+  },
+  {
+    "feature": "Gear slip",
+    "kind": "tip",
+    "page": "gears",
+    "section": "if-gears-slip",
+    "name": "closer"
+  },
+  {
+    "feature": "Sample",
+    "kind": "starter",
+    "page": "saving",
+    "section": "",
+    "name": "Sample"
+  }
+]
