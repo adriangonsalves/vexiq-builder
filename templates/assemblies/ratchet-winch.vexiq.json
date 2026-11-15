@@ -1,0 +1,5644 @@
+{
+ "version": "1.1",
+ "pitchUnitMm": 12.7,
+ "name": "Ratchet winch",
+ "exportedAt": "2026-11-14T00:00:00.000Z",
+ "instances": [
+  {
+   "instanceId": "import-5",
+   "partId": "vex-iq-smart-motor-228-2560-500",
+   "label": "VEX IQ Smart Motor #1",
+   "position": [
+    2.95,
+    28.744,
+    -31.875
+   ],
+   "rotation": [
+    -90,
+    0,
+    -180
+   ],
+   "color": "#4b5563",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    2.95,
+    28.744,
+    -31.875
+   ],
+   "lastValidRotation": [
+    -90,
+    0,
+    -180
+   ]
+  },
+  {
+   "instanceId": "import-6",
+   "partId": "2x14-beam-228-2500-027-170",
+   "label": "2x14 Beam #1",
+   "position": [
+    37.95,
+    28.744,
+    -22.225
+   ],
+   "rotation": [
+    -180,
+    0,
+    -180
+   ],
+   "color": "#858b8b",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    37.95,
+    28.744,
+    -22.225
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -180
+   ]
+  },
+  {
+   "instanceId": "import-7",
+   "partId": "2x-wide-spool-228-2500-421-94",
+   "label": "2x Wide Spool #1",
+   "position": [
+    76.05,
+    28.744,
+    -0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": "#f96b02",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    76.05,
+    28.744,
+    -0.047
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "instanceId": "import-8",
+   "partId": "double-2x-wide-2x2-double-offset-corner-connector-228-2500-277-374",
+   "label": "Double 2x Wide, 2x2 Double Offset Corner Connector #1",
+   "position": [
+    -19.202,
+    35.094,
+    19.05
+   ],
+   "rotation": [
+    -180,
+    0,
+    -90
+   ],
+   "color": "#f8fafc",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    -19.202,
+    35.094,
+    19.05
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -90
+   ]
+  },
+  {
+   "instanceId": "import-9",
+   "partId": "washer-228-2500-112-458",
+   "label": "Washer #1",
+   "position": [
+    76.05,
+    28.744,
+    -19.558
+   ],
+   "rotation": [
+    -180,
+    0,
+    22.523
+   ],
+   "color": "#d6d5d1",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    76.05,
+    28.744,
+    -19.558
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    22.523
+   ]
+  },
+  {
+   "instanceId": "import-10",
+   "partId": "double-2x-wide-2x2-double-offset-corner-connector-228-2500-277-374",
+   "label": "Double 2x Wide, 2x2 Double Offset Corner Connector #2",
+   "position": [
+    -44.6,
+    22.392,
+    19.05
+   ],
+   "rotation": [
+    -180,
+    0,
+    -180
+   ],
+   "color": "#f8fafc",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    -44.6,
+    22.392,
+    19.05
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -180
+   ]
+  },
+  {
+   "instanceId": "import-11",
+   "partId": "24x-pitch-rope-228-2500-438-319",
+   "label": "24x Pitch Rope #1",
+   "position": [
+    78.599,
+    174.772,
+    9.398
+   ],
+   "rotation": [
+    -180,
+    0,
+    -89
+   ],
+   "color": "#1c1c1c",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    78.599,
+    174.772,
+    9.398
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -89
+   ]
+  },
+  {
+   "instanceId": "import-12",
+   "partId": "36-tooth-gear-228-2500-214-328",
+   "label": "36 Tooth Gear #1",
+   "position": [
+    76.05,
+    28.744,
+    -16.002
+   ],
+   "rotation": [
+    -180,
+    0,
+    -180
+   ],
+   "color": "#0075c9",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    76.05,
+    28.744,
+    -16.002
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -180
+   ]
+  },
+  {
+   "instanceId": "import-13",
+   "partId": "3x4-plate-228-2500-032-205",
+   "label": "3x4 Plate #1",
+   "position": [
+    9.855,
+    51.456,
+    -9.779
+   ],
+   "rotation": [
+    0,
+    0,
+    63
+   ],
+   "color": "#3f4245",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    9.855,
+    51.456,
+    -9.779
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    63
+   ]
+  },
+  {
+   "instanceId": "import-14",
+   "partId": "3x4-plate-228-2500-032-205",
+   "label": "3x4 Plate #2",
+   "position": [
+    9.855,
+    51.456,
+    9.271
+   ],
+   "rotation": [
+    0,
+    0,
+    63
+   ],
+   "color": "#3f4245",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    9.855,
+    51.456,
+    9.271
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    63
+   ]
+  },
+  {
+   "instanceId": "import-15",
+   "partId": "36-tooth-gear-228-2500-214-328",
+   "label": "36 Tooth Gear #2",
+   "position": [
+    12.522,
+    28.717,
+    -15.24
+   ],
+   "rotation": [
+    180,
+    0,
+    86
+   ],
+   "color": "#0075c9",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    12.522,
+    28.717,
+    -15.24
+   ],
+   "lastValidRotation": [
+    180,
+    0,
+    86
+   ]
+  },
+  {
+   "instanceId": "import-16",
+   "partId": "washer-228-2500-112-458",
+   "label": "Washer #2",
+   "position": [
+    12.522,
+    28.717,
+    19.05
+   ],
+   "rotation": [
+    -180,
+    0,
+    -67
+   ],
+   "color": "#d6d5d1",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    12.522,
+    28.717,
+    19.05
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -67
+   ]
+  },
+  {
+   "instanceId": "import-17",
+   "partId": "short-low-profile-pawl-228-2500-1411-421",
+   "label": "Short Low-Profile Pawl #1",
+   "position": [
+    8.326,
+    67.953,
+    -3.429
+   ],
+   "rotation": [
+    0,
+    0,
+    100.342
+   ],
+   "color": "#81bc00",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    8.326,
+    67.953,
+    -3.429
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    100.342
+   ]
+  },
+  {
+   "instanceId": "import-18",
+   "partId": "rubber-shaft-collar-228-2500-143-412",
+   "label": "Rubber Shaft Collar #1",
+   "position": [
+    38.893,
+    62.631,
+    14.822
+   ],
+   "rotation": [
+    -90,
+    -63,
+    -180
+   ],
+   "color": "#2a2829",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    38.893,
+    62.631,
+    14.822
+   ],
+   "lastValidRotation": [
+    -90,
+    -63,
+    -180
+   ]
+  },
+  {
+   "instanceId": "import-19",
+   "partId": "2x3-right-angle-beam-228-2500-145-142",
+   "label": "2x3 Right Angle Beam #1",
+   "position": [
+    18.275,
+    40.028,
+    -3.429
+   ],
+   "rotation": [
+    0,
+    0,
+    -117
+   ],
+   "color": "#0075c9",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    18.275,
+    40.028,
+    -3.429
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    -117
+   ]
+  },
+  {
+   "instanceId": "import-20",
+   "partId": "36-tooth-gear-228-2500-214-328",
+   "label": "36 Tooth Gear #3",
+   "position": [
+    12.522,
+    28.717,
+    14.732
+   ],
+   "rotation": [
+    180,
+    0,
+    86
+   ],
+   "color": "#0075c9",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    12.522,
+    28.717,
+    14.732
+   ],
+   "lastValidRotation": [
+    180,
+    0,
+    86
+   ]
+  },
+  {
+   "instanceId": "import-21",
+   "partId": "washer-228-2500-112-458",
+   "label": "Washer #3",
+   "position": [
+    12.522,
+    28.717,
+    18.288
+   ],
+   "rotation": [
+    -180,
+    0,
+    -67
+   ],
+   "color": "#d6d5d1",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    12.522,
+    28.717,
+    18.288
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -67
+   ]
+  },
+  {
+   "instanceId": "import-22",
+   "partId": "36-tooth-gear-228-2500-214-328",
+   "label": "36 Tooth Gear #4",
+   "position": [
+    29.819,
+    62.664,
+    -15.24
+   ],
+   "rotation": [
+    180,
+    0,
+    65.23
+   ],
+   "color": "#0075c9",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    29.819,
+    62.664,
+    -15.24
+   ],
+   "lastValidRotation": [
+    180,
+    0,
+    65.23
+   ]
+  },
+  {
+   "instanceId": "import-23",
+   "partId": "2x3-right-angle-beam-228-2500-145-142",
+   "label": "2x3 Right Angle Beam #2",
+   "position": [
+    18.275,
+    40.028,
+    2.921
+   ],
+   "rotation": [
+    0,
+    0,
+    -117
+   ],
+   "color": "#0075c9",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    18.275,
+    40.028,
+    2.921
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    -117
+   ]
+  },
+  {
+   "instanceId": "import-24",
+   "partId": "36-tooth-gear-228-2500-214-328",
+   "label": "36 Tooth Gear #5",
+   "position": [
+    29.819,
+    62.664,
+    14.732
+   ],
+   "rotation": [
+    -180,
+    0,
+    -114.77
+   ],
+   "color": "#0075c9",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    29.819,
+    62.664,
+    14.732
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -114.77
+   ]
+  },
+  {
+   "instanceId": "import-25",
+   "partId": "washer-228-2500-112-458",
+   "label": "Washer #4",
+   "position": [
+    12.522,
+    28.717,
+    -18.796
+   ],
+   "rotation": [
+    0,
+    0,
+    89.523
+   ],
+   "color": "#d6d5d1",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    12.522,
+    28.717,
+    -18.796
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    89.523
+   ]
+  },
+  {
+   "instanceId": "import-26",
+   "partId": "6x-pitch-shaft-228-2500-122-265",
+   "label": "6x Pitch Shaft #1",
+   "position": [
+    12.522,
+    28.717,
+    -0.254
+   ],
+   "rotation": [
+    0,
+    0,
+    94
+   ],
+   "color": "#e2e8f0",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    12.522,
+    28.717,
+    -0.254
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    94
+   ]
+  },
+  {
+   "instanceId": "import-27",
+   "partId": "4x-pitch-motor-shaft-228-2500-2238-231",
+   "label": "4x Pitch Motor Shaft #1",
+   "position": [
+    29.819,
+    62.664,
+    -22.501
+   ],
+   "rotation": [
+    -180,
+    0,
+    155.23
+   ],
+   "color": "#e2e8f0",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    29.819,
+    62.664,
+    -22.501
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    155.23
+   ]
+  },
+  {
+   "instanceId": "import-28",
+   "partId": "16-tooth-ratchet-228-2500-1407-304",
+   "label": "16 Tooth Ratchet #1",
+   "position": [
+    29.819,
+    62.664,
+    -4.318
+   ],
+   "rotation": [
+    0,
+    0,
+    -65.23
+   ],
+   "color": "#81bc00",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    29.819,
+    62.664,
+    -4.318
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    -65.23
+   ]
+  },
+  {
+   "instanceId": "import-29",
+   "partId": "washer-228-2500-112-458",
+   "label": "Washer #5",
+   "position": [
+    12.522,
+    28.717,
+    -19.558
+   ],
+   "rotation": [
+    0,
+    0,
+    89.523
+   ],
+   "color": "#d6d5d1",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    12.522,
+    28.717,
+    -19.558
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    89.523
+   ]
+  },
+  {
+   "instanceId": "import-30",
+   "partId": "rubber-shaft-collar-228-2500-143-412",
+   "label": "Rubber Shaft Collar #2",
+   "position": [
+    35.18,
+    55.342,
+    8.292
+   ],
+   "rotation": [
+    -90,
+    -63,
+    0
+   ],
+   "color": "#2a2829",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    35.18,
+    55.342,
+    8.292
+   ],
+   "lastValidRotation": [
+    -90,
+    -63,
+    0
+   ]
+  },
+  {
+   "instanceId": "import-31",
+   "partId": "4x-pitch-shaft-228-2500-120-234",
+   "label": "4x Pitch Shaft #1",
+   "position": [
+    76.05,
+    28.744,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    180
+   ],
+   "color": "#e2e8f0",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    76.05,
+    28.744,
+    0
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    180
+   ]
+  },
+  {
+   "instanceId": "import-32",
+   "partId": "double-2x-wide-2x2-double-offset-corner-connector-228-2500-277-374",
+   "label": "Double 2x Wide, 2x2 Double Offset Corner Connector #3",
+   "position": [
+    120.503,
+    35.094,
+    -19.05
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": "#f8fafc",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    120.503,
+    35.094,
+    -19.05
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    90
+   ]
+  },
+  {
+   "instanceId": "import-33",
+   "partId": "2x6-beam-228-2500-021-156",
+   "label": "2x6 Beam #1",
+   "position": [
+    -0.15,
+    28.744,
+    -28.575
+   ],
+   "rotation": [
+    -180,
+    0,
+    -180
+   ],
+   "color": "#858b8b",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    -0.15,
+    28.744,
+    -28.575
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -180
+   ]
+  },
+  {
+   "instanceId": "import-34",
+   "partId": "washer-228-2500-112-458",
+   "label": "Washer #6",
+   "position": [
+    76.05,
+    28.744,
+    19.558
+   ],
+   "rotation": [
+    -180,
+    0,
+    22.523
+   ],
+   "color": "#d6d5d1",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    76.05,
+    28.744,
+    19.558
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    22.523
+   ]
+  },
+  {
+   "instanceId": "import-35",
+   "partId": "vex-iq-smart-motor-228-2560-500",
+   "label": "VEX IQ Smart Motor #2",
+   "position": [
+    2.95,
+    28.744,
+    31.875
+   ],
+   "rotation": [
+    90,
+    0,
+    -180
+   ],
+   "color": "#4b5563",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    2.95,
+    28.744,
+    31.875
+   ],
+   "lastValidRotation": [
+    90,
+    0,
+    -180
+   ]
+  },
+  {
+   "instanceId": "import-36",
+   "partId": "2x14-beam-228-2500-027-170",
+   "label": "2x14 Beam #2",
+   "position": [
+    37.95,
+    28.744,
+    22.225
+   ],
+   "rotation": [
+    -180,
+    0,
+    -180
+   ],
+   "color": "#858b8b",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    37.95,
+    28.744,
+    22.225
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -180
+   ]
+  },
+  {
+   "instanceId": "import-37",
+   "partId": "36-tooth-gear-228-2500-214-328",
+   "label": "36 Tooth Gear #6",
+   "position": [
+    76.05,
+    28.744,
+    16.002
+   ],
+   "rotation": [
+    -180,
+    0,
+    -180
+   ],
+   "color": "#0075c9",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    76.05,
+    28.744,
+    16.002
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -180
+   ]
+  },
+  {
+   "instanceId": "import-38",
+   "partId": "2x6-beam-228-2500-021-156",
+   "label": "2x6 Beam #2",
+   "position": [
+    -0.15,
+    28.744,
+    28.575
+   ],
+   "rotation": [
+    -180,
+    0,
+    -180
+   ],
+   "color": "#858b8b",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    -0.15,
+    28.744,
+    28.575
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -180
+   ]
+  },
+  {
+   "instanceId": "import-243",
+   "partId": "1x2-connector-pin-228-2500-061-38",
+   "label": "1x2 Connector Pin #1",
+   "position": [
+    6.2,
+    35.094,
+    -31.745
+   ],
+   "rotation": [
+    -180,
+    0,
+    90
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    6.2,
+    35.094,
+    -31.745
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    90
+   ]
+  },
+  {
+   "instanceId": "import-244",
+   "partId": "1x2-connector-pin-228-2500-061-38",
+   "label": "1x2 Connector Pin #2",
+   "position": [
+    6.2,
+    22.394,
+    -31.745
+   ],
+   "rotation": [
+    -180,
+    0,
+    90
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    6.2,
+    22.394,
+    -31.745
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    90
+   ]
+  },
+  {
+   "instanceId": "import-245",
+   "partId": "1x2-connector-pin-228-2500-061-38",
+   "label": "1x2 Connector Pin #3",
+   "position": [
+    18.9,
+    22.394,
+    -31.745
+   ],
+   "rotation": [
+    -180,
+    0,
+    90
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    18.9,
+    22.394,
+    -31.745
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    90
+   ]
+  },
+  {
+   "instanceId": "import-246",
+   "partId": "1x2-connector-pin-228-2500-061-38",
+   "label": "1x2 Connector Pin #4",
+   "position": [
+    18.9,
+    35.094,
+    -31.745
+   ],
+   "rotation": [
+    -180,
+    0,
+    90
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    18.9,
+    35.094,
+    -31.745
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    90
+   ]
+  },
+  {
+   "instanceId": "import-247",
+   "partId": "2x2-connector-pin-228-2500-062-133",
+   "label": "2x2 Connector Pin #1",
+   "position": [
+    -4.344,
+    51.574,
+    -6.604
+   ],
+   "rotation": [
+    -180,
+    0,
+    -91.792
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    -4.344,
+    51.574,
+    -6.604
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -91.792
+   ]
+  },
+  {
+   "instanceId": "import-248",
+   "partId": "2x2-connector-pin-228-2500-062-133",
+   "label": "2x2 Connector Pin #2",
+   "position": [
+    6.973,
+    45.808,
+    -6.604
+   ],
+   "rotation": [
+    -180,
+    0,
+    -85.523
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    6.973,
+    45.808,
+    -6.604
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -85.523
+   ]
+  },
+  {
+   "instanceId": "import-249",
+   "partId": "1x-pitch-standoff-228-2500-065-23",
+   "label": "1x Pitch Standoff #1",
+   "position": [
+    -10.109,
+    40.248,
+    6.096
+   ],
+   "rotation": [
+    0,
+    0,
+    -94.477
+   ],
+   "color": "#1c1c1c",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    -10.109,
+    40.248,
+    6.096
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    -94.477
+   ]
+  },
+  {
+   "instanceId": "import-250",
+   "partId": "2x2-connector-pin-228-2500-062-133",
+   "label": "2x2 Connector Pin #3",
+   "position": [
+    7.182,
+    74.204,
+    -6.604
+   ],
+   "rotation": [
+    -180,
+    0,
+    -125.094
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    7.182,
+    74.204,
+    -6.604
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    -125.094
+   ]
+  },
+  {
+   "instanceId": "import-251",
+   "partId": "2x2-connector-pin-228-2500-062-133",
+   "label": "2x2 Connector Pin #4",
+   "position": [
+    18.289,
+    40.022,
+    6.096
+   ],
+   "rotation": [
+    0,
+    0,
+    -86.155
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    18.289,
+    40.022,
+    6.096
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    -86.155
+   ]
+  },
+  {
+   "instanceId": "import-252",
+   "partId": "0x2-connector-pin-228-2500-086-8",
+   "label": "0x2 Connector Pin #1",
+   "position": [
+    9.468,
+    61.701,
+    -0.276
+   ],
+   "rotation": [
+    -180,
+    0,
+    4.172
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    9.468,
+    61.701,
+    -0.276
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    4.172
+   ]
+  },
+  {
+   "instanceId": "import-253",
+   "partId": "1x1-connector-pin-228-2500-060-31",
+   "label": "1x1 Connector Pin #1",
+   "position": [
+    -12.85,
+    28.744,
+    -25.4
+   ],
+   "rotation": [
+    -180,
+    0,
+    77.149
+   ],
+   "color": "#0075c9",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    -12.85,
+    28.744,
+    -25.4
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    77.149
+   ]
+  },
+  {
+   "instanceId": "import-254",
+   "partId": "1x2-connector-pin-228-2500-061-38",
+   "label": "1x2 Connector Pin #5",
+   "position": [
+    18.9,
+    22.394,
+    31.745
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    18.9,
+    22.394,
+    31.745
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    90
+   ]
+  },
+  {
+   "instanceId": "import-255",
+   "partId": "1x2-connector-pin-228-2500-061-38",
+   "label": "1x2 Connector Pin #6",
+   "position": [
+    18.9,
+    35.094,
+    31.745
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    18.9,
+    35.094,
+    31.745
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    90
+   ]
+  },
+  {
+   "instanceId": "import-256",
+   "partId": "1x2-connector-pin-228-2500-061-38",
+   "label": "1x2 Connector Pin #7",
+   "position": [
+    6.2,
+    35.094,
+    31.745
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    6.2,
+    35.094,
+    31.745
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    90
+   ]
+  },
+  {
+   "instanceId": "import-257",
+   "partId": "1x1-connector-pin-228-2500-060-31",
+   "label": "1x1 Connector Pin #2",
+   "position": [
+    -12.85,
+    28.744,
+    25.4
+   ],
+   "rotation": [
+    -180,
+    0,
+    77.149
+   ],
+   "color": "#0075c9",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    -12.85,
+    28.744,
+    25.4
+   ],
+   "lastValidRotation": [
+    -180,
+    0,
+    77.149
+   ]
+  },
+  {
+   "instanceId": "import-258",
+   "partId": "1x2-connector-pin-228-2500-061-38",
+   "label": "1x2 Connector Pin #8",
+   "position": [
+    6.2,
+    22.394,
+    31.745
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": "#3e4143",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    6.2,
+    22.394,
+    31.745
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    90
+   ]
+  },
+  {
+   "instanceId": "belt-1",
+   "partId": "2x30-mm-square-silicone-belt-228-2500-1225-174",
+   "label": "Pawl belt #1",
+   "position": [
+    7.792,
+    41.08,
+    2.571
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": "#374151",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    7.792,
+    41.08,
+    2.571
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    0
+   ],
+   "shape": {
+    "kind": "band",
+    "route": [
+     {
+      "instanceId": "import-249",
+      "feature": "post:body",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       -0.5923,
+       -0.8057,
+       0
+      ],
+      "h": -3.525
+     },
+     {
+      "instanceId": "import-23",
+      "feature": "edge:hole.thru.4_0_0",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       0.7872,
+       0.6167,
+       0
+      ],
+      "h": -0.348
+     },
+     {
+      "instanceId": "import-23",
+      "feature": "edge:hole.thru.0_0_0",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       -0.5754,
+       0.8179,
+       0
+      ],
+      "h": -0.349
+     },
+     {
+      "instanceId": "import-252",
+      "feature": "post:pin",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       -0.7564,
+       -0.6541,
+       0
+      ],
+      "h": -2.847
+     },
+     {
+      "instanceId": "import-23",
+      "feature": "edge:hole.thru.0_0_0",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       -0.5754,
+       0.8179,
+       0
+      ],
+      "h": -0.351
+     },
+     {
+      "instanceId": "import-23",
+      "feature": "edge:hole.thru.4_0_0",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       0.7872,
+       0.6167,
+       0
+      ],
+      "h": -0.351
+     }
+    ],
+    "path": {
+     "points": [
+      [
+       -14.33,
+       1.33,
+       0
+      ],
+      [
+       -14.487,
+       1.57,
+       0
+      ],
+      [
+       -14.66,
+       1.799,
+       0
+      ],
+      [
+       -14.849,
+       2.016,
+       0
+      ],
+      [
+       -15.052,
+       2.219,
+       0
+      ],
+      [
+       -15.268,
+       2.407,
+       0
+      ],
+      [
+       -15.497,
+       2.581,
+       0
+      ],
+      [
+       -15.737,
+       2.738,
+       0
+      ],
+      [
+       -15.988,
+       2.878,
+       0
+      ],
+      [
+       -16.247,
+       3.001,
+       0
+      ],
+      [
+       -16.515,
+       3.106,
+       0
+      ],
+      [
+       -16.789,
+       3.192,
+       0
+      ],
+      [
+       -17.068,
+       3.259,
+       0
+      ],
+      [
+       -17.351,
+       3.306,
+       0
+      ],
+      [
+       -17.637,
+       3.334,
+       0
+      ],
+      [
+       -17.924,
+       3.343,
+       0
+      ],
+      [
+       -18.211,
+       3.331,
+       0
+      ],
+      [
+       -18.496,
+       3.3,
+       0
+      ],
+      [
+       -18.779,
+       3.249,
+       0
+      ],
+      [
+       -19.057,
+       3.179,
+       0
+      ],
+      [
+       -19.33,
+       3.09,
+       0
+      ],
+      [
+       -19.597,
+       2.983,
+       0
+      ],
+      [
+       -19.855,
+       2.857,
+       0
+      ],
+      [
+       -20.104,
+       2.714,
+       0
+      ],
+      [
+       -20.342,
+       2.555,
+       0
+      ],
+      [
+       -20.569,
+       2.379,
+       0
+      ],
+      [
+       -20.784,
+       2.188,
+       0
+      ],
+      [
+       -20.985,
+       1.983,
+       0
+      ],
+      [
+       -21.171,
+       1.764,
+       0
+      ],
+      [
+       -21.342,
+       1.533,
+       0
+      ],
+      [
+       -21.496,
+       1.291,
+       0
+      ],
+      [
+       -21.634,
+       1.039,
+       0
+      ],
+      [
+       -21.753,
+       0.778,
+       0
+      ],
+      [
+       -21.855,
+       0.51,
+       0
+      ],
+      [
+       -21.938,
+       0.235,
+       0
+      ],
+      [
+       -22.002,
+       -0.045,
+       0
+      ],
+      [
+       -22.046,
+       -0.329,
+       0
+      ],
+      [
+       -22.071,
+       -0.615,
+       0
+      ],
+      [
+       -22.076,
+       -0.902,
+       0
+      ],
+      [
+       -22.061,
+       -1.189,
+       0
+      ],
+      [
+       -22.027,
+       -1.474,
+       0
+      ],
+      [
+       -21.973,
+       -1.756,
+       0
+      ],
+      [
+       -21.9,
+       -2.034,
+       0
+      ],
+      [
+       -21.808,
+       -2.306,
+       0
+      ],
+      [
+       -21.697,
+       -2.571,
+       0
+      ],
+      [
+       -21.569,
+       -2.827,
+       0
+      ],
+      [
+       -21.423,
+       -3.075,
+       0
+      ],
+      [
+       -21.261,
+       -3.312,
+       0
+      ],
+      [
+       -21.082,
+       -3.537,
+       0
+      ],
+      [
+       -20.889,
+       -3.749,
+       0
+      ],
+      [
+       -20.681,
+       -3.947,
+       0
+      ],
+      [
+       -20.461,
+       -4.131,
+       0
+      ],
+      [
+       -20.228,
+       -4.299,
+       0
+      ],
+      [
+       0.705,
+       -18.347,
+       0.002
+      ],
+      [
+       1.118,
+       -18.604,
+       0.002
+      ],
+      [
+       1.548,
+       -18.833,
+       0.002
+      ],
+      [
+       1.992,
+       -19.032,
+       0.002
+      ],
+      [
+       2.448,
+       -19.201,
+       0.002
+      ],
+      [
+       2.915,
+       -19.339,
+       0.002
+      ],
+      [
+       3.39,
+       -19.445,
+       0.002
+      ],
+      [
+       3.872,
+       -19.518,
+       0.002
+      ],
+      [
+       4.357,
+       -19.559,
+       0.002
+      ],
+      [
+       4.843,
+       -19.567,
+       0.002
+      ],
+      [
+       5.33,
+       -19.542,
+       0.002
+      ],
+      [
+       5.813,
+       -19.484,
+       0.002
+      ],
+      [
+       6.291,
+       -19.394,
+       0.002
+      ],
+      [
+       6.762,
+       -19.271,
+       0.002
+      ],
+      [
+       7.224,
+       -19.117,
+       0.002
+      ],
+      [
+       7.675,
+       -18.933,
+       0.002
+      ],
+      [
+       8.111,
+       -18.718,
+       0.002
+      ],
+      [
+       8.533,
+       -18.474,
+       0.002
+      ],
+      [
+       8.937,
+       -18.202,
+       0.002
+      ],
+      [
+       9.321,
+       -17.904,
+       0.002
+      ],
+      [
+       9.685,
+       -17.58,
+       0.002
+      ],
+      [
+       10.025,
+       -17.232,
+       0.002
+      ],
+      [
+       10.342,
+       -16.862,
+       0.002
+      ],
+      [
+       10.633,
+       -16.472,
+       0.002
+      ],
+      [
+       10.897,
+       -16.063,
+       0.002
+      ],
+      [
+       11.132,
+       -15.637,
+       0.002
+      ],
+      [
+       16.898,
+       -4.321,
+       0.001
+      ],
+      [
+       17.108,
+       -3.87,
+       0.001
+      ],
+      [
+       17.287,
+       -3.406,
+       0.001
+      ],
+      [
+       17.433,
+       -2.93,
+       0.001
+      ],
+      [
+       17.546,
+       -2.446,
+       0.001
+      ],
+      [
+       17.626,
+       -1.955,
+       0.001
+      ],
+      [
+       17.671,
+       -1.459,
+       0.001
+      ],
+      [
+       17.682,
+       -0.962,
+       0.001
+      ],
+      [
+       17.659,
+       -0.465,
+       0.001
+      ],
+      [
+       17.601,
+       0.029,
+       0.001
+      ],
+      [
+       17.509,
+       0.518,
+       0.001
+      ],
+      [
+       17.384,
+       1,
+       0.001
+      ],
+      [
+       17.226,
+       1.471,
+       0.001
+      ],
+      [
+       17.035,
+       1.931,
+       0.001
+      ],
+      [
+       16.814,
+       2.376,
+       0.001
+      ],
+      [
+       16.562,
+       2.805,
+       0.001
+      ],
+      [
+       16.281,
+       3.216,
+       0.001
+      ],
+      [
+       15.972,
+       3.606,
+       0.001
+      ],
+      [
+       15.638,
+       3.974,
+       0.001
+      ],
+      [
+       15.278,
+       4.318,
+       0.001
+      ],
+      [
+       -0.389,
+       18.308,
+       0
+      ],
+      [
+       -0.545,
+       18.457,
+       0
+      ],
+      [
+       -0.689,
+       18.616,
+       0
+      ],
+      [
+       -0.823,
+       18.785,
+       0
+      ],
+      [
+       -0.944,
+       18.963,
+       0
+      ],
+      [
+       -1.053,
+       19.149,
+       0
+      ],
+      [
+       -1.148,
+       19.342,
+       0
+      ],
+      [
+       -1.23,
+       19.541,
+       0
+      ],
+      [
+       -1.298,
+       19.745,
+       0
+      ],
+      [
+       -1.352,
+       19.954,
+       0
+      ],
+      [
+       -1.391,
+       20.165,
+       0
+      ],
+      [
+       -1.415,
+       20.379,
+       0
+      ],
+      [
+       -1.424,
+       20.594,
+       0
+      ],
+      [
+       -1.419,
+       20.81,
+       0
+      ],
+      [
+       -1.398,
+       21.024,
+       0
+      ],
+      [
+       -1.363,
+       21.236,
+       0
+      ],
+      [
+       -1.313,
+       21.446,
+       0
+      ],
+      [
+       -1.248,
+       21.651,
+       0
+      ],
+      [
+       -1.17,
+       21.851,
+       0
+      ],
+      [
+       -1.077,
+       22.046,
+       0
+      ],
+      [
+       -0.972,
+       22.233,
+       0
+      ],
+      [
+       -0.854,
+       22.413,
+       0
+      ],
+      [
+       -0.723,
+       22.584,
+       0
+      ],
+      [
+       -0.581,
+       22.746,
+       0
+      ],
+      [
+       -0.428,
+       22.898,
+       0
+      ],
+      [
+       -0.265,
+       23.038,
+       0
+      ],
+      [
+       -0.093,
+       23.167,
+       0
+      ],
+      [
+       0.088,
+       23.284,
+       0
+      ],
+      [
+       0.277,
+       23.387,
+       0
+      ],
+      [
+       0.472,
+       23.478,
+       0
+      ],
+      [
+       0.674,
+       23.554,
+       0
+      ],
+      [
+       0.88,
+       23.617,
+       0
+      ],
+      [
+       1.089,
+       23.665,
+       0
+      ],
+      [
+       1.302,
+       23.698,
+       0
+      ],
+      [
+       1.517,
+       23.717,
+       0
+      ],
+      [
+       1.732,
+       23.72,
+       0
+      ],
+      [
+       1.947,
+       23.709,
+       0
+      ],
+      [
+       2.16,
+       23.682,
+       0
+      ],
+      [
+       2.372,
+       23.641,
+       0
+      ],
+      [
+       2.58,
+       23.586,
+       0
+      ],
+      [
+       2.783,
+       23.516,
+       0
+      ],
+      [
+       2.982,
+       23.432,
+       0
+      ],
+      [
+       3.173,
+       23.335,
+       0
+      ],
+      [
+       3.358,
+       23.224,
+       0
+      ],
+      [
+       3.535,
+       23.101,
+       0
+      ],
+      [
+       3.703,
+       22.966,
+       0
+      ],
+      [
+       3.86,
+       22.82,
+       0
+      ],
+      [
+       4.008,
+       22.663,
+       0
+      ],
+      [
+       4.144,
+       22.496,
+       0
+      ],
+      [
+       17.808,
+       4.514,
+       -0.001
+      ],
+      [
+       18.159,
+       4.019,
+       -0.001
+      ],
+      [
+       18.476,
+       3.502,
+       -0.001
+      ],
+      [
+       18.759,
+       2.965,
+       -0.001
+      ],
+      [
+       19.006,
+       2.411,
+       -0.001
+      ],
+      [
+       19.215,
+       1.842,
+       -0.001
+      ],
+      [
+       19.387,
+       1.26,
+       -0.001
+      ],
+      [
+       19.52,
+       0.669,
+       -0.001
+      ],
+      [
+       19.614,
+       0.069,
+       -0.001
+      ],
+      [
+       19.668,
+       -0.535,
+       -0.001
+      ],
+      [
+       19.682,
+       -1.141,
+       -0.001
+      ],
+      [
+       19.656,
+       -1.747,
+       -0.001
+      ],
+      [
+       19.591,
+       -2.35,
+       -0.001
+      ],
+      [
+       19.485,
+       -2.947,
+       -0.001
+      ],
+      [
+       19.341,
+       -3.537,
+       -0.001
+      ],
+      [
+       19.158,
+       -4.115,
+       -0.001
+      ],
+      [
+       18.937,
+       -4.68,
+       -0.001
+      ],
+      [
+       18.68,
+       -5.229,
+       -0.001
+      ],
+      [
+       12.914,
+       -16.545,
+       -0.001
+      ],
+      [
+       12.609,
+       -17.097,
+       -0.001
+      ],
+      [
+       12.266,
+       -17.626,
+       -0.001
+      ],
+      [
+       11.888,
+       -18.131,
+       -0.001
+      ],
+      [
+       11.476,
+       -18.609,
+       -0.001
+      ],
+      [
+       11.033,
+       -19.058,
+       -0.001
+      ],
+      [
+       10.559,
+       -19.475,
+       -0.001
+      ],
+      [
+       10.059,
+       -19.859,
+       -0.001
+      ],
+      [
+       9.533,
+       -20.207,
+       -0.001
+      ],
+      [
+       8.984,
+       -20.519,
+       -0.001
+      ],
+      [
+       8.416,
+       -20.792,
+       -0.001
+      ],
+      [
+       7.83,
+       -21.025,
+       -0.001
+      ],
+      [
+       7.229,
+       -21.218,
+       -0.001
+      ],
+      [
+       6.617,
+       -21.37,
+       -0.001
+      ],
+      [
+       5.996,
+       -21.479,
+       -0.001
+      ],
+      [
+       5.368,
+       -21.545,
+       -0.001
+      ],
+      [
+       4.738,
+       -21.568,
+       -0.001
+      ],
+      [
+       4.107,
+       -21.548,
+       -0.001
+      ],
+      [
+       3.48,
+       -21.485,
+       -0.001
+      ],
+      [
+       2.858,
+       -21.378,
+       -0.001
+      ],
+      [
+       2.245,
+       -21.23,
+       -0.001
+      ],
+      [
+       1.643,
+       -21.04,
+       -0.001
+      ],
+      [
+       1.056,
+       -20.809,
+       -0.001
+      ],
+      [
+       0.487,
+       -20.538,
+       -0.001
+      ],
+      [
+       -0.063,
+       -20.229,
+       -0.001
+      ],
+      [
+       -0.591,
+       -19.883,
+       -0.001
+      ],
+      [
+       -1.093,
+       -19.501,
+       -0.001
+      ],
+      [
+       -1.568,
+       -19.086,
+       -0.001
+      ],
+      [
+       -2.014,
+       -18.64,
+       -0.001
+      ],
+      [
+       -2.428,
+       -18.164,
+       -0.001
+      ],
+      [
+       -2.808,
+       -17.661,
+       -0.001
+      ],
+      [
+       -3.153,
+       -17.133,
+       -0.001
+      ]
+     ],
+     "ups": [
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ]
+     ],
+     "lengthMm": 192.548
+    }
+   }
+  },
+  {
+   "instanceId": "belt-2",
+   "partId": "2x30-mm-square-silicone-belt-228-2500-1225-174",
+   "label": "Pawl belt #2",
+   "position": [
+    7.792,
+    41.08,
+    -0.321
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": "#374151",
+   "visible": true,
+   "locked": false,
+   "isIntersecting": false,
+   "lastValidPosition": [
+    7.792,
+    41.08,
+    -0.321
+   ],
+   "lastValidRotation": [
+    0,
+    0,
+    0
+   ],
+   "shape": {
+    "kind": "band",
+    "route": [
+     {
+      "instanceId": "import-249",
+      "feature": "post:body",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       -0.7351,
+       -0.6779,
+       0
+      ],
+      "h": -6.477
+     },
+     {
+      "instanceId": "import-19",
+      "feature": "edge:hole.thru.4_0_0",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       0.7618,
+       0.6479,
+       0
+      ],
+      "h": 3.049
+     },
+     {
+      "instanceId": "import-19",
+      "feature": "edge:hole.thru.0_0_0",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       -0.5334,
+       0.8458,
+       0
+      ],
+      "h": 3.05
+     },
+     {
+      "instanceId": "import-252",
+      "feature": "post:pin",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       -0.7089,
+       -0.7054,
+       0
+      ],
+      "h": -0.133
+     },
+     {
+      "instanceId": "import-19",
+      "feature": "edge:hole.thru.0_0_0",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       -0.5334,
+       0.8458,
+       0
+      ],
+      "h": 3.05
+     },
+     {
+      "instanceId": "import-19",
+      "feature": "edge:hole.thru.4_0_0",
+      "side": "out",
+      "wraps": 1,
+      "wrap": [
+       0.7618,
+       0.6479,
+       0
+      ],
+      "h": 3.049
+     }
+    ],
+    "path": {
+     "points": [
+      [
+       -14.33,
+       1.33,
+       -0.06
+      ],
+      [
+       -14.487,
+       1.57,
+       -0.06
+      ],
+      [
+       -14.66,
+       1.799,
+       -0.06
+      ],
+      [
+       -14.849,
+       2.016,
+       -0.06
+      ],
+      [
+       -15.052,
+       2.219,
+       -0.06
+      ],
+      [
+       -15.268,
+       2.407,
+       -0.06
+      ],
+      [
+       -15.497,
+       2.581,
+       -0.06
+      ],
+      [
+       -15.737,
+       2.738,
+       -0.06
+      ],
+      [
+       -15.988,
+       2.878,
+       -0.06
+      ],
+      [
+       -16.247,
+       3.001,
+       -0.06
+      ],
+      [
+       -16.515,
+       3.106,
+       -0.06
+      ],
+      [
+       -16.789,
+       3.192,
+       -0.06
+      ],
+      [
+       -17.068,
+       3.259,
+       -0.06
+      ],
+      [
+       -17.351,
+       3.306,
+       -0.06
+      ],
+      [
+       -17.637,
+       3.334,
+       -0.06
+      ],
+      [
+       -17.924,
+       3.343,
+       -0.06
+      ],
+      [
+       -18.211,
+       3.331,
+       -0.06
+      ],
+      [
+       -18.496,
+       3.3,
+       -0.06
+      ],
+      [
+       -18.779,
+       3.249,
+       -0.06
+      ],
+      [
+       -19.057,
+       3.179,
+       -0.06
+      ],
+      [
+       -19.33,
+       3.09,
+       -0.06
+      ],
+      [
+       -19.597,
+       2.983,
+       -0.06
+      ],
+      [
+       -19.855,
+       2.857,
+       -0.06
+      ],
+      [
+       -20.104,
+       2.714,
+       -0.06
+      ],
+      [
+       -20.342,
+       2.555,
+       -0.06
+      ],
+      [
+       -20.569,
+       2.379,
+       -0.06
+      ],
+      [
+       -20.784,
+       2.188,
+       -0.06
+      ],
+      [
+       -20.985,
+       1.983,
+       -0.06
+      ],
+      [
+       -21.171,
+       1.764,
+       -0.06
+      ],
+      [
+       -21.342,
+       1.533,
+       -0.06
+      ],
+      [
+       -21.496,
+       1.291,
+       -0.06
+      ],
+      [
+       -21.634,
+       1.039,
+       -0.06
+      ],
+      [
+       -21.753,
+       0.778,
+       -0.06
+      ],
+      [
+       -21.855,
+       0.51,
+       -0.06
+      ],
+      [
+       -21.938,
+       0.235,
+       -0.06
+      ],
+      [
+       -22.002,
+       -0.045,
+       -0.06
+      ],
+      [
+       -22.046,
+       -0.329,
+       -0.06
+      ],
+      [
+       -22.071,
+       -0.615,
+       -0.06
+      ],
+      [
+       -22.076,
+       -0.902,
+       -0.06
+      ],
+      [
+       -22.061,
+       -1.189,
+       -0.06
+      ],
+      [
+       -22.027,
+       -1.474,
+       -0.06
+      ],
+      [
+       -21.973,
+       -1.756,
+       -0.06
+      ],
+      [
+       -21.9,
+       -2.034,
+       -0.06
+      ],
+      [
+       -21.808,
+       -2.306,
+       -0.06
+      ],
+      [
+       -21.697,
+       -2.571,
+       -0.06
+      ],
+      [
+       -21.569,
+       -2.827,
+       -0.06
+      ],
+      [
+       -21.423,
+       -3.075,
+       -0.06
+      ],
+      [
+       -21.261,
+       -3.312,
+       -0.06
+      ],
+      [
+       -21.082,
+       -3.537,
+       -0.06
+      ],
+      [
+       -20.889,
+       -3.749,
+       -0.06
+      ],
+      [
+       -20.681,
+       -3.947,
+       -0.06
+      ],
+      [
+       -20.461,
+       -4.131,
+       -0.06
+      ],
+      [
+       -20.228,
+       -4.299,
+       -0.06
+      ],
+      [
+       0.705,
+       -18.347,
+       -0.058
+      ],
+      [
+       1.118,
+       -18.604,
+       -0.058
+      ],
+      [
+       1.548,
+       -18.833,
+       -0.058
+      ],
+      [
+       1.992,
+       -19.032,
+       -0.058
+      ],
+      [
+       2.448,
+       -19.201,
+       -0.058
+      ],
+      [
+       2.915,
+       -19.339,
+       -0.058
+      ],
+      [
+       3.39,
+       -19.445,
+       -0.058
+      ],
+      [
+       3.872,
+       -19.518,
+       -0.058
+      ],
+      [
+       4.357,
+       -19.559,
+       -0.058
+      ],
+      [
+       4.843,
+       -19.567,
+       -0.058
+      ],
+      [
+       5.33,
+       -19.542,
+       -0.058
+      ],
+      [
+       5.813,
+       -19.484,
+       -0.058
+      ],
+      [
+       6.291,
+       -19.394,
+       -0.058
+      ],
+      [
+       6.762,
+       -19.271,
+       -0.058
+      ],
+      [
+       7.224,
+       -19.117,
+       -0.058
+      ],
+      [
+       7.675,
+       -18.933,
+       -0.058
+      ],
+      [
+       8.111,
+       -18.718,
+       -0.058
+      ],
+      [
+       8.533,
+       -18.474,
+       -0.058
+      ],
+      [
+       8.937,
+       -18.202,
+       -0.058
+      ],
+      [
+       9.321,
+       -17.904,
+       -0.058
+      ],
+      [
+       9.685,
+       -17.58,
+       -0.058
+      ],
+      [
+       10.025,
+       -17.232,
+       -0.058
+      ],
+      [
+       10.342,
+       -16.862,
+       -0.058
+      ],
+      [
+       10.633,
+       -16.472,
+       -0.058
+      ],
+      [
+       10.897,
+       -16.063,
+       -0.058
+      ],
+      [
+       11.132,
+       -15.637,
+       -0.058
+      ],
+      [
+       16.898,
+       -4.321,
+       -0.058
+      ],
+      [
+       17.108,
+       -3.87,
+       -0.058
+      ],
+      [
+       17.287,
+       -3.406,
+       -0.058
+      ],
+      [
+       17.433,
+       -2.93,
+       -0.058
+      ],
+      [
+       17.546,
+       -2.446,
+       -0.058
+      ],
+      [
+       17.626,
+       -1.955,
+       -0.058
+      ],
+      [
+       17.671,
+       -1.459,
+       -0.058
+      ],
+      [
+       17.682,
+       -0.962,
+       -0.058
+      ],
+      [
+       17.659,
+       -0.465,
+       -0.058
+      ],
+      [
+       17.601,
+       0.029,
+       -0.058
+      ],
+      [
+       17.509,
+       0.518,
+       -0.058
+      ],
+      [
+       17.384,
+       1,
+       -0.058
+      ],
+      [
+       17.226,
+       1.471,
+       -0.058
+      ],
+      [
+       17.035,
+       1.931,
+       -0.058
+      ],
+      [
+       16.814,
+       2.376,
+       -0.058
+      ],
+      [
+       16.562,
+       2.805,
+       -0.058
+      ],
+      [
+       16.281,
+       3.216,
+       -0.058
+      ],
+      [
+       15.972,
+       3.606,
+       -0.058
+      ],
+      [
+       15.638,
+       3.974,
+       -0.058
+      ],
+      [
+       15.278,
+       4.318,
+       -0.058
+      ],
+      [
+       -0.389,
+       18.308,
+       0.178
+      ],
+      [
+       -0.545,
+       18.457,
+       0.178
+      ],
+      [
+       -0.689,
+       18.616,
+       0.178
+      ],
+      [
+       -0.823,
+       18.785,
+       0.178
+      ],
+      [
+       -0.944,
+       18.963,
+       0.178
+      ],
+      [
+       -1.053,
+       19.149,
+       0.178
+      ],
+      [
+       -1.148,
+       19.342,
+       0.178
+      ],
+      [
+       -1.23,
+       19.541,
+       0.178
+      ],
+      [
+       -1.298,
+       19.745,
+       0.178
+      ],
+      [
+       -1.352,
+       19.954,
+       0.178
+      ],
+      [
+       -1.391,
+       20.165,
+       0.178
+      ],
+      [
+       -1.415,
+       20.379,
+       0.178
+      ],
+      [
+       -1.424,
+       20.594,
+       0.178
+      ],
+      [
+       -1.419,
+       20.81,
+       0.178
+      ],
+      [
+       -1.398,
+       21.024,
+       0.178
+      ],
+      [
+       -1.363,
+       21.236,
+       0.178
+      ],
+      [
+       -1.313,
+       21.446,
+       0.178
+      ],
+      [
+       -1.248,
+       21.651,
+       0.178
+      ],
+      [
+       -1.17,
+       21.851,
+       0.178
+      ],
+      [
+       -1.077,
+       22.046,
+       0.178
+      ],
+      [
+       -0.972,
+       22.233,
+       0.178
+      ],
+      [
+       -0.854,
+       22.413,
+       0.178
+      ],
+      [
+       -0.723,
+       22.584,
+       0.178
+      ],
+      [
+       -0.581,
+       22.746,
+       0.178
+      ],
+      [
+       -0.428,
+       22.898,
+       0.178
+      ],
+      [
+       -0.265,
+       23.038,
+       0.178
+      ],
+      [
+       -0.093,
+       23.167,
+       0.178
+      ],
+      [
+       0.088,
+       23.284,
+       0.178
+      ],
+      [
+       0.277,
+       23.387,
+       0.178
+      ],
+      [
+       0.472,
+       23.478,
+       0.178
+      ],
+      [
+       0.674,
+       23.554,
+       0.178
+      ],
+      [
+       0.88,
+       23.617,
+       0.178
+      ],
+      [
+       1.089,
+       23.665,
+       0.178
+      ],
+      [
+       1.302,
+       23.698,
+       0.178
+      ],
+      [
+       1.517,
+       23.717,
+       0.178
+      ],
+      [
+       1.732,
+       23.72,
+       0.178
+      ],
+      [
+       1.947,
+       23.709,
+       0.178
+      ],
+      [
+       2.16,
+       23.682,
+       0.178
+      ],
+      [
+       2.372,
+       23.641,
+       0.178
+      ],
+      [
+       2.58,
+       23.586,
+       0.178
+      ],
+      [
+       2.783,
+       23.516,
+       0.178
+      ],
+      [
+       2.982,
+       23.432,
+       0.178
+      ],
+      [
+       3.173,
+       23.335,
+       0.178
+      ],
+      [
+       3.358,
+       23.224,
+       0.178
+      ],
+      [
+       3.535,
+       23.101,
+       0.178
+      ],
+      [
+       3.703,
+       22.966,
+       0.178
+      ],
+      [
+       3.86,
+       22.82,
+       0.178
+      ],
+      [
+       4.008,
+       22.663,
+       0.178
+      ],
+      [
+       4.144,
+       22.496,
+       0.178
+      ],
+      [
+       17.808,
+       4.514,
+       -0.058
+      ],
+      [
+       18.159,
+       4.019,
+       -0.058
+      ],
+      [
+       18.476,
+       3.502,
+       -0.058
+      ],
+      [
+       18.759,
+       2.965,
+       -0.058
+      ],
+      [
+       19.006,
+       2.411,
+       -0.058
+      ],
+      [
+       19.215,
+       1.842,
+       -0.058
+      ],
+      [
+       19.387,
+       1.26,
+       -0.058
+      ],
+      [
+       19.52,
+       0.669,
+       -0.058
+      ],
+      [
+       19.614,
+       0.069,
+       -0.058
+      ],
+      [
+       19.668,
+       -0.535,
+       -0.058
+      ],
+      [
+       19.682,
+       -1.141,
+       -0.058
+      ],
+      [
+       19.656,
+       -1.747,
+       -0.058
+      ],
+      [
+       19.591,
+       -2.35,
+       -0.058
+      ],
+      [
+       19.485,
+       -2.947,
+       -0.058
+      ],
+      [
+       19.341,
+       -3.537,
+       -0.058
+      ],
+      [
+       19.158,
+       -4.115,
+       -0.058
+      ],
+      [
+       18.937,
+       -4.68,
+       -0.058
+      ],
+      [
+       18.68,
+       -5.229,
+       -0.058
+      ],
+      [
+       12.914,
+       -16.545,
+       -0.058
+      ],
+      [
+       12.609,
+       -17.097,
+       -0.058
+      ],
+      [
+       12.266,
+       -17.626,
+       -0.058
+      ],
+      [
+       11.888,
+       -18.131,
+       -0.058
+      ],
+      [
+       11.476,
+       -18.609,
+       -0.058
+      ],
+      [
+       11.033,
+       -19.058,
+       -0.058
+      ],
+      [
+       10.559,
+       -19.475,
+       -0.058
+      ],
+      [
+       10.059,
+       -19.859,
+       -0.058
+      ],
+      [
+       9.533,
+       -20.207,
+       -0.058
+      ],
+      [
+       8.984,
+       -20.519,
+       -0.058
+      ],
+      [
+       8.416,
+       -20.792,
+       -0.058
+      ],
+      [
+       7.83,
+       -21.025,
+       -0.058
+      ],
+      [
+       7.229,
+       -21.218,
+       -0.058
+      ],
+      [
+       6.617,
+       -21.37,
+       -0.058
+      ],
+      [
+       5.996,
+       -21.479,
+       -0.058
+      ],
+      [
+       5.368,
+       -21.545,
+       -0.058
+      ],
+      [
+       4.738,
+       -21.568,
+       -0.058
+      ],
+      [
+       4.107,
+       -21.548,
+       -0.058
+      ],
+      [
+       3.48,
+       -21.485,
+       -0.058
+      ],
+      [
+       2.858,
+       -21.378,
+       -0.058
+      ],
+      [
+       2.245,
+       -21.23,
+       -0.058
+      ],
+      [
+       1.643,
+       -21.04,
+       -0.058
+      ],
+      [
+       1.056,
+       -20.809,
+       -0.058
+      ],
+      [
+       0.487,
+       -20.538,
+       -0.058
+      ],
+      [
+       -0.063,
+       -20.229,
+       -0.058
+      ],
+      [
+       -0.591,
+       -19.883,
+       -0.058
+      ],
+      [
+       -1.093,
+       -19.501,
+       -0.058
+      ],
+      [
+       -1.568,
+       -19.086,
+       -0.058
+      ],
+      [
+       -2.014,
+       -18.64,
+       -0.058
+      ],
+      [
+       -2.428,
+       -18.164,
+       -0.058
+      ],
+      [
+       -2.808,
+       -17.661,
+       -0.058
+      ],
+      [
+       -3.153,
+       -17.133,
+       -0.058
+      ]
+     ],
+     "ups": [
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       -1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       0,
+       1
+      ]
+     ],
+     "lengthMm": 192.551
+    }
+   }
+  }
+ ]
+}
