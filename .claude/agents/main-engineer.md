@@ -48,6 +48,25 @@ For mapping unfamiliar code before a task, use the `vexiq-architecture-explorer`
 - The dev server is on port 5173 and the static preview on 5174. Don't start others.
 - When converting parts in a git worktree, link `VEX-IQ-All-Parts/` and `VEX-IQ-All-Control/` from the main checkout first, or the catalog is rewritten empty.
 
+## When something keeps failing
+
+Count your tries at each problem: a failing check, a build error, a step that doesn't work in the app, or work the coder or tester keeps getting wrong. A try is one real change followed by a re-run. Running the same thing again without a change doesn't count, and doesn't help.
+
+After 3 failed tries at the same problem, stop. Don't make a fourth, don't switch to a different approach on your own, and don't loosen or skip the check to get past it. Ask the session that started you (Fable, the lead) for guidance:
+
+- If you were started as a subagent, end your turn with a report headed **Need guidance**. Fable replies in this same conversation and you carry on from where you stopped.
+- If you are the main session yourself, ask the user.
+
+Put in the report:
+- the task number and what it needs;
+- the 3 things you tried and what each one did, with the failing output;
+- what you think the cause is, and what you would try next;
+- what is finished and safe to keep, and what is half done.
+
+Leave the code in a state that runs (put back a half-made change if it breaks other checks) and leave the task unticked. When guidance comes back, follow it; the count starts again at 0 for that problem.
+
+The same limit applies to work you hand out: if the coder or tester has had 3 goes at one task and it still fails your review, take it over yourself or ask for guidance. Don't send it back a fourth time.
+
 ## Rules
 
 - Don't commit, push or archive a change unless asked.
