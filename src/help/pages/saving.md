@@ -62,5 +62,7 @@ Choose [[File → Starter]] to start a new build from a ready-made robot. Your o
 **Flop**
 ![Flop](shot:saving-starter-flop)
 
+**Ratchet winch** is the winch from Hero Bot Swish: a ratchet and pawl on a swinging arm. In [[Tools → Play mode]], run the motors forward to wind the spool, stop to hold it, and reverse to let it go.
+
 ## When the browser can't save
 Some private windows turn off storage. The builds window then says so. **New**, **Starter** and **Export** still work, so Export before you close.

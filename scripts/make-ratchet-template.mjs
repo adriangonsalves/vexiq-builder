@@ -1,6 +1,6 @@
 /**
- * Writes templates/assemblies/ratchet-winch.vexiq.json: Hero Bot Swish's winch (a ratchet and pawl
- * on a swinging arm, openspec ratchet-and-pawl) as a build the app can open with File → Load.
+ * Writes src/starters/assemblies/ratchet-winch.js, the "Ratchet winch" starter for File → Starter:
+ * Hero Bot Swish's winch (a ratchet and pawl on a swinging arm, openspec ratchet-and-pawl).
  * Made from scripts/fixtures/swish-winch.json (VEX's CAD poses) with its two belts strung.
  *
  *   node scripts/make-ratchet-template.mjs
@@ -59,10 +59,20 @@ const belts = swish.bands.map((b, k) => {
 });
 const instances = [...parts, ...belts].map(instance);
 const audit = auditAssembly({ instances });
-const out = path.join(ROOT_DIR, 'templates', 'assemblies', 'ratchet-winch.vexiq.json');
+const round = (x) => Math.round(x * 1000) / 1000;
+const rows = instances.map((x) => {
+  const row = [findPart(x.partId).partNumber, x.label, x.position.map(round), x.rotation.map(round), x.color, 'Ratchet winch'];
+  if (x.shape) row.push(null, x.shape);
+  return row;
+});
+const out = path.join(ROOT_DIR, 'src', 'starters', 'assemblies', 'ratchet-winch.js');
 fs.mkdirSync(path.dirname(out), { recursive: true });
-fs.writeFileSync(out, `${JSON.stringify({ version: '1.1', pitchUnitMm: 12.7, name: 'Ratchet winch', exportedAt: '2026-11-14T00:00:00.000Z', instances }, null, 1)}\n`);
-console.log(`Wrote ${path.relative(ROOT_DIR, out)}: ${instances.length} parts.`);
+fs.writeFileSync(
+  out,
+  `// Ratchet winch: Hero Bot Swish's winch, made by scripts/make-ratchet-template.mjs (${rows.length} parts).\n` +
+    '// [part number, label, position, rotation, colour, group, motor hub turn, shape]\n' +
+    `export default [\n${rows.map((r) => `  ${JSON.stringify(r)}`).join(',\n')}\n];\n`
+);
+console.log(`Wrote ${path.relative(ROOT_DIR, out)}: ${rows.length} parts.`);
 console.log('Ratchets:', JSON.stringify(audit.ratchets.map((r) => ({ pawl: r.pawl, ratchet: r.ratchet, holds: r.holds, turns: r.freeDirection, pressed: r.pressed }))));
-console.log('Sound:', audit.isMechanicallySound, '| tilted motors:', audit.tiltedMotors?.length, '| floating pins:', audit.floatingFasteners?.length, '| loose groups:', audit.disconnectedIslands?.length);
-console.log('Overlaps:', audit.collisions.length, audit.collisions.map((c) => `${c.label} x ${c.collidingWith.join(', ')}`).join('; '));
+console.log('Overlaps:', audit.collisions.length);
