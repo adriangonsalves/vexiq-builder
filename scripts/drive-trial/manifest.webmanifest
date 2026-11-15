@@ -1,0 +1,8 @@
+{
+  "name": "Drive trial",
+  "short_name": "Drive trial",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0969da"
+}

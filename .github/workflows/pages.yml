@@ -27,6 +27,9 @@ jobs:
       - run: npm run build:static
         env:
           VEXIQ_BASE: /${{ github.event.repository.name }}/
+      # TEMPORARY (google-drive-sync task 0.3): the Drive trial page for the iPad sign-in test.
+      # Remove this step and scripts/drive-trial/ once the results are in.
+      - run: cp -R scripts/drive-trial dist-static/drive-trial
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist-static
