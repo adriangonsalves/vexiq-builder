@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { findSeatedPairs } from './pinHoleAlignment.js';
 import { canTurnToMesh, meshMessage, meshRelation, meshSnapSlides, meshTurn, quaternionToEulerDeg, rightAngleNearMiss, turnQuaternion, worldToothed } from './gearMeshing.js';
 import { groupOf, hubAngleFor, shaftGroups, squareFitRoll } from './shaftGroups.js';
+import { isPawl, pawlPivots, pawlRestTurn, worldPawl, worldRatchet } from './ratchetPawl.js';
 
 /**
  * The step after a part is placed (dropped from a drag, mated, picked into a hole, inserted as a
@@ -41,6 +42,27 @@ export function settlePlacement({ placedId, instances, partOf, featuresOf, recei
   const squarePairs = () =>
     findSeatedPairs(featuresAt(placedId), otherFeatures()).filter((p) => p.insert.flatDir && p.opening.flatDir);
   const placedMeta = partOf(start);
+
+  /**
+   * The pawl's single pivot (a pin or peg seated in one of its holes; with none, a lone hole of
+   * another part lined up with one of its holes, face to face) and the nearest clean rest on a
+   * ratchet: { ratchetId, rest } or null.
+   */
+  const pawlSwing = (id) => {
+    const pose = poses.get(id);
+    const lines = pawlPivots({ pawlId: id, instances: [...poses.values()], partOf, featuresOf: (inst) => featuresAt(inst.instanceId) });
+    if (lines.length !== 1) return null;
+    const pawl = worldPawl(placedMeta, pose.position, pose.rotation, id);
+    let best = null;
+    for (const rid of otherIds()) {
+      const r = poses.get(rid);
+      const ratchet = worldRatchet(partOf(r), r.position, r.rotation, rid);
+      if (!ratchet) continue;
+      const rest = pawlRestTurn(ratchet, pawl, lines[0]);
+      if (rest && (!best || Math.abs(rest.turnDeg) < Math.abs(best.rest.turnDeg))) best = { ratchetId: rid, rest };
+    }
+    return best && Math.abs(best.rest.turnDeg) >= 0.005 ? best : null;
+  };
 
   // 1. Square fit. A Smart Motor's socket never turns its part: its hub turns instead (step 3).
   const isHubSocket = (f) => f.kind === 'shaft_socket' && hasHub(f.instanceId);
@@ -146,6 +168,19 @@ export function settlePlacement({ placedId, instances, partOf, featuresOf, recei
       }
       const text = meshMessage(labelOf(placedId), turn, (o) => labelOf(o.instanceId));
       if (text) result.messages.unshift(text);
+    }
+  }
+
+  // 2a. A pawl hanging on one pin swings about it onto a ratchet in reach, its tip resting in the
+  // teeth the way that holds (openspec ratchet-and-pawl, design §4). No clean rest: it isn't turned.
+  if (mesh && isPawl(placedMeta)) {
+    const swung = pawlSwing(placedId);
+    if (swung) {
+      setPose(placedId, turnAboutLine(poses.get(placedId), swung.rest.axis, swung.rest.point, swung.rest.turnDeg));
+      const free = swung.rest.relation.axis.clone().multiplyScalar(swung.rest.relation.freeSign);
+      const k = [0, 1, 2].reduce((b, i) => (Math.abs(free.getComponent(i)) > Math.abs(free.getComponent(b)) ? i : b), 0);
+      const way = `${free.getComponent(k) >= 0 ? 'anticlockwise' : 'clockwise'} seen from +${'xyz'[k]}`;
+      result.messages.unshift(`Turned ${labelOf(placedId)} ${Math.abs(swung.rest.turnDeg).toFixed(1)}° on its pin to rest in the teeth of ${labelOf(swung.ratchetId)}: it turns ${way} only`);
     }
   }
 

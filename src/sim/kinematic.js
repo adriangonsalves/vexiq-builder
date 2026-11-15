@@ -127,6 +127,13 @@ export function createKinematic(graph) {
         queue.push(other);
       }
     }
+    // Ratchets (openspec ratchet-and-pawl): a pawl held by a still body stops its ratchet turning the
+    // held way (a pawl on two pins, either way), as a worm asked to turn backward jams
+    for (const r of graph.ratchets || []) {
+      if (!fixed.has(r.holderBody) || !speedOf.has(r.ratchetBody)) continue;
+      const free = spinAbout(r.ratchetBody, v3(r.axis).normalize().multiplyScalar(r.freeSign || 1));
+      if (r.locked ? Math.abs(free) > SAME : free < -SAME) jam(setBy.get(r.ratchetBody));
+    }
     // A jammed motor's whole train stops
     for (const [body, motor] of setBy) if (jammed.has(motor)) speedOf.set(body, 0);
     stalled = jammed;
@@ -176,4 +183,16 @@ export function createKinematic(graph) {
     /** A body's spin about a world axis (rad/s), from its own hinge. */
     spin: (body, axis) => spinAbout(body, v3(axis).normalize())
   };
+}
+
+/**
+ * What this pass leaves out, as entry warnings ([{ partId, text }]): bands don't pull, and a pawl on a
+ * part that moves isn't run (a pawl on the frame is: its ratchet jams the held way).
+ */
+export function kinematicNotes(graph) {
+  const fixed = new Set(graph.fixed || []);
+  return [
+    ...(graph.bands || []).map((b) => ({ partId: b.id, text: `${b.label}: bands don't pull without physics` })),
+    ...(graph.ratchets || []).filter((r) => !fixed.has(r.holderBody)).map((r) => ({ partId: r.pawl, text: `${graph.partInfo?.[r.pawl]?.label || 'A pawl'} rides on a moving part, so it isn't run without physics` }))
+  ];
 }

@@ -26,6 +26,7 @@ import * as THREE from 'three';
 import { solveBandPath } from '../utils/bandPath.js';
 import { bandPullN } from './bandStrength.js';
 import { sameLine } from './bodyGraph.js';
+import { meshTurn } from '../utils/gearMeshing.js';
 import { MOTOR_FREE_RAD_S } from './kinematic.js';
 import { allMeasured, partMassKg } from './fastenerStrength.js';
 import { buildImpactModel, landingQuaternion, solveImpact } from './impact.js';
@@ -62,6 +63,15 @@ const MAX_HULL_POINTS = 400;
 const START_OVERLAP = 0.0003; // m: parts whose outlines overlap deeper than this at the start never collide (a shaft in a hole); parts only touching do
 const MIN_MASS = 0.005; // kg per moving body
 const MIN_RADIUS = 0.01; // m: its extra mass spread this far round its centre
+// Ratchets (openspec ratchet-and-pawl, design §7)
+const PAWL_DRAG = 0.02 * 0.414; // N·m: the pawl dragging on teeth turning the free way (2% of stall torque)
+const PAWL_PRESS_SPEED = 30; // rad/s: how fast a band (or its weight) brings a pawl back down onto the teeth
+const PAWL_PRESS_TORQUE = 0.02; // N·m: the most a band (or its weight) presses a pawl on with
+const PAWL_PIN_FRICTION = 0.002; // N·m: what holds a lifted pawl where it is left
+const MESH_ENGAGE_MM = 1; // gears this near mesh distance on parts that move apart drive each other ...
+const MESH_RELEASE_MM = 1.5; // ... until this far off it
+const PAWL_LIFTED_MM = 0.5; // a pawl's tip this far above the teeth has been lifted off them
+const PAWL_DOWN_MM = 0.05; // ... and is in the teeth while this far under their tips
 
 let ready = null;
 /** Loads Rapier's WASM once. */
@@ -278,6 +288,10 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   // Gears just out of mesh don't drive each other, so their smooth shells mustn't rub either
   for (const [a, b] of graph.nearGears || []) touchingParts.add(pairKey(a, b));
   for (const [a, b] of graph.hingePairs || []) touchingParts.add(pairKey(a, b));
+  // A pawl rides its ratchet's teeth by rule (holdRatchets), never by its outline
+  for (const r of graph.ratchets || []) touchingParts.add(pairKey(r.ratchet, r.pawl));
+  // Gears that may swing into mesh: their smooth hulls would meet at the tip circles, 2 mm early
+  for (const m of graph.maybeMeshes || []) touchingParts.add(pairKey(m.gears[0], m.gears[1]));
   const { w: world, bodies: rb, partOfCollider, bodyColliders } = buildWorld(false);
   const skip = new Set();
   for (const a of partOfCollider.keys()) {
@@ -342,6 +356,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   };
   /** Pulls each link's speeds to its ratio; `catchUp` also takes back part of the turn drifted apart. */
   function holdLinks(dt, catchUp = true) {
+    for (const c of clusters) solveCluster(c, dt, catchUp);
     // Everything one link needs, worked out once for the sweep
     const active = [];
     graph.links.forEach((l, i) => {
@@ -364,6 +379,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     // Whole sweeps over every link, not each link to the end in turn: a train of gears of very
     // different weights (a light shaft into a heavy frame) only settles when they pass impulses along
     for (let pass = 0; pass < LINK_PASSES; pass++) {
+      if (ratchetState.length) holdRatchets(dt, catchUp);
       for (const { l, i, A, B, axisA, axisB, pointA, pointB, k, mass } of active) {
         const speedB = l.kind === 'rack' ? toV3(B.linvel()).dot(axisB) : spin(l.b, axisB);
         const error = k * spin(l.a, axisA) - speedB + (catchUp ? (DRIFT_GAIN * drift.get(i)) / dt : 0);
@@ -389,6 +405,583 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     });
   }
 
+  // --- Ratchets (openspec ratchet-and-pawl, design §7) --------------------------------------------
+  // Each ratchet keeps where the pawl's tip is round the tooth under it: `s` (degrees from the steep
+  // side the free turn last brought past it, along the sloped side). Turning the free way runs s down
+  // to 0, where the tip drops off the crest into the next gap (a click) and s starts again at a whole
+  // tooth; turning the held way runs s up to a whole tooth, where the steep side meets the tip and,
+  // with the pawl down, stops it. The pawl's angle on its pin follows the tooth outline under the tip.
+  const ratchetState = (graph.ratchets || []).map((r) => {
+    const period = 360 / r.teeth;
+    const n = r.profileMm.length;
+    const radiusAt = (deg) => {
+      const x = THREE.MathUtils.clamp((deg / period) * n - 0.5, 0, n - 1);
+      const i = Math.min(n - 2, Math.floor(x));
+      return r.profileMm[i] + (r.profileMm[i + 1] - r.profileMm[i]) * (x - i);
+    };
+    const lever = Math.abs(r.leverMm) >= 1 ? r.leverMm : 0; // mm of tip radius per radian about the pivot
+    return {
+      r,
+      period,
+      radiusAt,
+      r0: radiusAt(r.phaseDeg),
+      lever,
+      axis0: new THREE.Vector3(...r.axis).normalize().multiplyScalar(r.freeSign || 1),
+      center0: new THREE.Vector3(...r.point).multiplyScalar(MM),
+      pivotAxis0: r.pivot ? new THREE.Vector3(...r.pivot.axis).normalize() : null,
+      pivotPoint0: r.pivot ? new THREE.Vector3(...r.pivot.point).multiplyScalar(MM) : null,
+      tip0: r.tip ? new THREE.Vector3(...r.tip).multiplyScalar(MM) : null,
+      s: r.phaseDeg,
+      clicks: 0,
+      locked: Boolean(r.locked),
+      turn: 0, // the ratchet's turn the free way against its holder since the start (rad)
+      down: true
+    };
+  });
+  /** The ratchet's turn the free way against the body holding its pawl (rad, in (−π, π]), from their poses. */
+  const ratchetTurn = (st) => {
+    const q = toV3q(rb.get(st.r.holderBody).rotation()).invert().multiply(toV3q(rb.get(st.r.ratchetBody).rotation()));
+    return 2 * Math.atan2(q.x * st.axis0.x + q.y * st.axis0.y + q.z * st.axis0.z, q.w);
+  };
+  /** A start-frame point carried by body `bodyId`'s move (m). */
+  const carried0 = (bodyId, p0) => {
+    const body = rb.get(bodyId);
+    return p0.clone().applyQuaternion(toV3q(body.rotation())).add(toV3(body.translation()));
+  };
+  /** The pawl's turn on its pin against the body holding it (rad, about the pivot axis), from the start. */
+  const pawlTurn = (st) => {
+    const { r } = st;
+    const q = toV3q(rb.get(r.holderBody).rotation()).invert().multiply(toV3q(rb.get(r.pawlBody).rotation()));
+    return 2 * Math.atan2(q.x * st.pivotAxis0.x + q.y * st.pivotAxis0.y + q.z * st.pivotAxis0.z, q.w);
+  };
+  /** How far the pawl has turned outward (rad: its tip moving away from the ratchet's centre), and where the tooth outline puts it. */
+  const pawlLift = (st) => {
+    const out = pawlTurn(st) * Math.sign(st.lever);
+    const surface = (st.radiusAt(THREE.MathUtils.clamp(st.s, 0, st.period)) - st.r0) / Math.abs(st.lever);
+    return { out, surface, tipMm: st.r0 + out * Math.abs(st.lever) };
+  };
+  /** The free-turn speed of a ratchet against the body holding its pawl, and what that turn needs. */
+  const ratchetFrame = (st) => {
+    const { r } = st;
+    const R = rb.get(r.ratchetBody);
+    const H = rb.get(r.holderBody);
+    if (!R || !H || R === H || (!R.isDynamic() && !H.isDynamic())) return null;
+    const axis = axisNow(r.ratchetBody, st.axis0);
+    const center = carried0(r.ratchetBody, st.center0);
+    const w = toV3(R.angvel()).sub(toV3(H.angvel())).dot(axis);
+    const inv = (R.isDynamic() ? 1 / inertiaAbout(R, axis, center) : 0) + (H.isDynamic() ? 1 / inertiaAbout(H, axis, center) : 0);
+    return { R, H, axis, center, w, inv };
+  };
+  /**
+   * Changes how fast `body` turns about the world line (point, axis) by `dw` (rad/s), moving its centre
+   * of mass with the turn: exact for a body that turns on that line (a ratchet on its shaft), where a
+   * pure torque on an arm whose weight sits off the line would mostly go into its hinge.
+   */
+  const spinAboutLine = (body, axis, point, dw) => {
+    if (!body?.isDynamic()) return;
+    const dW = axis.clone().multiplyScalar(dw);
+    body.setAngvel(vec(toV3(body.angvel()).add(dW)), true);
+    body.setLinvel(vec(toV3(body.linvel()).add(dW.cross(toV3(body.worldCom()).sub(point)))), true);
+  };
+  /** Equal and opposite turns (angular impulse `tau`) on the ratchet and the pawl's holder about the ratchet's axis. */
+  const turnRatchetPair = (f, tau) => {
+    if (f.R.isDynamic()) spinAboutLine(f.R, f.axis, f.center, tau / inertiaAbout(f.R, f.axis, f.center));
+    turnAboutLine(f.H, f.axis, f.center, -tau);
+  };
+  /** One pass of the ratchet stops: a down pawl at the steep side takes away the held-way turn (a locked pawl, both ways). */
+  function holdRatchets(dt, catchUp = true) {
+    for (const st of ratchetState) {
+      if (inCluster.has(st.r.ratchetBody) || inCluster.has(st.r.holderBody)) continue; // solved with its cluster
+      const f = ratchetFrame(st);
+      if (!f || f.inv <= 0) continue;
+      let target = null;
+      if (st.locked) {
+        target = catchUp ? -(DRIFT_GAIN * st.turn) / dt : 0;
+      } else if (st.down) {
+        // How much more held-way turn there is before the steep side meets the tip (rad)
+        const room = THREE.MathUtils.degToRad(st.period - st.s);
+        if (room + f.w * dt < 0) target = room >= 0 ? -room / dt : catchUp ? -(DRIFT_GAIN * room) / dt : 0;
+        if (target !== null && f.w >= target) target = null;
+      }
+      if (target === null) {
+        // The pawl's drag: friction taking out the free turn against its holder, never reversing it
+        if (st.dragLeft > 0 && f.w > 0) {
+          const take = Math.min(st.dragLeft, f.w / f.inv);
+          st.dragLeft -= take;
+          turnRatchetPair(f, -take);
+        }
+        continue;
+      }
+      turnRatchetPair(f, (target - f.w) / f.inv);
+    }
+  }
+  /** Before each step: the pawl's drag on teeth turning the free way, and the pawl kept on (or let off) the teeth. */
+  function rideRatchets(dt) {
+    for (const st of ratchetState) {
+      const f = ratchetFrame(st);
+      if (!f) continue;
+      // The pawl drags on teeth turning the free way: friction between the ratchet and the body holding
+      // the pawl, up to PAWL_DRAG × dt this substep (taken in holdRatchets, with the stop)
+      st.dragLeft = !st.locked && st.down ? PAWL_DRAG * dt : 0;
+      if (st.locked || !st.lever || !st.pivotAxis0) continue;
+      const P = rb.get(st.r.pawlBody);
+      const H = f.H;
+      if (!P?.isDynamic()) continue;
+      const { out, surface, tipMm } = pawlLift(st);
+      const axis = axisNow(st.r.holderBody, st.pivotAxis0).multiplyScalar(Math.sign(st.lever));
+      const point = carried0(st.r.holderBody, st.pivotPoint0);
+      const wOut = toV3(P.angvel()).sub(toV3(H.angvel())).dot(axis);
+      // The teeth push the pawl out to the outline under its tip at once (design §7). A band or its
+      // weight presses it back on with at most PAWL_PRESS_TORQUE, so another part can lift it clear;
+      // with neither it follows the teeth until lifted clear of their tips, and then stays where it is
+      // left (its pin's friction holds it).
+      // Lifted clear by something else, not by the teeth themselves (a quick tooth can fling it up a moment)
+      if (tipMm < st.r.tipRadiusMm + PAWL_LIFTED_MM) st.liftedClear = false;
+      else if (!st.pushedOut) st.liftedClear = true;
+      const following = st.r.pressed || simulateGravity || !st.liftedClear;
+      st.pushedOut = out < surface;
+      const inertia = inertiaAbout(P, axis, point);
+      let dw = 0;
+      if (out < surface) dw = Math.max(0, (surface - out) / dt - wOut);
+      else if (following) dw = Math.max(-PAWL_PRESS_SPEED - wOut, (surface - out) / dt - wOut);
+      else dw = -wOut;
+      const cap = ((out < surface ? Infinity : following ? PAWL_PRESS_TORQUE : PAWL_PIN_FRICTION) * dt) / inertia;
+      dw = THREE.MathUtils.clamp(dw, -cap, cap);
+      if (Math.abs(dw) > 1e-9) {
+        spinAboutLine(P, axis, point, dw);
+        // The teeth pushing the pawl out push back on the ratchet's shaft (straight out from its centre at
+        // the tip, so they don't turn it: the pawl's drag does that), and the pin on what holds the pawl
+        if (out < surface && st.tip0) {
+          const tip = carried0(st.r.pawlBody, st.tip0);
+          const u = axis.clone().cross(tip.clone().sub(point));
+          const reach = u.length();
+          const radial = tip.clone().sub(f.center);
+          radial.addScaledVector(f.axis, -radial.dot(f.axis));
+          if (reach > 1e-6 && radial.lengthSq() > 1e-12) {
+            radial.normalize();
+            const along = u.divideScalar(reach).dot(radial);
+            if (Math.abs(along) > 0.05) {
+              const J = radial.multiplyScalar((inertia * dw) / reach / along);
+              if (f.R.isDynamic()) f.R.applyImpulseAtPoint(vec(J.clone().negate()), vec(f.center), true);
+              const pawlMomentum = axis.clone().multiplyScalar(dw).cross(toV3(P.worldCom()).sub(point)).multiplyScalar(P.mass());
+              if (H.isDynamic()) H.applyImpulseAtPoint(vec(pawlMomentum.sub(J).negate()), vec(point), true);
+            }
+          }
+        }
+      }
+    }
+  }
+  /** After each step: where each pawl's tip now is round its tooth, clicks, and whether it is down. */
+  function trackRatchets(dt) {
+    for (const st of ratchetState) {
+      const f = ratchetFrame(st);
+      if (!f) continue;
+      // Measured from the poses, not summed from speeds: contacts and hinges move bodies within a step
+      const now = ratchetTurn(st);
+      const prev = st.turn - Math.round(st.turn / (2 * Math.PI)) * 2 * Math.PI;
+      let step = now - prev;
+      step -= Math.round(step / (2 * Math.PI)) * 2 * Math.PI;
+      st.turn += step;
+      if (st.locked) continue;
+      st.s -= THREE.MathUtils.radToDeg(step);
+      const lift = st.lever && st.pivotAxis0 ? pawlLift(st) : null;
+      // Down while its tip is under the teeth's tips (a pawl that can't rock is always down)
+      st.down = !lift || lift.tipMm < st.r.tipRadiusMm - PAWL_DOWN_MM;
+      while (st.s < 0) {
+        st.s += st.period;
+        st.clicks += 1;
+      }
+      // Lifted clear, the teeth pass under it the held way too
+      while (!st.down && st.s > st.period) st.s -= st.period;
+    }
+  }
+
+  // --- Gears that swing into and out of mesh (openspec ratchet-and-pawl, design §8–9) ---------------
+  // A pair on parts that move apart never collides by hull; it is stopped from coming closer than mesh
+  // distance, and while within MESH_ENGAGE_MM of it (until MESH_RELEASE_MM) the teeth are held together
+  // where they meet: the two gears' speeds at the pitch point, from each body's whole motion (so an arm
+  // swinging is counted), are pulled equal along the teeth by a push at that point, which the hinges
+  // pass on to the arm.
+  const meshState = (graph.maybeMeshes || []).map((m) => ({
+    m,
+    distance: (m.radii[0] + m.radii[1]) * MM,
+    center0: m.centers.map((c) => new THREE.Vector3(...c).multiplyScalar(MM)),
+    axis0: m.axes.map((a) => new THREE.Vector3(...a).normalize()),
+    tooth0: m.toothDirs.map((t) => new THREE.Vector3(...t).normalize()),
+    engaged: false,
+    slip: 0 // m: how far the teeth have slipped past each other along the pitch circle while engaged
+  }));
+  const velocityAt = (body, p) => toV3(body.linvel()).add(toV3(body.angvel()).cross(p.clone().sub(toV3(body.worldCom()))));
+  /** A free body's give at `p` along `u` (1/kg): how much a unit push there changes its speed there. */
+  const giveAt = (body, p, u) => {
+    if (!body?.isDynamic()) return 0;
+    const rxu = p.clone().sub(toV3(body.worldCom())).cross(u);
+    const l = rxu.length();
+    return body.invMass() + (l > 1e-12 ? (l * l) / inertiaAbout(body, rxu.clone().divideScalar(l)) : 0);
+  };
+  const meshFrame = (st) => {
+    const { m } = st;
+    const A = rb.get(m.a);
+    const B = rb.get(m.b);
+    if (!A || !B || A === B || (!A.isDynamic() && !B.isDynamic())) return null;
+    const cA = carried0(m.a, st.center0[0]);
+    const cB = carried0(m.b, st.center0[1]);
+    const axis = axisNow(m.a, st.axis0[0]);
+    const d = cB.clone().sub(cA);
+    d.addScaledVector(axis, -d.dot(axis));
+    const apart = d.length();
+    if (apart < 1e-9) return null;
+    const n = d.divideScalar(apart);
+    const P = cA.clone().addScaledVector(n, (m.radii[0] / (m.radii[0] + m.radii[1])) * apart);
+    const t = axis.clone().cross(n);
+    return { A, B, HA: rb.get(m.holders[0]) || A, HB: rb.get(m.holders[1]) || B, cA, cB, axis, n, apart, P, t };
+  };
+  /** One pass: gears kept from coming closer than mesh distance, and engaged pairs held together at their teeth. */
+  function holdMeshes(dt, catchUp = true) {
+    for (const st of meshState) {
+      const f = meshFrame(st);
+      if (!f) continue;
+      // Not closer than mesh distance: take away the closing speed (and the depth, a little each step)
+      const depth = st.distance - f.apart;
+      const closing = velocityAt(f.B, f.cB).sub(velocityAt(f.A, f.cA)).dot(f.n);
+      // Inside mesh distance: back out a little each step; outside it: close at most the gap in this step
+      const wanted = depth > 0 ? (catchUp ? (DRIFT_GAIN * depth) / dt : 0) : depth / dt;
+      if (closing < wanted) {
+        // The push goes to what carries each gear's shaft (an arm), at the gear's centre
+        const [HA, HB] = [f.HA, f.HB];
+        const give = giveAt(HA, f.cA, f.n) + giveAt(HB, f.cB, f.n);
+        if (give > 0) {
+          const J = (wanted - closing) / give;
+          if (HB.isDynamic()) HB.applyImpulseAtPoint(vec(f.n.clone().multiplyScalar(J)), vec(f.cB), true);
+          if (HA.isDynamic()) HA.applyImpulseAtPoint(vec(f.n.clone().multiplyScalar(-J)), vec(f.cA), true);
+        }
+      }
+      if (!st.engaged) continue;
+      // The teeth move together where they meet: a push along the teeth at the pitch point. A gear whose
+      // shaft is held by a body that holds still only turns about that shaft; one carried by a moving
+      // body (an arm) takes the push as a free body, and its hinge passes it on to the arm.
+      const error = velocityAt(f.A, f.P).sub(velocityAt(f.B, f.P)).dot(f.t) + (catchUp ? (DRIFT_GAIN * st.slip) / dt : 0);
+      const sides = [
+        { G: f.A, H: f.HA, c: f.cA, axis: f.axis, sign: 1 },
+        { G: f.B, H: f.HB, c: f.cB, axis: axisNow(st.m.b, st.axis0[1]), sign: -1 }
+      ];
+      let give = 0;
+      for (const sd of sides) {
+        if (!sd.G.isDynamic()) continue;
+        sd.onShaft = sd.H !== sd.G && !sd.H.isDynamic() && !motorTurned.has(sd.G);
+        if (sd.onShaft) {
+          sd.lever = f.P.clone().sub(sd.c).cross(f.t).dot(sd.axis);
+          sd.inertia = inertiaAbout(sd.G, sd.axis, sd.c);
+          give += (sd.lever * sd.lever) / sd.inertia;
+        } else give += giveAt(sd.G, f.P, f.t);
+      }
+      if (give <= 0) continue;
+      const J = -error / give;
+      for (const sd of sides) {
+        if (!sd.G.isDynamic()) continue;
+        if (sd.onShaft) spinAboutLine(sd.G, sd.axis, sd.c, (sd.sign * J * sd.lever) / sd.inertia);
+        else sd.G.applyImpulseAtPoint(vec(f.t.clone().multiplyScalar(sd.sign * J)), vec(f.P), true);
+      }
+    }
+  }
+  /** The gear `k` of a pair as the meshing rule sees it now (for the tooth misfit when it engages). */
+  const toothedNow = (st, k, f) => {
+    const { m } = st;
+    const body = k === 0 ? m.a : m.b;
+    const center = (k === 0 ? f.cA : f.cB).clone().divideScalar(MM);
+    const axis = axisNow(body, st.axis0[k]);
+    const t0 = center.dot(axis);
+    return { kind: 'gear', instanceId: m.gears[k], teeth: m.teeth[k], pitchRadiusMm: m.radii[k], center, axis, toothDir: axisNow(body, st.tooth0[k]), faceSpan: [t0 + m.faceSpans[k][0], t0 + m.faceSpans[k][1]], faceMid: center.clone().addScaledVector(axis, (m.faceSpans[k][0] + m.faceSpans[k][1]) / 2) };
+  };
+  /** A body's turn about `axis` since the start (rad, in (−π, π]), from its pose. */
+  const bodyTurn = (bodyId, axis) => {
+    const q = toV3q(rb.get(bodyId).rotation());
+    return 2 * Math.atan2(q.x * axis.x + q.y * axis.y + q.z * axis.z, q.w);
+  };
+  /** Adds the step from `prev` (unwrapped) to `now` (in (−π, π]), unwrapped. */
+  const unwrap = (prev, now) => {
+    let step = now - (prev - Math.round(prev / (2 * Math.PI)) * 2 * Math.PI);
+    step -= Math.round(step / (2 * Math.PI)) * 2 * Math.PI;
+    return prev + step;
+  };
+  /**
+   * How far the teeth have rolled against each other (m), from the poses: each gear's turn about A's
+   * axis less the turn of the line between their centres, through its pitch radius. Steady while the
+   * teeth roll together; its change since the pair engaged is the slip taken back.
+   */
+  const meshRoll = (st, f) => {
+    st.turnA = unwrap(st.turnA ?? 0, bodyTurn(st.m.a, st.axis0[0]));
+    st.turnB = unwrap(st.turnB ?? 0, bodyTurn(st.m.b, st.axis0[0]));
+    const line = Math.atan2(st.n0.clone().cross(f.n).dot(f.axis), st.n0.dot(f.n));
+    st.line = unwrap(st.line ?? 0, line);
+    return (st.m.radii[0] * (st.turnA - st.line) + st.m.radii[1] * (st.turnB - st.line)) * MM;
+  };
+  /** After each step: which pairs are in mesh now, and how far engaged teeth have slipped. */
+  function trackMeshes() {
+    for (const st of meshState) {
+      const f = meshFrame(st);
+      if (!f) continue;
+      st.n0 ||= f.n.clone();
+      const roll = meshRoll(st, f);
+      const off = Math.abs(f.apart - st.distance) / MM;
+      if (st.engaged && off > MESH_RELEASE_MM) st.engaged = false;
+      else if (!st.engaged && off <= MESH_ENGAGE_MM) {
+        st.engaged = true;
+        // Coming together, one gear slips (at most half a tooth) so the teeth fit instead of jumping
+        // Two pairs of gears on the same two bodies (a doubled gear train) slip together, by the first one's misfit
+        const twin = meshState.find((o) => o !== st && o.engaged && new Set([o.m.a, o.m.b, st.m.a, st.m.b]).size === 2);
+        const turn = twin || (st.m.meshedOnEntry && !st.started) ? null : meshTurn(toothedNow(st, 1, f), [toothedNow(st, 0, f)]);
+        st.rollAtEngage = twin ? roll - twin.slip : roll + (turn ? THREE.MathUtils.degToRad(turn.turnDeg) * st.m.radii[1] * MM : 0);
+      }
+      st.started = true;
+      if (st.engaged) st.slip = roll - st.rollAtEngage;
+    }
+  }
+
+  // --- Clusters: gears on parts that move apart, solved together (openspec ratchet-and-pawl, design §8–9) ---
+  // Bodies tied by gears that may swing into or out of mesh, and ratchets whose pawl rides a moving body,
+  // are solved together each substep in hinge coordinates: one turn speed per body about its own hinge
+  // (relative to the body it hangs on). Their inertia matrix in those coordinates is exact, so a light
+  // gear's speed from a load carries no more momentum than it has. Rows (all at once, projected
+  // Gauss–Seidel): teeth moving together at the pitch point (two-sided), the mesh-distance stop and the
+  // ratchet's stop (one-sided), and the pawl's drag (bounded). Rapier's hinges keep positions together.
+  // Gear links where no shaft's holder can move stay on the old path (holdLinks).
+  const CLUSTER_PASSES = 40;
+  const clusters = (() => {
+    const fixedNow = (id) => !rb.get(id)?.isDynamic();
+    const members = new Set();
+    for (const m of graph.maybeMeshes || []) for (const id of [m.a, m.b, ...m.holders]) if (id && !fixedNow(id)) members.add(id);
+    for (const r of graph.ratchets || []) if (!fixedNow(r.holderBody) && !fixedNow(r.ratchetBody)) members.add(r.ratchetBody).add(r.holderBody);
+    if (!members.size) return [];
+    // Each member hangs on the body it was reached from, walking out from bodies that hold still (or
+    // from members hinged to bodies outside the cluster)
+    const parent = new Map();
+    const hingeOf = new Map();
+    const reached = new Set();
+    const queue = [];
+    for (const id of members) {
+      const out = graph.hinges.find((h) => (h.a === id || h.b === id) && !members.has(h.a === id ? h.b : h.a) && (fixedNow(h.a === id ? h.b : h.a) || graph.fixed.includes(h.a === id ? h.b : h.a)));
+      if (out) {
+        parent.set(id, out.a === id ? out.b : out.a);
+        hingeOf.set(id, out);
+        reached.add(id);
+        queue.push(id);
+      }
+    }
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const h of graph.hinges) {
+        const next = h.a === cur ? h.b : h.b === cur ? h.a : null;
+        if (!next || !members.has(next) || reached.has(next)) continue;
+        parent.set(next, cur);
+        hingeOf.set(next, h);
+        reached.add(next);
+        queue.push(next);
+      }
+    }
+    const list = [...members].filter((id) => reached.has(id));
+    return list.length ? [{ bodies: list, parent, hinge: (id) => hingeOf.get(id) }] : [];
+  })();
+  const inCluster = new Set(clusters.flatMap((c) => c.bodies));
+  // The hinge line a cluster body turns on (start frame: carried by the body it hangs on)
+  for (const c of clusters) {
+    c.line = new Map(c.bodies.map((id) => {
+      const h = c.hinge(id);
+      const ha = hingeAxis.get(h.id);
+      // hingeAxis stores the line in body a's start frame; carried by a's move
+      return [id, { a: h.a, axis0: ha.axis.clone(), point0: ha.point.clone() }];
+    }));
+  }
+  const worldInertia = (body) => {
+    const R = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(toV3q(body.rotation()).multiply(toV3q(body.principalInertiaLocalFrame()))));
+    const i = body.principalInertia();
+    const D = new THREE.Matrix3().set(i.x, 0, 0, 0, i.y, 0, 0, 0, i.z);
+    return R.clone().multiply(D).multiply(R.clone().transpose());
+  };
+  /** Solves cluster `c` for this substep (see above). */
+  function solveCluster(c, dt, catchUp) {
+    const ids = c.bodies;
+    const n = ids.length;
+    const index = new Map(ids.map((id, k) => [id, k]));
+    // Each coordinate's hinge line now, and each body's ancestors in the cluster
+    const lines = ids.map((id) => {
+      const L = c.line.get(id);
+      return { axis: axisNow(L.a, L.axis0), point: carried0(L.a, L.point0) };
+    });
+    const chain = ids.map((id) => {
+      const out = [];
+      for (let cur = id; index.has(cur); cur = c.parent.get(cur)) out.push(index.get(cur));
+      return out;
+    });
+    const root = ids.map((id) => {
+      let cur = id;
+      while (index.has(cur)) cur = c.parent.get(cur);
+      return rb.get(cur);
+    });
+    const bodies = ids.map((id) => rb.get(id));
+    const com = bodies.map((b) => toV3(b.worldCom()));
+    // Each body's twist from one unit of coordinate k: [w, v at its centre of mass]
+    const unit = ids.map((_, b) => ids.map((__, k) => {
+      if (!chain[b].includes(k)) return null;
+      const { axis, point } = lines[k];
+      return { w: axis.clone(), v: axis.clone().cross(com[b].clone().sub(point)) };
+    }));
+    // The part of each body's motion that comes from outside the cluster (the root it hangs from)
+    const ext = ids.map((_, b) => {
+      const R = root[b];
+      if (!R) return { w: new THREE.Vector3(), v: new THREE.Vector3() };
+      const w = toV3(R.angvel());
+      return { w, v: toV3(R.linvel()).add(w.clone().cross(com[b].clone().sub(toV3(R.worldCom())))) };
+    });
+    // Coordinates now: each body's turn speed about its hinge against the body it hangs on
+    const u = ids.map((id, b) => {
+      const pid = c.parent.get(id);
+      const pw = index.has(pid) ? toV3(bodies[index.get(pid)].angvel()) : root[b] ? toV3(root[b].angvel()) : new THREE.Vector3();
+      return toV3(bodies[b].angvel()).sub(pw).dot(lines[b].axis);
+    });
+    // Inertia matrix in these coordinates
+    const M = ids.map(() => new Array(n).fill(0));
+    for (let b = 0; b < n; b++) {
+      if (!bodies[b].isDynamic()) continue;
+      const m = bodies[b].mass();
+      const I = worldInertia(bodies[b]);
+      for (let k = 0; k < n; k++) {
+        const uk = unit[b][k];
+        if (!uk) continue;
+        for (let l = 0; l < n; l++) {
+          const ul = unit[b][l];
+          if (!ul) continue;
+          M[k][l] += m * uk.v.dot(ul.v) + uk.w.dot(ul.w.clone().applyMatrix3(I));
+        }
+      }
+    }
+    // Invert (tiny: Gauss–Jordan)
+    const W = ids.map((_, i) => ids.map((__, j) => (i === j ? 1 : 0)));
+    const A = M.map((row) => [...row]);
+    for (let i = 0; i < n; i++) {
+      let piv = i;
+      for (let r = i + 1; r < n; r++) if (Math.abs(A[r][i]) > Math.abs(A[piv][i])) piv = r;
+      [A[i], A[piv]] = [A[piv], A[i]];
+      [W[i], W[piv]] = [W[piv], W[i]];
+      const d = A[i][i] || 1e-12;
+      for (let j = 0; j < n; j++) {
+        A[i][j] /= d;
+        W[i][j] /= d;
+      }
+      for (let r = 0; r < n; r++) {
+        if (r === i || !A[r][i]) continue;
+        const f = A[r][i];
+        for (let j = 0; j < n; j++) {
+          A[r][j] -= f * A[i][j];
+          W[r][j] -= f * W[i][j];
+        }
+      }
+    }
+    // A row is a linear function of the bodies' motion: (twist of body b) -> number. As a function of u:
+    // value = g·u + e. `terms`: [{ body, w, v, at }] meaning w·ω_b + v·(velocity of b at point `at`)
+    const rowOf = (terms) => {
+      const g = new Array(n).fill(0);
+      let e = 0;
+      for (const t of terms) {
+        const b = index.get(t.body);
+        const value = (tw) => (t.w ? t.w.dot(tw.w) : 0) + (t.v ? t.v.dot(tw.v.clone().add(tw.w.clone().cross(t.at.clone().sub(com[b])))) : 0);
+        if (b === undefined) {
+          // a body outside the cluster: its motion now is a constant
+          const B = rb.get(t.body);
+          if (!B) continue;
+          const w = toV3(B.angvel());
+          e += (t.w ? t.w.dot(w) : 0) + (t.v ? t.v.dot(velocityAt(B, t.at)) : 0);
+          continue;
+        }
+        e += value(ext[b]);
+        for (let k = 0; k < n; k++) if (unit[b][k]) g[k] += value(unit[b][k]);
+      }
+      return { g, e };
+    };
+    const rows = [];
+    // Gears: engaged pairs hold their teeth together (a doubled pair on the same bodies is one row); every
+    // pair keeps from coming closer than mesh distance
+    const pairsDone = new Set();
+    for (const st of meshState) {
+      const f = meshFrame(st);
+      if (!f) continue;
+      const depth = st.distance - f.apart;
+      const stop = rowOf([
+        { body: st.m.b, v: f.n.clone(), at: f.cB },
+        { body: st.m.a, v: f.n.clone().negate(), at: f.cA }
+      ]);
+      rows.push({ ...stop, kind: 'stop', target: depth > 0 ? (catchUp ? (DRIFT_GAIN * depth) / dt : 0) : depth / dt, lo: 0, hi: Infinity });
+      if (!st.engaged) continue;
+      const key = [st.m.a, st.m.b].sort().join('|');
+      if (pairsDone.has(key)) continue;
+      pairsDone.add(key);
+      const teeth = rowOf([
+        { body: st.m.a, v: f.t.clone(), at: f.P },
+        { body: st.m.b, v: f.t.clone().negate(), at: f.P }
+      ]);
+      rows.push({ ...teeth, kind: 'teeth', target: catchUp ? -(DRIFT_GAIN * st.slip) / dt : 0, lo: -Infinity, hi: Infinity });
+    }
+    // Ratchets whose ratchet or holder is in this cluster
+    for (const st of ratchetState) {
+      if (!index.has(st.r.ratchetBody) && !index.has(st.r.holderBody)) continue;
+      const axis = axisNow(st.r.ratchetBody, st.axis0);
+      const w = rowOf([
+        { body: st.r.ratchetBody, w: axis.clone() },
+        { body: st.r.holderBody, w: axis.clone().negate() }
+      ]);
+      if (st.locked) rows.push({ ...w, kind: 'ratchet', target: catchUp ? -(DRIFT_GAIN * st.turn) / dt : 0, lo: -Infinity, hi: Infinity });
+      else if (st.down) {
+        const room = THREE.MathUtils.degToRad(st.period - st.s);
+        rows.push({ ...w, kind: 'ratchet', target: room >= 0 ? -room / dt : catchUp ? -(DRIFT_GAIN * room) / dt : 0, lo: 0, hi: Infinity });
+        if (st.dragLeft > 0) rows.push({ ...w, kind: 'drag', st, target: 0, lo: -st.dragLeft, hi: 0 });
+      }
+    }
+    if (!rows.length) return;
+    // Projected Gauss–Seidel on the reduced system
+    const Wg = (g) => W.map((row) => row.reduce((sum, x, j) => sum + x * g[j], 0));
+    for (const r of rows) {
+      r.Wg = Wg(r.g);
+      r.K = r.g.reduce((sum, x, j) => sum + x * r.Wg[j], 0);
+      r.lambda = 0;
+    }
+    for (let pass = 0; pass < CLUSTER_PASSES; pass++) {
+      for (const r of rows) {
+        if (!(r.K > 1e-12)) continue;
+        const value = r.g.reduce((sum, x, j) => sum + x * u[j], 0) + r.e;
+        let next = r.lambda + (r.target - value) / r.K;
+        next = Math.min(r.hi, Math.max(r.lo, next));
+        const d = next - r.lambda;
+        if (!d) continue;
+        r.lambda = next;
+        for (let j = 0; j < n; j++) u[j] += r.Wg[j] * d;
+      }
+    }
+    for (const r of rows) if (r.kind === 'drag') r.st.dragLeft = Math.max(0, r.st.dragLeft + r.lambda);
+    // Write the bodies' motion back from the solved coordinates
+    for (let b = 0; b < n; b++) {
+      if (!bodies[b].isDynamic()) continue;
+      const w = ext[b].w.clone();
+      const v = ext[b].v.clone();
+      for (const k of chain[b]) {
+        w.addScaledVector(unit[b][k].w, u[k]);
+        v.addScaledVector(unit[b][k].v, u[k]);
+      }
+      bodies[b].setAngvel(vec(w), true);
+      bodies[b].setLinvel(vec(v), true);
+    }
+  }
+
+  // Which pairs are in mesh at the start
+  for (const st of meshState) {
+    const f = meshFrame(st);
+    st.engaged = Boolean(f && Math.abs(f.apart - st.distance) / MM <= MESH_ENGAGE_MM);
+    if (f) {
+      st.n0 = f.n.clone();
+      st.rollAtEngage = meshRoll(st, f);
+      st.started = true;
+    }
+  }
+
   // Motors: torque about the hinge, the motor body pushed back the other way. The torque steers to
   // the throttle's speed by what it turns (shaft and gear train): a part for how far off it is, and
   // a part that builds up while it stays off (for the friction, damping and linkages that weighs
@@ -398,6 +991,11 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   );
   // What else each motor turns through its gears and chains: [{ body, axis, gear, factor }], where
   // the body turns `factor` times as fast as the shaft, so it weighs factor² as much on the motor
+  // (gears in mesh on entry on parts that can move apart count too, for how much the motor turns)
+  const trainLinks = [
+    ...graph.links,
+    ...(graph.maybeMeshes || []).filter((m) => m.meshedOnEntry).map((m) => ({ kind: 'gear', a: m.a, b: m.b, ratio: m.teeth[0] / m.teeth[1], axisA: m.axes[0], axisB: m.axes[1], gears: m.gears }))
+  ];
   const trains = new Map(
     graph.motors.map((m) => {
       const start = hingeAxis.get(m.hinge).b;
@@ -405,7 +1003,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       const out = [];
       for (let i = 0, queue = [start]; i < queue.length; i++) {
         const cur = queue[i];
-        for (const l of graph.links) {
+        for (const l of trainLinks) {
           if (l.kind === 'rack' || (l.a !== cur && l.b !== cur)) continue;
           if (l.oneWay && l.a !== cur) continue; // a gear doesn't turn its worm
           const forward = l.a === cur;
@@ -420,6 +1018,8 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       return [m.id, out];
     })
   );
+  // Bodies a motor turns through its shaft and gears (as rigid bodies), for the gears that may swing into mesh
+  const motorTurned = new Set(graph.motors.flatMap((m) => [hingeAxis.get(m.hinge).b, ...trains.get(m.id).map((t) => t.body)]).map((id) => rb.get(id)).filter(Boolean));
   // Bodies turned directly by each motor (its shaft body and any gears or sprockets linked to it)
   const directDriven = new Map(
     graph.motors.map((m) => [
@@ -669,6 +1269,12 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     return deepest;
   }
   function driveMotors(throttles, dt) {
+    // Every motor's speed is read before any of them pushes: two motors on one shaft each see the
+    // shaft's speed, not the speed the other has just given it
+    const relNow = new Map(graph.motors.map((m) => {
+      const h = hingeAxis.get(m.hinge);
+      return [m.id, toV3(rb.get(h.b).angvel()).sub(toV3(rb.get(h.a).angvel())).dot(axisNow(h.a, h.axis))];
+    }));
     for (const m of graph.motors) {
       const h = hingeAxis.get(m.hinge);
       const st = motorState.get(m.id);
@@ -676,7 +1282,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       const B = rb.get(h.b);
       const axis = axisNow(h.a, h.axis);
       const point = h.point.clone().applyQuaternion(toV3q(A.rotation())).add(toV3(A.translation()));
-      st.rel = toV3(B.angvel()).sub(toV3(A.angvel())).dot(axis);
+      st.rel = relNow.get(m.id);
       // A blocked shaft jitters: the speed shown and the stall check use it smoothed
       st.smooth += (st.rel - st.smooth) * Math.min(1, dt / SPEED_SMOOTHING);
       const throttle = throttles.get(m.id) || 0;
@@ -744,7 +1350,13 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       const steer = (inertia * off) / MOTOR_RESPONSE;
       // The push only builds while the torque isn't already at the limit that way
       const atLimit = Math.abs(steer + st.push) >= STALL_TORQUE && Math.sign(steer + st.push) === Math.sign(off);
-      if (!atLimit) st.push = THREE.MathUtils.clamp(st.push + (inertia * off * dt) / (MOTOR_RESPONSE * PUSH_RISE), -STALL_TORQUE, STALL_TORQUE);
+      // It builds at least as fast as it would reach stall torque in PUSH_RISE at a whole free speed off:
+      // scaled by inertia alone, a very light shaft (a ratchet with its pawl dragging) took seconds to find
+      // the torque for a small steady load. Each step it grows by no more than would close the gap in that
+      // step, so a light shaft starting up doesn't overshoot
+      const pushRate = Math.max(inertia / MOTOR_RESPONSE, STALL_TORQUE / MOTOR_FREE_RAD_S) / PUSH_RISE;
+      const grow = Math.sign(off) * Math.min(pushRate * Math.abs(off) * dt, (inertia * Math.abs(off)) / dt);
+      if (!atLimit) st.push = THREE.MathUtils.clamp(st.push + grow, -STALL_TORQUE, STALL_TORQUE);
       // Stopped, or asked the other way than it was pushing (reversed out of a stall): let go at once
       if (!target || Math.sign(st.push) === -Math.sign(target)) st.push = 0;
       // When gravity is simulated and exceeds the motor's stall torque, the excess pulls the shaft back
@@ -1260,6 +1872,9 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     }
   }
 
+  // Outside pushes (a debugging aid for the checks, standing in for a part pushing): body -> { axis, point (m), speed (rad/s) }
+  const pushes = new Map();
+  const pulls = new Map();
   let carry = 0;
   let dropTimeScale = 1;
   return {
@@ -1275,12 +1890,25 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       while (carry >= h) {
         carry -= h;
         driveMotors(throttles, h);
+        if (ratchetState.length) rideRatchets(h);
+        for (const [bodyId, pull] of pulls) {
+          const body = rb.get(bodyId);
+          // A torque about a line through the body's centre of mass turns it; about another line, a push pair
+          turnAboutLine(body, pull.axis, pull.point, pull.torque * h);
+        }
+        for (const [bodyId, push] of pushes) {
+          const body = rb.get(bodyId);
+          const w = toV3(body.angvel()).dot(push.axis);
+          if (w < push.speed) spinAboutLine(body, push.axis, push.point, push.speed - w);
+        }
         holdLinks(h);
         if (pullingBands.length) pullBands(h);
         world.step(events, hooks);
         stepDrop(h);
         checkBlocked(throttles);
         trackDrift(h);
+        if (ratchetState.length) trackRatchets(h);
+        if (meshState.length) trackMeshes();
         // Contacts and hinges may have pulled the ratios apart within the step: put the speeds back
         holdLinks(h, false);
       }
@@ -1376,6 +2004,31 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         motors[m.id] = { rpm: (st.smooth * 60) / (2 * Math.PI), stalled: st.stalled, loadTorque: st.loadTorque || 0 };
       }
       return motors;
+    },
+    /** Gears that may swing into mesh: [{ id, gears, engaged, offMm (from mesh distance) }]. */
+    meshes() {
+      return meshState.map((st) => {
+        const f = meshFrame(st);
+        return { id: st.m.id, gears: st.m.gears, engaged: st.engaged, offMm: f ? (f.apart - st.distance) / MM : null };
+      });
+    },
+    /** Turns body `bodyId` round the world line through `point` (mm) along `axis` with `torque` N·m every step until called with 0 (a debugging aid: stands in for a load or a hand). */
+    pull(bodyId, axis, point, torque) {
+      if (!torque) pulls.delete(bodyId);
+      else if (rb.get(bodyId)?.isDynamic()) pulls.set(bodyId, { axis: new THREE.Vector3(...axis).normalize(), point: new THREE.Vector3(...point).multiplyScalar(MM), torque });
+    },
+    /**
+     * Pushes body `bodyId` round the world line through `point` (mm) along `axis`, turning it at least
+     * `speed` rad/s that way every step (0: holds it from turning back), as another part pressing on it
+     * would; `speed` null lets go (a debugging aid for the checks, standing in for a part pushing).
+     */
+    push(bodyId, axis, point, speed) {
+      if (speed === null || speed === undefined) pushes.delete(bodyId);
+      else if (rb.get(bodyId)?.isDynamic()) pushes.set(bodyId, { axis: new THREE.Vector3(...axis).normalize(), point: new THREE.Vector3(...point).multiplyScalar(MM), speed });
+    },
+    /** Each ratchet: { id, ratchet, pawl, clicks (teeth passed under the pawl the free way), down, locked, phaseDeg, liftMm (the pawl's tip above the teeth's tips) }. */
+    ratchets() {
+      return ratchetState.map((st) => ({ id: st.r.id, ratchet: st.r.ratchet, pawl: st.r.pawl, clicks: st.clicks, down: st.down, locked: st.locked, phaseDeg: st.s, liftMm: st.lever && st.pivotAxis0 ? pawlLift(st).tipMm - st.r.tipRadiusMm : null }));
     },
     setLimitSpeedByLoad(on) {
       limitSpeedByLoad = Boolean(on);

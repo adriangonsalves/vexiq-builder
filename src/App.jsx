@@ -53,7 +53,7 @@ import ToolbarMenu from './components/ToolbarMenu.jsx';
 import { useLayoutSize } from './utils/layoutSize.js';
 import ExplodePanel from './components/ExplodePanel.jsx';
 import PlayPanel from './components/PlayPanel.jsx';
-import { createKinematic } from './sim/kinematic.js';
+import { createKinematic, kinematicNotes } from './sim/kinematic.js';
 import { createPlayRunner } from './sim/playRunner.js';
 import SelectMenu from './components/SelectMenu.jsx';
 import { ChainBuilderDialog, ChainRouteDialog } from './components/BuildMenu.jsx';
@@ -118,6 +118,7 @@ import { bandReport, copiedBand, followBands, isRoutedBand } from './utils/bandR
 import { STRETCH_COLORS } from './sim/bandStrength.js';
 import { BAND_SPECS } from './utils/bandPath.js';
 import { isPlasticSheet } from './utils/sheetBend.js';
+import { setPawlTarget } from './utils/ratchetPawl.js';
 import {
   applyOps,
   createHistory,
@@ -2453,6 +2454,12 @@ export default function App() {
 
   // Bend sheet (openspec shaped-parts-and-sheet-bending): a plastic sheet and the part to anchor it to,
   // or a bent sheet alone (to flatten it)
+  // Set pawl (openspec ratchet-and-pawl): one pawl selected, with its ratchet or the only one near it
+  const pawlCheck = useMemo(() => setPawlTarget({ selectedIds, instances, partOf: (i) => catalogMap.get(i.partId) }), [selectedIds, instances, catalogMap]);
+  /** Sets `pawlId` on `ratchetId` (one history step): at the spot nearest `near` (a world point), else nearest the pawl, or the next spot. */
+  const setPawl = (pawlId, ratchetId, near = null) =>
+    handleRunSmartAction('set_pawl', { instanceId: pawlId, ratchetInstanceId: ratchetId, ...(near ? { near } : { nearest: true }) });
+
   const bendCheck = useMemo(() => {
     const byId = new Map(instances.map((i) => [i.instanceId, i]));
     const chosen = selectedIds.map((id) => byId.get(id)).filter(Boolean);
@@ -3205,6 +3212,8 @@ export default function App() {
               onBelt={() => band.open(band.beltCheck.route, { size: '228-2500-221' })}
               flattenBandReason={selectedBand ? null : 'Select a strung band.'}
               onFlattenBand={() => flattenBand(selectedBand)}
+              pawlReason={pawlCheck.reason ?? null}
+              onSetPawl={() => pawlCheck.pawlId && setPawl(pawlCheck.pawlId, pawlCheck.ratchetId)}
             />
           </div>
 
@@ -3522,6 +3531,7 @@ export default function App() {
             focusTrigger={focusTrigger}
             onLoadingChange={setIsLoadingMesh}
             onMateFeedback={(message, isError) => setActionFeedback({ message, isError })}
+            onSetPawl={setPawl}
             onToggleRotateRequest={locked ? noop : handleToggleRotateRequest}
             collisionRecheck={locked ? undefined : build.recheck}
             onPickStatus={setPickStatus}
@@ -3544,11 +3554,7 @@ export default function App() {
               motors={play.graph?.motors}
               throttles={playThrottles}
               status={playStatus}
-              warnings={
-                play.mode === 'kinematic' && play.graph?.bands?.length
-                  ? [...(play.graph?.warnings || []), ...play.graph.bands.map((b) => ({ partId: b.id, text: `${b.label}: bands don't pull without physics` }))]
-                  : play.graph?.warnings
-              }
+              warnings={play.mode === 'kinematic' && play.graph ? [...(play.graph.warnings || []), ...kinematicNotes(play.graph)] : play.graph?.warnings}
               limitSpeedByLoad={playLimitSpeedByLoad}
               onLimitSpeedByLoad={handlePlayLimitSpeedByLoad}
               simulateGravity={playSimulateGravity}

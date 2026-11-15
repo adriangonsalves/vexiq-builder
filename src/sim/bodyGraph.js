@@ -15,13 +15,17 @@
  * motors: [{ id, label, hinge }], still: [partId], pins: [partId], solidPins: [partId] (the pins that
  * are solid posts, standoffs, and so collide), tracks: [{ links (in order round
  * the loop, or null), linkIds, grippers: [[gripperId, linkId]], frame: bodyId, drive: { body, axis, teeth } | null }], bands: [{ id, label,
- * elements, bodies (per spot), pulls, freeMm, ... }] (openspec rubber-bands), warnings: [{ partId, text }] }.
+ * elements, bodies (per spot), pulls, freeMm, ... }] (openspec rubber-bands), ratchets: [{ id, ratchet, pawl,
+ * ratchetBody, holderBody, pawlBody, locked, pressed, axis, point, freeSign, teeth, tipRadiusMm, profileMm,
+ * phaseDeg, leverMm, pivot }], maybeMeshes: [{ id, gears, a, b, holders, teeth, radii, axes, centers, toothDirs,
+ * faceSpans, meshedOnEntry }] (openspec ratchet-and-pawl), warnings: [{ partId, text }] }.
  */
 import { gapStrengths, jointSpec, seatGrip, snapGrip } from './fastenerStrength.js';
 
 export const SQUARE_FIT_DEG = 45;
 const LINE_MM = 0.5; // two joins this close to one line count as the same line
 const PARALLEL = 0.999;
+const MAYBE_MESH_MM = 80; // gears this near mesh distance on parts that move apart may swing into mesh
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -57,7 +61,7 @@ function unionFind(ids) {
 }
 
 export function buildBodyGraph(inputs) {
-  const { parts, seated, groups, meshes, chains, tracks = [], sprocketAxes = {}, bays = [], bands = [] } = inputs;
+  const { parts, seated, groups, meshes, chains, tracks = [], sprocketAxes = {}, bays = [], bands = [], ratchets = [], spurGears = [] } = inputs;
   const byId = new Map(parts.map((p) => [p.id, p]));
   const labelOf = (id) => byId.get(id)?.label || id;
   const warnings = [];
@@ -429,6 +433,77 @@ export function buildBodyGraph(inputs) {
     }
   }
 
+  // Gears whose shafts can move apart (openspec ratchet-and-pawl, design §8–9). A gear's holder is the
+  // body its own body turns on along the gear's axis (the frame before a washer: most parts wins), or
+  // its own body when it turns on nothing there. Two spur gears of one tooth size, axes parallel and
+  // tooth bands overlapping, on different bodies whose holders can move against each other (not the
+  // same body, not both held still), and within MAYBE_MESH_MM of mesh distance, may mesh while playing:
+  // they go in `maybeMeshes`, and a pair meshed on entry goes there instead of `links`. Every other
+  // gear pair is linked exactly as before.
+  const fixedSet = new Set(fixed);
+  const gearById = new Map(spurGears.map((gr) => [gr.id, gr]));
+  const sizeOfBody = (id) => bodies.find((b) => b.id === id)?.parts.length || 0;
+  const holderOf = (gr) => {
+    const own = bodyOf(gr.id);
+    const line = { axis: gr.axis, point: gr.center };
+    const near = hinges.filter((h) => (h.a === own || h.b === own) && sameLine({ axis: h.axis, point: h.point }, line)).map((h) => (h.a === own ? h.b : h.a));
+    if (!near.length) return own;
+    return near.reduce((best, id) => (fixedSet.has(id) && !fixedSet.has(best) ? id : fixedSet.has(best) && !fixedSet.has(id) ? best : sizeOfBody(id) > sizeOfBody(best) ? id : best));
+  };
+  const canMoveApart = (ha, hb) => ha && hb && ha !== hb && !(fixedSet.has(ha) && fixedSet.has(hb));
+  const maybeMeshes = [];
+  const pairDone = new Set();
+  const addMaybe = (ga, gb, meshedOnEntry) => {
+    const [bodyA, bodyB] = [bodyOf(ga.id), bodyOf(gb.id)];
+    maybeMeshes.push({
+      id: `m${maybeMeshes.length}`,
+      gears: [ga.id, gb.id],
+      a: bodyA,
+      b: bodyB,
+      holders: [holderOf(ga), holderOf(gb)],
+      teeth: [ga.teeth, gb.teeth],
+      radii: [ga.pitchRadiusMm, gb.pitchRadiusMm],
+      axes: [ga.axis, gb.axis],
+      centers: [ga.center, gb.center],
+      toothDirs: [ga.toothDir, gb.toothDir],
+      faceSpans: [ga.faceSpan, gb.faceSpan],
+      meshedOnEntry
+    });
+  };
+  for (let i = links.length - 1; i >= 0; i--) {
+    const l = links[i];
+    if (l.kind !== 'gear' || l.pair) continue;
+    const [ga, gb] = l.gears.map((id) => gearById.get(id));
+    if (!ga || !gb || !canMoveApart(holderOf(ga), holderOf(gb))) continue;
+    links.splice(i, 1);
+    addMaybe(ga, gb, true);
+    pairDone.add([ga.id, gb.id].sort().join('|'));
+  }
+  // Gears just out of mesh that can swing into it aren't reported as out of mesh
+  const swingable = new Set();
+  for (let i = 0; i < spurGears.length; i++) {
+    for (let j = i + 1; j < spurGears.length; j++) {
+      const [ga, gb] = [spurGears[i], spurGears[j]];
+      if (pairDone.has([ga.id, gb.id].sort().join('|'))) continue;
+      const [bodyA, bodyB] = [bodyOf(ga.id), bodyOf(gb.id)];
+      if (!bodyA || !bodyB || bodyA === bodyB || Math.abs(ga.moduleMm - gb.moduleMm) > 0.01) continue;
+      if (Math.abs(dot(ga.axis, gb.axis)) < PARALLEL || !canMoveApart(holderOf(ga), holderOf(gb))) continue;
+      const d = sub(gb.center, ga.center);
+      const along = dot(d, ga.axis);
+      const apart = Math.sqrt(Math.max(0, dot(d, d) - along * along));
+      // Tooth bands along the axis overlap (B's band measured in A's axis, which may point the other way)
+      const sB = dot(gb.axis, ga.axis) > 0 ? gb.faceSpan : [-gb.faceSpan[1], -gb.faceSpan[0]];
+      const overlap = Math.min(ga.faceSpan[1], along + sB[1]) - Math.max(ga.faceSpan[0], along + sB[0]);
+      if (overlap <= 0 || Math.abs(apart - ga.pitchRadiusMm - gb.pitchRadiusMm) > MAYBE_MESH_MM) continue;
+      addMaybe(ga, gb, false);
+      swingable.add([ga.id, gb.id].sort().join('|'));
+    }
+  }
+  for (let i = warnings.length - 1; i >= 0; i--) {
+    const near = nearGears.find(([x, y]) => warnings[i].partId === y && swingable.has([x, y].sort().join('|')));
+    if (near && /out of mesh/.test(warnings[i].text)) warnings.splice(i, 1);
+  }
+
   // Tracks (chain and track parts) ride with the body that holds their sprockets' axles: the one most
   // of the sprockets' shaft bodies hang on within two hinges (else the largest), or the sprocket's own
   // body when it isn't on a shaft. A track on a single sprocket also runs round its loop as that
@@ -471,11 +546,68 @@ export function buildBodyGraph(inputs) {
     })
     .filter(Boolean);
 
+  // Ratchets (openspec ratchet-and-pawl, design §7): a pawl holding a ratchet ties the ratchet's body to
+  // the body the pawl hangs on, one way; a pawl on two pins is part of that body and ties it both ways.
+  // A pawl facing the wrong way holds nothing.
+  const ratchetList = [];
+  for (const r of ratchets) {
+    const ratchetBody = bodyOf(r.ratchet);
+    const pawlBody = bodyOf(r.pawl);
+    if (!ratchetBody || !pawlBody) continue;
+    if (r.wrongWay) {
+      warnings.push({ partId: r.pawl, text: `${labelOf(r.pawl)} faces the wrong way on ${labelOf(r.ratchet)}, so it holds nothing: the ratchet turns both ways.` });
+      continue;
+    }
+    if (!r.holds || r.pivotCount === 0) continue;
+    if (pawlBody === ratchetBody) {
+      warnings.push({ partId: r.pawl, text: `${labelOf(r.pawl)} is locked to ${labelOf(r.ratchet)}, so it holds nothing.` });
+      continue;
+    }
+    let holderBody = null;
+    let locked = false;
+    if (r.pivotCount >= 2) {
+      // Pinned through two holes: one body with what it's pinned to
+      holderBody = pawlBody;
+      locked = true;
+      warnings.push({ partId: r.pawl, text: `${labelOf(r.pawl)} is pinned through two holes, so it can't lift: ${labelOf(r.ratchet)} is locked both ways.` });
+    } else {
+      const line = r.pivot ? { axis: r.pivot.axis, point: r.pivot.point } : null;
+      const hinge = hinges.find((h) => (h.a === pawlBody || h.b === pawlBody) && (!line || sameLine({ axis: h.axis, point: h.point }, line)));
+      if (!hinge) continue;
+      holderBody = hinge.a === pawlBody ? hinge.b : hinge.a;
+      if (holderBody === ratchetBody) continue;
+    }
+    ratchetList.push({
+      id: `r${ratchetList.length}`,
+      ratchet: r.ratchet,
+      pawl: r.pawl,
+      ratchetBody,
+      holderBody,
+      pawlBody,
+      locked,
+      pressed: Boolean(r.pressed),
+      axis: r.axis,
+      point: r.center,
+      freeSign: r.freeSign,
+      teeth: r.teeth,
+      tipRadiusMm: r.tipRadiusMm,
+      profileMm: r.profileMm,
+      phaseDeg: r.phaseDeg,
+      leverMm: r.leverMm,
+      pivot: r.pivot,
+      tip: r.tip
+    });
+  }
+
   // Bands (openspec rubber-bands): no body of their own; each spot belongs to the body of its part.
   // A band whose spots are all on one body pulls on nothing.
+  // A band pressing a pawl onto its ratchet presses by the ratchet rule (pressed), not by pulling: its
+  // full pull on a light pawl would kick the ratchet and what holds it
+  const pawlBodies = new Set(ratchetList.map((r) => r.pawlBody));
   const bandList = bands.map((b) => {
     const spotBodies = b.elements.map((e) => bodyOf(e.instanceId));
-    return { ...b, bodies: spotBodies, pulls: new Set(spotBodies.filter(Boolean)).size > 1 };
+    const pressesPawl = spotBodies.some((id) => pawlBodies.has(id));
+    return { ...b, bodies: spotBodies, pulls: !pressesPawl && new Set(spotBodies.filter(Boolean)).size > 1, ...(pressesPawl ? { pressesPawl: true } : {}) };
   });
 
   return {
@@ -493,6 +625,8 @@ export function buildBodyGraph(inputs) {
     bays,
     shaftPairs,
     links,
+    maybeMeshes,
+    ratchets: ratchetList,
     nearGears,
     motors,
     still,

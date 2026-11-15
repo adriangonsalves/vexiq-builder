@@ -16,7 +16,11 @@ import {
   measureCrownGear,
   measureMotorHub,
   measureOpeningShape,
+  measurePawl,
+  measureRatchet,
   measureWormGear,
+  PAWL_PATTERN,
+  RATCHET_PATTERN,
   measureRack,
   measureShaftFlat,
   measureSpurGear,
@@ -635,6 +639,18 @@ function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasu
   const featureById = new Map(features.map((f) => [f.featureId, f]));
   let rackSpecs = null;
   let hubSpecs = null;
+  let ratchetSpecs = null;
+
+  // Ratchet teeth and pawl tips (openspec ratchet-and-pawl); gearSpecs stays unmeasured for them
+  if (RATCHET_PATTERN.test(part.name) || PAWL_PATTERN.test(part.name)) {
+    const m = RATCHET_PATTERN.test(part.name)
+      ? measureRatchet(part, gearSpecs?.teeth)
+      : measurePawl(part, ports.filter((p) => p.type === 'pin_hole'));
+    if (m.measured) {
+      const { measured, ...specs } = m;
+      ratchetSpecs = specs;
+    } else unmeasured.push(`${part.name}: ${m.reason}`);
+  }
 
   if (gearSpecs?.gearType === 'spur') {
     const m = measureSpurGear(part, gearSpecs.teeth);
@@ -694,7 +710,17 @@ function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasu
     fastenerSpecs.shape = flat ? 'square' : 'round';
     if (flat) fastenerSpecs.squarePhaseDeg = flat.squarePhaseDeg;
   }
-  return { rackSpecs, hubSpecs };
+  return { rackSpecs, hubSpecs, ratchetSpecs };
+}
+
+/** A pawl's hole ids, nearest its tip first (after the ports have their stable ids). */
+function pawlHoleIds(ratchetSpecs, ports) {
+  const [tx, ty, tz] = ratchetSpecs.tipPoint;
+  return ports
+    .filter((p) => p.type === 'pin_hole')
+    .map((p) => ({ id: p.portId, d: Math.hypot(p.origin[0] - tx, p.origin[1] - ty, p.origin[2] - tz) }))
+    .sort((a, b) => a.d - b.d)
+    .map((h) => h.id);
 }
 
 const FACE_TOL_MM = 0.3; // a hole's surfaces within this of a face of the part's box reach that face
@@ -1321,12 +1347,13 @@ async function main() {
     addPinBlockers(part, fastenerSpecs, rawRaycast);
     clampPegSpans(part, ports);
     const mountingRules = classifyMountingRules(part);
-    const { rackSpecs, hubSpecs } = measureShapes(part, ports, gearSpecs, fastenerSpecs, rawCylinders, unmeasured);
+    const { rackSpecs, hubSpecs, ratchetSpecs } = measureShapes(part, ports, gearSpecs, fastenerSpecs, rawCylinders, unmeasured);
     // 7. Shafts: their axis, ends, cross-section and cap or stop ring
     addShaftPort(part, ports, fastenerSpecs, rawRaycast);
     // Facts for every point, then ids from where each point is, keeping today's ids as aliases
     describePorts(part, ports, fastenerSpecs, partBvh);
     assignStableIds(part, ports, oldPortsById.get(part.id) || [], lostIds);
+    if (ratchetSpecs?.kind === 'pawl') ratchetSpecs.holes = pawlHoleIds(ratchetSpecs, ports);
 
     const portCounts = {
       total: ports.length,
@@ -1345,6 +1372,7 @@ async function main() {
       originType,
       gearSpecs,
       ...(rackSpecs ? { rackSpecs } : {}),
+      ...(ratchetSpecs ? { ratchetSpecs } : {}),
       ...(CHAIN_SPECS[part.partNumber] ? { chainSpecs: CHAIN_SPECS[part.partNumber] } : {}),
       fastenerSpecs,
       ...(hubSpecs ? { hubSpecs } : {}),
@@ -1360,6 +1388,8 @@ async function main() {
     part.originType = originType;
     part.gearSpecs = gearSpecs;
     if (rackSpecs) part.rackSpecs = rackSpecs;
+    if (ratchetSpecs) part.ratchetSpecs = ratchetSpecs;
+    else delete part.ratchetSpecs;
     if (CHAIN_SPECS[part.partNumber]) part.chainSpecs = CHAIN_SPECS[part.partNumber];
     else delete part.chainSpecs;
     part.fastenerSpecs = fastenerSpecs;

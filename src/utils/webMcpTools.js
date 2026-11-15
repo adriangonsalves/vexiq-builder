@@ -274,6 +274,33 @@ export function registerVexIqWebMcpTools(contextRef) {
       annotations: { readOnlyHint: false }
     },
     {
+      name: 'set_pawl',
+      description:
+        "Sets a Short Low-Profile Pawl on a 16 Tooth or 40 Tooth Ratchet so the ratchet turns one way only (as the MCP server's set_pawl does). Give instanceId (a pawl to move) or part (a pawl to add) and ratchetInstanceId. Without spot it lists the pawl spots [{ spot, pinTo, pawlHole, turnedOver, freeDirection, blocked, blockedBy }] and changes nothing; with spot it puts the pawl there as one undo step and replies with the way the ratchet can still turn. A blocked spot is refused, naming the part in the way.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          instanceId: { type: 'string', description: 'A pawl already in the build to move.' },
+          part: { type: 'string', description: 'A pawl to add instead (part number or name).' },
+          ratchetInstanceId: { type: 'string', description: 'The ratchet to set the pawl on.' },
+          spot: { type: 'number', description: 'The pawl spot to use, from a listing call.' },
+          label: { type: 'string' },
+          color: { type: 'string' }
+        },
+        required: ['ratchetInstanceId']
+      },
+      async execute(args = {}) {
+        const ctx = contextRef.current;
+        if (!ctx) return { error: 'Application context is not ready.' };
+        const { near, nearest, ...params } = args;
+        const data = await ctx.runAction('set_pawl', params);
+        if (!data?.ok) return { error: data?.error || 'Could not set the pawl.', ...(data?.spots ? { spots: data.spots } : {}) };
+        const { state, record, stepLabel, ...reply } = data;
+        return reply;
+      },
+      annotations: { readOnlyHint: false }
+    },
+    {
       name: 'clear_assembly',
       description:
         'Resets the 3D workspace by removing all placed parts or restoring the starter assembly.',

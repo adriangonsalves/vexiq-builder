@@ -26,6 +26,7 @@ import {
   worldFeaturesFor,
   readAppSettings,
   settlePlacedInstance,
+  setPawlTool,
   readAssemblyState,
   writeAssemblyState
 } from './assembly-engine.mjs';
@@ -570,6 +571,23 @@ const TOOLS = [
         color: { type: 'string', description: 'Color for an added gear.' }
       },
       required: ['targetInstanceId']
+    }
+  },
+  {
+    name: 'set_pawl',
+    description:
+      "Set a Short Low-Profile Pawl on a 16 Tooth or 40 Tooth Ratchet so the ratchet turns one way only. Give the pawl to move (instanceId) or a pawl to add (part), and the ratchet (ratchetInstanceId). Without spot it changes nothing and lists the pawl spots round the ratchet: poses where one of the pawl's holes lines up with a pin hole (or a standing pin) of a beam or plate lying against the pawl's plane, and its tip rests in the teeth facing the way that holds: [{ spot, pinTo: { instanceId, label, feature, kind }, pawlHole, turnedOver, freeDirection (the way the ratchet can still turn), blocked, blockedBy }]. With spot (a number from the list) it puts the pawl there as one undo step and replies with the free direction; a blocked spot is refused, naming the part in the way. The ratchet never moves. Add the pin through pinTo's hole and the pawl's hole afterwards, and a band or belt (place_band) pulling the pawl onto the teeth. place_part and place_parts also swing a pawl on one pin onto a ratchet in reach.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        instanceId: { type: 'string', description: 'A pawl already in the build to move.' },
+        part: { type: 'string', description: 'A pawl to add instead (part number or name, e.g. "Short Low-Profile Pawl").' },
+        ratchetInstanceId: { type: 'string', description: 'The ratchet to set the pawl on.' },
+        spot: { type: 'number', description: 'The pawl spot to use, from a listing call.' },
+        label: { type: 'string', description: 'Label for an added pawl.' },
+        color: { type: 'string', description: 'Color for an added pawl.' }
+      },
+      required: ['ratchetInstanceId']
     }
   },
   {
@@ -1913,6 +1931,16 @@ async function executeTool(name, args = {}) {
     const res = meshRightAngle(state, args);
     if (!res.ok) return { isError: true, error: res.error, ...(res.spots ? { spots: res.spots } : {}) };
     if (!res.state) return { ok: true, spots: res.spots };
+    await writeAssemblyState(res.state, { stepLabel: res.stepLabel });
+    const { state: _s, record: _r, stepLabel: _l, ...reply } = res;
+    return { ...reply, audit: summarizeAudit(auditAssembly(readAssemblyState())) };
+  }
+
+  if (name === 'set_pawl') {
+    const state = readAssemblyState();
+    const res = setPawlTool(state, { ...args, near: undefined, nearest: undefined });
+    if (!res.ok) return { isError: true, error: res.error, ...(res.spots ? { spots: res.spots } : {}) };
+    if (!res.state) return { ok: true, ratchet: res.ratchet, spots: res.spots, ...(res.message ? { message: res.message } : {}) };
     await writeAssemblyState(res.state, { stepLabel: res.stepLabel });
     const { state: _s, record: _r, stepLabel: _l, ...reply } = res;
     return { ...reply, audit: summarizeAudit(auditAssembly(readAssemblyState())) };

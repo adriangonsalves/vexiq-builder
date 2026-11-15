@@ -6,10 +6,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
-import { ROOT_DIR, getPartRawGeometry, partOf, playInputs } from '../mcp/assembly-engine.mjs';
+import { ROOT_DIR, findPart, getPartRawGeometry, listPawlSpots, partOf, playInputs, setPawl } from '../mcp/assembly-engine.mjs';
 import { buildBodyGraph } from '../src/sim/bodyGraph.js';
-import { MOTOR_FREE_RPM, createKinematic } from '../src/sim/kinematic.js';
+import { MOTOR_FREE_RPM, createKinematic, kinematicNotes } from '../src/sim/kinematic.js';
 import { createPlayRunner } from '../src/sim/playRunner.js';
+import { stringBand } from '../src/utils/bandRoute.js';
+import { settlePlacedInstance } from '../mcp/assembly-engine.mjs';
 import { createPhysics } from '../src/sim/physics.js';
 import { starterById } from '../src/starters.js';
 
@@ -549,6 +551,459 @@ const shaftInputs = (offDeg) => ({
       seats.map((s) => s.part).join() === 'A,B,C' && shoulder.length === 1 && shoulder[0] > seats[0].t && shoulder[0] < seats[1].t && inp.seated.every((s) => s.pulloutN === undefined),
       JSON.stringify({ seats, shoulder, pin })
     );
+  }
+}
+
+// --- Ratchets turn one way (openspec ratchet-and-pawl, play-mode "Ratchets turn one way") -----------------
+{
+  let n = 0;
+  const mk = (label, name, position, rotation = [0, 0, 0]) => ({ instanceId: `rp-${++n}`, partId: findPart(name).id, label, position, rotation, visible: true });
+  const plateZ = 3.175 + 3.05;
+  /** Puts a Short Low-Profile Pawl on the ratchet at the spot on the pin labelled 'Pawl Pin', as Set pawl does. */
+  const withPawl = (instances, ratchetLabel) => {
+    const pawl = mk('Pawl', 'Short Low-Profile Pawl', [60, -40, 0]);
+    const ratchet = instances.find((i) => i.label === ratchetLabel);
+    const state = { instances: [...instances, pawl] };
+    const spot = listPawlSpots(state, { pawlId: pawl.instanceId, ratchetId: ratchet.instanceId }).spots.find((x) => x.pinTo.label === 'Pawl Pin' && !x.blocked);
+    if (!spot) throw new Error('no pawl spot on the pawl pin');
+    return setPawl(state, { pawlId: pawl.instanceId, ratchetId: ratchet.instanceId, spot: spot.spot }).state;
+  };
+  // A Smart Motor under a 4x6 Plate turns a 4x Pitch Shaft carrying a 16 Tooth Ratchet; the pawl swings
+  // on a 1x1 pin standing in the plate
+  const motorRig = () => {
+    n = 0;
+    return withPawl([
+      mk('Plate', '4x6 Plate', [6.35, 6.35, -plateZ]),
+      mk('Motor', 'VEX IQ Smart Motor', [9.525, 0, -9.405], [90, 0, 0]),
+      mk('Motor Pin A', '1x1 Connector Pin', [12.7, 0, -9.275]),
+      mk('Motor Pin B', '1x1 Connector Pin', [-12.7, 0, -9.275]),
+      mk('Shaft', '4x Pitch Shaft', [0, 0, 7.5]),
+      mk('Ratchet', '16 Tooth Ratchet', [0, 0, 0]),
+      mk('Pawl Pin', '1x1 Connector Pin', [25.4, 12.7, -3.175], [180, 0, 0])
+    ], 'Ratchet');
+  };
+  // A free shaft (no motor) with the ratchet and an arm (a 36 Tooth Gear and a 1x8 Beam pinned to it)
+  // pointing 60° up from +x, so its weight turns it clockwise seen from +z: the held way. A Smart Motor on
+  // the frame turning a stub shaft keeps the frame still, and a leg under it keeps the floor clear of the arm.
+  const loadRig = ({ pawl = true } = {}) => {
+    n = 100;
+    const [c, s] = [Math.cos(Math.PI / 3), Math.sin(Math.PI / 3)];
+    const parts = [
+      mk('Plate', '4x6 Plate', [6.35, 6.35, -plateZ]),
+      mk('Shaft', '4x Pitch Shaft', [0, 0, 5]),
+      mk('Ratchet', '16 Tooth Ratchet', [0, 0, 0]),
+      mk('Arm Gear', '36 Tooth Gear', [0, 0, 6.36], [0, 0, 60]),
+      mk('Arm', '1x8 Beam', [31.75 * c, 31.75 * s, 12.59], [0, 0, 60]),
+      mk('Arm Pin A', '1x1 Connector Pin', [12.7 * c, 12.7 * s, 9.54]),
+      mk('Arm Pin B', '1x1 Connector Pin', [-12.7 * c, -12.7 * s, 9.54]),
+      mk('Pawl Pin', '1x1 Connector Pin', [25.4, 12.7, -3.175], [180, 0, 0]),
+      mk('Frame Motor', 'VEX IQ Smart Motor', [34.925, -12.7, -9.405], [90, 0, 0]),
+      mk('Frame Motor Pin A', '1x1 Connector Pin', [12.7, -12.7, -9.275]),
+      mk('Frame Motor Pin B', '1x1 Connector Pin', [38.1, -12.7, -9.275]),
+      mk('Frame Motor Shaft', '2x Pitch Shaft', [25.4, -12.7, -5.1]),
+      mk('Leg', '1x8 Beam', [-12.7, 6.35, -12.325], [0, 0, 90]),
+      mk('Leg Pin A', '1x1 Connector Pin', [-12.7, 0, -9.275]),
+      mk('Leg Pin B', '1x1 Connector Pin', [-12.7, 12.7, -9.275])
+    ];
+    return pawl ? withPawl(parts, 'Ratchet') : { instances: parts };
+  };
+  const shapesOf = (state) => {
+    const byId = new Map(state.instances.map((i) => [i.instanceId, i]));
+    return { points: (id) => getPartRawGeometry(partOf(byId.get(id))).attributes.position.array };
+  };
+  /** A body's turn about +z from the start (degrees). */
+  const turnZ = (p, body) => {
+    const q = new THREE.Quaternion().setFromRotationMatrix(p.deltas().get(body));
+    return THREE.MathUtils.radToDeg(2 * Math.atan2(q.z, q.w));
+  };
+  const labelId = (state, label) => state.instances.find((i) => i.label === label).instanceId;
+  const runFor = (p, seconds, throttles, each = null) => {
+    for (let t = 0; t < seconds; t += 1 / 60) {
+      p.step(1 / 60, throttles);
+      each?.(t);
+    }
+  };
+
+  // 5.2: the body graph's ratchet
+  const rigState = motorRig();
+  const g = buildBodyGraph(playInputs(rigState));
+  const r = g.ratchets?.[0];
+  const motor = g.motors[0];
+  const hinge = g.hinges.find((h) => h.id === motor?.hinge);
+  check(
+    'ratchet graph: one ratchet tying the ratchet\'s shaft body to the frame the pawl hangs on, free anticlockwise seen from +z',
+    g.ratchets?.length === 1 && r.ratchetBody === bodyOf(g, labelId(rigState, 'Ratchet')) && r.holderBody === bodyOf(g, labelId(rigState, 'Plate')) && r.pawlBody === bodyOf(g, labelId(rigState, 'Pawl')) && r.freeSign * r.axis[2] > 0 && !r.locked,
+    JSON.stringify(r && { ...r, profileMm: undefined })
+  );
+  // Which throttle turns the shaft the free way: the motor turns its shaft about +axis of its hinge
+  const freeThrottle = hinge ? Math.sign(hinge.axis[2] * r.freeSign * r.axis[2]) || 1 : 1;
+
+  // Free direction: about 120 rpm, the pawl rocking over 16 teeth a turn
+  {
+    const p = await createPhysics(g, rigState.instances, shapesOf(rigState));
+    let pawlLo = Infinity;
+    let pawlHi = -Infinity;
+    runFor(p, 0.5, new Map([[motor.id, freeThrottle]]));
+    const turn0 = p.ratchets()[0].clicks;
+    const angle0 = turnZ(p, r.ratchetBody);
+    let turned = 0;
+    let last = angle0;
+    const rpms = [];
+    runFor(p, 2, new Map([[motor.id, freeThrottle]]), () => {
+      const a = turnZ(p, r.ratchetBody);
+      turned += ((a - last + 540) % 360) - 180;
+      last = a;
+      const pa = turnZ(p, r.pawlBody);
+      pawlLo = Math.min(pawlLo, pa);
+      pawlHi = Math.max(pawlHi, pa);
+      rpms.push(p.status()[motor.id].rpm);
+    });
+    const rpm = rpms.reduce((x, y) => x + y, 0) / rpms.length;
+    const clicks = p.ratchets()[0].clicks - turn0;
+    const perTurn = clicks / (Math.abs(turned) / 360);
+    check(`Free direction: the shaft turns at about 120 rpm (${rpm.toFixed(1)})`, Math.abs(Math.abs(rpm) - 120) < 4 && turned * r.freeSign > 0, `${rpm} turned ${turned}°`);
+    check(`  and the pawl rocks over the teeth 16 times a turn (${perTurn.toFixed(1)}, rocking ${(pawlHi - pawlLo).toFixed(1)}°)`, Math.abs(perTurn - 16) < 1 && pawlHi - pawlLo > 2, `${clicks} clicks over ${turned.toFixed(0)}°`);
+    check('  the motor is not stalled', !p.status()[motor.id].stalled);
+    p.dispose();
+  }
+  // Held direction: no more than one tooth, then stopped and stalled
+  {
+    const p = await createPhysics(g, rigState.instances, shapesOf(rigState));
+    runFor(p, 1.5, new Map([[motor.id, -freeThrottle]]));
+    const turned = turnZ(p, r.ratchetBody);
+    const st = p.status()[motor.id];
+    check(`Held direction stalls the motor: the shaft turns no more than one tooth (${Math.abs(turned).toFixed(1)}° of 22.5°), stops, and the motor shows as stalled`, Math.abs(turned) <= 22.5 + 0.5 && st.stalled && Math.abs(st.rpm) < 3, JSON.stringify({ turned, st }));
+    p.dispose();
+  }
+  // Ratchet holds a load: an arm's weight (gravity on) turns its shaft the held way; with no pawl it falls
+  {
+    const fall = async (state) => {
+      const lg = buildBodyGraph(playInputs(state));
+      const p = await createPhysics(lg, state.instances, shapesOf(state), { simulateGravity: true });
+      const arm = bodyOf(lg, labelId(state, 'Arm'));
+      runFor(p, 1.5, new Map());
+      const at = turnZ(p, arm);
+      runFor(p, 1, new Map());
+      const later = turnZ(p, arm);
+      p.dispose();
+      return { at, later };
+    };
+    const free = await fall(loadRig({ pawl: false }));
+    const held = await fall(loadRig());
+    check(`Ratchet holds a load: with no pawl the arm's weight swings it down (${free.later.toFixed(0)}°)`, free.later < -45, JSON.stringify(free));
+    check(`  with the pawl it turns no more than one tooth and stays there (${held.at.toFixed(1)}°, then ${held.later.toFixed(1)}°)`, held.at > -23 && Math.abs(held.later - held.at) < 0.5, JSON.stringify(held));
+  }
+  // Pawl on two pins: the ratchet locked both ways (the pawl is part of what it's pinned to)
+  {
+    const inputs = playInputs(rigState);
+    const lockedInputs = { ...inputs, ratchets: inputs.ratchets.map((x) => ({ ...x, pivotCount: 2, pivot: null })) };
+    const lg = buildBodyGraph(lockedInputs);
+    // In a real build the second pin makes the pawl one body with what it's pinned to: here (one real pin,
+    // a second one told) it still swings, so the ratchet is tied to the frame it would be fused to
+    if (lg.ratchets[0]) lg.ratchets[0].holderBody = bodyOf(lg, labelId(rigState, 'Plate'));
+    check('Pawl on two pins: the entry list says the pawl can\'t lift and the ratchet is locked', lg.ratchets[0]?.locked === true && lg.warnings.some((w) => /can't lift/.test(w.text) && /locked both ways/.test(w.text)), JSON.stringify(lg.warnings));
+    const both = [];
+    for (const dir of [1, -1]) {
+      const p = await createPhysics(lg, rigState.instances, shapesOf(rigState));
+      runFor(p, 1, new Map([[motor.id, dir]]));
+      both.push({ turned: turnZ(p, lg.ratchets[0].ratchetBody), ...p.status()[motor.id] });
+      p.dispose();
+    }
+    check('  and a motor turning it stalls both ways', both.every((b) => b.stalled && Math.abs(b.turned) < 1), JSON.stringify(both));
+  }
+  // A pawl facing the wrong way holds nothing (and is listed on entry)
+  {
+    const inputs = playInputs(rigState);
+    const wrong = buildBodyGraph({ ...inputs, ratchets: inputs.ratchets.map((x) => ({ ...x, holds: false, wrongWay: true, freeSign: 0 })) });
+    check('a pawl facing the wrong way makes no ratchet, and the entry list says so', wrong.ratchets.length === 0 && wrong.warnings.some((w) => /wrong way/.test(w.text)), JSON.stringify(wrong.warnings));
+  }
+  // Lifting the pawl lets go (play-mode "Lifting the pawl lets go"). The pushing part is stood in for by an
+  // outside push on the pawl's body, a torque about its pin lifting its tip, while a load turns the ratchet
+  // the held way.
+  {
+    // The push lifts the pawl's tip at 6 rad/s until it is 1.5 mm clear of the teeth's tips, then holds it
+    // there, as a beam pressing up under it would
+    const push = (p, graph, speed) => {
+      const rr = graph.ratchets[0];
+      p.push(rr.pawlBody, rr.pivot.axis.map((v) => v * Math.sign(rr.leverMm)), rr.pivot.point, speed);
+    };
+    const lift = (p, graph, on) => push(p, graph, on ? (p.ratchets()[0].liftMm < 1.5 ? 6 : 0) : null);
+    /** As runFor, a step at a time (1/240 s), so the push is worked out as often as the physics steps. */
+    const runFine = (p, seconds, throttles, each) => {
+      for (let t = 0; t < seconds; t += 1 / 240) {
+        each?.(t);
+        p.step(1 / 240, throttles);
+      }
+    };
+    // Gravity on: the arm's weight is the load and the pawl's weight brings it back
+    {
+      const state = loadRig();
+      const lg = buildBodyGraph(playInputs(state));
+      const p = await createPhysics(lg, state.instances, shapesOf(state), { simulateGravity: true });
+      const arm = bodyOf(lg, labelId(state, 'Arm'));
+      runFor(p, 1, new Map());
+      const held0 = turnZ(p, arm);
+      let upDuring = true;
+      // Briefly: the arm would otherwise fall onto the floor under the robot
+      runFine(p, 0.12, new Map(), (t) => {
+        lift(p, lg, true);
+        if (t > 0.06) upDuring &&= !p.ratchets()[0].down && p.ratchets()[0].liftMm > 0.5;
+      });
+      const whileLifted = turnZ(p, arm);
+      lift(p, lg, false);
+      runFor(p, 1.5, new Map());
+      const after = turnZ(p, arm);
+      const backDown = p.ratchets()[0].down;
+      runFor(p, 0.5, new Map());
+      const later = turnZ(p, arm);
+      check(`Lifting the pawl lets go: pushed clear of the teeth, the arm swings back the held way (${held0.toFixed(1)}° to ${whileLifted.toFixed(1)}°)`, upDuring && whileLifted < held0 - 5, JSON.stringify({ held0, whileLifted, upDuring }));
+      check(`  once the push stops, its weight brings the pawl back down and the arm is held again (${after.toFixed(1)}°, then ${later.toFixed(1)}°)`, backDown && Math.abs(later - after) < 0.5 && after > -85, JSON.stringify({ after, later, backDown }));
+      p.dispose();
+    }
+    // A band on the pawl (stood in for by the audit's `pressed`), the motor turning the ratchet the held way
+    {
+      const bg = buildBodyGraph(playInputs(rigState));
+      bg.ratchets[0].pressed = true;
+      const p = await createPhysics(bg, rigState.instances, shapesOf(rigState));
+      runFor(p, 0.6, new Map([[motor.id, -freeThrottle]]));
+      const held0 = turnZ(p, bg.ratchets[0].ratchetBody);
+      runFine(p, 0.25, new Map([[motor.id, -freeThrottle]]), () => lift(p, bg, true));
+      const whileLifted = turnZ(p, bg.ratchets[0].ratchetBody);
+      lift(p, bg, false);
+      runFor(p, 0.8, new Map([[motor.id, -freeThrottle]]));
+      const after = turnZ(p, bg.ratchets[0].ratchetBody);
+      runFor(p, 0.5, new Map([[motor.id, -freeThrottle]]));
+      const later = turnZ(p, bg.ratchets[0].ratchetBody);
+      const turnedWhileLifted = Math.abs(((whileLifted - held0 + 540) % 360) - 180);
+      check(`  with a band on the pawl: lifted, the motor turns the ratchet the held way (${turnedWhileLifted.toFixed(0)}°); let go, the band brings the pawl down and it holds again (stalled: ${p.status()[motor.id].stalled})`, turnedWhileLifted > 20 && p.ratchets()[0].down && Math.abs(later - after) < 0.5 && p.status()[motor.id].stalled, JSON.stringify({ held0, whileLifted, after, later }));
+      p.dispose();
+    }
+    // Neither band nor gravity: let go, the pawl stays where it was left and the ratchet keeps turning
+    {
+      const p = await createPhysics(g, rigState.instances, shapesOf(rigState));
+      runFor(p, 0.6, new Map([[motor.id, -freeThrottle]]));
+      runFine(p, 0.25, new Map([[motor.id, -freeThrottle]]), () => lift(p, g, true));
+      lift(p, g, false);
+      runFor(p, 0.2, new Map([[motor.id, -freeThrottle]]));
+      const pawlAt = turnZ(p, r.pawlBody);
+      let last = turnZ(p, r.ratchetBody);
+      let shaftTurned = 0;
+      runFine(p, 0.5, new Map([[motor.id, -freeThrottle]]), () => {
+        const a = turnZ(p, r.ratchetBody);
+        shaftTurned += Math.abs(((a - last + 540) % 360) - 180);
+        last = a;
+      });
+      const pawlLater = turnZ(p, r.pawlBody);
+      check(`  with neither band nor gravity: the pawl stays where it was left (${pawlAt.toFixed(1)}° then ${pawlLater.toFixed(1)}°) and the ratchet keeps turning (${shaftTurned.toFixed(0)}° in 0.5 s)`, Math.abs(pawlLater - pawlAt) < 0.5 && !p.ratchets()[0].down && shaftTurned > 90, JSON.stringify({ pawlAt, pawlLater, shaftTurned }));
+      p.dispose();
+    }
+  }
+  // The fallback engine (no physics): the free way turns, the held way jams, a locked pawl jams both ways
+  {
+    const kin = (graph, throttle) => {
+      const k = createKinematic(graph);
+      k.step(0.1, new Map([[motor.id, throttle]]));
+      return k.status()[motor.id];
+    };
+    const free = kin(g, freeThrottle);
+    const held = kin(g, -freeThrottle);
+    check(`fallback engine: the free way turns at 120 rpm (${free.rpm.toFixed(0)}), not stalled`, !free.stalled && Math.abs(Math.abs(free.rpm) - 120) < 1e-6, JSON.stringify(free));
+    check('fallback engine: the held way jams the motor (stalled, stopped)', held.stalled && held.rpm === 0, JSON.stringify(held));
+    const lockedG = { ...g, ratchets: g.ratchets.map((x) => ({ ...x, locked: true })) };
+    check('fallback engine: a pawl on two pins jams it both ways', kin(lockedG, 1).stalled && kin(lockedG, -1).stalled);
+    const movingG = { ...g, fixed: g.fixed.filter((id) => id !== r.holderBody) };
+    check('fallback engine: a pawl on a moving part is listed as not run', kinematicNotes(movingG).some((w) => /isn't run without physics/.test(w.text)) && kinematicNotes(g).length === 0);
+  }
+  // A build with no ratchet has no ratchet list entries (and runs as before: the checks above)
+  check('a build with no ratchet: no ratchets in the graph', buildBodyGraph(playInputs(loadRig({ pawl: false }))).ratchets.length === 0);
+}
+
+// --- Gears on a swinging arm, gears that come into and out of mesh, and the Swish release ------------------
+// (openspec ratchet-and-pawl, play-mode requirements "Gears on a swinging arm", "Gears come into and out of
+// mesh", "Ratchet release on a swinging arm")
+{
+  let n = 0;
+  const mk = (label, name, position, rotation = [0, 0, 0]) => ({ instanceId: `sw-${++n}`, partId: findPart(name).id, label, position, rotation, visible: true });
+  const plateZ = 3.175 + 3.05;
+  // A Smart Motor under a 4x6 Plate turns shaft A (36 Tooth Gear); an arm (1x4 Beam) swings on shaft A
+  // carrying shaft B (36 Tooth Gear, in mesh with A's); shaft C (36 Tooth Gear) stands in the plate where
+  // B can swing into it
+  const swingRig = ({ pinArm = false, lockB = false, gearC = true } = {}) => {
+    n = 0;
+    const parts = [
+      mk('Plate', '4x6 Plate', [6.35, 6.35, -plateZ]),
+      mk('Motor', 'VEX IQ Smart Motor', [9.525, 0, -9.405], [90, 0, 0]),
+      mk('Motor Pin A', '1x1 Connector Pin', [12.7, 0, -9.275]),
+      mk('Motor Pin B', '1x1 Connector Pin', [-12.7, 0, -9.275]),
+      mk('Shaft A', '4x Pitch Shaft', [0, 0, 7.5]),
+      mk('Gear A', '36 Tooth Gear', [0, 0, 7.36]),
+      mk('Arm', '1x4 Beam', [0, 19.05, 1], [0, 0, 90]),
+      mk('Shaft B', '2x Pitch Shaft', [0, 38.1, 10]),
+      mk('Gear B', '36 Tooth Gear', [0, 38.1, 7.36])
+    ];
+    if (gearC) parts.push(mk('Shaft C', '4x Pitch Shaft', [38.1, 25.4, 7.5]), mk('Gear C', '36 Tooth Gear', [38.1, 25.4, 7.36]));
+    if (pinArm) parts.push(mk('Arm Pin 1', '1x1 Connector Pin', [0, 12.7, -3.175], [180, 0, 0]), mk('Arm Pin 2', '1x1 Connector Pin', [0, 25.4, -3.175], [180, 0, 0]));
+    // Gear A turned so its teeth fit Gear B's, as placing it does (Gear B keeps its holes over the arm's)
+    const gearA = parts.find((i) => i.label === 'Gear A');
+    for (const pt of settlePlacedInstance(gearA, parts).patches) Object.assign(parts.find((i) => i.instanceId === pt.instanceId), pt);
+    // Locked to the arm: a pin through Gear B's hole over the arm's hole at y 25.4
+    if (lockB) parts.push(mk('Lock Pin', '1x1 Connector Pin', [0, 25.4, 4.18]));
+    return { instances: parts };
+  };
+  const shapesOf = (state) => {
+    const byId = new Map(state.instances.map((i) => [i.instanceId, i]));
+    return { points: (id) => getPartRawGeometry(partOf(byId.get(id))).attributes.position.array };
+  };
+  const make = async (state, options = {}) => {
+    const g = buildBodyGraph(playInputs(state));
+    const p = await createPhysics(g, state.instances, shapesOf(state), options);
+    const body = (label) => g.bodies.find((b) => b.parts.includes(state.instances.find((i) => i.label === label).instanceId))?.id;
+    const tz = (b) => {
+      const q = new THREE.Quaternion().setFromRotationMatrix(p.deltas().get(b));
+      return THREE.MathUtils.radToDeg(2 * Math.atan2(q.z, q.w));
+    };
+    const rpm = (b) => (p.spin(b, [0, 0, 1]) * 60) / (2 * Math.PI);
+    return { g, p, body, tz, rpm };
+  };
+  const run = (p, seconds, throttles, each) => {
+    for (let t = 0; t < seconds; t += 1 / 60) {
+      p.step(1 / 60, throttles);
+      each?.(t);
+    }
+  };
+  const wrap = (d) => ((d + 540) % 360) - 180;
+
+  // Gears on a swinging arm
+  {
+    const r = await make(swingRig({ pinArm: true, gearC: false }));
+    const motor = r.g.motors[0].id;
+    run(r.p, 2, new Map([[motor, 1]]));
+    const [a, b] = [r.rpm(r.body('Gear A')), r.rpm(r.body('Gear B'))];
+    check(`Arm held still: the arm's gear turns the opposite way at the motor's speed (A ${a.toFixed(1)}, B ${b.toFixed(1)} rpm), on the ordinary gear link`, Math.abs(a + b) < 1 && Math.abs(Math.abs(a) - 120) < 2 && r.g.links.length === 1 && r.g.maybeMeshes.length === 0, JSON.stringify({ a, b, links: r.g.links.length }));
+    r.p.dispose();
+  }
+  {
+    const r = await make(swingRig({ lockB: true, gearC: false }));
+    const motor = r.g.motors[0].id;
+    const arm = r.body('Arm');
+    const speeds = [];
+    run(r.p, 5, new Map([[motor, 1]]), (t) => t > 1 && speeds.push(r.rpm(arm)));
+    const a = r.rpm(r.body('Gear A'));
+    const lo = Math.min(...speeds);
+    const hi = Math.max(...speeds);
+    check(`Gear locked to the arm: the motor swings the arm at its speed, the same way (arm ${lo.toFixed(1)}–${hi.toFixed(1)} rpm over 4 s, A ${a.toFixed(1)}), steady within 2%`, lo > 0 && Math.abs(hi - lo) < 0.02 * hi && Math.abs(hi - Math.abs(a)) < 2.4 && r.p.meshes()[0].engaged, JSON.stringify({ lo, hi, a }));
+    r.p.dispose();
+  }
+  {
+    const r = await make(swingRig({ gearC: false }));
+    const motor = r.g.motors[0].id;
+    const arm = r.body('Arm');
+    const gb = r.body('Gear B');
+    let armTurn = 0;
+    let bTurn = 0;
+    let [la, lb] = [r.tz(arm), r.tz(gb)];
+    r.p.push(arm, [0, 0, 1], [0, 0, 0], 1.5);
+    run(r.p, 1.2, new Map([[motor, 0]]), () => {
+      const [x, y] = [r.tz(arm), r.tz(gb)];
+      armTurn += wrap(x - la);
+      bTurn += wrap(y - lb);
+      [la, lb] = [x, y];
+      if (armTurn >= 90) r.p.push(arm, [0, 0, 1], [0, 0, 0], 0);
+    });
+    const rel = bTurn - armTurn;
+    check(`Arm swung by something else: swung ${armTurn.toFixed(0)}°, its gear turns ${rel.toFixed(0)}° relative to the arm, rolling round the still gear (in mesh: ${r.p.meshes()[0].engaged})`, armTurn > 89 && Math.abs(rel - armTurn) < 0.03 * armTurn && Math.abs(r.rpm(r.body('Gear A'))) < 1 && r.p.meshes()[0].engaged, JSON.stringify({ armTurn, bTurn }));
+    r.p.dispose();
+  }
+  // Gears come into and out of mesh
+  {
+    const r = await make(swingRig());
+    const motor = r.g.motors[0].id;
+    const arm = r.body('Arm');
+    const [gb, gc] = [r.body('Gear B'), r.body('Gear C')];
+    const bc = () => r.p.meshes().find((m) => m.gears.includes(r.g.bodies.find((b) => b.id === gc).parts.find((id) => /Gear C/.test(id) || true)));
+    const pairBC = () => r.p.meshes()[1];
+    r.p.pull(arm, [0, 0, 1], [0, 0, 0], -0.002); // a light hand swinging the arm toward C
+    let engagedAll = true;
+    const offs = [];
+    run(r.p, 5, new Map([[motor, 1]]), (t) => {
+      if (t > 1) {
+        engagedAll &&= pairBC().engaged;
+        offs.push(pairBC().offMm);
+      }
+    });
+    const [b, c] = [r.rpm(gb), r.rpm(gc)];
+    check(`Swinging into mesh: the arm stops at mesh distance (${Math.min(...offs).toFixed(2)} to ${Math.max(...offs).toFixed(2)} mm off it) and C turns the opposite way at the same speed (B ${b.toFixed(1)}, C ${c.toFixed(1)} rpm)`, Math.max(...offs.map(Math.abs)) < 0.5 && Math.abs(b + c) < 2 && Math.abs(c) > 100, JSON.stringify({ b, c }));
+    check('  and stays in mesh, without chattering, for the whole 5 s of winding', engagedAll);
+    // Swinging away: a short pull the other way, then nothing
+    r.p.pull(arm, [0, 0, 1], [0, 0, 0], 0.004);
+    run(r.p, 0.15, new Map([[motor, 1]]));
+    r.p.pull(arm, [0, 0, 1], [0, 0, 0], 0);
+    run(r.p, 0.1, new Map([[motor, 1]]));
+    const out = pairBC();
+    const cFree = r.rpm(gc);
+    run(r.p, 0.5, new Map([[motor, 0]]));
+    check(`Swinging out of mesh: C is no longer driven (${out.offMm.toFixed(1)} mm apart, not engaged) and turns on freely when the motor stops (${cFree.toFixed(0)} rpm, then ${r.rpm(gc).toFixed(0)})`, !out.engaged && out.offMm > 1.5 && Math.abs(r.rpm(gc)) > 0.5 * Math.abs(cFree) && Math.abs(r.rpm(gb)) < Math.abs(r.rpm(gc)), JSON.stringify(out));
+    r.p.dispose();
+  }
+  {
+    const catalog = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'public', 'catalog.json'), 'utf8'));
+    const counts = ['clawbot', 'flop'].map((id) => buildBodyGraph(playInputs({ instances: starterById(id).build(catalog) })).maybeMeshes.length);
+    check('Fixed gears unchanged: Clawbot and Flop have no gears that can swing into mesh, so all their gears stay on the ordinary links', counts.every((x) => x === 0), JSON.stringify(counts));
+  }
+
+  // The Swish winch (VEX's CAD, scripts/fixtures/swish-winch.json, with its two belts)
+  {
+    const swish = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'scripts', 'fixtures', 'swish-winch.json'), 'utf8'));
+    const parts = swish.parts.map((x) => ({ ...x, visible: true }));
+    const belts = swish.bands.map((b, k) => {
+      const band = { instanceId: `belt-${k}`, partId: b.partId, label: `Belt ${k + 1}`, position: [0, 0, 0], rotation: [0, 0, 0], visible: true };
+      const strung = stringBand(band, b.spots, parts, (i) => findPart(i.partId));
+      return { ...band, position: strung.position, rotation: strung.rotation, shape: strung.shape };
+    });
+    const state = { instances: [...parts, ...belts] };
+    const byName = (g, name) => g.bodies.find((b) => b.parts.some((id) => findPart(state.instances.find((i) => i.instanceId === id).partId).name === name))?.id;
+    const g0 = buildBodyGraph(playInputs(state));
+    const [armB, shaftA, shaftB, shaftC, pawlB] = ['3x4 Plate', '6x Pitch Shaft', '16 Tooth Ratchet', '4x Pitch Shaft', 'Short Low-Profile Pawl'].map((x) => byName(g0, x));
+    check('Swish winch: the arm, shaft A, shaft B, shaft C and the pawl are separate bodies', new Set([armB, shaftA, shaftB, shaftC, pawlB]).size === 5 && !g0.fixed.includes(armB), JSON.stringify({ armB, shaftA, shaftB, shaftC, pawlB }));
+    const winch = async () => {
+      const r = await make(state);
+      const h = r.g.hinges.find((x) => x.motor);
+      const wind = Math.sign(-h.axis[2]) || 1; // shaft A clockwise seen from +z
+      const thr = (v) => new Map(r.g.motors.map((m) => [m.id, v]));
+      const cPairs = () => r.p.meshes().filter((m) => m.gears.some((id) => r.g.bodies.find((b) => b.id === shaftC).parts.includes(id)));
+      const cMesh = r.g.maybeMeshes.find((m) => m.a === shaftC || m.b === shaftC);
+      const cCenter = cMesh.a === shaftC ? cMesh.centers[0] : cMesh.centers[1];
+      return { ...r, wind, thr, cPairs, cCenter };
+    };
+    // Winding, then holding under a sudden 0.3 N·m pulling C backward, then releasing
+    const r = await winch();
+    let engagedLate = true;
+    run(r.p, 3, r.thr(r.wind), (t) => t > 1 && (engagedLate &&= r.cPairs().every((m) => m.engaged)));
+    const armAt = r.tz(armB);
+    const [bw, cw] = [r.rpm(shaftB), r.rpm(shaftC)];
+    check(`Winding: the arm swings toward C (${armAt.toFixed(1)}°), its gear drops into mesh and stays there, and C turns (B ${bw.toFixed(0)}, C ${cw.toFixed(0)} rpm)`, armAt < -25 && engagedLate && cw < -60 && Math.abs(bw + cw) < 0.1 * Math.abs(cw), JSON.stringify({ armAt, bw, cw }));
+    r.p.pull(shaftC, [0, 0, 1], r.cCenter, 0.3);
+    const c0 = r.tz(shaftC);
+    run(r.p, 1, r.thr(0));
+    const c1 = r.tz(shaftC);
+    let inMesh = true;
+    run(r.p, 2, r.thr(0), () => (inMesh &&= r.cPairs().every((m) => m.engaged)));
+    const back = wrap(r.tz(shaftC) - c0);
+    const creep = wrap(r.tz(shaftC) - c1);
+    check(`Holding: with the throttle at stop and 0.3 N·m pulling C backward, C turns back ${back.toFixed(1)}° (within a ratchet tooth, 22.5° + 2°), creeps ${creep.toFixed(2)}° over the next 2 s, and the arm stays in mesh`, Math.abs(back) <= 24.5 && Math.abs(creep) < 1 && inMesh, JSON.stringify({ back, creep }));
+    // Releasing: the motors reversed lift the arm out; C, freed, turns under the load (which then lets go)
+    let freedAt = null;
+    for (let t = 0; t < 1 && freedAt === null; t += 1 / 240) {
+      r.p.step(1 / 240, r.thr(-r.wind));
+      if (r.cPairs().every((m) => !m.engaged && m.offMm > 1.5)) freedAt = t;
+    }
+    // Free, C is no longer held: the load stops at once (a load still pulling a free, frictionless shaft
+    // would spin it without limit), and C turns on by itself while B, its arm against its stop, doesn't
+    r.p.pull(shaftC, [0, 0, 1], r.cCenter, 0);
+    run(r.p, 0.5, r.thr(-r.wind));
+    const [bR, cR] = [r.rpm(shaftB), r.rpm(shaftC)];
+    check(`Releasing: the arm swings away with the motor shaft (to ${r.tz(armB).toFixed(1)}°), its gear leaves C's within ${freedAt === null ? 'never' : `${(freedAt * 1000).toFixed(0)} ms`}, and C turns freely (C ${cR.toFixed(0)} rpm, B ${bR.toFixed(0)})`, freedAt !== null && r.tz(armB) > armAt + 15 && r.cPairs().every((m) => !m.engaged) && Math.abs(cR) > 20 && Math.abs(bR) < 0.5 * Math.abs(cR), JSON.stringify({ freedAt, bR, cR }));
+    r.p.dispose();
   }
 }
 

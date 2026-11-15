@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { getPartRawGeometry } from '../mcp/assembly-engine.mjs';
-import { refAxes, wrapDeg } from '../src/utils/axisFrame.js';
+import { directionAt, refAxes, wrapDeg } from '../src/utils/axisFrame.js';
 
 /**
  * Measurements of gear teeth, racks, square bores, square shafts and the Smart Motor hub, taken from
@@ -202,6 +202,308 @@ export function measureSprocket(part, teeth) {
     gapPhaseDeg: round(mod(phaseDeg + 180 / teeth, 360 / teeth), 2),
     faceSpanMm: [round(faceLo, 2), round(faceHi, 2)]
   };
+}
+
+// Ratchets and pawls (openspec ratchet-and-pawl, design §1)
+export const RATCHET_PATTERN = /\bratchet\b/i;
+export const PAWL_PATTERN = /\bpawl\b/i;
+export const RATCHET_PROFILE_SAMPLES = 48; // outline samples across one tooth, radius against angle
+const STEEP_RATIO = 3; // a tooth side this many times steeper than the other makes the teeth lean
+const STEEP_STEP_SHARE = 0.2; // one ray step rising this share of the tooth depth is a steep side
+
+/**
+ * Ratchet teeth about the part's local Z axis (the bore). Angles are in the frame of
+ * refAxes(+Z). Returns { measured: true, kind: 'ratchet', teeth, tipRadiusMm, rootRadiusMm,
+ * toothPhaseDeg, faceSpanMm, lean, profileMm } or { measured: false, reason }:
+ * - lean: the turning direction about +Z that a pawl stops (+1 anticlockwise, −1 clockwise), or 0
+ *   when both sides of a tooth are alike. A pawl's tip, fixed while the ratchet turns, climbs the
+ *   sloped side and drops off the steep one in the free direction; the other way the steep side
+ *   runs into it.
+ * - toothPhaseDeg: the angle of one tooth's steep side (of one tooth's middle when lean is 0).
+ * - profileMm: the outline's radius at RATCHET_PROFILE_SAMPLES bin centres across one tooth,
+ *   starting at the steep side and running along the sloped side (sample i at
+ *   toothPhaseDeg − lean·(i + 0.5)/N·(360/teeth)°; +θ when lean is 0), each the median over all teeth.
+ */
+export function measureRatchet(part, teeth) {
+  if (!teeth || teeth < 6) return { measured: false, reason: 'no tooth count' };
+  const ring = measureToothRing(part, teeth);
+  if (!ring.measured) return ring;
+  const { faceLo, faceHi } = ring;
+  const cast = makeRaycaster(part);
+  const axis = new THREE.Vector3(0, 0, 1);
+  const { min, max } = part.bbox;
+  const startR = Math.max(...[min[0], min[1], max[0], max[1]].map(Math.abs)) * 1.5 + 2;
+  const perTooth = 96;
+  const count = teeth * perTooth;
+  const { thetas, radii } = inwardProfile(cast, new THREE.Vector3(0, 0, (faceLo + faceHi) / 2), axis, startR, count);
+  if (radii.some((r) => r == null)) return { measured: false, reason: 'tooth outline has gaps' };
+  const { tip, root } = tipAndRoot(thetas, radii, teeth);
+  const depth = tip - root;
+  const step = (i) => radii[(i + 1) % count] - radii[i];
+
+  // Steepest rise and fall in each tooth (per ray step, +θ), then the median over teeth
+  const rises = [];
+  const falls = [];
+  for (let t = 0; t < teeth; t++) {
+    let rise = 0;
+    let fall = 0;
+    for (let i = t * perTooth; i < (t + 1) * perTooth; i++) {
+      rise = Math.max(rise, step(i));
+      fall = Math.max(fall, -step(i));
+    }
+    rises.push(rise);
+    falls.push(fall);
+  }
+  const rise = median(rises);
+  const fall = median(falls);
+  // Rising steeply in +θ: turning clockwise carries the steep side into a fixed tip
+  const lean = rise > STEEP_RATIO * fall ? -1 : fall > STEEP_RATIO * rise ? 1 : 0;
+  const period = 360 / teeth;
+  const dTheta = 360 / count;
+  let phaseDeg;
+  if (lean === 0) {
+    const clipped = radii.map((r) => Math.min(tip, Math.max(root, r)));
+    phaseDeg = fourierPhase(thetas, clipped, teeth).phaseDeg;
+  } else {
+    // Each steep side: a run of ray steps climbing fast (in the climbing direction), placed at its steepest step
+    const climb = (i) => (lean < 0 ? step(i) : -step(i));
+    const steep = (i) => climb(i) > STEEP_STEP_SHARE * depth;
+    let first = 0;
+    while (steep(first) && first < count) first++; // start outside a run
+    const edges = [];
+    for (let k = 0; k < count; k++) {
+      const i = (first + k) % count;
+      if (!steep(i)) continue;
+      let best = i;
+      while (k + 1 < count && steep((first + k + 1) % count)) {
+        k++;
+        const j = (first + k) % count;
+        if (climb(j) > climb(best)) best = j;
+      }
+      edges.push((best + 0.5) * dTheta);
+    }
+    if (edges.length !== teeth) {
+      return { measured: false, reason: `found ${edges.length} steep tooth sides, expected ${teeth}` };
+    }
+    // Circular mean of the edges folded into one tooth
+    const k = (Math.PI * 2) / period; // radians per degree of turn, one cycle per tooth
+    let c = 0;
+    let s = 0;
+    for (const e of edges) {
+      c += Math.cos(k * e);
+      s += Math.sin(k * e);
+    }
+    phaseDeg = mod(Math.atan2(s, c) / k, period);
+  }
+
+  // The tooth band's ends, found to 0.01 mm on a ray at the crest of one tooth
+  const crestDeg = phaseDeg + (lean === 0 ? 0 : -lean * period * 0.1);
+  const crestDir = directionAt(axis, crestDeg);
+  const toothAt = (z) => {
+    const d = cast(new THREE.Vector3(0, 0, z).addScaledVector(crestDir, startR), crestDir.clone().negate());
+    return d != null && startR - d > (tip + root) / 2;
+  };
+  const edgeOfBand = (inZ, outZ) => {
+    if (!toothAt(inZ) || toothAt(outZ)) return outZ;
+    for (let n = 0; n < 20; n++) {
+      const m = (inZ + outZ) / 2;
+      if (toothAt(m)) inZ = m;
+      else outZ = m;
+    }
+    return (inZ + outZ) / 2;
+  };
+  const zMid = (faceLo + faceHi) / 2;
+  const bandLo = edgeOfBand(zMid, min[2] - 0.01);
+  const bandHi = edgeOfBand(zMid, max[2] + 0.01);
+
+  // The outline across one tooth, from the steep side along the slope, median over every tooth
+  const radiusAt = (deg) => {
+    const x = mod(deg, 360) / dTheta;
+    const i = Math.floor(x);
+    const f = x - i;
+    return radii[i % count] * (1 - f) + radii[(i + 1) % count] * f;
+  };
+  const along = lean === 0 ? 1 : -lean;
+  const profileMm = [];
+  for (let i = 0; i < RATCHET_PROFILE_SAMPLES; i++) {
+    const off = ((i + 0.5) / RATCHET_PROFILE_SAMPLES) * period * along;
+    const values = [];
+    for (let t = 0; t < teeth; t++) values.push(radiusAt(phaseDeg + t * period + off));
+    profileMm.push(round(median(values)));
+  }
+  return {
+    measured: true,
+    kind: 'ratchet',
+    teeth,
+    tipRadiusMm: round(tip),
+    rootRadiusMm: round(root),
+    toothPhaseDeg: round(phaseDeg, 2),
+    faceSpanMm: [round(bandLo, 2), round(bandHi, 2)],
+    lean,
+    profileMm
+  };
+}
+
+const PAWL_FACE_NEAR_MM = [0.5, 2.5]; // the catching face is read this far from the tip
+
+/**
+ * A pawl's tip, in the part's frame (design §1). The pawl's outline is the exact section of its
+ * mesh through the middle of its holes; the tip is the outline point farthest from the middle of
+ * the hole row, and the catching face is the side of the tip facing away from the holes (its
+ * outward normal is tipNormal). `holes` is the pawl's pin_hole ports (origin, axis). Returns { measured: true,
+ * kind: 'pawl', tipPoint, tipNormal, thicknessMm, outline } or { measured: false, reason }.
+ */
+export function measurePawl(part, holes) {
+  if (!holes.length) return { measured: false, reason: 'no pin holes' };
+  const axis = new THREE.Vector3(...holes[0].axis).normalize();
+  if (holes.some((h) => Math.abs(new THREE.Vector3(...h.axis).normalize().dot(axis)) < 0.999)) {
+    return { measured: false, reason: 'pin holes are not parallel' };
+  }
+  if (Math.abs(axis.z) < 0.999) return { measured: false, reason: 'pin holes do not run along Z' };
+  const mid = holes.reduce((a, h) => a.add(new THREE.Vector3(...h.origin)), new THREE.Vector3()).divideScalar(holes.length);
+  const planeZ = mid.z + 0.0123; // off any vertex row
+
+  // Section of the mesh through planeZ: segments with the outward normal of the face they cut
+  const geo = getPartRawGeometry(part);
+  const pos = geo.attributes.position.array;
+  const idx = geo.index.array;
+  const segs = [];
+  const pa = new THREE.Vector3();
+  const pb = new THREE.Vector3();
+  const pc = new THREE.Vector3();
+  for (let t = 0; t < idx.length; t += 3) {
+    const vs = [pa, pb, pc].map((p, j) => p.fromArray(pos, idx[t + j] * 3));
+    const ds = vs.map((p) => p.z - planeZ);
+    const cut = [];
+    for (let j = 0; j < 3; j++) {
+      const a = vs[j];
+      const b = vs[(j + 1) % 3];
+      const da = ds[j];
+      const db = ds[(j + 1) % 3];
+      if (da < 0 !== db < 0) {
+        const f = da / (da - db);
+        cut.push(new THREE.Vector2(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f));
+      }
+    }
+    if (cut.length !== 2) continue;
+    const n3 = new THREE.Vector3().subVectors(pb, pa).cross(new THREE.Vector3().subVectors(pc, pa));
+    const n = new THREE.Vector2(n3.x, n3.y);
+    if (n.length() < 1e-9) continue;
+    segs.push({ a: cut[0], b: cut[1], n: n.normalize(), len: cut[0].distanceTo(cut[1]) });
+  }
+  if (!segs.length) return { measured: false, reason: 'no outline through the holes' };
+
+  const mid2 = new THREE.Vector2(mid.x, mid.y);
+  let tip = null;
+  for (const s of segs) for (const p of [s.a, s.b]) if (!tip || p.distanceTo(mid2) > tip.distanceTo(mid2)) tip = p.clone();
+  const toMid = mid2.clone().sub(tip).normalize();
+
+  // The catching face: outline near the tip whose outward normal points away from the holes
+  const normal = new THREE.Vector2();
+  for (const s of segs) {
+    const m = s.a.clone().add(s.b).multiplyScalar(0.5);
+    const d = m.distanceTo(tip);
+    if (d < PAWL_FACE_NEAR_MM[0] || d > PAWL_FACE_NEAR_MM[1]) continue;
+    if (s.n.dot(toMid) > -0.5) continue;
+    normal.addScaledVector(s.n, s.len);
+  }
+  if (normal.length() < 1e-6) return { measured: false, reason: 'no catching face at the tip' };
+  normal.normalize();
+
+  // Thickness just inside the tip
+  const cast = makeRaycaster(part);
+  const inside = tip.clone().addScaledVector(toMid, 1);
+  const span = part.bbox.size[2] + 10;
+  const down = cast(new THREE.Vector3(inside.x, inside.y, mid.z + span), new THREE.Vector3(0, 0, -1));
+  const up = cast(new THREE.Vector3(inside.x, inside.y, mid.z - span), new THREE.Vector3(0, 0, 1));
+  if (down == null || up == null) return { measured: false, reason: 'no thickness at the tip' };
+  const top = mid.z + span - down;
+  const bottom = mid.z - span + up;
+  const outline = outerLoop(segs, tip);
+  if (!outline) return { measured: false, reason: 'outline does not close' };
+  return {
+    measured: true,
+    kind: 'pawl',
+    tipPoint: [round(tip.x), round(tip.y), round((top + bottom) / 2)],
+    tipNormal: [round(normal.x, 4), round(normal.y, 4), 0],
+    thicknessMm: round(top - bottom),
+    outline
+  };
+}
+
+const PAWL_OUTLINE_MAX_POINTS = 200;
+
+/**
+ * The section's outer loop (the one through the tip), starting at the tip; a loop of more than
+ * PAWL_OUTLINE_MAX_POINTS points is simplified (Douglas–Peucker, the tip kept as a corner), anticlockwise about +Z, as
+ * [[x, y]] rounded to 0.001 mm. Null when the segments don't close into a loop through the tip.
+ */
+function outerLoop(segs, tip) {
+  const key = (p) => `${Math.round(p.x * 1000)},${Math.round(p.y * 1000)}`;
+  const byKey = new Map();
+  segs.forEach((s, i) => {
+    for (const p of [s.a, s.b]) {
+      const k = key(p);
+      if (!byKey.has(k)) byKey.set(k, []);
+      byKey.get(k).push(i);
+    }
+  });
+  const used = new Set();
+  const loops = [];
+  segs.forEach((s0, i0) => {
+    if (used.has(i0)) return;
+    used.add(i0);
+    const loop = [s0.a.clone(), s0.b.clone()];
+    let end = s0.b;
+    for (;;) {
+      const next = (byKey.get(key(end)) || []).find((i) => !used.has(i));
+      if (next === undefined) break;
+      used.add(next);
+      const s = segs[next];
+      end = key(s.a) === key(end) ? s.b : s.a;
+      if (key(end) === key(loop[0])) break;
+      loop.push(end.clone());
+    }
+    if (loop.length >= 3) loops.push(loop);
+  });
+  const area = (l) => l.reduce((a, p, i) => a + p.x * l[(i + 1) % l.length].y - l[(i + 1) % l.length].x * p.y, 0) / 2;
+  const withTip = loops.filter((l) => l.some((p) => p.distanceTo(tip) < 1e-3));
+  if (!withTip.length) return null;
+  let loop = withTip.reduce((a, b) => (Math.abs(area(b)) > Math.abs(area(a)) ? b : a));
+  if (area(loop) < 0) loop = loop.reverse();
+  // Drop repeated points, start at the tip
+  loop = loop.filter((p, i) => p.distanceTo(loop[(i + 1) % loop.length]) > 1e-4);
+  const t = loop.findIndex((p) => p.distanceTo(tip) < 1e-3);
+  loop = [...loop.slice(t), ...loop.slice(0, t)];
+  const simplify = (pts, tol) => {
+    // Open polyline from the tip round to the tip again
+    const keep = new Array(pts.length).fill(false);
+    keep[0] = keep[pts.length - 1] = true;
+    const stack = [[0, pts.length - 1]];
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      const ab = pts[b].clone().sub(pts[a]);
+      const len = ab.length() || 1e-9;
+      let far = -1;
+      let worst = tol;
+      for (let i = a + 1; i < b; i++) {
+        const d = Math.abs(ab.x * (pts[i].y - pts[a].y) - ab.y * (pts[i].x - pts[a].x)) / len;
+        if (d > worst) [worst, far] = [d, i];
+      }
+      if (far >= 0) {
+        keep[far] = true;
+        stack.push([a, far], [far, b]);
+      }
+    }
+    return pts.filter((_, i) => keep[i]).slice(0, -1);
+  };
+  // A closed loop is simplified as two halves, split at the point farthest from the tip
+  const far = loop.reduce((b, p, i) => (p.distanceTo(loop[0]) > loop[b].distanceTo(loop[0]) ? i : b), 0);
+  const halves = (tol) => [...simplify([...loop.slice(0, far + 1)], tol), ...simplify([...loop.slice(far), loop[0]], tol)];
+  let tol = 0.005;
+  let out = loop;
+  while (out.length > PAWL_OUTLINE_MAX_POINTS) out = halves((tol *= 1.25));
+  return out.map((p) => [round(p.x), round(p.y)]);
 }
 
 /**

@@ -63,6 +63,20 @@ export function auditIssues(audit) {
   for (const s of audit.protrudingShafts || []) {
     add('protruding', 'problem', `${s.label} sticks out past its parts`, 'The shaft overhangs the outer faces of the parts it is seated in.', [part(s)]);
   }
+  // Ratchets and pawls (openspec ratchet-and-pawl)
+  for (const r of audit.ratchets || []) {
+    const parts = [{ instanceId: r.pawlId, label: r.pawl }, { instanceId: r.ratchetId, label: r.ratchet }];
+    if (r.wrongWay) {
+      add('pawl-wrong-way', 'problem', `${r.pawl} faces the wrong way on ${r.ratchet}`, 'Its tip is in the teeth, but they would push it out instead of catching it, so the ratchet turns both ways. Turn the pawl over, or set it again with Tools → Set pawl.', parts);
+    } else if (r.pivotCount === 0) {
+      add('pawl-no-pin', 'problem', `${r.pawl} is not pinned`, `A pawl swings on one pin so it can ride over the teeth of ${r.ratchet}. Put a pin through one of its holes into the part beside it.`, parts);
+    } else if (r.locked) {
+      add('pawl-locked', 'problem', `${r.pawl} can't lift, so ${r.ratchet} is locked`, `It is held by ${r.pivotCount} pins, so it can't rock over the teeth and the ratchet can't turn either way. Take out all but one pin.`, parts);
+    } else {
+      add('ratchet', 'note', `${r.ratchet} turns ${r.freeDirection} only`, `${r.pawl} holds it the other way.`, parts);
+      if (!r.pressed) add('pawl-unpressed', 'note', `Nothing presses ${r.pawl} onto ${r.ratchet}`, 'No band or belt is on the pawl or on a pin in it, so only its weight keeps it on the teeth.', parts);
+    }
+  }
   for (const p of audit.singlePinPivotParts || []) {
     add('single-pin', 'note', `${p.label} is held by one pin`, 'It can pivot on that pin. Add a second pin if it should stay fixed.', [part(p)]);
   }

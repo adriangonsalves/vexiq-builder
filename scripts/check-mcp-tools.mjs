@@ -161,6 +161,7 @@ check(
     initMsg.result?.instructions?.includes('pass `route: { "<id>": "over" | "under" }`'),
   initMsg.result?.instructions?.slice(-300)
 );
+check('initialize instructions say how a ratchet and pawl go together (set_pawl)', /Ratchets and pawls:\*\*[^\n]*`set_pawl`/.test(initMsg.result?.instructions || ''), initMsg.result?.instructions?.slice(-400));
 
 // ---------------------------------------------------------------------------
 // 1.1 Harness
@@ -1217,6 +1218,74 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
     wormReply?.status === 'placed' && rel && wormReply.rollReplaced,
     JSON.stringify(wormReply)
   );
+}
+
+// ---------------------------------------------------------------------------
+// ratchet-and-pawl: set_pawl lists spots then places; a blocked spot is refused; place_part swings a pawl
+// ---------------------------------------------------------------------------
+{
+  const names = (await rpc('tools/list')).result?.tools?.map((t) => t.name) || [];
+  check('tools/list has set_pawl', names.includes('set_pawl'));
+  const { findPart: fpR } = await import('../mcp/assembly-engine.mjs');
+  const { worldPawl, worldRatchet, pawlRelation } = await import('../src/utils/ratchetPawl.js');
+  const plateZ = 3.175 + 3.05;
+  const ratchetBuild = () => [
+    mk('Ratchet', '16 Tooth Ratchet', [0, 0, 0]),
+    mk('Shaft', '4x Pitch Shaft', [0, 0, 0]),
+    mk('Lower Plate', '4x6 Plate', [6.35, 6.35, -plateZ]),
+    mk('Upper Plate', '4x6 Plate', [6.35, 6.35, plateZ])
+  ];
+  writeState({ ...emptyState(), instances: ratchetBuild() });
+  const before = JSON.stringify(readState().instances);
+  let res = await call('set_pawl', { part: 'Short Low-Profile Pawl', ratchetInstanceId: 'Ratchet' });
+  const spots = res.data?.spots || [];
+  check(
+    'Listing spots: set_pawl with a pawl part and a ratchet between two plates lists the spots and leaves the build unchanged',
+    res.data?.ok && spots.length >= 4 && spots.every((s) => s.spot && s.pinTo?.label && s.pawlHole && /clockwise seen from/.test(s.freeDirection) && typeof s.blocked === 'boolean') && JSON.stringify(readState().instances) === before,
+    JSON.stringify(res.data).slice(0, 400)
+  );
+  const pick = spots.find((s) => !s.blocked);
+  res = await call('set_pawl', { part: 'Short Low-Profile Pawl', ratchetInstanceId: 'Ratchet', spot: pick?.spot, label: 'Pawl' });
+  const audit = (await call('audit_assembly')).data;
+  const pair = audit?.ratchets?.find((r) => r.ratchet === 'Ratchet' && r.pawl === 'Pawl');
+  check(
+    'Placing at a spot: the pawl is added there, the reply gives the free direction and audit_assembly lists it holding the ratchet',
+    res.data?.ok && res.data.spot === pick?.spot && /clockwise seen from/.test(res.data.freeDirection || '') && readState().instances.length === 5 && pair?.holds === true && audit.collisionCount === 0,
+    JSON.stringify({ reply: res.data, ratchets: audit?.ratchets, collisions: audit?.collisions })
+  );
+  const pawlInst = readState().instances.find((i) => i.label === 'Pawl');
+  res = await call('undo');
+  check('  one undo removes it', res.data?.ok && !readState().instances.some((i) => i.label === 'Pawl') && readState().instances.length === 4, JSON.stringify(res.data));
+
+  // A 1x2 Beam between the plates where that spot's pawl would be
+  const THREE = await import('three');
+  const PAWL = fpR('Short Low-Profile Pawl');
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...pawlInst.rotation.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ'));
+  const c = new THREE.Vector3(...PAWL.bbox.center).applyQuaternion(q).add(new THREE.Vector3(...pawlInst.position));
+  writeState({ ...emptyState(), instances: [...ratchetBuild(), mk('Blocking Beam', '1x2 Beam', [c.x, c.y, 0])] });
+  res = await call('set_pawl', { part: 'Short Low-Profile Pawl', ratchetInstanceId: 'Ratchet' });
+  const blocked = (res.data?.spots || []).find((s) => s.blocked && s.blockedBy?.includes('Blocking Beam'));
+  const count = readState().instances.length;
+  res = await call('set_pawl', { part: 'Short Low-Profile Pawl', ratchetInstanceId: 'Ratchet', spot: blocked?.spot });
+  check(
+    'Blocked spot: set_pawl with a spot the list marked blocked places nothing and names the part in the way',
+    Boolean(blocked) && res.isError && /Blocking Beam/.test(res.data?.error || '') && readState().instances.length === count,
+    JSON.stringify({ blocked, reply: res.data })
+  );
+
+  // place_part swings a pawl dropped on a pin 28.4 mm from the ratchet's shaft onto the teeth
+  const pin = { ...mk('Pin', '1x2 Connector Pin', [25.4, 12.7, -3.175], [180, 0, 0]) };
+  writeState({ ...emptyState(), instances: [mk('Ratchet', '16 Tooth Ratchet', [0, 0, 0]), mk('Shaft', '4x Pitch Shaft', [0, 0, 0]), mk('Plate', '4x6 Plate', [6.35, 6.35, -plateZ]), pin] });
+  const hole = PAWL.ports.find((p) => p.portId === 'hole.thru.2_0_0').origin;
+  res = await call('place_part', { partQuery: 'Short Low-Profile Pawl', label: 'Dropped Pawl', position: [25.4 - hole[0], 12.7 - hole[1], -3.175 + 2.286], rotation: [0, 0, 0] });
+  const dropped = readState().instances.find((i) => i.label === 'Dropped Pawl');
+  const rel = dropped && pawlRelation(worldRatchet(fpR('16 Tooth Ratchet'), [0, 0, 0], [0, 0, 0]), worldPawl(PAWL, dropped.position, dropped.rotation), { pivots: [{ point: new THREE.Vector3(25.4, 12.7, 0), axis: new THREE.Vector3(0, 0, 1) }] });
+  check('place_part swings a pawl on a pin beside a ratchet so its tip rests in the teeth', Boolean(rel?.holds) && Math.abs(dropped.rotation[2]) > 0.5, JSON.stringify({ rotation: dropped?.rotation, rel, reply: res.data?.message }));
+  writeState({ ...emptyState(), instances: [mk('Ratchet', '16 Tooth Ratchet', [0, 0, 0]), mk('Shaft', '4x Pitch Shaft', [0, 0, 0]), mk('Plate', '4x6 Plate', [6.35, 6.35, -plateZ]), pin] });
+  res = await call('place_parts', { parts: [{ partQuery: 'Short Low-Profile Pawl', label: 'Listed Pawl', position: [25.4 - hole[0], 12.7 - hole[1], -3.175 + 2.286], rotation: [0, 0, 0] }] });
+  const listed = readState().instances.find((i) => i.label === 'Listed Pawl');
+  const rel2 = listed && pawlRelation(worldRatchet(fpR('16 Tooth Ratchet'), [0, 0, 0], [0, 0, 0]), worldPawl(PAWL, listed.position, listed.rotation), { pivots: [{ point: new THREE.Vector3(25.4, 12.7, 0), axis: new THREE.Vector3(0, 0, 1) }] });
+  check('  and so does place_parts', Boolean(rel2?.holds), JSON.stringify({ rotation: listed?.rotation, parts: res.data?.parts }));
 }
 
 // ---------------------------------------------------------------------------
