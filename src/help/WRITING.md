@@ -74,7 +74,7 @@ Add a shot to your shot-list file:
 
 Specs for `crop` and `marks`: `control:<name from controls.js>`, `button:<name>`, `menuitem:<text>`, `menu:<name>`, `dialog:<title>`, `part:<Outline name>`, `text:<exact text>`, `css:<selector>`, or a region (`toolbar`, `view`, `library`, `outline`, `properties`, `context-bar`, `help`, `view-cube`, `window`). A mark sits at the middle of the control's right edge; end it with `@center`, `@left`, `@top` or `@bottom` to move it.
 
-Driver helpers in `scripts/help-shots/app.mjs`: `click`, `clickControl`, `openMenu`, `menu(name, item)`, `press`, `type`, `newBuild`, `starter(name)`, `loadBuild(file)`, `select([labels])`, `showOutline`, `drag`, `viewPoint`, `hover`, `openHelp`, `waitStill`, `find`, `rectOf`, and `page` (puppeteer).
+Driver helpers in `scripts/help-shots/app.mjs`: `click`, `clickControl`, `openMenu`, `menu(name, item)`, `press`, `type`, `newBuild`, `starter(name, { add, stay })`, `loadBuild(file, { add, stay })`, `answerOpenOrAdd({ add, stay })` (the open-or-add question), `select([labels])`, `showOutline`, `drag`, `viewPoint`, `hover`, `openHelp`, `waitStill`, `find`, `rectOf`, and `page` (puppeteer).
 
 Crop tight, show only what the step is about, use the large layout unless the step is about touch, tablets or phones. A picture must be 150 KB or less.
 

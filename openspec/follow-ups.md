@@ -95,3 +95,10 @@ Low-priority items left open when a change was closed. Pick one up by proposing 
 6. **A pawl pushed onto a long pin (1x2) used to land turned but above the teeth.** Fixed in groups 4–5 (`turnAndPushIn`, `pawlHoldsAt`); kept here as a note that the pre-push turn is worked out at the end of the travel, so other parts pushed onto pins that stop short may show the same thing.
 7. **Double-clicking a selected part in Rotate mode lands on the rotate rings**, so it doesn't mate; in Move mode it does.
 8. **In the fallback engine (no physics) a ratchet turned the held way jams at once**, with none of the up-to-one-tooth slack the physics gives.
+
+## From add-build-to-build (archived 2026-11-15)
+
+1. **The Ratchet winch starter's belts point at parts it doesn't have.** Their routes name `import-249`, `import-23`, … (ids from the CAD import), not the starter's own `inst-ratchet-winch-N`. They show because the stored path is kept. Adding a build leaves ids it doesn't know unchanged, so in a build made by CAD import one of those names could match a real part. Fix the starter data (`src/starters/assemblies/ratchet-winch.js`) to use its own ids.
+2. **A one-part build added to another comes in as a loose part**, not a group (a group needs two or more parts).
+3. **Adding while another tab is open** wasn't checked: the static preview has no bridge, and the live server shares the user's open build. The add is an ordinary history step, so it should reach other tabs like any change.
+

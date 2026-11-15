@@ -1,10 +1,12 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Download, FilePlus2, FolderOpen, Sparkles, Trash2 } from 'lucide-react';
-import PopoverMenu, { MenuDivider, MenuItem } from './PopoverMenu.jsx';
+import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.jsx';
+import { STARTER_SECTIONS } from '../starters.js';
 
 /**
  * The toolbar's File menu (openspec build-library): New, Starter ▸ (every starter, shown under it
- * on hover or click), Load…, Export and Delete this build….
+ * on hover or click, under the headings Robots and Assemblies: openspec starter-assemblies), Load…,
+ * Export and Delete this build….
  */
 export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport, onDeleteCurrent }) {
   const buttonRef = useRef(null);
@@ -39,7 +41,7 @@ export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport,
             New
           </MenuItem>
           <div onPointerEnter={() => setStartersOpen(true)}>
-            <MenuItem icon={Sparkles} onSelect={() => setStartersOpen(true)} title="Start a new build from a starter">
+            <MenuItem icon={Sparkles} onSelect={() => setStartersOpen(true)} title="Start a new build from a starter, or add one to your build">
               <span className="popover-submenu-label">
                 Starter
                 <ChevronRight size={12} />
@@ -47,11 +49,20 @@ export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport,
             </MenuItem>
             {startersOpen && (
               <div className="popover-submenu" role="group" aria-label="Starters">
-                {starters.map((s) => (
-                  <MenuItem key={s.id} onSelect={choose(() => onStarter(s.id))}>
-                    {s.name}
-                  </MenuItem>
-                ))}
+                {STARTER_SECTIONS.map((section) => {
+                  const list = starters.filter((s) => (s.section || 'robots') === section.id);
+                  if (!list.length) return null;
+                  return (
+                    <React.Fragment key={section.id}>
+                      <MenuHeading>{section.name}</MenuHeading>
+                      {list.map((s) => (
+                        <MenuItem key={s.id} onSelect={choose(() => onStarter(s.id))}>
+                          {s.name}
+                        </MenuItem>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
               </div>
             )}
           </div>

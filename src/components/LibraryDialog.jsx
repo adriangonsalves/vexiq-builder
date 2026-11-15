@@ -6,7 +6,8 @@ import HelpQ from '../help/HelpQ.jsx';
 /**
  * File → Load… (openspec build-library): every build saved in this browser, newest first, with its
  * picture, name, when it changed and its part count; Open (or double-click), Rename, Duplicate and
- * Delete, and Open from computer… for a .vexiq.json file.
+ * Delete, and Open from computer… for a .vexiq.json file. Open and Open from computer… ask first
+ * whether to open by itself or add to the open build (openspec add-build-to-build) when it has parts.
  */
 export default function LibraryDialog({ open, onClose, builds, currentId, available, onOpen, onRename, onDuplicate, onDelete, onOpenFile, onHelp }) {
   const ref = useRef(null);
@@ -52,7 +53,7 @@ export default function LibraryDialog({ open, onClose, builds, currentId, availa
         <strong id="libraryTitle">Your builds</strong>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <HelpQ tool="your builds" onHelp={onHelp} />
-          <button type="button" className="btn btn-outline" data-help="library-open-from-computer" onClick={() => fileRef.current?.click()} title="Open a .vexiq.json file as a new build">
+          <button type="button" className="btn btn-outline" data-help="library-open-from-computer" onClick={() => fileRef.current?.click()} title="Open a .vexiq.json file as a new build, or add it to yours">
             <Upload size={14} />
             Open from computer…
           </button>

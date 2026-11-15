@@ -1,5 +1,6 @@
 import FLOP from './starters/flop.js';
 import RATCHET_WINCH from './starters/assemblies/ratchet-winch.js';
+import { worldBoxOf } from './utils/partGroups.js';
 
 /**
  * Starter builds for File → Starter (openspec build-library). Each starter is a name and a function
@@ -454,13 +455,67 @@ function ratchetWinchStarter(catalog) {
   });
 }
 
+/**
+ * Pieces of the Clawbot (openspec starter-assemblies), sorted by the Clawbot's own labels so a fix to
+ * the Clawbot fixes them too. Every Clawbot row is in exactly one piece or in CLAWBOT_BRAIN, which no
+ * piece takes (scripts/check-starter-assemblies.mjs).
+ */
+export const CLAWBOT_PIECES = {
+  'simple-drivetrain': [
+    /^(Bottom|Side|Top) Beam [LR]$/, /^(Front Block (Inner|Outer)|Middle Block|Rear Block) [LR]$/, /^Side Pin [LR]$/,
+    /^(Front|Rear) Bearing [LR]$/, /^Bearing Pin [LR]$/, /^Drive Motor [LR]$/, /^Motor Pin [LR]$/, /^Front Axle [LR]$/,
+    /^Drive Shaft [LR]$/, /^(Front|Rear) Washer [LR]$/, /^Rear (Hub|Tire|Hub Pin) [LR]$/, /^(Front|Rear) Lock Beam [LR]$/,
+    /^(Front|Rear) Collar [LR]$/, /^Omni (Wheel|Pin) [LR]$/, /^(Front|Rear) Crossbeam$/, /^Rear Crossbeam Pin$/
+  ],
+  'simple-arm': [
+    /^Tower /, /^Arm Motor( Pin)?$/, /^Arm (Lower|Upper) Shaft$/, /^Shaft Stop /, /^Arm Beam /, /^Gear (12T|36T) [LR]$/,
+    /^Gear Pin 2x2$/, /^Arm Standoff$/
+  ],
+  'simple-claw': [/^Arm Tip Corner /, /^Wrist /, /^Claw /, /^Traction Link$/]
+};
+export const CLAWBOT_BRAIN = [/^Robot Brain/, /^Brain (Connector|Pin) /];
+
+/** A Clawbot label without the number repeated parts carry ("Side Pin R 2", "Traction Link #3"). */
+export const clawbotBaseLabel = (label) => String(label).replace(/ #?\d+$/, '');
+/** Does a Clawbot label match one of `rules`? */
+export const matchesClawbotRules = (rules, label) => rules.some((r) => r.test(clawbotBaseLabel(label)));
+
+/**
+ * One piece of the Clawbot as a starter: its rows only, one group named after it, lowered so its
+ * lowest point sits at the Clawbot's floor (X and Z stay the Clawbot's).
+ */
+function clawbotPiece(id, name) {
+  return (catalog) => {
+    const whole = clawbotStarter(catalog);
+    const byId = new Map(catalog.map((p) => [p.id, p]));
+    const lowest = (list) => Math.min(...list.map((i) => worldBoxOf(i, byId.get(i.partId)?.bbox)?.min[1] ?? Infinity));
+    const rules = CLAWBOT_PIECES[id];
+    const parts = whole.filter((i) => matchesClawbotRules(rules, i.label));
+    const dy = lowest(whole) - lowest(parts);
+    return parts.map((inst, n) => {
+      const position = [inst.position[0], Math.round((inst.position[1] + dy) * 1000) / 1000 + 0, inst.position[2]];
+      return { ...inst, instanceId: `inst-${id}-${n + 1}`, position, lastValidPosition: [...position], groupId: `group-${id}`, groupName: name };
+    });
+  };
+}
+
+/** Every starter, marked as a whole robot or a piece of one (the two headings of File → Starter). */
 export const STARTERS = [
-  { id: 'sample', name: 'Sample starter', build: sampleStarter },
-  { id: 'speedbot', name: 'Speedbot 2.0', build: speedbotStarter },
-  { id: 'basebot', name: 'BaseBot', build: basebotStarter },
-  { id: 'clawbot', name: 'Clawbot', build: clawbotStarter },
-  { id: 'flop', name: 'Flop', build: flopStarter },
-  { id: 'ratchet-winch', name: 'Ratchet winch', build: ratchetWinchStarter }
+  { id: 'sample', name: 'Sample starter', section: 'assemblies', build: sampleStarter },
+  { id: 'speedbot', name: 'Speedbot 2.0', section: 'robots', build: speedbotStarter },
+  { id: 'basebot', name: 'BaseBot', section: 'robots', build: basebotStarter },
+  { id: 'clawbot', name: 'Clawbot', section: 'robots', build: clawbotStarter },
+  { id: 'flop', name: 'Flop', section: 'robots', build: flopStarter },
+  { id: 'ratchet-winch', name: 'Ratchet winch', section: 'assemblies', build: ratchetWinchStarter },
+  { id: 'simple-drivetrain', name: 'Simple drivetrain', section: 'assemblies', build: clawbotPiece('simple-drivetrain', 'Simple drivetrain') },
+  { id: 'simple-arm', name: 'Simple arm', section: 'assemblies', build: clawbotPiece('simple-arm', 'Simple arm') },
+  { id: 'simple-claw', name: 'Simple claw', section: 'assemblies', build: clawbotPiece('simple-claw', 'Simple claw') }
+];
+
+/** The starter sections in menu order, with their headings. */
+export const STARTER_SECTIONS = [
+  { id: 'robots', name: 'Robots' },
+  { id: 'assemblies', name: 'Assemblies' }
 ];
 
 export const starterById = (id) => STARTERS.find((s) => s.id === id) || STARTERS[0];
