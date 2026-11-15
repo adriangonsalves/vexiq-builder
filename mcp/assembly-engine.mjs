@@ -109,7 +109,7 @@ export function readAssemblyState() {
  */
 export const appSyncContext = new AsyncLocalStorage();
 
-export const appUrl = () => `http://localhost:${process.env.VEXIQ_APP_PORT || 5173}`;
+export const appUrl = () => `http://${process.env.VEXIQ_APP_HOST || 'localhost'}:${process.env.VEXIQ_APP_PORT || 5173}`;
 
 // "<tool>: <summary>", e.g. "place_parts: 72 parts"; clearing says only the tool
 // `stepLabel`: the tool's own wording (e.g. "Move Left Drive"), used instead of the op summary

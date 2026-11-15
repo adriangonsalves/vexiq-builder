@@ -30,6 +30,7 @@ const BAND_FOLLOWS = 'A band follows its spots: drag a handle (Edit route) to mo
 import { spotsNearPoint } from '../utils/bandRoute.js';
 import { isBandPart } from '../utils/bandPath.js';
 import { joinKindFor } from '../utils/contextToolbarItems.js';
+import { isPawl, isRatchet, pawlHoldsAt, ratchetArrows, setPawlTarget } from '../utils/ratchetPawl.js';
 import { setGridPivot, wholeGroupOf } from '../utils/partGroups.js';
 import {
   HOLE_SNAP_AXIAL_REACH_MM,
@@ -1508,6 +1509,7 @@ export default function Viewport3D({
   focusTrigger,
   onLoadingChange,
   onMateFeedback,
+  onSetPawl,
   onToggleRotateRequest,
   collisionRecheck,
   onPickStatus,
@@ -1760,6 +1762,7 @@ export default function Viewport3D({
   onUpdateTransformRef.current = onUpdateTransform;
 
   const onMateFeedbackRef = useRef(onMateFeedback);
+  const onSetPawlRef = useRef(onSetPawl);
   const onTargetChangeRef = useRef(onTargetChange);
   const holePickingRef = useRef(holePicking);
   holePickingRef.current = holePicking;
@@ -1767,6 +1770,7 @@ export default function Viewport3D({
   onHoleAltClickRef.current = onHoleAltClick;
   onTargetChangeRef.current = onTargetChange;
   onMateFeedbackRef.current = onMateFeedback;
+  onSetPawlRef.current = onSetPawl;
 
   const onToggleRotateRequestRef = useRef(onToggleRotateRequest);
   onToggleRotateRequestRef.current = onToggleRotateRequest;
@@ -2257,6 +2261,35 @@ export default function Viewport3D({
   };
 
   /**
+   * Turns the part in `group` as the placement step would at the end of its travel (preTurnForPlacement),
+   * then pushes it in from `start` (sweepToContact); returns where it stops. A pawl keeps that turn only
+   * when it stops where it holds a ratchet (pawlHoldsAt): pushed onto a long pin that ends above the
+   * teeth, it goes in again unturned (openspec ratchet-and-pawl).
+   */
+  const turnAndPushIn = (group, start, direction, travelMm, options = {}, sweepMm = travelMm) => {
+    const startPos = start.clone();
+    const startQuat = group.quaternion.clone();
+    const turnedStart = startPos.clone().add(preTurnForPlacement(group, direction, travelMm, options, sweepMm));
+    const final = sweepToContact(group, turnedStart, direction, travelMm, sweepMm);
+    const meta = partFor(group.userData);
+    if (!isPawl(meta) || group.quaternion.angleTo(startQuat) < 1e-6) return final;
+    const id = options.copyOf ? '__copy__' : group.userData.instanceId;
+    group.position.copy(final);
+    const landed = { ...groupPose(group), instanceId: id, partId: group.userData.partId, visible: true };
+    const instances = [...instancesRef.current.filter((i) => i.instanceId !== group.userData.instanceId || options.copyOf), landed];
+    const featuresOf = (i) => {
+      const m = partFor(i);
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...i.rotation.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ'));
+      return collectWorldFeatures(m, new THREE.Matrix4().compose(new THREE.Vector3(...i.position), q, new THREE.Vector3(1, 1, 1)), i.instanceId, null);
+    };
+    if (pawlHoldsAt({ pawlId: id, instances, partOf: (i) => partFor(i), featuresOf })) return final;
+    group.quaternion.copy(startQuat);
+    group.position.copy(startPos);
+    group.updateMatrixWorld(true);
+    return sweepToContact(group, startPos, direction, travelMm, sweepMm);
+  };
+
+  /**
    * Before a part is pushed in (mate, pick, copy) from where it is along `direction` for up to
    * `travelMm`: turns it as the placement step would, so its teeth or flats don't stop it short. A
    * gear takes the turn at the first point of its path where it meshes (sliding down an axle past
@@ -2564,8 +2597,7 @@ export default function Viewport3D({
     const partnerOf = (p) => (p.insertInstanceId === selId ? p.instanceId : p.insertInstanceId);
     const receivingId = receivingIdArg ?? (plan.pairs[0] ? partnerOf(plan.pairs[0]) : null);
     // Turn to mesh / fit before the push, as at the end of the travel
-    start.add(preTurnForPlacement(group, plan.direction, plan.travelMm, { receivingId }, plan.sweepMm));
-    const final = sweepToContact(group, start, plan.direction, plan.travelMm, plan.sweepMm);
+    const final = turnAndPushIn(group, start, plan.direction, plan.travelMm, { receivingId }, plan.sweepMm);
     group.position.copy(final);
     const notes = commitPlacement(group, { label, receivingId, stepMeta });
     const withNotes = (text) => [text, ...notes].join('. ');
@@ -3445,8 +3477,7 @@ export default function Viewport3D({
     if (!checkGroupCollision(group, false)) {
       const copyOf = group.userData.instanceId;
       const startPos = fit.position.clone();
-      startPos.add(preTurnForPlacement(group, fit.direction, fit.travelMm, { receivingId, copyOf }, fit.sweepMm));
-      const final = sweepToContact(group, startPos, fit.direction, fit.travelMm, fit.sweepMm);
+      const final = turnAndPushIn(group, startPos, fit.direction, fit.travelMm, { receivingId, copyOf }, fit.sweepMm);
       group.position.copy(final);
       // The placement step for the copy: its own final pose, other parts' turns and the step's notes
       const settled = settleInstances(copyOf, groupPose(group), { receivingId, copyOf });
@@ -3814,6 +3845,39 @@ export default function Viewport3D({
       if (d <= JOIN_MESH_REACH_MM && (!best || d < best.d)) best = { id: p.id, d };
     }
     return best?.id ?? null;
+  };
+
+  // --- Ratchets and pawls (openspec ratchet-and-pawl, design §3) --------------------------------------
+
+  /** Whether `pawlId` is a pawl and `ratchetId` a ratchet (a click on the ratchet waits for a double-click). */
+  const pawlOnRatchet = (pawlId, ratchetId) => {
+    const byId = (id) => instancesRef.current.find((i) => i.instanceId === id);
+    return isPawl(partFor(byId(pawlId))) && isRatchet(partFor(byId(ratchetId)));
+  };
+
+  /** The ratchet Join would set the selected pawl on (the only one near it), or null. */
+  const pawlJoinRatchet = (selId) => {
+    const target = setPawlTarget({ selectedIds: [selId], instances: instancesRef.current, partOf: (i) => partFor(i) });
+    return target.ratchetId ?? null;
+  };
+
+  /**
+   * With a pawl selected, sets it on ratchet `ratchetId` (double-click or Join), at the spot whose tip
+   * rests nearest `point` when given. Returns false when the selected part isn't a single pawl or
+   * `ratchetId` isn't a ratchet, so the gesture does its usual job.
+   */
+  const setPawlOn = (ratchetId, point = null) => {
+    const selId = selectedIdRef.current;
+    const inst = instancesRef.current.find((i) => i.instanceId === selId);
+    const ratchetInst = instancesRef.current.find((i) => i.instanceId === ratchetId);
+    if (!inst || !ratchetInst || explodeModeRef.current !== 'off' || selectedIdsRef.current.length > 1) return false;
+    if (!isPawl(partFor(inst)) || !isRatchet(partFor(ratchetInst))) return false;
+    if (inst.locked) {
+      onMateFeedbackRef.current?.('Part is locked', true);
+      return true;
+    }
+    onSetPawlRef.current?.(selId, ratchetId, point ? point.toArray().map((v) => Number(v.toFixed(3))) : null);
+    return true;
   };
 
   /** While dragging: the spot preview for `obj` (a single gear) when it is within half a pitch of a free mesh spot. */
@@ -4964,7 +5028,7 @@ export default function Viewport3D({
       if (joinKindFor({ count: 1, targetOnOtherPart: !inst?.locked && targetOnOtherPart(selId) }) === 'target') return 'target';
       if (planMates(lastAlignedRef.current, selId).length > 0) return 'auto';
       const fitsABrain = instancesRef.current.some((i) => i.instanceId !== selId && i.visible !== false && batteryFitsBrain(selId, i.instanceId));
-      return fitsABrain || joinMeshPartner(selId) ? 'auto' : 'manual';
+      return fitsABrain || joinMeshPartner(selId) || pawlJoinRatchet(selId) ? 'auto' : 'manual';
     }
     const cache = joinCacheRef.current;
     const key = ids.join(',');
@@ -5053,6 +5117,9 @@ export default function Viewport3D({
     const selId = selectedIdRef.current;
     // A marked hole or pin end on another part comes first (openspec precise-placement)
     if (selId && selectedIdsRef.current.length <= 1 && startTargetMove()) return;
+    // A pawl with a ratchet near it goes to the spot nearest it (openspec ratchet-and-pawl)
+    const ratchetId = selId && selectedIdsRef.current.length <= 1 ? pawlJoinRatchet(selId) : null;
+    if (ratchetId && setPawlOn(ratchetId)) return;
     if (selId && selectedIdsRef.current.length <= 1 && planMates(lastAlignedRef.current, selId).length === 0) {
       const group = meshMapRef.current.get(selId);
       const brains = instancesRef.current
@@ -5489,6 +5556,17 @@ export default function Viewport3D({
     inputEl.className = 'viewport-input';
     container.appendChild(inputEl);
     inputElRef.current = inputEl;
+    // Dev server only: where a world point (mm) is on screen, for in-app checks driven by a browser
+    if (import.meta.env.DEV) {
+      window.__vexiqView = {
+        project: (p) => {
+          const cam = pointerCameraRef.current?.() || cameraRef.current;
+          const v = new THREE.Vector3(...p).project(cam);
+          const r = inputEl.getBoundingClientRect();
+          return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+        }
+      };
+    }
 
     // Studio CAD Lighting & Environment Reflections
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -6378,11 +6456,12 @@ export default function Viewport3D({
         return;
       }
       // Wait for a possible double-click before selecting: on the selected part behind another, on
-      // a brain the selected battery fits (the double-click slides it in), or on any part of a selected
+      // a brain the selected battery fits (the double-click slides it in), on a ratchet with a pawl
+      // selected (the double-click sets the pawl), or on any part of a selected
       // set (the double-click mates the whole set, so the first click mustn't narrow the selection)
       const selIds = selectedIdsRef.current;
       const onSet = selIds.length > 1 && ids.some((id) => selIds.includes(id));
-      if (onSet || (selId && front !== selId && (ids.includes(selId) || batteryFitsBrain(selId, front)))) {
+      if (onSet || (selId && front !== selId && (ids.includes(selId) || batteryFitsBrain(selId, front) || ids.some((id, k) => pawlOnRatchet(selId, id) && (!ids.includes(selId) || k < ids.indexOf(selId)))))) {
         pendingSelectTimer = setTimeout(() => {
           pendingSelectTimer = null;
           select(front);
@@ -6510,6 +6589,18 @@ export default function Viewport3D({
       if (underPointer.some((id) => id !== selId && slideBatteryInto(id))) {
         cancelPendingSelect();
         return;
+      }
+      // A selected pawl and a ratchet double-clicked (in front of the pawl, if that is under the
+      // pointer too): the pawl goes to the spot nearest the click
+      const pawlAt = underPointer.indexOf(selId);
+      const ratchetHit = underPointer.find((id, k) => id !== selId && (pawlAt < 0 || k < pawlAt) && isRatchet(partFor(instancesRef.current.find((i) => i.instanceId === id))));
+      if (ratchetHit && isPawl(partFor(instancesRef.current.find((i) => i.instanceId === selId)))) {
+        setRayFromEvent(e);
+        const hit = raycaster.intersectObject(meshMapRef.current.get(ratchetHit), true)[0];
+        if (setPawlOn(ratchetHit, hit?.point ?? null)) {
+          cancelPendingSelect();
+          return;
+        }
       }
       // A selected gear and a gear it meshes with at 90° double-clicked (in front of the selected
       // gear, if that is under the pointer too): the gear goes to the mesh spot nearest the click
@@ -7848,6 +7939,78 @@ export default function Viewport3D({
     validateTarget();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instances]);
+
+  // The direction arrow (openspec ratchet-and-pawl, design §5): while a holding pawl or its ratchet is
+  // selected, a flat curved arrow round the ratchet points the way it can turn. Overlay geometry, not a part.
+  const ratchetArrowRef = useRef(null);
+  const refreshRatchetArrow = () => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    if (ratchetArrowRef.current) {
+      scene.remove(ratchetArrowRef.current);
+      ratchetArrowRef.current.traverse((o) => {
+        o.geometry?.dispose();
+        o.material?.dispose();
+      });
+      ratchetArrowRef.current = null;
+    }
+    const ids = selectedIdsRef.current;
+    // One part selected, or a pawl and its ratchet together
+    if (!ids.length || ids.length > 2 || explodeModeRef.current !== 'off') {
+      renderFrameRef.current?.();
+      return;
+    }
+    const arrows = [];
+    for (const id of ids) {
+      const found = ratchetArrows({
+        selectedId: id,
+        instances: instancesRef.current,
+        partOf: (i) => partFor(i),
+        featuresOf: (i) => {
+          const g = meshMapRef.current.get(i.instanceId);
+          return g ? worldFeaturesOfGroup(g) : [];
+        }
+      });
+      for (const a of found) if (!arrows.some((b) => b.ratchetId === a.ratchetId)) arrows.push(a);
+    }
+    if (!arrows.length) {
+      renderFrameRef.current?.();
+      return;
+    }
+    const group = new THREE.Group();
+    group.name = '__ratchet_arrow__';
+    for (const a of arrows) {
+      const radius = a.radius + 4;
+      const sweep = (3 * Math.PI) / 2; // three quarters of a turn
+      const material = new THREE.MeshBasicMaterial({ color: 0xf59e0b, depthTest: false, transparent: true, opacity: 0.95, side: THREE.DoubleSide });
+      // Built in the ratchet's plane (local XY, turning anticlockwise about +Z), then turned onto it
+      const band = new THREE.Mesh(new THREE.RingGeometry(radius - 0.8, radius + 0.8, 64, 1, 0, sweep), material);
+      const head = new THREE.Shape();
+      head.moveTo(radius - 3, 0);
+      head.lineTo(radius + 3, 0);
+      head.lineTo(radius, 5);
+      head.closePath();
+      const tip = new THREE.Mesh(new THREE.ShapeGeometry(head), material.clone());
+      tip.rotation.z = sweep;
+      const piece = new THREE.Group();
+      piece.add(band, tip);
+      // Free direction clockwise about the axis: mirror the arrow
+      if (a.freeSign < 0) piece.scale.set(1, -1, 1);
+      piece.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), a.axis);
+      piece.position.copy(a.center);
+      piece.traverse((o) => {
+        o.renderOrder = 999;
+      });
+      group.add(piece);
+    }
+    scene.add(group);
+    ratchetArrowRef.current = group;
+    renderFrameRef.current?.();
+  };
+  useEffect(() => {
+    refreshRatchetArrow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instances, selectedIds, explodeMode]);
 
   // Meshed gears on the selected gear (openspec precise-placement): the edges of gears meshed with the
   // one selected turn green, and of 90° gears just out of mesh with it amber; they ride on the parts

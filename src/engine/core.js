@@ -27,6 +27,8 @@ import { canTurnToMesh, meshRelation, meshTurn, quaternionToEulerDeg, meshRatio,
 import { groupOf, shaftGroups, squareFitRoll, turnGroup } from '../utils/shaftGroups.js';
 import { motorShaftTilt, settlePlacement, turnAboutLine } from '../utils/placementFit.js';
 import { isTireOnHub } from '../utils/tireFit.js';
+import { isPawl, isRatchet, pawlCandidates, pawlRelation, pawlSpots, worldPawl, worldRatchet } from '../utils/ratchetPawl.js';
+import { refAxes } from '../utils/axisFrame.js';
 import { seatedBatteryBay } from '../utils/batteryBay.js';
 import { areChainNeighbours, isChainFit, isChainPart, isGripperOnLink, isLink, isLinkOnSprocket, unsupportedBends } from '../utils/chainFit.js';
 import { applyPatches, groupParts } from '../utils/partGroups.js';
@@ -946,8 +948,9 @@ function findJoints(state) {
   }
 
   // Kinematic Gear-Meshing & Motor-to-Wheel Power Tracing
+  // Ratchets and pawls carry gearSpecs from their names but have no meshing teeth (openspec ratchet-and-pawl)
   const placedGears = nonFasteners
-    .filter((nf) => nf.part.gearSpecs != null)
+    .filter((nf) => nf.part.gearSpecs != null && !nf.part.ratchetSpecs)
     .map((nf) => {
       const ports = getWorldPortsForInstance(nf.inst);
       const bore = ports.find((p) => p.type === 'shaft_bore') || ports[0];
@@ -1442,7 +1445,78 @@ export function playInputs(state, { braceTolerance = true } = {}) {
       if (a !== b && isTireOnHub(a.part, a.mat, b.part, b.mat) && /tire/i.test(a.part.name)) bays.push([a.inst.instanceId, b.inst.instanceId]);
     }
   }
-  return { parts, seated, groups, meshes, chains, tracks, sprocketAxes, bays, bands: playBands(found.visible) };
+  // Spur gears as placed, for gears that swing into and out of mesh in Play mode (openspec ratchet-and-pawl, design §9)
+  const spurGears = toothed
+    .filter((g) => g.kind === 'gear')
+    .map((g) => ({
+      id: g.instanceId,
+      center: vec(g.center),
+      axis: vec(g.axis),
+      teeth: g.teeth,
+      moduleMm: g.moduleMm,
+      pitchRadiusMm: g.pitchRadiusMm,
+      toothDir: vec(g.toothDir),
+      faceSpan: [Math.round((g.faceSpan[0] - g.center.dot(g.axis)) * 1000) / 1000, Math.round((g.faceSpan[1] - g.center.dot(g.axis)) * 1000) / 1000]
+    }));
+  return { parts, seated, groups, meshes, chains, tracks, sprocketAxes, bays, bands: playBands(found.visible), ratchets: playRatchets(found), spurGears };
+}
+
+/**
+ * Ratchets for Play mode (openspec ratchet-and-pawl, design §7): each pawl in a ratchet's teeth from
+ * the audit's list, with what the pawl's rocking needs: the ratchet's axis, centre and teeth, the
+ * free direction, how far round its tooth the tip sits now (`phaseDeg`, from the steep side the
+ * free turn last brought past it), and how fast the tip's distance from the centre changes as the
+ * pawl turns about its pin (`leverMm`, mm per radian about the pivot axis).
+ */
+function playRatchets(found) {
+  const out = [];
+  const byId = new Map(found.visible.map((i) => [i.instanceId, i]));
+  for (const r of auditRatchets(found)) {
+    const rInst = byId.get(r.ratchetId);
+    const meta = partOf(rInst);
+    const ratchet = worldRatchet(meta, rInst.position, rInst.rotation, r.ratchetId);
+    const s = meta.ratchetSpecs;
+    const period = 360 / s.teeth;
+    const tip = new THREE.Vector3(...r.tip);
+    // The tip's angle in the ratchet's own frame, measured from a steep side along the sloped side
+    const local = tip.clone().sub(ratchet.center).applyQuaternion(ratchet.inverse);
+    const [u, v] = refAxes(new THREE.Vector3(0, 0, 1));
+    const ang = THREE.MathUtils.radToDeg(Math.atan2(local.x * v.x + local.y * v.y, local.x * u.x + local.y * u.y));
+    const along = s.lean === 0 ? 1 : -s.lean;
+    const phase = (((ang - s.toothPhaseDeg) * along) % period + period) % period;
+    let leverMm = 0;
+    if (r.pivot) {
+      const axis = new THREE.Vector3(...r.pivot.axis).normalize();
+      const point = new THREE.Vector3(...r.pivot.point);
+      const radiusAt = (deg) => {
+        const t = tip.clone().sub(point).applyAxisAngle(axis, THREE.MathUtils.degToRad(deg)).add(point).sub(ratchet.center);
+        return t.addScaledVector(ratchet.axis, -t.dot(ratchet.axis)).length();
+      };
+      leverMm = (radiusAt(0.5) - radiusAt(-0.5)) / THREE.MathUtils.degToRad(1);
+    }
+    const rel = tip.clone().sub(ratchet.center);
+    out.push({
+      ratchet: r.ratchetId,
+      pawl: r.pawlId,
+      holds: r.holds,
+      wrongWay: r.wrongWay,
+      pivotCount: r.pivotCount,
+      pressed: r.pressed,
+      pivot: r.pivot,
+      axis: playVec(ratchet.axis),
+      center: playVec(ratchet.center),
+      freeSign: r.freeSign,
+      teeth: s.teeth,
+      tipRadiusMm: s.tipRadiusMm,
+      rootRadiusMm: s.rootRadiusMm,
+      profileMm: s.profileMm,
+      tip: playVec(tip),
+      phaseDeg: Math.round(phase * 1000) / 1000,
+      tipRadiusNowMm: Math.round(rel.addScaledVector(ratchet.axis, -rel.dot(ratchet.axis)).length() * 1000) / 1000,
+      leverMm: Math.round(leverMm * 1000) / 1000
+    });
+  }
+  return out;
 }
 
 const SHAFT_TYPES = new Set(['straight_shaft', 'capped_shaft', 'motor_shaft']);
@@ -1622,6 +1696,83 @@ function settleSpread(plan, state, input, { log = null, progress = null } = {}) 
   log?.(`explode: spread settled in ${round} round(s), ${Date.now() - t0} ms${left ? ' (some pieces still meet)' : ''}`);
   plan.stats = { ...plan.stats, settleRounds: round, settleMs: Date.now() - t0 };
   return plan;
+}
+
+/**
+ * Each pawl in a ratchet's teeth (openspec ratchet-and-pawl, design §6), from the joins: the pins
+ * that join the pawl to another part are its pivots (a pin seated in the pawl alone, like a band
+ * post, is not); `pressed` when a strung band has a spot on the pawl or on a pin seated in it.
+ * [{ ratchetId, ratchet, pawlId, pawl, holds, freeSign, freeAxis, freeDirection, wrongWay,
+ * pivotCount, locked, pressed }].
+ */
+function auditRatchets(found) {
+  const { visible, seatedPairs, seatedIn, fastenerIn, fasteners } = found;
+  const ratchetInsts = visible.filter((i) => isRatchet(partOf(i)));
+  const pawlInsts = visible.filter((i) => isPawl(partOf(i)));
+  if (!ratchetInsts.length || !pawlInsts.length) return [];
+  const fastenerIds = new Set(fasteners.map((f) => f.inst.instanceId));
+  const bands = visible.filter(isRoutedBand);
+  // The parts a fastener's stack is seated in
+  const partsOfStack = (id) => {
+    const seen = new Set([id]);
+    const queue = [id];
+    const parts = new Set();
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const partId of seatedIn.get(cur)?.keys() || []) parts.add(partId);
+      for (const next of fastenerIn.get(cur)?.keys() || []) if (!seen.has(next)) seen.add(next) && queue.push(next);
+    }
+    return parts;
+  };
+  const out = [];
+  for (const pawlInst of pawlInsts) {
+    const pawlId = pawlInst.instanceId;
+    const pins = new Set();
+    const pivots = [];
+    const addPivot = (feature) => {
+      if (!pivots.some((p) => p.point.distanceTo(feature.origin) < 0.5)) pivots.push({ point: feature.origin.clone(), axis: feature.axis.clone() });
+    };
+    for (const p of seatedPairs) {
+      const pawlIsOpening = p.openingOwner === pawlId;
+      if (!pawlIsOpening && p.insertOwner !== pawlId) continue;
+      const other = pawlIsOpening ? p.insertOwner : p.openingOwner;
+      const pawlFeature = pawlIsOpening ? p.opening : p.insert;
+      if (fastenerIds.has(other)) {
+        pins.add(other);
+        const partners = partsOfStack(other);
+        partners.delete(pawlId);
+        if (partners.size) addPivot(pawlFeature);
+      } else {
+        addPivot(pawlFeature); // an integral peg of another part, or the pawl's hole on it
+      }
+    }
+    const pressed = bands.some((b) => b.shape.route.some((sp) => sp.instanceId === pawlId || pins.has(sp.instanceId)));
+    const pawl = worldPawl(partOf(pawlInst), pawlInst.position, pawlInst.rotation, pawlId);
+    for (const ratchetInst of ratchetInsts) {
+      const ratchet = worldRatchet(partOf(ratchetInst), ratchetInst.position, ratchetInst.rotation, ratchetInst.instanceId);
+      const rel = pawlRelation(ratchet, pawl, { pivots });
+      if (!rel) continue;
+      const freeAxis = rel.axis.clone().multiplyScalar(rel.freeSign);
+      out.push({
+        ratchetId: ratchetInst.instanceId,
+        ratchet: ratchetInst.label,
+        pawlId,
+        pawl: pawlInst.label,
+        holds: rel.holds,
+        freeSign: rel.freeSign,
+        freeAxis: freeAxis.toArray().map((v) => Math.round(v * 1000) / 1000 + 0),
+        freeDirection: rel.holds ? turnWords(freeAxis) : null,
+        wrongWay: rel.wrongWay,
+        pivotCount: pivots.length,
+        locked: rel.holds && pivots.length >= 2,
+        pressed,
+        // The line it swings on (one pin) and its tip, for Play mode
+        pivot: pivots.length === 1 ? { point: pivots[0].point.toArray(), axis: pivots[0].axis.toArray() } : null,
+        tip: pawl.tip.toArray()
+      });
+    }
+  }
+  return out;
 }
 
 export function auditAssembly(state) {
@@ -1885,10 +2036,15 @@ export function auditAssembly(state) {
     }
   }
 
+  // Ratchets and pawls: a pawl facing the wrong way, held by two or more pins, or by none is a problem
+  const ratchets = auditRatchets(found);
+  const ratchetProblems = ratchets.filter((r) => r.wrongWay || r.locked || r.pivotCount === 0);
+
   return {
     totalInstances: visible.length,
     isMechanicallySound:
       collisions.length === 0 &&
+      ratchetProblems.length === 0 &&
       tiltedMotors.length === 0 &&
       floatingFasteners.length === 0 &&
       halfSeatedFasteners.length === 0 &&
@@ -1920,6 +2076,8 @@ export function auditAssembly(state) {
     joints,
     pegJoints,
     batteryBays,
+    // Pawls in ratchets' teeth, which way each ratchet turns, and pawls that won't work
+    ratchets,
     // Chains or tracks that bend away from any sprocket: their links are counted unsecured
     chainBends,
     kinematics: {
@@ -2752,6 +2910,7 @@ export function summarizeAudit(audit) {
     protrudingShaftCount: audit.protrudingShaftCount,
     drivenWheelCount: audit.kinematics.drivenWheelCount,
     totalWheelCount: audit.kinematics.totalWheelCount,
+    ...(audit.ratchets?.length ? { ratchets: audit.ratchets.map((r) => `${r.pawl} on ${r.ratchet}: ${r.holds ? `turns ${r.freeDirection} only` : 'holds nothing'}${r.holds && !r.pressed ? ' (nothing presses the pawl on)' : ''}`) } : {}),
     problems: Object.fromEntries(
       Object.entries({
         collisions: audit.collisions.map((c) => `${c.label} x ${c.collidingWith.join(', ')}`),
@@ -2763,6 +2922,7 @@ export function summarizeAudit(audit) {
         underSecuredHeavy: names(audit.underSecuredHeavyParts),
         disconnected: audit.disconnectedIslands.map((island) => island.map((p) => p.label).join(', ')),
         protruding: names(audit.protrudingShafts),
+        pawls: (audit.ratchets || []).filter((r) => r.wrongWay || r.locked || r.pivotCount === 0).map((r) => `${r.pawl} on ${r.ratchet}: ${r.wrongWay ? 'faces the wrong way' : r.locked ? 'held by two or more pins, so the ratchet is locked' : 'held by no pin'}`),
         undrivenWheels: names(audit.kinematics.unpoweredWheels)
       }).filter(([, v]) => v.length > 0)
     )
@@ -2944,6 +3104,202 @@ export function applyPosePatches(instances, patches) {
     const { instanceId, ...fields } = patch;
     return { ...inst, ...fields };
   });
+}
+
+// --- Ratchets and pawls (openspec ratchet-and-pawl, design §3) -------------------------------------
+
+/** "anticlockwise seen from +z" for a turn about the world vector `freeAxis` (right-hand rule). */
+export function turnWords(freeAxis) {
+  const a = freeAxis.isVector3 ? freeAxis : new THREE.Vector3(...freeAxis);
+  const k = [0, 1, 2].reduce((best, i) => (Math.abs(a.getComponent(i)) > Math.abs(a.getComponent(best)) ? i : best), 0);
+  return `${a.getComponent(k) >= 0 ? 'anticlockwise' : 'clockwise'} seen from +${'xyz'[k]}`;
+}
+
+const PAWL_NEAR_MM = 60; // parts further than this from the ratchet can't hold its pawl
+
+/** The parts a pawl could pin to beside `ratchetInst`, with their world features (not the ratchet, the pawl, or parts locked to its shaft). */
+function pawlNeighbours(visible, ratchetInst, ratchet, pawlId) {
+  const out = [];
+  for (const inst of visible) {
+    if (inst.instanceId === ratchetInst.instanceId || inst.instanceId === pawlId || isRoutedBand(inst)) continue;
+    const part = partOf(inst);
+    if (!part?.bbox) continue;
+    const box = new THREE.Box3(new THREE.Vector3(...part.bbox.min), new THREE.Vector3(...part.bbox.max)).applyMatrix4(buildWorldMatrix(inst.position, inst.rotation));
+    if (box.distanceToPoint(ratchet.center) > PAWL_NEAR_MM) continue;
+    const features = worldFeaturesFor(inst);
+    // A part with a square opening on the ratchet's shaft turns with the ratchet
+    const onShaft = features.some((f) => f.flatDir && f.kind !== 'pin' && f.kind !== 'shaft' && Math.abs(f.axis.dot(ratchet.axis)) > 0.999 && f.origin.clone().sub(ratchet.center).cross(ratchet.axis).length() < 0.25);
+    if (onShaft) continue;
+    out.push({ instanceId: inst.instanceId, label: inst.label || part.name, features });
+  }
+  return out;
+}
+
+/**
+ * The pawl spots round a ratchet (openspec ratchet-and-pawl "Set pawl"): params { pawlId (a pawl in
+ * the build) or part (a pawl to add), ratchetId }. Nothing changes. Returns { ok, ratchet, spots:
+ * [{ spot, pinTo: { instanceId, label, feature, kind: 'hole' | 'pin', point }, pawlHole, turnedOver,
+ * freeSign, freeAxis, freeDirection, angleDeg, blocked, blockedBy, pose: { position, rotation } }],
+ * message } (message says why when no spot is free), or { ok: false, error }.
+ */
+export function listPawlSpots(state, params = {}) {
+  const instances = state.instances || [];
+  const ratchetInst = instances.find((i) => i.instanceId === params.ratchetId);
+  if (!ratchetInst) return { ok: false, error: `Ratchet "${params.ratchetId}" not found.` };
+  const ratchetMeta = partOf(ratchetInst);
+  if (!isRatchet(ratchetMeta)) return { ok: false, error: `${ratchetInst.label || ratchetMeta?.name} is not a ratchet (the 16 Tooth Ratchet and 40 Tooth Ratchet are).` };
+  const moving = params.pawlId ? instances.find((i) => i.instanceId === params.pawlId) : null;
+  if (params.pawlId && !moving) return { ok: false, error: `Pawl "${params.pawlId}" not found.` };
+  const pawlMeta = moving ? partOf(moving) : findPart(params.part || 'Short Low-Profile Pawl');
+  if (!isPawl(pawlMeta)) return { ok: false, error: `${moving?.label || pawlMeta?.name || params.part} is not a pawl (the Short Low-Profile Pawl is).` };
+  const visible = instances.filter((i) => i.visible !== false);
+  const ratchet = worldRatchet(ratchetMeta, ratchetInst.position, ratchetInst.rotation, ratchetInst.instanceId);
+  const neighbours = pawlNeighbours(visible, ratchetInst, ratchet, moving?.instanceId);
+  const others = visible.filter((i) => i.instanceId !== moving?.instanceId);
+  const probeId = moving?.instanceId ?? '__pawl_spot__';
+  const poseOf = (position, quaternion) => ({ position: position.toArray().map((v) => Math.round(v * 1000) / 1000 + 0), rotation: quaternionToEulerDeg(quaternion) });
+  const blockedBy = (position, quaternion) =>
+    checkCandidateCollision({ instanceId: probeId, partId: pawlMeta.id, ...poseOf(position, quaternion), visible: true }, others).collidingWith.map((c) => c.label);
+  const ratchetLabel = ratchetInst.label || ratchetMeta.name;
+  const spots = pawlSpots(ratchet, pawlMeta, neighbours, { blockedBy }).map((sp) => {
+    const freeAxis = sp.relation.axis.clone().multiplyScalar(sp.relation.freeSign);
+    return {
+      spot: sp.index,
+      pinTo: { instanceId: sp.candidate.instanceId, label: sp.candidate.label, feature: sp.candidate.feature, kind: sp.candidate.kind, point: sp.candidate.point.toArray().map((v) => Math.round(v * 1000) / 1000 + 0) },
+      pawlHole: sp.hole,
+      turnedOver: sp.flipped,
+      freeSign: sp.relation.freeSign,
+      freeAxis: freeAxis.toArray().map((v) => Math.round(v * 1000) / 1000 + 0),
+      freeDirection: turnWords(freeAxis),
+      angleDeg: sp.angleDeg,
+      blocked: sp.blocked,
+      blockedBy: sp.blockedBy,
+      pose: poseOf(sp.position, sp.quaternion)
+    };
+  });
+  let message = '';
+  if (!spots.length) {
+    message = pawlCandidates(ratchet, pawlMeta, neighbours).length
+      ? `No hole or pin beside ${ratchetLabel} lets the pawl rest in its teeth. A pawl pinned about 28 mm from the ratchet's centre through its hole 2_0_0 fits; move the beam or plate, or use another hole.`
+      : `The pawl needs a beam or plate beside the ratchet to pin to: there is no free pin hole or standing pin beside ${ratchetLabel} in the plane of its teeth.`;
+  } else if (spots.every((s) => s.blocked)) {
+    message = `Every spot is blocked: by ${[...new Set(spots.flatMap((s) => s.blockedBy))].join(', ')}.`;
+  }
+  return { ok: true, ratchet: ratchetLabel, spots, ...(message ? { message } : {}) };
+}
+
+/**
+ * Sets a pawl on a ratchet as one history step (openspec ratchet-and-pawl "Set pawl"): params {
+ * pawlId or part, ratchetId, spot?, near? (a world point, e.g. a double-click), label?, color? }.
+ * With `spot`, that spot; otherwise, when the pawl is at a spot now, the next free one round the
+ * ratchet; otherwise the free spot whose tip rests nearest `near`, or the one nearest the pawl. The ratchet never moves.
+ * Returns { ok, state, record, stepLabel, message, instanceId, position, rotation, spot, freeSign,
+ * freeAxis, freeDirection, pinTo } or { ok: false, error, spots? }.
+ */
+export function setPawl(state, params = {}) {
+  const list = listPawlSpots(state, params);
+  if (!list.ok) return list;
+  const strip = (arr) => arr.map(({ pose, ...rest }) => rest);
+  if (!list.spots.length) return { ok: false, error: list.message, spots: [] };
+  const instances = state.instances || [];
+  const moving = params.pawlId ? instances.find((i) => i.instanceId === params.pawlId) : null;
+  if (moving?.locked) return { ok: false, error: `${moving.label} is locked.` };
+  const pawlMeta = moving ? partOf(moving) : findPart(params.part || 'Short Low-Profile Pawl');
+  const free = list.spots.filter((s) => !s.blocked);
+  let chosen = null;
+  if (params.spot !== undefined && params.spot !== null) {
+    chosen = list.spots.find((s) => s.spot === Number(params.spot));
+    if (!chosen) return { ok: false, error: `There is no spot ${params.spot}: ${list.spots.length} spot(s) round ${list.ratchet}.`, spots: strip(list.spots) };
+    if (chosen.blocked) return { ok: false, error: `Spot ${chosen.spot} is blocked by ${chosen.blockedBy.join(', ')}.`, spots: strip(list.spots) };
+  } else {
+    if (!free.length) return { ok: false, error: list.message, spots: strip(list.spots) };
+    const boxCenter = (pose) => new THREE.Vector3(...pawlMeta.bbox.center).applyMatrix4(buildWorldMatrix(pose.position, pose.rotation));
+    const q = (r) => new THREE.Quaternion().setFromEuler(new THREE.Euler(...r.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ'));
+    const here = moving ? free.findIndex((s) => new THREE.Vector3(...s.pose.position).distanceTo(new THREE.Vector3(...moving.position)) < 0.05 && Math.abs(q(s.pose.rotation).dot(q(moving.rotation))) > 0.99999) : -1;
+    // A click on the ratchet picks the spot whose tip rests nearest it; otherwise the spot nearest the pawl
+    const tipAt = (pose) => new THREE.Vector3(...pawlMeta.ratchetSpecs.tipPoint).applyMatrix4(buildWorldMatrix(pose.position, pose.rotation));
+    const [from, at] = params.near ? [new THREE.Vector3(...params.near), tipAt] : moving ? [boxCenter(moving), boxCenter] : [null, null];
+    const nearest = from ? free.reduce((a, b) => (at(b.pose).distanceTo(from) < at(a.pose).distanceTo(from) ? b : a)) : free[0];
+    const angleOff = (s, t) => Math.abs(((s.angleDeg - t.angleDeg + 540) % 360) - 180);
+    // Already at a spot (and, for a click, clicked where it is): the next spot round the ratchet,
+    // skipping twins at the same angle (the pawl against the plate on the other side)
+    if (here >= 0 && (!params.near || angleOff(nearest, free[here]) <= 1)) {
+      const order = [...free.slice(here + 1), ...free.slice(0, here)];
+      chosen = order.find((s) => angleOff(s, free[here]) > 1) || order[0] || free[here];
+    } else {
+      chosen = nearest;
+    }
+  }
+  const sameCount = instances.filter((i) => i.partId === pawlMeta.id).length;
+  const placed = moving
+    ? { ...moving, ...chosen.pose }
+    : {
+        instanceId: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        partId: pawlMeta.id,
+        label: params.label || `${pawlMeta.name} #${sameCount + 1}`,
+        ...chosen.pose,
+        color: params.color || pawlMeta.defaultColor,
+        visible: true,
+        locked: false
+      };
+  const rest = instances.filter((i) => i.instanceId !== placed.instanceId);
+  const col = checkCandidateCollision(placed, rest);
+  placed.isIntersecting = col.isIntersecting;
+  placed.lastValidPosition = col.isIntersecting ? null : [...placed.position];
+  placed.lastValidRotation = col.isIntersecting ? null : [...placed.rotation];
+  const message = `Set ${placed.label} on ${list.ratchet} (spot ${chosen.spot} of ${list.spots.length}), lined up with a hole in ${chosen.pinTo.label}: the ratchet now turns ${chosen.freeDirection} only. Put a pin through, and a band to pull the pawl onto the teeth`;
+  return {
+    ok: true,
+    state: { ...state, selectedId: placed.instanceId, instances: [...rest, placed] },
+    record: true,
+    stepLabel: `${moving ? 'Set' : 'Add'} ${placed.label} on ${list.ratchet}`,
+    message,
+    instanceId: placed.instanceId,
+    position: placed.position,
+    rotation: placed.rotation,
+    spot: chosen.spot,
+    freeSign: chosen.freeSign,
+    freeAxis: chosen.freeAxis,
+    freeDirection: chosen.freeDirection,
+    pinTo: chosen.pinTo
+  };
+}
+
+/**
+ * The set_pawl tool and action (openspec ratchet-and-pawl "Assistant sets a pawl"): params {
+ * instanceId (a pawl in the build) or part (a pawl to add), ratchetInstanceId, spot?, near?,
+ * nearest?, label?, color? }. Without `spot` (and without `near` / `nearest: true`) nothing changes
+ * and the spots are listed: { ok, ratchet, spots: [{ spot, pinTo, pawlHole, turnedOver, freeDirection,
+ * freeAxis, blocked, blockedBy }], message? }. Otherwise as setPawl.
+ */
+export function setPawlTool(state, params = {}) {
+  const engineParams = {
+    pawlId: params.instanceId ?? params.pawlId,
+    part: params.part,
+    ratchetId: params.ratchetInstanceId ?? params.ratchetId,
+    spot: params.spot,
+    near: params.near,
+    label: params.label,
+    color: params.color
+  };
+  if (!engineParams.ratchetId) return { ok: false, error: 'Give ratchetInstanceId: the 16 Tooth Ratchet or 40 Tooth Ratchet to set the pawl on.' };
+  if (!engineParams.pawlId && !engineParams.part) return { ok: false, error: 'Give instanceId (a pawl in the build) or part (a pawl to add, e.g. "Short Low-Profile Pawl").' };
+  if ((params.spot === undefined || params.spot === null) && !params.near && !params.nearest) {
+    const list = listPawlSpots(state, engineParams);
+    if (!list.ok) return list;
+    const spots = list.spots.map(({ spot, pinTo, pawlHole, turnedOver, freeDirection, freeAxis, blocked, blockedBy }) => ({
+      spot,
+      pinTo: { instanceId: pinTo.instanceId, label: pinTo.label, feature: pinTo.feature, kind: pinTo.kind },
+      pawlHole,
+      turnedOver,
+      freeDirection,
+      freeAxis,
+      blocked,
+      ...(blocked ? { blockedBy } : {})
+    }));
+    return { ok: true, ratchet: list.ratchet, spots, ...(list.message ? { message: list.message } : {}) };
+  }
+  return setPawl(state, engineParams);
 }
 
 /**

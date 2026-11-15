@@ -1,4 +1,5 @@
 import FLOP from './starters/flop.js';
+import RATCHET_WINCH from './starters/assemblies/ratchet-winch.js';
 
 /**
  * Starter builds for File → Starter (openspec build-library). Each starter is a name and a function
@@ -441,12 +442,25 @@ function flopStarter(catalog) {
   });
 }
 
+/** Hero Bot Swish's winch (src/starters/assemblies/): a ratchet and pawl on a swinging arm, with its two belts. */
+function ratchetWinchStarter(catalog) {
+  const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
+  return RATCHET_WINCH.flatMap(([number, label, position, rotation, color, groupName, , shape], i) => {
+    const p = byNumber.get(number);
+    if (!p) return [];
+    const inst = { ...part(p, `inst-ratchet-winch-${i + 1}`, position, rotation, color || p.defaultColor), label, groupId: 'group-ratchet-winch', groupName };
+    if (shape) inst.shape = shape;
+    return [inst];
+  });
+}
+
 export const STARTERS = [
   { id: 'sample', name: 'Sample starter', build: sampleStarter },
   { id: 'speedbot', name: 'Speedbot 2.0', build: speedbotStarter },
   { id: 'basebot', name: 'BaseBot', build: basebotStarter },
   { id: 'clawbot', name: 'Clawbot', build: clawbotStarter },
-  { id: 'flop', name: 'Flop', build: flopStarter }
+  { id: 'flop', name: 'Flop', build: flopStarter },
+  { id: 'ratchet-winch', name: 'Ratchet winch', build: ratchetWinchStarter }
 ];
 
 export const starterById = (id) => STARTERS.find((s) => s.id === id) || STARTERS[0];

@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ChevronDown, CircleDashed, ClipboardCheck, Expand, Link2, Magnet, Play, Ruler, Spline, Wrench } from 'lucide-react';
+import { ChevronDown, CircleDashed, ClipboardCheck, Expand, Link2, Magnet, Play, Ruler, Spline, Wrench, Cog } from 'lucide-react';
 import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.jsx';
 
 /**
@@ -17,8 +17,9 @@ import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.j
  * Band builder (openspec rubber-bands) strings a rubber band or belt round spots picked in the view;
  * Band between these and Belt round these start it from the selection; Flatten band takes a strung
  * band off its spots.
+ * Set pawl (openspec ratchet-and-pawl) rests the selected pawl in a ratchet's teeth, pinned beside it.
  */
-export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, bendReason = null, playing = false, playReason = null, onPlay, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack, onBendSheet, bandOpen = false, onBand, betweenReason = null, onBandBetween, beltReason = null, onBelt, flattenBandReason = null, onFlattenBand }) {
+export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, bendReason = null, playing = false, playReason = null, onPlay, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack, onBendSheet, bandOpen = false, onBand, betweenReason = null, onBandBetween, beltReason = null, onBelt, flattenBandReason = null, onFlattenBand, pawlReason = null, onSetPawl }) {
   const buttonRef = useRef(null);
   const [at, setAt] = useState(null);
   const close = useCallback(() => setAt(null), []);
@@ -110,6 +111,14 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, aud
           </MenuItem>
           <MenuItem disabled={Boolean(chainOff)} onSelect={choose(onTrack)} title={chainOff || `Wrap a tank track round the selected sprockets, with rubber grippers if you like.${inTheWay}`}>
             Track builder…
+          </MenuItem>
+          <MenuItem
+            icon={Cog}
+            disabled={Boolean(disabledReason || pawlReason)}
+            onSelect={choose(onSetPawl)}
+            title={disabledReason || pawlReason || 'Rest the selected pawl in the ratchet’s teeth, pinned to a hole beside it, so the ratchet turns one way only. Pick it again for the next spot round the ratchet.'}
+          >
+            Set pawl
           </MenuItem>
           <MenuItem
             icon={Spline}

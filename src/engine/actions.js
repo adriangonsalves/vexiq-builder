@@ -20,7 +20,8 @@ import {
   mirrorSubassembly,
   partOf,
   planChainFor,
-  playInputs
+  playInputs,
+  setPawlTool
 } from './core.js';
 import { buildBodyGraph } from '../sim/bodyGraph.js';
 import { fitSet, fixAssembly, lineUpAfterInsert } from './fixAssembly.js';
@@ -30,7 +31,7 @@ import { meshRightAngle } from './rightAngleGears.js';
 import { followBands } from '../utils/bandRoute.js';
 import { withBandFlags } from './bandFit.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'line_up_after_insert', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet', 'play_setup', 'place_band', 'band_routes', 'band_flags', 'mesh_right_angle'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'line_up_after_insert', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet', 'play_setup', 'place_band', 'band_routes', 'band_flags', 'mesh_right_angle', 'set_pawl'];
 
 export function runAction(action, state, params = {}) {
   const result = runActionOnce(action, state, params);
@@ -332,6 +333,8 @@ function runActionOnce(action, state, params = {}) {
   }
   // Gears at 90° (openspec right-angle-gears): list a gear's mesh spots round a partner, or put it at one
   if (action === 'mesh_right_angle') return meshRightAngle(state, params);
+  // Ratchets and pawls (openspec ratchet-and-pawl): list a pawl's spots round a ratchet, or set it at one
+  if (action === 'set_pawl') return setPawlTool(state, params);
 
   if (action === 'bend_sheet') {
     return bendSheet(state, {

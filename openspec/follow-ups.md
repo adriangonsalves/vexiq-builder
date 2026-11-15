@@ -84,3 +84,14 @@ Low-priority items left open when a change was closed. Pick one up by proposing 
 20. **The capture driver's `text:` spec can't find a button that has an icon as well as text** (`scripts/help-shots/app.mjs`).
 21. **The help-content spec's Explode entry names direction choices the app doesn't have**; the page is right, so fix the spec text when archiving.
 22. **Read-through still to finish** (in-app-help tasks 6.2–6.9, 7.2, 7.3): touch passes on the Basics pages and on the six Mechanisms pages (6.4, 6.5: pins, shafts, gears, chain, bands, sheets were followed by mouse only); not yet tried in the app: the Chain builder Slack on / Over-Under windows, Track builder Build, Belt round these, picking sheet holes by hand, Smart Motor on four pins and the omni wheel / lock beam, Play mode "Stalled"; the shortcuts and troubleshooting sample; `words`; reading every page at 420 and 390 px; tapping every Show me chip.
+
+## From ratchet-and-pawl (collected during groups 4–5; to be sorted in task 7.4)
+
+1. **A pawl dragged tip-first onto its pin stops at the ratchet.** The tip runs into the teeth on the way, so the drag stops short of the pin and the swing-on never happens. Pointing away from the ratchet it works. A see-through preview of the swung pawl while dragging (as gears get near a mesh spot) would fix it.
+2. **A pawl pinned twice to a loose beam reads as locked.** The audit counts every pin joining the pawl to another part as a pivot, but pawl and beam still swing together on the one frame pin, and Play mode ties the ratchet to that swinging body.
+3. **Ratchets and the pawl are still read as gears in places:** the fastener rule counts the pawl as a turning part (`isRotatingComponent` in `src/engine/core.js`, from its `gearSpecs`), and band and chain routing treat ratchets as toothed (`src/engine/bandStrand.js`, `src/engine/bandRouting.js`, `src/utils/chainPath.js`).
+4. **Emulated finger taps on the context bar's Join count as a hold when rendering is slow** (headless Chrome with software rendering): the 500 ms tip timer fires before the finger lifts, so the press is dropped. Real taps on a tablet are expected to be fine.
+5. **A Smart Motor released from a long stall overshoots** (about 270 rpm for a moment) because its built-up push carries over; seen when a lifted pawl lets a stalled ratchet go.
+6. **A pawl pushed onto a long pin (1x2) used to land turned but above the teeth.** Fixed in groups 4–5 (`turnAndPushIn`, `pawlHoldsAt`); kept here as a note that the pre-push turn is worked out at the end of the travel, so other parts pushed onto pins that stop short may show the same thing.
+7. **Double-clicking a selected part in Rotate mode lands on the rotate rings**, so it doesn't mate; in Move mode it does.
+8. **In the fallback engine (no physics) a ratchet turned the held way jams at once**, with none of the up-to-one-tooth slack the physics gives.
