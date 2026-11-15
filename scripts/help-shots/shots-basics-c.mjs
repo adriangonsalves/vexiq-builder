@@ -80,6 +80,12 @@ export default [
     async setup(app) { await app.openMenu('File'); await app.click('menuitem:Starter', { wait: 300 }); },
     crop: ['toolbar', 'menu:File', 'css:.popover-submenu'], marks: ['menuitem:Starter', 'css:.popover-submenu']
   },
+  {
+    // The open-or-add question (openspec add-build-to-build): a fresh build has parts, so a starter asks
+    name: 'saving-open-or-add', layout: 'large', build: 'fresh',
+    async setup(app) { await app.starter('Clawbot', { stay: true }); },
+    crop: ['css:dialog.open-or-add-dialog'], marks: ['control:Open by itself', 'control:Add to this build']
+  },
   starter('sample', 'Sample starter'),
   starter('speedbot', 'Speedbot 2.0'),
   starter('basebot', 'BaseBot'),

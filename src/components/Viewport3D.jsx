@@ -8177,7 +8177,18 @@ export default function Viewport3D({
     if (selectedId && meshMapRef.current.has(selectedId)) {
       box.setFromObject(meshMapRef.current.get(selectedId));
     } else if (partsRoot.children.length > 0) {
-      box.setFromObject(partsRoot);
+      // A part whose model is still loading counts by its catalog box (a starter or an added build
+      // framed straight away), so the view takes in every part
+      partsRoot.updateMatrixWorld(true);
+      const byId = new Map(instancesRef.current.map((i) => [i.instanceId, i]));
+      for (const child of partsRoot.children) {
+        if (child.userData.renderGeometries || !child.userData.instanceId) {
+          box.expandByObject(child);
+          continue;
+        }
+        const bbox = partFor(byId.get(child.userData.instanceId))?.bbox;
+        if (bbox?.min && bbox?.max) box.union(new THREE.Box3(new THREE.Vector3(...bbox.min), new THREE.Vector3(...bbox.max)).applyMatrix4(child.matrixWorld));
+      }
     }
 
     if (!box.isEmpty()) {

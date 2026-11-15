@@ -5,7 +5,7 @@
  * history step and the MCP server into one `mcp` step. Pure (no React/DOM), shared by the app, the
  * Vite bridge and the MCP server.
  */
-import { copiedBand } from './bandRoute.js';
+import { copiedBand, isRoutedBand } from './bandRoute.js';
 import * as THREE from 'three';
 import { quaternionToEulerDeg } from './gearMeshing.js';
 import { collectWorldFeatures, gridPivot } from './pinHoleAlignment.js';
@@ -344,4 +344,110 @@ export function cloneSet(instances, ids, offset, { newId, groupId = newGroupId()
       if (group) Object.assign(copy, { groupId, groupName: `${group.name} copy` });
       return copy;
     });
+}
+
+/** The world box round every part of `instances` (hidden ones left out unless all are hidden), as a THREE.Box3. */
+function unionBox(instances, bboxOf) {
+  const shown = instances.filter((i) => i.visible !== false);
+  const box = new THREE.Box3();
+  for (const inst of shown.length ? shown : instances) {
+    const b = worldBoxOf(inst, bboxOf(inst));
+    if (b) box.union(new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)));
+  }
+  return box;
+}
+
+/**
+ * Where a whole set of parts goes beside the build (openspec add-build-to-build): the offset [dx, 0, dz]
+ * that puts the set's box one pitch in front of the build's box (+X is the front), centred across it
+ * (Z), at the height it was built, on the half-pitch grid. [0, 0, 0] when either side is empty.
+ */
+export function setOffsetBesideBuild(instances, incoming, bboxOf, pitch = 12.7) {
+  const build = unionBox(instances, bboxOf);
+  const set = unionBox(incoming, bboxOf);
+  if (build.isEmpty() || set.isEmpty()) return [0, 0, 0];
+  const half = pitch / 2;
+  const dx = Math.ceil((build.max.x + pitch - set.min.x) / half) * half;
+  const dz = Math.round(((build.min.z + build.max.z) / 2 - (set.min.z + set.max.z) / 2) / half) * half;
+  return [round3(dx), 0, round3(dz)];
+}
+
+/** `label` if free, else the next free "<name> #N" for a numbered label, or "<label> 2", "<label> 3", … */
+function freeLabel(taken, label) {
+  if (!taken.has(label)) return label;
+  const m = /^(.*) #(\d+)$/.exec(label);
+  if (m) {
+    let n = 1;
+    while (taken.has(`${m[1]} #${n}`)) n += 1;
+    return `${m[1]} #${n}`;
+  }
+  let n = 2;
+  while (taken.has(`${label} ${n}`)) n += 1;
+  return `${label} ${n}`;
+}
+
+/**
+ * Another build's parts added into this one as one new group (openspec add-build-to-build).
+ *
+ * The only fields on a placed part that name another part are a routed band's `shape.route[].instanceId`
+ * and `shape.picks[].instanceId` (src/utils/bandRoute.js); chains and tracks are plain links, a bent
+ * sheet's shape holds hole rows, and a pawl finds its ratchet by where it is. Checked by walking every
+ * field of every starter (scripts/check-add-to-build.mjs).
+ *
+ * Every incoming part gets a fresh id, is unlocked (a locked part would stop the group moving), the one new `groupId` and `groupName` (`name`, or "<name> 2" when
+ * a group of that name is there), a label no other part has, and the one offset that sets the set down
+ * beside the build. Band routes point at the copies; an id the incoming build itself didn't have is left
+ * as it was. Returns { parts, ids, groupName } (empty `parts` when there is nothing to add).
+ */
+export function addBuildAsGroup(instances, incoming, name, bboxOf, { pitch = 12.7, newId, groupId = newGroupId() } = {}) {
+  const source = (incoming || []).filter((i) => i && i.partId && i.instanceId);
+  if (!source.length) return { parts: [], ids: [], groupName: null };
+  const makeId = newId || (() => `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+  const taken = new Set(instances.map((i) => i.instanceId));
+  const idMap = new Map();
+  for (const inst of source) {
+    let id = makeId();
+    while (taken.has(id)) id = makeId();
+    taken.add(id);
+    idMap.set(inst.instanceId, id);
+  }
+  const groupName = freeGroupName(instances, name);
+  const offset = setOffsetBesideBuild(instances, source, bboxOf, pitch);
+  const labels = new Set(instances.map((i) => i.label));
+  const remap = (list) => list.map((s) => (idMap.has(s.instanceId) ? { ...s, instanceId: idMap.get(s.instanceId) } : s));
+  const parts = source.map((inst) => {
+    const position = inst.position.map((v, i) => round3(v + offset[i]));
+    const label = freeLabel(labels, inst.label || 'Part');
+    labels.add(label);
+    const copy = {
+      ...inst,
+      instanceId: idMap.get(inst.instanceId),
+      label,
+      position,
+      rotation: [...inst.rotation],
+      lastValidPosition: [...position],
+      lastValidRotation: [...inst.rotation],
+      isIntersecting: false,
+      // Locked parts come in unlocked, so the group can be moved into place
+      locked: false,
+      groupId,
+      groupName
+    };
+    if (isRoutedBand(inst)) {
+      copy.shape = { ...inst.shape, route: remap(inst.shape.route), ...(Array.isArray(inst.shape.picks) ? { picks: remap(inst.shape.picks) } : {}) };
+    }
+    return copy;
+  });
+  return { parts, ids: parts.map((p) => p.instanceId), groupName };
+}
+
+/** `name` if no group has it, else "<name> 2", "<name> 3", … */
+export function freeGroupName(instances, name) {
+  const base = String(name || '').trim() || 'Group';
+  const used = new Set([...groupsOf(instances).values()].map((g) => g.name));
+  for (const inst of instances) if (inst.groupName) used.add(inst.groupName);
+  if (!used.has(base)) return base;
+  let n = 2;
+  while (used.has(`${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
 }

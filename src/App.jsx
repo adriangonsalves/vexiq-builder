@@ -84,6 +84,7 @@ import {
 } from './utils/buildLibrary.js';
 import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
 import LibraryDialog from './components/LibraryDialog.jsx';
+import OpenOrAddDialog from './components/OpenOrAddDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
 import HelpFrame from './help/HelpFrame.jsx';
 import HelpQ from './help/HelpQ.jsx';
@@ -97,6 +98,7 @@ import {
   applyPatches as applyGroupPatches,
   applySetTransform,
   axisTurn,
+  addBuildAsGroup,
   cloneSet,
   expandToGroups,
   groupCollapse,
@@ -2284,13 +2286,48 @@ export default function App() {
     setActionFeedback({ message: `Started ${name}`, isError: false });
   };
 
+  /**
+   * A starter, saved build or file being opened (openspec add-build-to-build): with parts in the open
+   * build, ask whether to open it by itself or add it as a group; with none, open it straight away.
+   * `pick` = { name, parts, open() }.
+   */
+  const [openOrAddPick, setOpenOrAddPick] = useState(null);
+  const offerOpenOrAdd = async (pick) => {
+    if (instances.length === 0) await pick.open();
+    else setOpenOrAddPick(pick);
+  };
+
+  /** "Add to this build": the picked build's parts come in as one new group beside the parts, as one step. */
+  const handleAddBuild = (pick) => {
+    const added = addBuildAsGroup(instances, pick.parts, pick.name, (i) => shapedPart(catalogMap.get(i.partId), i.shape)?.bbox, { pitch: VEX_PITCH_MM });
+    if (!added.parts.length) {
+      setActionFeedback({ message: `Nothing to add: ${pick.name} has no parts`, isError: true });
+      return;
+    }
+    const acting = takePlacing(null);
+    setInstances((prev) => [...resolveIntersectingInstances(prev, null, acting), ...added.parts], { label: `Add ${pick.name}` });
+    setLibraryOpen(false);
+    setPreview(null);
+    // Frame the whole build, then select the new group (framing with a part selected zooms to that part)
+    setSelectedId(null);
+    setFocusTrigger((c) => c + 1);
+    requestAnimationFrame(() => setSelectedIds(added.ids));
+    setActionFeedback({ message: `Added ${added.groupName}: ${added.parts.length} parts. Move the group into place.`, isError: false });
+  };
+
   const handleStarterBuild = async (starterId) => {
     const starter = starterById(starterId);
     const parts = starter.build(catalog);
-    const history = recordStep(createHistory([]), [], parts, { source: 'app', label: `Add ${starter.name}` }).history;
-    const name = starterBuildName(await buildNames(), starter.name);
-    await switchToBuild({ id: newBuildId(), name, instances: parts, history });
-    setActionFeedback({ message: `Started ${name}`, isError: false });
+    await offerOpenOrAdd({
+      name: starter.name,
+      parts,
+      open: async () => {
+        const history = recordStep(createHistory([]), [], parts, { source: 'app', label: `Add ${starter.name}` }).history;
+        const name = starterBuildName(await buildNames(), starter.name);
+        await switchToBuild({ id: newBuildId(), name, instances: parts, history });
+        setActionFeedback({ message: `Started ${name}`, isError: false });
+      }
+    });
   };
 
   const handleOpenBuild = async (id) => {
@@ -2300,8 +2337,14 @@ export default function App() {
       setActionFeedback({ message: "That build couldn't be opened", isError: true });
       return;
     }
-    await switchToBuild(record);
-    setLibraryOpen(false);
+    await offerOpenOrAdd({
+      name: record.name,
+      parts: record.instances || [],
+      open: async () => {
+        await switchToBuild(record);
+        setLibraryOpen(false);
+      }
+    });
   };
 
   const handleRenameBuild = async (id, name) => {
@@ -2356,10 +2399,16 @@ export default function App() {
       try {
         const parsed = JSON.parse(String(reader.result));
         if (!Array.isArray(parsed.instances)) throw new Error('it has no parts list');
-        const name = uniqueName(await buildNames(), fileBuildName(file.name));
-        await switchToBuild({ id: newBuildId(), name, instances: parsed.instances, history: parsed.history });
-        setLibraryOpen(false);
-        setActionFeedback({ message: `Opened ${name}`, isError: false });
+        await offerOpenOrAdd({
+          name: fileBuildName(file.name),
+          parts: parsed.instances,
+          open: async () => {
+            const name = uniqueName(await buildNames(), fileBuildName(file.name));
+            await switchToBuild({ id: newBuildId(), name, instances: parsed.instances, history: parsed.history });
+            setLibraryOpen(false);
+            setActionFeedback({ message: `Opened ${name}`, isError: false });
+          }
+        });
       } catch (err) {
         setActionFeedback({ message: `Couldn't open ${file.name}: ${err.message}`, isError: true });
       }
@@ -4751,6 +4800,21 @@ export default function App() {
         onDelete={handleDeleteBuild}
         onOpenFile={handleOpenFile}
         onHelp={() => openHelpAt('saving')}
+      />
+      <OpenOrAddDialog
+        pick={openOrAddPick}
+        buildName={currentBuild?.name}
+        onOpen={() => {
+          const pick = openOrAddPick;
+          setOpenOrAddPick(null);
+          pick?.open();
+        }}
+        onAdd={() => {
+          const pick = openOrAddPick;
+          setOpenOrAddPick(null);
+          if (pick) handleAddBuild(pick);
+        }}
+        onCancel={() => setOpenOrAddPick(null)}
       />
       {offline.offer && offline.status === 'off' && (
         <div className="offline-update-banner" role="status">

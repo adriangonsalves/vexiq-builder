@@ -39,7 +39,7 @@ export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport,
             New
           </MenuItem>
           <div onPointerEnter={() => setStartersOpen(true)}>
-            <MenuItem icon={Sparkles} onSelect={() => setStartersOpen(true)} title="Start a new build from a starter">
+            <MenuItem icon={Sparkles} onSelect={() => setStartersOpen(true)} title="Start a new build from a starter, or add one to your build">
               <span className="popover-submenu-label">
                 Starter
                 <ChevronRight size={12} />

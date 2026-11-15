@@ -68,6 +68,8 @@ const CONTROLS = {
   Open: { find: at('build-open'), hint: 'Select File, then Your builds, to see Open beside each build.' },
   Rename: { find: at('build-rename'), hint: 'Select File, then Your builds, to see Rename beside each build.' },
   'Open from computer…': { find: at('library-open-from-computer'), hint: 'Select File, then Your builds, to see Open from computer… at the top of the window.' },
+  'Open by itself': { find: at('open-by-itself'), hint: 'Open a starter or a saved build while your build has parts. The question that pops up has this button.' },
+  'Add to this build': { find: at('add-to-this-build'), hint: 'Open a starter or a saved build while your build has parts. The question that pops up has this button.' },
 
   // The Outline, the Library and Properties
   Locate: { find: at('outline-locate'), sidePanel: true, hint: 'Select Panels in the toolbar to show the Outline. Locate is the small target above the list.' },

@@ -245,17 +245,30 @@ function makeDriver(page, { layout, hasTouch }) {
       await app.waitStill();
     },
 
-    /** File → Starter → name ('Sample starter', 'Speedbot 2.0', 'BaseBot', 'Clawbot', 'Flop'). */
-    async starter(name) {
+    /**
+     * Answers the open-or-add question if it is up (openspec add-build-to-build): "Open by itself",
+     * or "Add to this build" with `add`. Leaves it up with `stay`. Returns true when it was asked.
+     */
+    async answerOpenOrAdd({ add = false, stay = false } = {}) {
+      const asked = await page.waitForSelector('dialog.open-or-add-dialog[open]', { timeout: 1500 }).then(() => true, () => false);
+      if (asked && !stay) {
+        await app.click(`css:dialog.open-or-add-dialog [data-help="${add ? 'add-to-this-build' : 'open-by-itself'}"]`, { wait: 300 });
+      }
+      return asked;
+    },
+
+    /** File → Starter → name ('Sample starter', 'Speedbot 2.0', 'BaseBot', 'Clawbot', 'Flop'); `add` adds it to the open build. */
+    async starter(name, { add = false, stay = false } = {}) {
       await app.openMenu('File');
       await app.click('menuitem:Starter', { wait: 300 });
       await app.click(`menuitem:${name}`, { wait: 500 });
+      if ((await app.answerOpenOrAdd({ add, stay })) && stay) return;
       await app.waitForParts();
       await app.waitStill();
     },
 
     /** File → Load… → Open from computer… with a saved build file (a path from the project root or absolute). */
-    async loadBuild(file) {
+    async loadBuild(file, { add = false, stay = false } = {}) {
       const full = path.resolve(file);
       if (!fs.existsSync(full)) throw new Error(`No build file ${full}`);
       await app.menu('File', 'Load…');
@@ -263,6 +276,7 @@ function makeDriver(page, { layout, hasTouch }) {
       const input = await page.$('dialog.library-dialog input[type="file"]');
       if (!input) throw new Error('Load… has no file input');
       await input.uploadFile(full);
+      if ((await app.answerOpenOrAdd({ add, stay })) && stay) return;
       await page.waitForFunction(() => !document.querySelector('dialog.library-dialog[open]'), { timeout: 10000 });
       await app.waitForParts();
       await app.waitStill();

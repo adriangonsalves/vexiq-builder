@@ -1705,6 +1705,36 @@ body,
   backdrop-filter: none;
 }
 
+.open-or-add-dialog {
+  width: min(420px, 92vw);
+}
+
+.open-or-add-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.open-or-add-btn {
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.open-or-add-btn span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.open-or-add-btn small {
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
 .bend-sheet-choice {
   cursor: pointer;
   border-radius: 6px;
