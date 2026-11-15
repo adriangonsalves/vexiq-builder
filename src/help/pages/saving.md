@@ -62,12 +62,10 @@ Choose [[File → Delete this build…]] to remove the build you are in. It asks
 ![The File menu with Delete this build… marked](shot:saving-delete)
 
 ## The starters
-Choose [[File → Starter]] to start a new build from a ready-made robot, or to add one to your build. Your open build stays saved.
+Choose [[File → Starter]] to start a new build from a ready-made one, or to add one to your build. Your open build stays saved. The list has two parts: **Robots** are whole robots, and **Assemblies** are pieces of a robot.
 ![The Starter list open in the File menu](shot:saving-starters)
 
-**Sample starter** is what a new browser opens with.
-![Sample starter](shot:saving-starter-sample)
-
+## The robot starters
 **Speedbot 2.0**
 ![Speedbot 2.0](shot:saving-starter-speedbot)
 
@@ -80,7 +78,22 @@ Choose [[File → Starter]] to start a new build from a ready-made robot, or to 
 **Flop**
 ![Flop](shot:saving-starter-flop)
 
+## The assembly starters
+**Sample starter** is what a new browser opens with: a beam, a pin, a shaft and a gear.
+![Sample starter](shot:saving-starter-sample)
+
 **Ratchet winch** is the winch from Hero Bot Swish: a ratchet and pawl on a swinging arm. In [[Tools → Play mode]], run the motors forward to wind the spool, stop to hold it, and reverse to let it go.
+
+**Simple drivetrain** is the Clawbot's base: chassis, wheels and drive motors, without the brain.
+![Simple drivetrain](shot:saving-starter-simple-drivetrain)
+
+**Simple arm** is the Clawbot's tower and arm, with its motor and gears.
+![Simple arm](shot:saving-starter-simple-arm)
+
+**Simple claw** is the Clawbot's claw, with its wrist and motor.
+![Simple claw](shot:saving-starter-simple-claw)
+
+To build a Clawbot from the pieces, open **Simple drivetrain**. Then add **Simple arm** and **Simple claw** with [[Add to this build]]. Move each group into place, and add a brain.
 
 ## When the browser can't save
 Some private windows turn off storage. The builds window then says so. **New**, **Starter** and **Export** still work, so Export before you close.

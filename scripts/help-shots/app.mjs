@@ -128,7 +128,8 @@ function makeDriver(page, { layout, hasTouch }) {
       case 'button':
         return all('button, [role="button"], [role="tab"], [role="checkbox"]').find((el) => named(el) === value || el.getAttribute('aria-label')?.startsWith(`${value}:`)) || null;
       case 'menuitem':
-        return all('[role="menuitem"], [role="menuitemcheckbox"]').find((el) => named(el).startsWith(value)) || null;
+        // An exact name first ("Clawbot", not a longer name that starts with it), then one that starts with it
+        return all('[role="menuitem"], [role="menuitemcheckbox"]').find((el) => named(el) === value) || all('[role="menuitem"], [role="menuitemcheckbox"]').find((el) => named(el).startsWith(value)) || null;
       case 'menu':
         return all(`[role="menu"][aria-label="${value}"]`)[0] || null;
       case 'dialog':

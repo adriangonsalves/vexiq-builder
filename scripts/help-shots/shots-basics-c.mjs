@@ -17,8 +17,9 @@ async function showTimeline(app) {
 const TWO = 'file:scripts/help-shots/builds/two-beams-joined.vexiq.json';
 
 /** An invisible box over the middle of the 3D view, so the picture stays under the size limit. */
-async function cropMiddle(app) {
-  const r = await app.rectOf('view');
+async function cropMiddle(app, widthPart = 1) {
+  const view = await app.rectOf('view');
+  const r = { ...view, x: view.x + (view.width * (1 - widthPart)) / 2, width: view.width * widthPart };
   await app.page.evaluate((r) => {
     const d = document.createElement('div');
     d.id = 'help-crop-box';
@@ -27,8 +28,9 @@ async function cropMiddle(app) {
   }, r);
 }
 
-const starter = (id, name) => ({
-  name: `saving-starter-${id}`, layout: 'large', build: `starter:${name}`, setup: cropMiddle, crop: ['css:#help-crop-box'], marks: []
+/** A starter's picture; `widthPart` narrows the box for a detailed one, to stay under the size limit. */
+const starter = (id, name, widthPart = 1) => ({
+  name: `saving-starter-${id}`, layout: 'large', build: `starter:${name}`, setup: (app) => cropMiddle(app, widthPart), crop: ['css:#help-crop-box'], marks: []
 });
 
 export default [
@@ -78,7 +80,7 @@ export default [
   {
     name: 'saving-starters', layout: 'large', build: 'fresh',
     async setup(app) { await app.openMenu('File'); await app.click('menuitem:Starter', { wait: 300 }); },
-    crop: ['toolbar', 'menu:File', 'css:.popover-submenu'], marks: ['menuitem:Starter', 'css:.popover-submenu']
+    crop: ['control:File', 'menu:File', 'css:.popover-submenu'], marks: ['menuitem:Starter', 'css:.popover-submenu']
   },
   {
     // The open-or-add question (openspec add-build-to-build): a fresh build has parts, so a starter asks
@@ -90,5 +92,8 @@ export default [
   starter('speedbot', 'Speedbot 2.0'),
   starter('basebot', 'BaseBot'),
   starter('clawbot', 'Clawbot'),
-  starter('flop', 'Flop')
+  starter('flop', 'Flop'),
+  starter('simple-drivetrain', 'Simple drivetrain'),
+  starter('simple-arm', 'Simple arm'),
+  starter('simple-claw', 'Simple claw', 0.75)
 ];

@@ -2250,36 +2250,64 @@
   "feature": "File → Starter → Sample starter",
   "kind": "starter",
   "page": "saving",
-  "section": "the-starters",
+  "section": "the-assembly-starters",
   "name": "Sample starter"
  },
  {
   "feature": "File → Starter → Speedbot 2.0",
   "kind": "starter",
   "page": "saving",
-  "section": "the-starters",
+  "section": "the-robot-starters",
   "name": "Speedbot 2.0"
  },
  {
   "feature": "File → Starter → BaseBot",
   "kind": "starter",
   "page": "saving",
-  "section": "the-starters",
+  "section": "the-robot-starters",
   "name": "BaseBot"
  },
  {
   "feature": "File → Starter → Clawbot",
   "kind": "starter",
   "page": "saving",
-  "section": "the-starters",
+  "section": "the-robot-starters",
   "name": "Clawbot"
  },
  {
   "feature": "File → Starter → Flop",
   "kind": "starter",
   "page": "saving",
-  "section": "the-starters",
+  "section": "the-robot-starters",
   "name": "Flop"
+ },
+ {
+  "feature": "File → Starter → Ratchet winch",
+  "kind": "starter",
+  "page": "saving",
+  "section": "the-assembly-starters",
+  "name": "Ratchet winch"
+ },
+ {
+  "feature": "File → Starter → Simple drivetrain",
+  "kind": "starter",
+  "page": "saving",
+  "section": "the-assembly-starters",
+  "name": "Simple drivetrain"
+ },
+ {
+  "feature": "File → Starter → Simple arm",
+  "kind": "starter",
+  "page": "saving",
+  "section": "the-assembly-starters",
+  "name": "Simple arm"
+ },
+ {
+  "feature": "File → Starter → Simple claw",
+  "kind": "starter",
+  "page": "saving",
+  "section": "the-assembly-starters",
+  "name": "Simple claw"
  },
  {
   "feature": "Ctrl/Cmd+Z",

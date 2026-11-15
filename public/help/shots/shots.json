@@ -663,24 +663,39 @@
     "h": 407,
     "marks": []
   },
+  "saving-starter-simple-arm": {
+    "w": 642,
+    "h": 407,
+    "marks": []
+  },
+  "saving-starter-simple-claw": {
+    "w": 490,
+    "h": 407,
+    "marks": []
+  },
+  "saving-starter-simple-drivetrain": {
+    "w": 642,
+    "h": 407,
+    "marks": []
+  },
   "saving-starter-speedbot": {
     "w": 642,
     "h": 407,
     "marks": []
   },
   "saving-starters": {
-    "w": 1280,
-    "h": 350,
+    "w": 204,
+    "h": 494,
     "marks": [
       {
         "n": 1,
-        "x": 0.9883,
-        "y": 0.2586
+        "x": 0.9265,
+        "y": 0.1832
       },
       {
         "n": 2,
-        "x": 0.9883,
-        "y": 0.4814
+        "x": 0.9265,
+        "y": 0.4868
       }
     ]
   },
