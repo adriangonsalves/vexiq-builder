@@ -69,7 +69,7 @@ VITE_GOOGLE_APP_ID=1234567890
 
 Restart `npm run dev`, or rebuild with `npm run build:static`. Once the Drive feature is built (change `google-drive-sync`), the **File** menu shows **Save to Google Drive…** and **File → Load…** shows **Open from Google Drive…**.
 
-For the GitHub Pages site, add the three values as repository **Actions secrets** with the same names. The Drive feature's change passes them to the build step in `.github/workflows/pages.yml`.
+For the GitHub Pages site, add the three values as repository **variables** with the same names (**Settings → Secrets and variables → Actions → Variables**, or `gh variable set VITE_GOOGLE_CLIENT_ID --body …`). `.github/workflows/pages.yml` passes them to the build. They don't need to be secrets: the client ID and API key are always visible in the published page, which is normal for Google sign-in and the Picker in a browser app. What protects them is the list of allowed addresses on the client ID and the website and API limits on the key (steps 4 and 5). Keep billing off for the project, or set a budget alert.
 
 ## 7. How teams share a build
 
