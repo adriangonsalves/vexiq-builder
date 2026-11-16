@@ -21,7 +21,13 @@ In **APIs & Services → Library**, search for and **Enable** each of these:
 
 In **APIs & Services → OAuth consent screen** (on newer consoles: **Google Auth Platform → Branding / Audience / Data access**):
 
-1. **App name:** `VEX IQ Builder`. Support email: your own.
+1. **App name:** `VEX IQ Builder`. Support email: your own. **App domain / branding links:** the static site carries its own pages, so on GitHub Pages use
+   - Application home page: `https://adriangonsalves.github.io/vexiq-builder/`
+   - Privacy policy: `https://adriangonsalves.github.io/vexiq-builder/privacy.html`
+   - Terms of service: `https://adriangonsalves.github.io/vexiq-builder/terms.html`
+   - Authorised domain: `adriangonsalves.github.io`
+
+   The pages are `public/privacy.html` and `public/terms.html`. Change them if the app ever reads more from Google than the `drive.file` files and the display name.
 2. **Audience / User type:** **External**. If the project belongs to a school Workspace and only that school's students will use it, choose **Internal** instead; then no test-user list is needed.
 3. **Scopes / Data access:** add only `https://www.googleapis.com/auth/drive.file`. Don't add other Drive scopes. `drive.file` lets the app see only files it created or files the student picks, and Google doesn't need to review an app that asks only for it.
 4. **Test users:** while the app is in **Testing**, only the accounts listed here can sign in. Add every account that will sign in, **your own account included**, and the second trial account. If you leave one out, its sign-in fails with "access blocked", which looks like a Drive problem but isn't.

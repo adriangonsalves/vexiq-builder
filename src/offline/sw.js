@@ -42,8 +42,9 @@ self.addEventListener('fetch', (event) => {
     (async () => {
       const name = await activeCacheName();
       const cache = name && (await caches.open(name));
-      // Every page inside the site is the app's one page
-      const hit = cache && (await cache.match(request.mode === 'navigate' ? `${scope}index.html` : request, { ignoreSearch: true }));
+      // A page the site has (privacy.html, terms.html) opens as itself; every other page is the app's one page
+      const page = request.mode === 'navigate' && /\.html$/.test(rel) && cache ? await cache.match(request, { ignoreSearch: true }) : null;
+      const hit = page ?? (cache && (await cache.match(request.mode === 'navigate' ? `${scope}index.html` : request, { ignoreSearch: true })));
       return hit ?? fetch(request);
     })()
   );
