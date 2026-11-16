@@ -237,19 +237,35 @@ try {
   $('pick').onclick = () => {
     if (!pickerReady) { log('Picker not loaded yet.'); return; }
     const appId = $('app').value.trim();
+    const left = Math.round((tokenExpiresAt - Date.now()) / 1000);
+    log(`Picker: opening (sign-in has ${left}s left${left <= 0 ? ', so tap Renew sign-in first' : ''}).`);
+    // The picker opens at the top of the page, so a scrolled page can hide it
+    window.scrollTo(0, 0);
     // Folders shown in both tabs: files inside a shared folder only appear by opening the folder.
     const mine = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes('application/json').setOwnedByMe(true).setIncludeFolders(true);
     const shared = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes('application/json').setOwnedByMe(false).setIncludeFolders(true);
+    let loaded = false;
     let b = new google.picker.PickerBuilder()
       .setOAuthToken(token)
       .setDeveloperKey($('key').value.trim())
+      .setOrigin(location.origin)
       .addView(mine).addView(shared)
       .setCallback((data) => {
+        if (data.action === google.picker.Action.LOADED) { loaded = true; log('Picker: shown.'); }
         if (data.action === google.picker.Action.PICKED) setFile(data.docs[0].id, 'picked');
         if (data.action === google.picker.Action.CANCEL) log('Picker cancelled.');
+        if (data.action === 'error' || data.action === google.picker.Action.ERROR) log('Picker error: ' + JSON.stringify(data).slice(0, 200));
       });
     if (appId) b = b.setAppId(appId); else log('Warning: no project number set, so a picked file may give 404.');
-    b.build().setVisible(true);
+    try {
+      b.build().setVisible(true);
+    } catch (err) {
+      log('Picker failed to open: ' + err.message);
+      return;
+    }
+    setTimeout(() => {
+      if (!loaded) log(`Picker: not shown after 10 s. Picker frames on the page: ${document.querySelectorAll('iframe[src*="picker"], .picker-dialog').length}.`);
+    }, 10000);
   };
 
   // ---- checks ----

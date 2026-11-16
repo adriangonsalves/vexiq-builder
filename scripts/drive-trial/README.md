@@ -37,7 +37,7 @@ The page remembers the three values, so after the first visit `http://localhost:
 
 Google won't sign in from a plain `http://` address other than `localhost`, so the iPad needs an `https://` address for this page. Either:
 
-- **Temporary copy on GitHub Pages:** copy `index.html` and `manifest.webmanifest` into the published site (for example under `drive-trial/`), add `https://adriangonsalves.github.io` to the client's origins, and remove the copy afterwards; or
+- **Temporary copy on GitHub Pages:** copy `index.html` and `manifest.webmanifest` into the published site (for example under `drive-trial/`), add `https://adriangonsalves.github.io` to the client's origins and `https://adriangonsalves.github.io/*` (no `/vexiq-builder`) to the API key's websites, and remove the copy afterwards; or
 - **A tunnel** from this computer, for example `npx localtunnel --port 5173`. Its address changes every run and has to be added to the client's origins and the API key's websites each time.
 
 Then:
