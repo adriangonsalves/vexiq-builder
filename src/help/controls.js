@@ -71,6 +71,11 @@ const CONTROLS = {
   'Open by itself': { find: at('open-by-itself'), hint: 'Open a starter or a saved build while your build has parts. The question that pops up has this button.' },
   'Add to this build': { find: at('add-to-this-build'), hint: 'Open a starter or a saved build while your build has parts. The question that pops up has this button.' },
 
+  // Google Drive (shown only where the app is set up for Google Drive)
+  'Drive button': { find: at('drive-button'), hint: "The Drive button shows beside the build's name (in the toolbar on a tablet or phone) when the build is saved on Google Drive." },
+  'Open from Google Drive…': { find: at('library-open-from-drive'), hint: 'Select File, then Load…, to see Open from Google Drive… at the top of the window.' },
+  'Work on this device only': { find: at('drive-paused'), hint: 'It shows on the banner over the 3D view when a Google Drive build is waiting to reconnect.' },
+
   // The Outline, the Library and Properties
   Locate: { find: at('outline-locate'), sidePanel: true, hint: 'Select Panels in the toolbar to show the Outline. Locate is the small target above the list.' },
   'Library search box': { find: at('library-search'), sidePanel: true, hint: 'Select Panels in the toolbar to show the Library. The search box is at the top of it.' },
@@ -114,7 +119,7 @@ const MENUS = {
     'Band builder', 'Band between these', 'Belt round these', 'Flatten band'
   ]),
   ...menu('Snap', ['1P', '0.5P', '0.25P', 'Free']),
-  ...menu('File', ['New', 'Starter', 'Load…', 'Export', 'Delete this build…']),
+  ...menu('File', ['New', 'Starter', 'Load…', 'Export', 'Delete this build…', 'Save to Google Drive…', 'Done editing']),
   ...menu('View', ['Perspective', 'Orthographic', 'Single', '4-View', 'Stereo', 'Cross-eyed', 'Full screen', 'Grid', 'Axes'])
 };
 

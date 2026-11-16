@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Copy, FolderOpen, Pencil, Trash2, Upload, X } from 'lucide-react';
+import { CloudDownload, Copy, FolderOpen, Pencil, Trash2, Upload, X } from 'lucide-react';
 import { changedAgo } from '../utils/buildLibrary.js';
 import HelpQ from '../help/HelpQ.jsx';
 
@@ -8,8 +8,10 @@ import HelpQ from '../help/HelpQ.jsx';
  * picture, name, when it changed and its part count; Open (or double-click), Rename, Duplicate and
  * Delete, and Open from computer… for a .vexiq.json file. Open and Open from computer… ask first
  * whether to open by itself or add to the open build (openspec add-build-to-build) when it has parts.
+ * With Google Drive set up, Open from Google Drive… picks a build with the Google Picker (openspec
+ * google-drive-sync); opening the dialog starts loading the Google scripts.
  */
-export default function LibraryDialog({ open, onClose, builds, currentId, available, onOpen, onRename, onDuplicate, onDelete, onOpenFile, onHelp }) {
+export default function LibraryDialog({ open, onClose, builds, currentId, available, onOpen, onRename, onDuplicate, onDelete, onOpenFile, onHelp, onOpenFromDrive, onDialogOpen }) {
   const ref = useRef(null);
   const fileRef = useRef(null);
   const [renaming, setRenaming] = useState(null); // { id, draft }
@@ -17,7 +19,10 @@ export default function LibraryDialog({ open, onClose, builds, currentId, availa
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      onDialogOpen?.();
+    }
     if (!open && dialog.open) dialog.close();
     if (!open) setRenaming(null);
   }, [open]);
@@ -53,6 +58,24 @@ export default function LibraryDialog({ open, onClose, builds, currentId, availa
         <strong id="libraryTitle">Your builds</strong>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <HelpQ tool="your builds" onHelp={onHelp} />
+          {onOpenFromDrive && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              data-help="library-open-from-drive"
+              disabled={typeof navigator !== 'undefined' && navigator.onLine === false}
+              onClick={() => {
+                // This window stays above everything on the page, Google's file picker included,
+                // so it closes first; the picker then opens in front
+                ref.current?.close();
+                onOpenFromDrive();
+              }}
+              title={typeof navigator !== 'undefined' && navigator.onLine === false ? 'Needs an internet connection' : 'Open a build from your Google Drive, or one a teammate shared with you'}
+            >
+              <CloudDownload size={14} />
+              Open from Google Drive…
+            </button>
+          )}
           <button type="button" className="btn btn-outline" data-help="library-open-from-computer" onClick={() => fileRef.current?.click()} title="Open a .vexiq.json file as a new build, or add it to yours">
             <Upload size={14} />
             Open from computer…

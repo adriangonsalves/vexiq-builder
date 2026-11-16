@@ -16,7 +16,7 @@ export const HELP_GROUPS = [
 
 const LIST = {
   start: ['quick-start', 'tour'],
-  basics: ['library', 'looking-around', 'moving', 'joining', 'context-bar', 'selecting', 'outline', 'copying', 'undo-history', 'saving'],
+  basics: ['library', 'looking-around', 'moving', 'joining', 'context-bar', 'selecting', 'outline', 'copying', 'undo-history', 'saving', 'google-drive'],
   mechanisms: ['pins-and-connectors', 'shafts-and-wheels', 'gears', 'chain-and-track', 'rubber-bands', 'plastic-sheets'],
   check: ['views', 'explode', 'check-and-fix', 'blueprint', 'play-mode'],
   devices: ['settings', 'tablets-and-phones', 'offline'],

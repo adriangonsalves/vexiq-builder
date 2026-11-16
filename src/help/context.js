@@ -40,11 +40,11 @@ export function partKindTag(part) {
   return null;
 }
 
-const PANELS = ['band', 'chain', 'track', 'bend', 'explode', 'drop', 'play', 'audit', 'blueprint', 'timeline', 'buildLibrary', 'offline', 'settings'];
+const PANELS = ['band', 'chain', 'track', 'bend', 'explode', 'drop', 'play', 'audit', 'blueprint', 'timeline', 'drive', 'buildLibrary', 'offline', 'settings'];
 const PANEL_SITUATION = {
   band: 'band-builder', chain: 'chain-builder', track: 'track-builder', bend: 'bend-sheet', explode: 'explode',
   drop: 'drop-test', play: 'play', audit: 'audit', blueprint: 'blueprint', timeline: 'timeline',
-  buildLibrary: 'build-library', offline: 'offline', settings: 'settings'
+  drive: 'google-drive', buildLibrary: 'build-library', offline: 'offline', settings: 'settings'
 };
 const BAR = [
   ['selectMode', 'select-mode'], ['boxSelect', 'box-select'], ['worldAxes', 'world-arrows'], ['freeMove', 'free-move'],

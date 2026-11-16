@@ -51,7 +51,7 @@ export default function PopoverMenu({ at, onClose, children, label }) {
  * A menu row: a choice (`checked` marks the current one) or a switch (`checked` on/off).
  * `shortcut` shows the key at the right; `disabled` greys it out.
  */
-export function MenuItem({ checked, onSelect, children, title, icon: Icon, shortcut, disabled = false }) {
+export function MenuItem({ checked, onSelect, children, title, icon: Icon, shortcut, disabled = false, help }) {
   return (
     <button
       type="button"
@@ -61,6 +61,7 @@ export function MenuItem({ checked, onSelect, children, title, icon: Icon, short
       onClick={onSelect}
       title={title}
       disabled={disabled}
+      data-help={help}
     >
       <span className="popover-check">{checked ? '✓' : ''}</span>
       {Icon && <Icon size={14} />}

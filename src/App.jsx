@@ -21,6 +21,7 @@ import {
   Copy,
   Crosshair,
   Download,
+  Expand,
   Fullscreen,
   Grid,
   Magnet,
@@ -29,6 +30,7 @@ import {
   Maximize2,
   PanelLeftClose,
   PanelLeftOpen,
+  Play,
   Radio,
   Settings as SettingsIcon,
   Redo2,
@@ -73,6 +75,7 @@ import {
   deleteBuild,
   exportFileName,
   fileBuildName,
+  findBuildByDriveFile,
   getBuild,
   libraryAvailable,
   listBuilds,
@@ -84,6 +87,9 @@ import {
 } from './utils/buildLibrary.js';
 import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
 import LibraryDialog from './components/LibraryDialog.jsx';
+import { DriveBanners, DriveButton, DriveQuestions } from './components/DriveControls.jsx';
+import { useGoogleDrive } from './drive/useGoogleDrive.js';
+import { preloadGoogleDriveScripts } from './drive/googleAuth.js';
 import OpenOrAddDialog from './components/OpenOrAddDialog.jsx';
 import { registerVexIqWebMcpTools } from './utils/webMcpTools.js';
 import HelpFrame from './help/HelpFrame.jsx';
@@ -157,6 +163,9 @@ const TIMELINE_KEY = 'vexiq_history_timeline_visible';
 const EMPTY_IDS = [];
 const PREVIEW_LOCK = "This is a preview of an earlier point. Go to a step's end to edit.";
 const PLAY_LOCK = 'Play mode is on. Close it to edit the build.';
+// A Drive build someone else is editing, or one waiting to reconnect (openspec google-drive-sync)
+const DRIVE_READONLY_LOCK = 'Someone else is editing this build. You can look around, Explode and Play.';
+const DRIVE_PAUSED_LOCK = 'This build is paused. Reconnect to Drive to keep editing.';
 const TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const EXPLODE_MODES = ['off', 'x', 'y', 'z', 'all'];
 /** Explode always takes the robot apart every way: an older saved X, Y or Z direction opens as All. */
@@ -529,7 +538,8 @@ export default function App() {
   });
   // The MCP status shows with advanced options on, and only where there is an assistant (not the static site)
   const showMcpStatus = settings.advanced && backend.hasAssistant;
-  // The build being worked on (openspec build-library): { id, name }, shared through the saved state
+  // The build being worked on (openspec build-library): { id, name, drive? }, shared through the saved
+  // state. `drive` links it to a Google Drive file (openspec google-drive-sync)
   const [currentBuild, setCurrentBuild] = useState(null);
   const currentBuildRef = useRef(null);
   // Parts the user is placing right now (a library drop, a drag, a hole-pick insert, a copy or
@@ -604,9 +614,82 @@ export default function App() {
   const [play, setPlay] = useState(null);
   const playRef = useRef(null);
   playRef.current = play;
+
+  // --- Google Drive (openspec google-drive-sync) ---------------------------------------------------
+  // The open build as the Drive session reads it; host methods update it at once, before React renders
+  const driveBuildRef = useRef(null);
+  driveBuildRef.current = { ...(currentBuild ?? {}), instances, history };
+  const setCurrentBuildNow = (next) => {
+    currentBuildRef.current = next;
+    driveBuildRef.current = { ...driveBuildRef.current, ...next, drive: next?.drive };
+    setCurrentBuild(next);
+  };
+  const googleDrive = useGoogleDrive({
+    buildKey: `${currentBuild?.id ?? ''}|${currentBuild?.drive?.fileId ?? ''}`,
+    busy: Boolean(play) || explodeMode !== 'off',
+    host: {
+      getBuild: () => driveBuildRef.current,
+      setDrive: (drive) => {
+        const cb = currentBuildRef.current;
+        if (!cb) return;
+        const { drive: _old, ...rest } = cb;
+        setCurrentBuildNow(drive?.fileId ? { ...rest, drive } : rest);
+      },
+      isBusy: () => Boolean(playRef.current) || explodeModeRef.current !== 'off',
+      // A teammate's save: new parts and history, the camera stays where it is
+      replaceBuildContent: (content) => {
+        const parts = Array.isArray(content?.instances) ? content.instances : [];
+        const hist = loadHistory(content?.history, parts, { source: 'app', label: 'Teammate change' });
+        setPreview(null);
+        setSelectedId(null);
+        placingIdsRef.current = new Set();
+        setBuild({ instances: parts, history: hist });
+        driveBuildRef.current = { ...driveBuildRef.current, instances: parts, history: hist };
+        return hist.rev;
+      },
+      // Load latest from Drive keeps the student's version as a new local build first
+      saveLocalCopy: async ({ name, instances: parts, history: hist }) => {
+        const used = uniqueName(await buildNames(), name);
+        const now = Date.now();
+        if (libraryAvailable()) {
+          await putBuild({ id: newBuildId(), name: used, createdAt: now, updatedAt: now, partCount: parts.length, thumbnail: null, instances: parts, history: hist });
+          refreshLibrary();
+        }
+        return used;
+      },
+      linkAsNewFile: async ({ name, drive }) => {
+        const cb = currentBuildRef.current;
+        const used = uniqueName((await buildNames()).filter((n) => n !== cb?.name), name);
+        setCurrentBuildNow({ ...cb, name: used, drive });
+        return used;
+      },
+      openDriveBuild: async ({ fileId, fileName, name, content, meta }) => {
+        if (currentBuildRef.current?.drive?.fileId === fileId) return { reused: true };
+        const known = libraryAvailable() ? await findBuildByDriveFile(fileId).catch(() => null) : null;
+        if (known) {
+          await switchToBuild(known, { leaveCheck: false });
+          setLibraryOpen(false);
+          return { reused: true };
+        }
+        const parts = Array.isArray(content?.instances) ? content.instances : [];
+        const hist = loadHistory(content?.history, parts, { source: 'app', label: 'External change' });
+        const used = uniqueName(await buildNames(), name);
+        await switchToBuild(
+          { id: newBuildId(), name: used, instances: parts, history: hist, drive: { fileId, fileName, lastSyncedRev: hist.rev, lastSyncedName: used, lastSyncedHeadRevisionId: meta.headRevisionId } },
+          { leaveCheck: false }
+        );
+        setLibraryOpen(false);
+        return { reused: false };
+      },
+      notify: (message, isError) => setActionFeedback({ message, isError })
+    }
+  });
   // Why the build can't be edited right now (a past point shown, or Play mode on), or null
   const lockedRef = useRef(null);
-  lockedRef.current = preview ? PREVIEW_LOCK : play ? PLAY_LOCK : null;
+  const readOnlyViewer = googleDrive.readOnlyViewer;
+  const readOnlyViewerRef = useRef(false);
+  readOnlyViewerRef.current = readOnlyViewer;
+  lockedRef.current = preview ? PREVIEW_LOCK : play ? PLAY_LOCK : readOnlyViewer ? (googleDrive.mode === 'disconnected' ? DRIVE_PAUSED_LOCK : DRIVE_READONLY_LOCK) : null;
   const handlePreview = useCallback((parts, info) => setPreview(parts ? { parts, info } : null), []);
   const noop = useCallback(() => {}, []);
 
@@ -674,7 +757,7 @@ export default function App() {
     // Another tab or the assistant switched or renamed the current build
     if (state.build?.id && (state.build.id !== currentBuildRef.current?.id || state.build.name !== currentBuildRef.current?.name)) {
       lastPostedBuildIdRef.current = state.build.id;
-      setCurrentBuild({ id: state.build.id, name: state.build.name });
+      setCurrentBuild({ id: state.build.id, name: state.build.name, ...(state.build.drive ? { drive: state.build.drive } : {}) });
     }
     if (isHistory(state.history)) {
       const history = loadHistory(state.history, state.instances);
@@ -718,17 +801,18 @@ export default function App() {
   };
 
   const handleUndo = useCallback(() => {
-    if (playRef.current) return;
+    if (playRef.current || readOnlyViewerRef.current) return;
     setBuild((b) => afterHistoryMove(b, undoHistory(b.history, b.instances)));
   }, []);
 
   const handleRedo = useCallback(() => {
-    if (playRef.current) return;
+    if (playRef.current || readOnlyViewerRef.current) return;
     setBuild((b) => afterHistoryMove(b, redoHistory(b.history, b.instances)));
   }, []);
 
   // Timeline: make any step (null = the start) the current one
   const handleMoveTo = useCallback((stepId) => {
+    if (readOnlyViewerRef.current) return;
     if (playRef.current) return;
     setBuild((b) => afterHistoryMove(b, moveHistoryTo(b.history, b.instances, stepId)));
   }, []);
@@ -854,18 +938,20 @@ export default function App() {
     if (startupBuildChosenRef.current) return;
     startupBuildChosenRef.current = true;
     let names = [];
-    let known = false;
+    let known = null;
     if (libraryAvailable()) {
       try {
         const list = await listBuilds();
         names = list.map((b) => b.name);
-        known = Boolean(savedBuild?.id && list.some((b) => b.id === savedBuild.id));
+        known = savedBuild?.id && list.some((b) => b.id === savedBuild.id) ? await getBuild(savedBuild.id) : null;
       } catch {
         // no library in this browser: the build still works, it just isn't listed
       }
     }
     if (known) {
-      setCurrentBuild({ id: savedBuild.id, name: savedBuild.name });
+      // The library record has the newest Drive link (openspec google-drive-sync)
+      const drive = known.drive ?? savedBuild.drive;
+      setCurrentBuild({ id: savedBuild.id, name: savedBuild.name, ...(drive ? { drive } : {}) });
       return;
     }
     const name = savedBuild?.name && !names.includes(savedBuild.name) ? savedBuild.name : nextBuildName(names);
@@ -916,7 +1002,8 @@ export default function App() {
         thumbnail,
         instances: data.instances,
         history: data.history,
-        viewport: data.viewport
+        viewport: data.viewport,
+        ...(data.build.drive ? { drive: data.build.drive } : {})
       });
     } catch (err) {
       console.warn('Saving the build to the library failed:', err);
@@ -2114,6 +2201,14 @@ export default function App() {
       }
       // Undo: Ctrl/Cmd+Z. Redo: Shift+Ctrl/Cmd+Z or Ctrl+Y
       const mod = e.metaKey || e.ctrlKey;
+      // Save to Drive: Ctrl/Cmd+S on a Drive build being edited (openspec google-drive-sync)
+      if (mod && key === 's' && !e.shiftKey && !e.altKey) {
+        if (googleDrive.linked) {
+          e.preventDefault();
+          if (googleDrive.mode === 'edit' && googleDrive.dirty) googleDrive.session.saveToDrive();
+        }
+        return;
+      }
       if (mod && key === 'z') {
         e.preventDefault();
         if (e.shiftKey) handleRedo();
@@ -2137,6 +2232,12 @@ export default function App() {
           turnViewAlong(`${e.shiftKey ? '-' : '+'}${axis}`);
           return;
         }
+      }
+      // A Read-only Drive build still explodes and frames (openspec google-drive-sync)
+      if (readOnlyViewerRef.current && !playRef.current && !mod && !e.altKey) {
+        if (key === 'x') return toggleExplode();
+        if (key === 'f') return setFocusTrigger((c) => c + 1);
+        if (e.key === 'Escape' && explodeMode !== 'off') return closeExplode();
       }
       // Nothing else edits or selects while a past point is shown or Play mode is on
       if (lockedRef.current) return;
@@ -2255,7 +2356,9 @@ export default function App() {
    * Makes `record` the current build: the open one is saved first (unless it is being deleted), then
    * its parts, history and view settings come in, and the bridge, other tabs and the assistant follow.
    */
-  const switchToBuild = async ({ id, name, instances: parts, history: hist, viewport }, { saveCurrent = true } = {}) => {
+  const switchToBuild = async ({ id, name, instances: parts, history: hist, viewport, drive }, { saveCurrent = true, leaveCheck = saveCurrent } = {}) => {
+    // Leaving a Drive build with unsaved Drive changes asks first (openspec google-drive-sync)
+    if (leaveCheck && !(await googleDrive.session.leaveBuild())) return false;
     if (saveCurrent) {
       await saveCurrentBuildNow();
     } else {
@@ -2276,13 +2379,16 @@ export default function App() {
       if (viewport.showConnectors !== undefined) setShowConnectors(viewport.showConnectors);
       applyViewOptions(viewport);
     }
-    setCurrentBuild({ id, name });
+    const next = { id, name, ...(drive?.fileId ? { drive } : {}) };
+    currentBuildRef.current = next;
+    setCurrentBuild(next);
     setFocusTrigger((c) => c + 1);
+    return true;
   };
 
   const handleNewBuild = async () => {
     const name = nextBuildName(await buildNames());
-    await switchToBuild({ id: newBuildId(), name, instances: [], history: createHistory([]) });
+    if (!(await switchToBuild({ id: newBuildId(), name, instances: [], history: createHistory([]) }))) return;
     setActionFeedback({ message: `Started ${name}`, isError: false });
   };
 
@@ -2324,7 +2430,7 @@ export default function App() {
       open: async () => {
         const history = recordStep(createHistory([]), [], parts, { source: 'app', label: `Add ${starter.name}` }).history;
         const name = starterBuildName(await buildNames(), starter.name);
-        await switchToBuild({ id: newBuildId(), name, instances: parts, history });
+        if (!(await switchToBuild({ id: newBuildId(), name, instances: parts, history }))) return;
         setActionFeedback({ message: `Started ${name}`, isError: false });
       }
     });
@@ -2341,15 +2447,14 @@ export default function App() {
       name: record.name,
       parts: record.instances || [],
       open: async () => {
-        await switchToBuild(record);
-        setLibraryOpen(false);
+        if (await switchToBuild(record)) setLibraryOpen(false);
       }
     });
   };
 
   const handleRenameBuild = async (id, name) => {
     if (id === currentBuildRef.current?.id) {
-      setCurrentBuild({ id, name });
+      setCurrentBuild({ ...currentBuildRef.current, name });
     } else {
       const record = await getBuild(id).catch(() => null);
       if (record) await putBuild({ ...record, name });
@@ -2363,7 +2468,8 @@ export default function App() {
     const record = await getBuild(id).catch(() => null);
     if (!record) return;
     const now = Date.now();
-    await putBuild({ ...record, id: newBuildId(), name: copyName(await buildNames(), record.name), createdAt: now, updatedAt: now });
+    const { drive: _drive, ...copy } = record; // a copy is a local build, not linked to the Drive file
+    await putBuild({ ...copy, id: newBuildId(), name: copyName(await buildNames(), record.name), createdAt: now, updatedAt: now });
     refreshLibrary();
   };
 
@@ -2404,7 +2510,7 @@ export default function App() {
           parts: parsed.instances,
           open: async () => {
             const name = uniqueName(await buildNames(), fileBuildName(file.name));
-            await switchToBuild({ id: newBuildId(), name, instances: parsed.instances, history: parsed.history });
+            if (!(await switchToBuild({ id: newBuildId(), name, instances: parsed.instances, history: parsed.history }))) return;
             setLibraryOpen(false);
             setActionFeedback({ message: `Opened ${name}`, isError: false });
           }
@@ -2580,7 +2686,7 @@ export default function App() {
       clearTimeout(timer);
     };
   }, [bandFlagKey]);
-  const band = useBandBuilder({ instances, catalog, catalogMap, selectedIds, runAction: runBandAction, previewPlace: previewBandPlace, setFeedback: setActionFeedback, locked: Boolean(preview || play) });
+  const band = useBandBuilder({ instances, catalog, catalogMap, selectedIds, runAction: runBandAction, previewPlace: previewBandPlace, setFeedback: setActionFeedback, locked: Boolean(preview || play || readOnlyViewer) });
   const selectedBand = selectedIds.length === 1 && isRoutedBand(instances.find((i) => i.instanceId === selectedIds[0])) ? instances.find((i) => i.instanceId === selectedIds[0]) : null;
   const flattenBand = (inst) => {
     if (!inst) return;
@@ -2721,8 +2827,8 @@ export default function App() {
     }
     setBendDialog({ sheetId: sheet.instanceId, sheetLabel: sheet.label, targetId: target?.instanceId ?? null, targetLabel: target?.label ?? null, bent: Boolean(sheet.shape) });
   };
-  // A past point shown, or Play mode on: the 3D view selects and edits nothing
-  const locked = Boolean(preview || play);
+  // A past point shown, Play mode on, or a Read-only Drive build: the 3D view selects and edits nothing
+  const locked = Boolean(preview || play || readOnlyViewer);
   // What the 3D view shows: the sheet bent as the pointed-at choice, and that choice's target holes
   const shownInstances = useMemo(
     () => (bendPreview ? instances.map((i) => (i.instanceId === bendPreview.sheetId ? { ...i, shape: bendPreview.shape } : i)) : instances),
@@ -2998,7 +3104,7 @@ export default function App() {
   const barList = barItems({
     selection: barSelection,
     transformMode,
-    locked: false,
+    locked: readOnlyViewer,
     explode: explodeMode !== 'off',
     playing: Boolean(play),
     previewing: Boolean(preview),
@@ -3120,7 +3226,9 @@ export default function App() {
           drop: Boolean(play && playDropReport),
           audit: auditOpen,
           blueprint: Boolean(blueprintData),
-          timeline: timelineVisible,
+          timeline: timelineVisible && !readOnlyViewer,
+          // A Drive build that is read-only, paused or asking a Drive question (openspec google-drive-sync)
+          drive: googleDrive.linked && (readOnlyViewer || Boolean(googleDrive.prompt)),
           buildLibrary: libraryOpen,
           settings: settingsOpen,
           offline: settingsOpen && settingsFocus === 'offline'
@@ -3145,8 +3253,9 @@ export default function App() {
       <header ref={topbarRef} className="topbar">
         <div className="brand">
           <span className="brand-badge">VEX IQ</span>
-          <span>3D Robot Modeler</span>
-          <BuildNameField name={currentBuild?.name} onRename={(name) => currentBuild && setCurrentBuild({ ...currentBuild, name })} />
+          <span className="brand-title">3D Robot Modeler</span>
+          <BuildNameField name={currentBuild?.name} readOnly={googleDrive.readOnlyViewer} onRename={(name) => currentBuild && setCurrentBuild({ ...currentBuild, name })} />
+          <DriveButton drive={googleDrive} />
           <span
             style={{
               display: 'inline-flex',
@@ -3182,6 +3291,9 @@ export default function App() {
 
         {/* Transform, Snap & Explode Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* A Read-only Drive build shows no editing controls (openspec google-drive-sync) */}
+          {!readOnlyViewer && (
+            <>
           <div className="toolbar-group" role="group" aria-label="Undo and Redo">
             <button
               type="button"
@@ -3282,6 +3394,9 @@ export default function App() {
             />
           </div>
 
+            </>
+          )}
+
           <div className="toolbar-group" role="group" aria-label="View">
             <button
               type="button"
@@ -3294,6 +3409,35 @@ export default function App() {
               <Maximize2 size={14} />
               <span className="btn-text">Focus</span>
             </button>
+            {readOnlyViewer && (
+              <>
+                <button
+                  type="button"
+                  className={`btn ${explodeMode !== 'off' ? 'active' : ''}`}
+                  onClick={toggleExplode}
+                  disabled={Boolean(play)}
+                  data-help="viewer-explode"
+                  aria-pressed={explodeMode !== 'off'}
+                  title="Explode: spread the parts out to see how it goes together (X)"
+                >
+                  <Expand size={14} />
+                  <span className="btn-text">Explode</span>
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${play ? 'active' : ''}`}
+                  onClick={togglePlay}
+                  disabled={instances.length === 0}
+                  data-help="viewer-play"
+                  aria-pressed={Boolean(play)}
+                  title="Play: run the motors and test the build"
+                >
+                  <Play size={14} />
+                  <span className="btn-text">Play</span>
+                </button>
+              </>
+            )}
+            {!readOnlyViewer && (
             <button
               type="button"
               className={`btn wide-toggle ${panelsHidden ? 'active' : ''}`}
@@ -3305,6 +3449,7 @@ export default function App() {
               {panelsHidden ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
               <span className="btn-text">{panelsHidden ? 'Panels' : 'Wide'}</span>
             </button>
+            )}
             {(viewLayout === 'stereo' || layoutSize !== 'large') && (
               <button
                 type="button"
@@ -3331,6 +3476,7 @@ export default function App() {
 
         {/* Scene Actions: Starter, Export, Import */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <DriveButton drive={googleDrive} compact />
           <FileMenu
             starters={STARTERS}
             onNew={handleNewBuild}
@@ -3338,6 +3484,8 @@ export default function App() {
             onLoad={() => setLibraryOpen(true)}
             onExport={handleExportJson}
             onDeleteCurrent={() => currentBuild && handleDeleteBuild(currentBuild.id)}
+            drive={googleDrive}
+            onMenuOpen={preloadGoogleDriveScripts}
           />
           <button
             type="button"
@@ -3367,7 +3515,8 @@ export default function App() {
       <div
         className={[
           'workspace-grid',
-          panelsHidden && layoutSize !== 'small' ? 'panels-hidden' : '',
+          (panelsHidden && layoutSize !== 'small') || readOnlyViewer ? 'panels-hidden' : '',
+          readOnlyViewer ? 'readonly-viewer' : '',
           `side-${sidePanelView}`,
           `tab-${sideTab}`,
           openDrawer ? `drawer-${openDrawer}` : '',
@@ -3741,11 +3890,11 @@ export default function App() {
             )}
           </div>
 
-          {timelineVisible && (
+          {timelineVisible && !readOnlyViewer && (
             <HistoryTimeline history={history} onMoveTo={handleMoveTo} onPreview={handlePreview} onHelp={() => openHelpAt('undo-history')} />
           )}
 
-          {!timelineVisible && (
+          {(!timelineVisible || readOnlyViewer) && (
             <div className="viewport-hud-bottom">
               <div className="shortcuts-bar" data-help="shortcuts-strip">
                 <span>
@@ -3754,6 +3903,8 @@ export default function App() {
                 <span>
                   <kbd className="kbd">RMB</kbd> Pan
                 </span>
+                {!readOnlyViewer && (
+                  <>
                 <span>
                   <kbd className="kbd">W</kbd> Move
                 </span>
@@ -3769,12 +3920,16 @@ export default function App() {
                 <span>
                   <kbd className="kbd">E</kbd> Rotate
                 </span>
+                  </>
+                )}
                 <span>
                   <kbd className="kbd">X</kbd> Explode
                 </span>
-                <span>
-                  <kbd className="kbd">D</kbd> Duplicate
-                </span>
+                {!readOnlyViewer && (
+                  <span>
+                    <kbd className="kbd">D</kbd> Duplicate
+                  </span>
+                )}
                 <span>
                   <kbd className="kbd">F</kbd> Focus
                 </span>
@@ -3795,7 +3950,7 @@ export default function App() {
 
           <div className="help-cube-spot" data-help="view-cube" aria-hidden="true" hidden={viewLayout !== 'single' || immersive} />
 
-          {welcomeShown && !help.open && (
+          {welcomeShown && !help.open && !readOnlyViewer && (
             <div className="welcome-card" role="region" aria-label="Welcome">
               <span>New here? Build your first thing in 5 minutes.</span>
               <button type="button" className="btn btn-primary-action" onClick={() => openHelpAt(START_PAGE)}>
@@ -4635,7 +4790,7 @@ export default function App() {
         </aside>
 
         {/* Medium layout: Library and Outline tabs over the side panel */}
-        {layoutSize === 'medium' && !panelsHidden && (
+        {layoutSize === 'medium' && !panelsHidden && !readOnlyViewer && (
           <div className="side-tabs" role="tablist" aria-label="Side panel">
             {[
               { name: 'library', label: 'Library', Icon: LibraryIcon },
@@ -4658,7 +4813,7 @@ export default function App() {
         )}
 
         {/* Small layout: buttons that open the Library and Outline drawers */}
-        {layoutSize === 'small' && (
+        {layoutSize === 'small' && !readOnlyViewer && (
           <nav className="drawer-buttons" aria-label="Panels">
             {[
               { name: 'library', label: 'Library', Icon: LibraryIcon },
@@ -4800,7 +4955,11 @@ export default function App() {
         onDelete={handleDeleteBuild}
         onOpenFile={handleOpenFile}
         onHelp={() => openHelpAt('saving')}
+        onOpenFromDrive={googleDrive.configured ? () => googleDrive.session.openFromDrive() : null}
+        onDialogOpen={preloadGoogleDriveScripts}
       />
+      <DriveQuestions drive={googleDrive} buildName={currentBuild?.name} />
+      <DriveBanners drive={googleDrive} buildName={currentBuild?.name} />
       <OpenOrAddDialog
         pick={openOrAddPick}
         buildName={currentBuild?.name}

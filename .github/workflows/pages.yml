@@ -2,7 +2,7 @@ name: Publish site
 
 on:
   push:
-    branches: [main]
+    branches: [main, google-drive-sync]
   workflow_dispatch:
 
 permissions:
@@ -27,6 +27,12 @@ jobs:
       - run: npm run build:static
         env:
           VEXIQ_BASE: /${{ github.event.repository.name }}/
+          # Google Drive sync (openspec google-drive-sync, docs/google-drive-setup.md); without
+          # these repository variables the site builds as before, with no Drive items. They aren't
+          # secrets: the client ID and API key end up in the public page, limited by Google to this site
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_API_KEY: ${{ vars.VITE_GOOGLE_API_KEY }}
+          VITE_GOOGLE_APP_ID: ${{ vars.VITE_GOOGLE_APP_ID }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist-static
