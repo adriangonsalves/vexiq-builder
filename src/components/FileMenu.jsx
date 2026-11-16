@@ -1,14 +1,16 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Download, FilePlus2, FolderOpen, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, CloudCheck, CloudUpload, Download, FilePlus2, FolderOpen, Sparkles, Trash2 } from 'lucide-react';
 import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.jsx';
 import { STARTER_SECTIONS } from '../starters.js';
 
 /**
  * The toolbar's File menu (openspec build-library): New, Starter ▸ (every starter, shown under it
  * on hover or click, under the headings Robots and Assemblies: openspec starter-assemblies), Load…,
- * Export and Delete this build….
+ * Export and Delete this build…. With Google Drive set up (openspec google-drive-sync): Save to
+ * Google Drive… and, while editing a Drive build, Done editing. Opening the menu starts loading the
+ * Google scripts, so sign-in can open straight from the tap.
  */
-export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport, onDeleteCurrent }) {
+export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport, onDeleteCurrent, drive, onMenuOpen }) {
   const buttonRef = useRef(null);
   const [at, setAt] = useState(null);
   const [startersOpen, setStartersOpen] = useState(false);
@@ -27,7 +29,9 @@ export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport,
     }
     const r = buttonRef.current.getBoundingClientRect();
     setAt({ x: r.left, y: r.bottom + 4 });
+    onMenuOpen?.();
   };
+  const online = typeof navigator === 'undefined' || navigator.onLine !== false;
   return (
     <>
       <button ref={buttonRef} type="button" className={`btn ${at ? 'active' : ''}`} onClick={toggle} aria-haspopup="menu" aria-expanded={Boolean(at)} title="New, starters, your saved builds, export" aria-label="File" data-help="file">
@@ -72,6 +76,25 @@ export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport,
           <MenuItem icon={Download} onSelect={choose(onExport)} title="Download this build as a .vexiq.json file">
             Export
           </MenuItem>
+          {drive?.configured && (
+            <>
+              <MenuDivider />
+              <MenuItem
+                icon={CloudUpload}
+                onSelect={choose(() => drive.session.askWhereToSave())}
+                disabled={!online || drive.readOnlyViewer}
+                title={!online ? 'Needs an internet connection' : drive.readOnlyViewer ? 'Not while this build is read-only' : 'Save this build as a new file on Google Drive, in your team’s folder or your My Drive'}
+                help="save-to-drive"
+              >
+                Save to Google Drive…
+              </MenuItem>
+              {drive.linked && drive.mode === 'edit' && (
+                <MenuItem icon={CloudCheck} onSelect={choose(() => drive.session.doneEditing())} title="Save if needed, then finish editing so a teammate can edit" help="done-editing">
+                  Done editing
+                </MenuItem>
+              )}
+            </>
+          )}
           <MenuDivider />
           <MenuItem icon={Trash2} onSelect={choose(onDeleteCurrent)} title="Remove this build from this browser's storage">
             Delete this build…
@@ -83,8 +106,16 @@ export default function FileMenu({ starters, onNew, onStarter, onLoad, onExport,
 }
 
 /** The current build's name beside the title: click to type a new one (Enter keeps, Esc cancels). */
-export function BuildNameField({ name, onRename }) {
+export function BuildNameField({ name, onRename, readOnly = false }) {
   const [draft, setDraft] = useState(null);
+  // A Read-only or paused Drive build can't be renamed (openspec google-drive-sync)
+  if (readOnly) {
+    return (
+      <span className="build-name build-name-readonly" data-help="build-name">
+        {name || '…'}
+      </span>
+    );
+  }
   const commit = () => {
     const next = (draft ?? '').trim();
     setDraft(null);

@@ -1893,6 +1893,81 @@ body,
   outline: none;
 }
 
+/* A Read-only or paused Drive build's name can't be clicked to rename (openspec google-drive-sync) */
+.build-name.build-name-readonly {
+  cursor: default;
+}
+.build-name.build-name-readonly:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
+/* The one Drive button beside the build name, and its Read-only tag (openspec google-drive-sync) */
+.drive-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  max-width: 240px;
+  padding: 3px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.drive-button .drive-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drive-button.drive-saveToDrive {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.drive-button.drive-saveToDrive:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.drive-button.drive-reconnectToDrive {
+  border-color: #f59e0b;
+  color: #fbbf24;
+}
+.drive-tag {
+  color: var(--text-secondary);
+  background: var(--bg-panel-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-weight: 500;
+}
+/* Large layout: the button beside the build name. Tablets and phones hide the name, so the button
+   moves into the toolbar row, as its icon and a short label */
+.app-shell[data-layout="large"] .drive-button.drive-compact,
+.app-shell:not([data-layout="large"]) .drive-button.drive-wide {
+  display: none;
+}
+.app-shell:not([data-layout="large"]) .drive-button.drive-compact {
+  max-width: 170px;
+  min-height: 44px;
+}
+.drive-button {
+  flex-shrink: 0;
+}
+.drive-button .drive-label-short {
+  display: none;
+}
+.app-shell[data-layout="small"] .drive-button.drive-compact .drive-label-full {
+  display: none;
+}
+.app-shell[data-layout="small"] .drive-button.drive-compact .drive-label-short {
+  display: inline;
+}
+.app-shell:not([data-layout="large"]) .drive-tag.drive-compact {
+  padding: 0 10px;
+}
+
+/* Drive banners sit where the offline banner does; a question or the paused banner can wrap */
+.drive-banner {
+  z-index: 60;
+}
+
 .popover-submenu-label {
   display: inline-flex;
   align-items: center;
@@ -3671,4 +3746,21 @@ dialog.help-modal::backdrop {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Read-only Drive viewer (openspec google-drive-sync): no Part Library, Outliner or Inspector on any layout */
+.workspace-grid.readonly-viewer .panel-left,
+.workspace-grid.readonly-viewer .panel-right {
+  display: none !important;
+}
+
+/* A Drive build's button needs room beside the name: the title words give way on narrower screens,
+   and the name and count never wrap (openspec google-drive-sync) */
+.brand {
+  white-space: nowrap;
+}
+@media (max-width: 1480px) {
+  .brand:has(.drive-button.drive-wide) .brand-title {
+    display: none;
+  }
 }

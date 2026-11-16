@@ -2016,6 +2016,181 @@
   "name": "Add to this build"
  },
  {
+  "feature": "Top toolbar, beside the build name → Drive button (Save to Drive, Done editing, Edit build, Reconnect to Drive, Read-only tag)",
+  "kind": "toolbar",
+  "page": "google-drive",
+  "section": "",
+  "name": "Drive button"
+ },
+ {
+  "feature": "Drive button → Save to Drive",
+  "kind": "toolbar",
+  "page": "google-drive",
+  "section": "",
+  "name": "Save to Drive"
+ },
+ {
+  "feature": "Drive button → Done editing",
+  "kind": "toolbar",
+  "page": "google-drive",
+  "section": "",
+  "name": "Done editing"
+ },
+ {
+  "feature": "Drive button → Edit build",
+  "kind": "toolbar",
+  "page": "google-drive",
+  "section": "when-a-teammate-is-editing",
+  "name": "Edit build"
+ },
+ {
+  "feature": "Drive button → Read-only · Locked by <name>",
+  "kind": "toolbar",
+  "page": "google-drive",
+  "section": "when-a-teammate-is-editing",
+  "name": "read-only"
+ },
+ {
+  "feature": "Read-only toolbar → Explode",
+  "kind": "toolbar",
+  "page": "google-drive",
+  "section": "when-a-teammate-is-editing",
+  "name": "Explode"
+ },
+ {
+  "feature": "Read-only toolbar → Play",
+  "kind": "toolbar",
+  "page": "google-drive",
+  "section": "when-a-teammate-is-editing",
+  "name": "Play"
+ },
+ {
+  "feature": "File menu → Save to Google Drive…",
+  "kind": "menu",
+  "page": "google-drive",
+  "section": "",
+  "name": "Save to Google Drive…"
+ },
+ {
+  "feature": "File menu → Done editing",
+  "kind": "menu",
+  "page": "google-drive",
+  "section": "",
+  "name": "Done editing"
+ },
+ {
+  "feature": "Your builds dialog (File → Load…) → Open from Google Drive…",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "",
+  "name": "Open from Google Drive…"
+ },
+ {
+  "feature": "Drive banner (paused) → Reconnect to Drive",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "reconnect-to-drive",
+  "name": "Reconnect to Drive"
+ },
+ {
+  "feature": "Drive banner (paused) → Work on this device only",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "work-on-this-device-only",
+  "name": "Work on this device only"
+ },
+ {
+  "feature": "Drive banner (unlocked) → Edit build",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "when-a-teammate-is-editing",
+  "name": "Edit build"
+ },
+ {
+  "feature": "Drive banner (unlocked) → Stay read-only",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "when-a-teammate-is-editing",
+  "name": "read-only"
+ },
+ {
+  "feature": "Changed-on-Drive question → Save as a copy on Drive",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "if-a-teammate-saved-first",
+  "name": "Save as a copy on Drive"
+ },
+ {
+  "feature": "Changed-on-Drive question → Load latest from Drive",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "if-a-teammate-saved-first",
+  "name": "Load latest from Drive"
+ },
+ {
+  "feature": "Changed-on-Drive question → Cancel",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "if-a-teammate-saved-first",
+  "name": "Cancel"
+ },
+ {
+  "feature": "Leave question → Save and leave",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "leaving-a-build-you-changed",
+  "name": "Save and leave"
+ },
+ {
+  "feature": "Leave question → Leave without saving",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "leaving-a-build-you-changed",
+  "name": "Leave without saving"
+ },
+ {
+  "feature": "Leave question → Cancel",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "leaving-a-build-you-changed",
+  "name": "Cancel"
+ },
+ {
+  "feature": "Keyboard → Ctrl/Cmd+S (Save to Drive)",
+  "kind": "shortcut",
+  "page": "google-drive",
+  "section": "",
+  "name": "Save to Drive"
+ },
+ {
+  "feature": "Where-to-save question (File → Save to Google Drive…) → Choose a folder…",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "",
+  "name": "Choose a folder…"
+ },
+ {
+  "feature": "Where-to-save question (File → Save to Google Drive…) → My Drive",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "",
+  "name": "My Drive"
+ },
+ {
+  "feature": "Where-to-save question (File → Save to Google Drive…) → Save in <last folder>",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "share-the-file-with-your-team",
+  "name": "Save in"
+ },
+ {
+  "feature": "Where-to-save question (File → Save to Google Drive…) → Cancel",
+  "kind": "panel",
+  "page": "google-drive",
+  "section": "if-a-teammate-saved-first",
+  "name": "Cancel"
+ },
+ {
   "feature": "Your builds dialog (File → Load…) → Close",
   "kind": "panel",
   "page": "blueprint",

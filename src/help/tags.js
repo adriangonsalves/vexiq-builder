@@ -37,6 +37,7 @@ export const SITUATIONS = [
   S('blueprint', 1, 'making a blueprint'),
   S('timeline', 1, 'looking at your history'),
   S('build-library', 1, 'looking through your builds'),
+  S('google-drive', 1, 'working on a build shared on Google Drive'),
   S('settings', 1, 'in Settings'),
   S('offline', 1, 'setting up offline use'),
   S('four-view', 1, 'looking at 4-View'),

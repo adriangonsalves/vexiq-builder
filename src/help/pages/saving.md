@@ -55,6 +55,8 @@ Each of you builds one part of the robot, like the drive base and the claw.
 4. Choose [[Add to this build]].
 5. Drag the new group into place and join it with pins.
 
+To work on one build together instead, see [Sharing with your team on Google Drive](help:google-drive).
+
 The new group is named after the file. Locked parts come in unlocked. If it won't move, a part in it is hidden: use the group's hide button in the Outline. **Ungroup** makes its parts loose again; select some and press `G` for a smaller group.
 
 ## Delete this build…

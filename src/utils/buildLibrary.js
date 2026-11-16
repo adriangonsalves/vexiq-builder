@@ -95,5 +95,11 @@ export async function listBuilds() {
 }
 
 export const getBuild = (id) => run('readonly', (store) => store.get(id));
+
+/** The saved build linked to a Google Drive file (openspec google-drive-sync), or null. */
+export async function findBuildByDriveFile(fileId) {
+  const all = (await run('readonly', (store) => store.getAll())) || [];
+  return all.find((b) => b.drive?.fileId === fileId) ?? null;
+}
 export const putBuild = (record) => run('readwrite', (store) => store.put(record));
 export const deleteBuild = (id) => run('readwrite', (store) => store.delete(id));
