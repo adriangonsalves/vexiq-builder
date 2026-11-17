@@ -37,6 +37,7 @@ On a computer and a tablet it runs down the right edge, under the view cube. On 
 - [[Duplicate]] [[Duplicate]]: copy it. {{`D`|}}
 - [[Delete]] [[Delete]]: remove it. Undo brings it back. {{`Del`|}}
 - **One part of a group** [[One part of a group]]: pick a single part inside a group. {{`Shift` + `Alt` + click|}}
+- **Rope between these** [[Rope between these]]: with a spool, pin, standoff or shaft and one more selected, run a rope between the two.
 
 ## Buttons for one part
 - **Stamp copies** [[Stamp copies]]: put a copy in each hole you pick. {{`Ctrl`/`Cmd` + double-click|}}

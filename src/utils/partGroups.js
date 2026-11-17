@@ -6,6 +6,7 @@
  * Vite bridge and the MCP server.
  */
 import { copiedBand, isRoutedBand } from './bandRoute.js';
+import { copiedRope, isRoutedRope } from './ropeRoute.js';
 import * as THREE from 'three';
 import { quaternionToEulerDeg } from './gearMeshing.js';
 import { collectWorldFeatures, gridPivot } from './pinHoleAlignment.js';
@@ -327,7 +328,7 @@ export function cloneSet(instances, ids, offset, { newId, groupId = newGroupId()
   // Bands copied with their parts stay strung on the copies (openspec rubber-bands)
   const idMap = new Map(chosen.map((inst) => [inst.instanceId, makeId()]));
   return chosen
-    .map((inst) => copiedBand(inst, idMap))
+    .map((inst) => copiedRope(copiedBand(inst, idMap), idMap))
     .map((inst) => {
       const position = inst.position.map((v, i) => round3(v + (offset[i] || 0)));
       const copy = {
@@ -435,6 +436,9 @@ export function addBuildAsGroup(instances, incoming, name, bboxOf, { pitch = 12.
     };
     if (isRoutedBand(inst)) {
       copy.shape = { ...inst.shape, route: remap(inst.shape.route), ...(Array.isArray(inst.shape.picks) ? { picks: remap(inst.shape.picks) } : {}) };
+    }
+    if (isRoutedRope(inst)) {
+      copy.shape = { ...inst.shape, ends: inst.shape.ends.map((e) => (e && idMap.has(e.instanceId) ? { ...e, instanceId: idMap.get(e.instanceId) } : e)), via: remap(inst.shape.via || []) };
     }
     return copy;
   });

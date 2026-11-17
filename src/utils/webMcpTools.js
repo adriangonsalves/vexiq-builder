@@ -248,6 +248,35 @@ export function registerVexIqWebMcpTools(contextRef) {
       annotations: { readOnlyHint: false }
     },
     {
+      name: 'place_rope',
+      description:
+        "Routes a rope on the build (as the MCP server's place_rope and the app's Rope builder do). from / to: { instanceId, feature: \"post:pin\" | \"post:body\" | \"post:shaft\" | \"pocket\" | \"free\", at } (to left out: a free end). via: [{ instanceId, feature (\"groove\", posts, edges as place_band names them), turn (1 | -1, left out for the side a tight rope presses on), wraps }] in order, any number. ropePartId left out: the shortest rope that fits. Spare winds on a spool (turns, winding \"over\" | \"under\"), else hangs as slack. Too short: refused with suggestion unless allowShort. list: true lists end places and spots and changes nothing. Reply: size, usedMm, spareMm, slackMm, turns, via (with turn), bends.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ropePartId: { type: 'string' },
+          instanceId: { type: 'string' },
+          from: { type: 'object' },
+          to: { type: 'object' },
+          via: { type: 'array', items: { type: 'object' } },
+          turns: { type: 'number' },
+          winding: { type: 'string', enum: ['over', 'under'] },
+          allowShort: { type: 'boolean' },
+          list: { type: 'boolean' },
+          near: { type: 'array', items: { type: 'string' } }
+        }
+      },
+      async execute(args = {}) {
+        const ctx = contextRef.current;
+        if (!ctx) return { error: 'Application context is not ready.' };
+        const data = await ctx.runAction('place_rope', args);
+        if (!data?.ok) return { error: data?.error || 'Could not place the rope.', ...(data?.needsRoute ? { needsRoute: data.needsRoute } : {}), ...(data?.suggestion ? { suggestion: data.suggestion } : {}) };
+        const { state, record, stepLabel, ...reply } = data;
+        return reply;
+      },
+      annotations: { readOnlyHint: false }
+    },
+    {
       name: 'mesh_right_angle',
       description:
         "Puts a gear in mesh with a gear it meshes with at 90° (as the MCP server's mesh_right_angle does): a bevel gear with a bevel gear of the same tooth count, the 36 Tooth Crown Gear with a standard spur gear, or the Worm Gear with a standard spur gear (the worm drives the gear, never the other way). Give instanceId (a gear to move) or part (a gear to add) and targetInstanceId. Without spot it lists the mesh spots [{ spot, axis, center, blocked, blockedBy }] and changes nothing; with spot it puts the gear there, meshed, as one undo step.",

@@ -77,6 +77,12 @@ export function auditIssues(audit) {
       if (!r.pressed) add('pawl-unpressed', 'note', `Nothing presses ${r.pawl} onto ${r.ratchet}`, 'No band or belt is on the pawl or on a pin in it, so only its weight keeps it on the teeth.', parts);
     }
   }
+  // Ropes (openspec rope-and-spool)
+  for (const r of audit.ropes || []) {
+    if (r.tooShortMm) add('rope-short', 'problem', `${r.label} is too short by ${Math.round(r.tooShortMm)} mm`, 'Its route is longer than the rope. Move its parts closer, take a turn off its spool, or route a longer rope.', [part(r)]);
+    if (r.loosePocket) add('rope-pocket', 'problem', `${r.label}'s end isn't held`, `It is in the pocket of ${r.spool}, but no shaft goes through that spool to hold it.`, [part(r)]);
+    if (r.through?.length) add('rope-through', 'problem', `${r.label} passes through ${r.through.join(', ')}`, 'Route it round that part, or over a pulley or post beside it.', [part(r)]);
+  }
   for (const p of audit.singlePinPivotParts || []) {
     add('single-pin', 'note', `${p.label} is held by one pin`, 'It can pivot on that pin. Add a second pin if it should stay fixed.', [part(p)]);
   }

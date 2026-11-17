@@ -41,7 +41,7 @@ export function setPostCover(fn) {
  * other parts' holes sit on it (a pin through a beam is only free outside the beam) and where other
  * bands already lie on it.
  */
-function freeSpans(spot, inst, instances, partOf, { widthMm, selfId, bands = true }) {
+export function freeSpans(spot, inst, instances, partOf, { widthMm, selfId, bands = true }) {
   const [lo, hi] = [Math.min(...spot.span), Math.max(...spot.span)];
   if (spot.kind !== 'post') return [[lo, hi]];
   const axis = spot.axis;

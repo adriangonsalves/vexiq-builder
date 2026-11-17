@@ -9,7 +9,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditAssembly, looksTheSame } from '../mcp/assembly-engine.mjs';
-import { convertParts, finalStepState, projectIdFrom, walkAssembly } from './import-cad.mjs';
+import { convertParts, finalStepState, projectIdFrom, reportLines, walkAssembly } from './import-cad.mjs';
+import { frameEntryFor } from '../src/engine/cadFrames.js';
+import { placeRope } from '../src/engine/ropeRouting.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let failures = 0;
@@ -105,6 +107,46 @@ const audit = auditAssembly({ instances });
   const one = walked.parts.find((p) => p.cadPartNumber === '228-2500-2238');
   const unknown = convertParts({ scaleFactor: walked.scaleFactor, parts: [{ ...one, cadPartNumber: '228-2500-120', path: 'Test/228-2500-120-1' }] }, { catalog, frames: {} });
   check('Unknown part: placed by the box-centre rule and listed as unchecked', unknown.items.length === 1 && unknown.unchecked.includes('228-2500-120'), JSON.stringify(unknown.unchecked));
+}
+
+// --- A robot whose CAD keeps a part in another frame ---------------------------------------------------
+{
+  const table = { '228-2500-065': { rule: 'centre', source: 'pins', checkedOn: 'flop', projects: { huey: { rule: 'origin', turn: [0, 180, 180], offsetMm: [0, 0, -12.7], source: 'mesh' } } } };
+  const own = frameEntryFor(table, '228-2500-065', 'huey');
+  check("Frames: a robot's own placement replaces the entry's rule, turn and offset for that robot only", own.rule === 'origin' && own.offsetMm[2] === -12.7 && own.checkedOn === 'flop' && frameEntryFor(table, '228-2500-065', 'flop').rule === 'centre' && frameEntryFor(table, '228-2500-065').rule === 'centre');
+  const huey = '82f13c0c-d4a4-4db5-869e-5a18c90b9443';
+  check("  Huey's standoffs and Swish's and Flop's are placed by different entries", frameEntryFor(frames, '228-2500-065', huey).rule === 'origin' && frameEntryFor(frames, '228-2500-065', 'other').rule === 'centre');
+}
+
+// --- Ropes (openspec rope-and-spool) -------------------------------------------------------------------
+{
+  // Rope pieces are neither placed as parts nor listed as left out
+  const one = walked.parts.find((p) => p.cadPartNumber === '228-2500-2238');
+  const piece = (cadPartNumber, tail) => ({ ...one, cadPartNumber, path: `Winch-1/${tail}`, top: 'Winch-1' });
+  const conv2 = convertParts({ scaleFactor: walked.scaleFactor, parts: [one, piece('228-2500-438', '228-2500-438-1'), piece('228-2500-438 bent for catapultbot^228-7980 VEX IQ Catapult', '228-2500-438 bent-1'), piece('228-2500-ROPE-OVERMOLD-MASTER', '228-2500-ROPE-OVERMOLD-MASTER-1'), piece('Lift Rope', 'Lift Rope-1')] }, { catalog, frames });
+  check('Rope pieces (the straight rope, a bent piece, a loose tab, "Lift Rope") are kept for stringing: not placed, not left out', conv2.items.length === 1 && conv2.leftOut.length === 0 && conv2.ropeParts.length === 4 && conv2.ropeParts.filter((r) => r.lib).length === 1, JSON.stringify({ items: conv2.items.length, leftOut: conv2.leftOut.length, ropes: conv2.ropeParts.length }));
+
+  // The report
+  const lines = reportLines({ items: [], leftOut: [], duplicates: [], unchecked: [], ropes: [{ label: 'Winch: 24x Pitch Rope', names: { from: 'spool pocket', to: 'arm shaft', via: [] }, usedMm: 220.6, turns: 1.25, slackMm: 8.1, shortMm: 0, pieces: ['a', 'b'] }, { label: 'Lift: 24x Pitch Rope', names: { from: 'pin', to: 'pin', via: ['pulley groove'] }, usedMm: 260.2, turns: 0, slackMm: 31.9, shortMm: 0, pieces: ['c'] }, { label: 'Lift: rope', error: 'no end was found on a pin, standoff, shaft or spool', pieces: ['d'] }] });
+  check('Report: each rope with its ends, spots, used length and turns or slack', lines.some((l) => /^Rope Winch: 24x Pitch Rope: from spool pocket to arm shaft; 220.6 mm used, 1.25 turns on the spool/.test(l)) && lines.some((l) => /from pin over pulley groove to pin; 260.2 mm used, 31.9 mm slack/.test(l)), lines.filter((l) => /^Rope/.test(l)).join(' | '));
+  check('Rope end not found: left out, and the report says no end was found', lines.some((l) => /^Rope left out: Lift: rope: no end was found/.test(l)));
+
+  // The ropes the import read from VEX's CAD (scripts/make-rope-fixture.mjs), placed on their parts
+  for (const [file, count] of [['scripts/fixtures/swish-rope.json', 1], ['scripts/fixtures/huey-lift.json', 2]]) {
+    const fx = read(file);
+    let state = { instances: fx.parts.map((p) => ({ ...p, visible: true })) };
+    const placed = [];
+    for (const r of fx.ropes) {
+      const res = placeRope(state, { ropePartId: r.partQuery, label: r.label, from: r.from, ...(r.to ? { to: r.to } : {}), via: r.via, ...(r.winding ? { winding: r.winding } : {}), allowShort: true });
+      placed.push(res);
+      if (res.ok) state = res.state;
+    }
+    const a = auditAssembly(state);
+    const name = file.includes('swish') ? 'Swish' : 'Huey';
+    check(`${name}: ${count} rope${count > 1 ? 's' : ''} placed from the CAD's pieces, with no rope through a part and no loose end`, placed.length === count && placed.every((r) => r.ok) && a.ropes.length === count && a.ropes.every((r) => !r.through.length && !r.loosePocket && !r.tooShortMm), JSON.stringify(placed.map((r) => r.error || 'ok')) + JSON.stringify(a.ropes.map((r) => r.through)));
+    if (name === 'Swish') check('  Swish: one 24x rope from the spool pocket, its spare wound on the spool', fx.ropes[0].from.feature === 'pocket' && placed[0].ok && placed[0].size === '24x Pitch Rope' && placed[0].turns >= 1, JSON.stringify({ size: placed[0].size, turns: placed[0].turns }));
+    else check('  Huey: two 24x ropes, one each side, each with slack reported', placed.every((r) => r.ok && r.size === '24x Pitch Rope' && r.slackMm > 10) && Math.sign(fx.parts.find((p) => p.instanceId === fx.ropes[0].from.instanceId).position[2]) !== Math.sign(fx.parts.find((p) => p.instanceId === fx.ropes[1].from.instanceId).position[2]), JSON.stringify(placed.map((r) => r.slackMm)));
+  }
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll CAD import checks passed');

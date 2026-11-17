@@ -36,6 +36,8 @@ import { CHAIN_LINK_PART_NUMBER, TREAD_LINK_PART_NUMBER, buildChainPath, chainMe
 import { sliceOutline } from '../utils/chainObstacles.js';
 import { bandOverlaps } from './bandFit.js';
 import { isRoutedBand, mirroredRoute, resolveRoute, setPostCover, stringBand } from '../utils/bandRoute.js';
+import { isRoutedRope, mirroredRope, routeOf, stringRope } from '../utils/ropeRoute.js';
+import { isRopePart, spoolSpec } from '../utils/ropePath.js';
 import { bandSpec } from '../utils/bandPath.js';
 import { mirrorShape, normalizeShape, shapeError, shapeMeshArrays, shapedPart } from '../utils/shapedParts.js';
 import { SHEET_PRESS_MM, isPlasticSheet } from '../utils/sheetBend.js';
@@ -340,6 +342,9 @@ export function checkCandidateCollision(candidate, instances) {
   const partA = partOf(candidate);
   if (!partA) return { isIntersecting: false, collidingWith: [], tightFits: [] };
   // A strung band: the band rule (src/engine/bandFit.js), its own parts included (openspec rubber-bands)
+  // A routed rope touches only the spots on its route: its tabs on their posts and its coils on a drum
+  // aren't overlaps (openspec rope-and-spool); a path through a part is the audit's to list
+  if (isRoutedRope(candidate)) return { isIntersecting: false, collidingWith: [], tightFits: [] };
   if (isRoutedBand(candidate)) {
     const others = instances.filter((i) => i.instanceId !== candidate.instanceId);
     const collidingWith = bandOverlaps(candidate, others).map((o) => ({ instanceId: o.instanceId, label: o.label, partNumber: partOf(others.find((i) => i.instanceId === o.instanceId))?.partNumber, depthMm: o.depthMm }));
@@ -364,6 +369,7 @@ export function checkCandidateCollision(candidate, instances) {
   for (const other of instances) {
     if (other.instanceId === candidate.instanceId) continue;
     if (other.visible === false) continue;
+    if (isRoutedRope(other)) continue;
     if (isRoutedBand(other)) {
       withCandidate ||= instances.some((i) => i.instanceId === candidate.instanceId) ? instances.map((i) => (i.instanceId === candidate.instanceId ? candidate : i)) : [...instances, candidate];
       const hit = bandOverlaps(other, withCandidate, { only: new Set([candidate.instanceId]) });
@@ -739,8 +745,9 @@ function findJoints(state) {
     expandedWorldBoxes.set(inst.instanceId, rawBox.clone().expandByScalar(0.6));
     featuresById.set(inst.instanceId, worldFeaturesFor(inst));
 
-    // A strung band is held by the spots it's strung on, not by pins (openspec rubber-bands)
-    if (isRoutedBand(inst)) continue;
+    // A strung band is held by the spots it's strung on, not by pins (openspec rubber-bands); a
+    // routed rope by its ends (openspec rope-and-spool)
+    if (isRoutedBand(inst) || isRoutedRope(inst)) continue;
     if (isFastenerPart(part, featuresById.get(inst.instanceId))) {
       fasteners.push({ inst, part, mat });
     } else {
@@ -845,6 +852,13 @@ function findJoints(state) {
     return [...parts];
   };
 
+  // A pin or standoff a rope's end sits on, or a band is strung round, is a post: seated in one part is
+  // all it needs (openspec rope-and-spool)
+  const posts = new Set();
+  for (const inst of visible) {
+    if (isRoutedRope(inst)) for (const e of [...inst.shape.ends, ...(inst.shape.via || [])]) if (e && String(e.feature).startsWith('post:')) posts.add(e.instanceId);
+    if (isRoutedBand(inst)) for (const sp of inst.shape.route) if (String(sp.feature).startsWith('post:')) posts.add(sp.instanceId);
+  }
   for (const f of fasteners) {
     const ports = seatedIn.get(f.inst.instanceId);
     const own = [...ports.keys()];
@@ -860,6 +874,8 @@ function findJoints(state) {
       const nearMiss = nearMissesFor(f, new Set(partners));
       if (partners.length === 0) {
         floatingFasteners.push({ instanceId: f.inst.instanceId, label: f.inst.label, engagedWith: [], nearMiss });
+      } else if (posts.has(f.inst.instanceId)) {
+        for (const id of own) fastenerCountByPartInstance.set(id, (fastenerCountByPartInstance.get(id) || 0) + 1);
       } else {
         halfSeatedFasteners.push({ instanceId: f.inst.instanceId, label: f.inst.label, seatedIn: seatedList, nearMiss });
       }
@@ -1156,7 +1172,7 @@ function measurePostCover(spot, postInst, instances) {
   const segBox = new THREE.Box3().setFromPoints([spot.center.clone().addScaledVector(axis, lo), spot.center.clone().addScaledVector(axis, hi)]).expandByScalar(ring + 1);
   const ray = new THREE.Ray();
   for (const other of instances) {
-    if (other.instanceId === postInst.instanceId || other.visible === false || isRoutedBand(other)) continue;
+    if (other.instanceId === postInst.instanceId || other.visible === false || isRoutedBand(other) || isRoutedRope(other)) continue;
     const part = partOf(other);
     if (!part?.bbox || bandSpec(part)) continue;
     const m = buildWorldMatrix(other.position, other.rotation);
@@ -1232,6 +1248,54 @@ function playBands(visible) {
   return out;
 }
 
+/**
+ * Play mode's ropes (openspec rope-and-spool, design decision 8): each routed rope's path elements at
+ * the start, as plain data: [{ id, label, partNumber, lengthMm, cordMm, position, elements: [{ ...spot,
+ * instanceId (null for a free end's hang probe), center, axis }], turns (the solver's per element),
+ * spool: { element, instanceId, turns, winding, spec } | null, ends: [{ kind, instanceId, point, axis,
+ * slot?, origin? } | null], free }].
+ */
+function playRopes(visible) {
+  const arr3 = (v) => (v?.isVector3 ? [v.x, v.y, v.z] : v);
+  const out = [];
+  for (const inst of visible) {
+    if (!isRoutedRope(inst)) continue;
+    const s = inst.shape;
+    const route = { ends: s.ends, via: s.via || [], spool: s.spool ? { turns: s.spool.turns, winding: s.spool.winding } : null };
+    const strung = stringRope(inst, route, visible, partOf, { allowShort: true });
+    if (strung.error) continue;
+    const part = partOf({ ...inst, shape: undefined });
+    const n = strung.elements.length;
+    const ids = [strung.resolvedEnds[0]?.instanceId, ...strung.via.map((v) => v.instanceId), strung.resolvedEnds[1]?.instanceId ?? null];
+    const spoolEnd = strung.spoolEnd;
+    const spoolEl = spoolEnd === null ? null : spoolEnd === 0 ? 0 : n - 1;
+    out.push({
+      id: inst.instanceId,
+      label: inst.label || part.name,
+      partNumber: part.partNumber,
+      lengthMm: strung.lengthMm,
+      cordMm: 1.2,
+      position: [...inst.position],
+      elements: strung.elements.map((e, i) => ({
+        ...e,
+        instanceId: ids[i] ?? null,
+        center: arr3(e.center),
+        axis: arr3(e.axis),
+        ...(e.radial ? { radial: arr3(e.radial) } : {}),
+        ...(e.wrapDir ? { wrapDir: arr3(e.wrapDir) } : {})
+      })),
+      turns: strung.solveTurns,
+      spool: spoolEl === null ? null : { element: spoolEl, instanceId: strung.resolvedEnds[spoolEnd].instanceId, turns: strung.turns, winding: s.spool?.winding === -1 ? -1 : 1, spec: spoolSpec(partOf(visible.find((v) => v.instanceId === strung.resolvedEnds[spoolEnd].instanceId))) },
+      ends: strung.resolvedEnds.map((r) => (r ? { kind: r.kind, instanceId: r.instanceId, point: arr3(r.point), axis: arr3(r.axis), ...(r.slot ? { slot: arr3(r.slot), origin: arr3(r.origin) } : {}) } : null)),
+      free: !strung.resolvedEnds[1]
+    });
+  }
+  return out;
+}
+
+/** A Smart Motor's stopping modes (openspec motor-stopping); a motor without one brakes. */
+export const STOPPING_MODES = ['coast', 'brake', 'hold'];
+
 export function playInputs(state, { braceTolerance = true } = {}) {
   const found = findJoints(state);
   const fastenerIds = new Set(found.fasteners.map((f) => f.inst.instanceId));
@@ -1243,6 +1307,7 @@ export function playInputs(state, { braceTolerance = true } = {}) {
     const part = partOf(inst);
     if (!part) continue;
     if (isRoutedBand(inst)) continue; // a strung band is no body: it pulls on its spots (below)
+    if (isRoutedRope(inst)) continue; // nor is a routed rope (openspec rope-and-spool)
     parts.push({
       id: inst.instanceId,
       label: inst.label || part.name,
@@ -1250,6 +1315,8 @@ export function playInputs(state, { braceTolerance = true } = {}) {
       standoff: part.fastenerSpecs?.fastenerType === 'standoff',
       chain: isChainPart(part) && inChain.has(inst.instanceId),
       motor: Boolean(part.hubSpecs),
+      // How a Smart Motor stops (openspec motor-stopping): coast, brake (the default) or hold
+      ...(part.hubSpecs ? { stopping: STOPPING_MODES.includes(inst.stopping) ? inst.stopping : 'brake' } : {}),
       gear: part.gearSpecs ? { teeth: part.gearSpecs.teeth, type: part.gearSpecs.gearType } : null,
       rack: Boolean(part.rackSpecs?.measured),
       ...dropInfo(inst, part, fastenerIds.has(inst.instanceId))
@@ -1458,7 +1525,7 @@ export function playInputs(state, { braceTolerance = true } = {}) {
       toothDir: vec(g.toothDir),
       faceSpan: [Math.round((g.faceSpan[0] - g.center.dot(g.axis)) * 1000) / 1000, Math.round((g.faceSpan[1] - g.center.dot(g.axis)) * 1000) / 1000]
     }));
-  return { parts, seated, groups, meshes, chains, tracks, sprocketAxes, bays, bands: playBands(found.visible), ratchets: playRatchets(found), spurGears };
+  return { parts, seated, groups, meshes, chains, tracks, sprocketAxes, bays, bands: playBands(found.visible), ropes: playRopes(found.visible), ratchets: playRatchets(found), spurGears };
 }
 
 /**
@@ -1894,6 +1961,15 @@ export function auditAssembly(state) {
     neighbours.get(a)?.push(b);
     neighbours.get(b)?.push(a);
   }
+  // A rope joins the parts holding its ends and spots: a weight hanging on one isn't an island
+  // (openspec rope-and-spool)
+  for (const rope of visible.filter(isRoutedRope)) {
+    const ids = [...new Set([...rope.shape.ends.filter(Boolean).map((e) => e.instanceId), ...(rope.shape.via || []).map((v) => v.instanceId)])].filter((id) => neighbours.has(id));
+    for (let k = 1; k < ids.length; k++) {
+      neighbours.get(ids[0]).push(ids[k]);
+      neighbours.get(ids[k]).push(ids[0]);
+    }
+  }
   const nonFastenerById = new Map(nonFasteners.map((n) => [n.inst.instanceId, n]));
   const visited = new Set();
   const components = [];
@@ -2036,6 +2112,11 @@ export function auditAssembly(state) {
     }
   }
 
+  // Ropes (openspec rope-and-spool): too short for their route, an end in a spool no shaft holds, a
+  // path through a part
+  const ropes = auditRopes(state, found);
+  const ropeProblems = ropes.filter((r) => r.tooShortMm || r.loosePocket || r.through.length);
+
   // Ratchets and pawls: a pawl facing the wrong way, held by two or more pins, or by none is a problem
   const ratchets = auditRatchets(found);
   const ratchetProblems = ratchets.filter((r) => r.wrongWay || r.locked || r.pivotCount === 0);
@@ -2045,6 +2126,7 @@ export function auditAssembly(state) {
     isMechanicallySound:
       collisions.length === 0 &&
       ratchetProblems.length === 0 &&
+      ropeProblems.length === 0 &&
       tiltedMotors.length === 0 &&
       floatingFasteners.length === 0 &&
       halfSeatedFasteners.length === 0 &&
@@ -2078,6 +2160,8 @@ export function auditAssembly(state) {
     batteryBays,
     // Pawls in ratchets' teeth, which way each ratchet turns, and pawls that won't work
     ratchets,
+    // Routed ropes, each with what's wrong with it (nothing, for most)
+    ropes,
     // Chains or tracks that bend away from any sprocket: their links are counted unsecured
     chainBends,
     kinematics: {
@@ -2092,6 +2176,90 @@ export function auditAssembly(state) {
       motorDriveChains
     }
   };
+}
+
+/**
+ * The audit's ropes (openspec rope-and-spool): every routed rope with { tooShortMm?, loosePocket,
+ * through: [labels of parts its path passes through] }.
+ */
+function auditRopes(state, found) {
+  const out = [];
+  const visible = found.visible;
+  const byId = new Map(visible.map((i) => [i.instanceId, i]));
+  for (const rope of visible.filter(isRoutedRope)) {
+    const s = rope.shape;
+    const onRoute = new Set([...s.ends.filter(Boolean).map((e) => e.instanceId), ...(s.via || []).map((v) => v.instanceId)]);
+    const pocket = s.ends.find((e) => e?.feature === 'pocket');
+    // A spool held by nothing seated in it (no shaft through its bore)
+    const loosePocket = Boolean(pocket && !found.seatedPairs.some((p) => p.openingOwner === pocket.instanceId || p.insertOwner === pocket.instanceId));
+    // The shaft through the spool runs through the pocket the tab sits in: not a part the rope passes through
+    if (pocket) for (const p of found.seatedPairs) if (p.openingOwner === pocket.instanceId) onRoute.add(p.insertOwner);
+    // A slack rope is drawn with a droop that only shows the slack: it is judged on its tight line
+    let line = null;
+    if ((s.slackMm || 0) > 1) {
+      const tight = stringRope(rope, routeOf(rope), visible, partOf, { allowShort: true });
+      // (its straight runs only: across a pulley the line would cut through the pin the pulley turns on)
+      if (!tight.error) line = tight.contacts.slice(0, -1).map((c, k) => [new THREE.Vector3(...c.b), new THREE.Vector3(...tight.contacts[k + 1].a)]);
+    }
+    const through = ropeThroughParts(rope, line, visible.filter((i) => !onRoute.has(i.instanceId) && i.instanceId !== rope.instanceId && !isRoutedRope(i) && !isRoutedBand(i)));
+    out.push({
+      instanceId: rope.instanceId,
+      label: rope.label,
+      usedMm: s.usedMm,
+      turns: s.spool?.turns ?? 0,
+      slackMm: s.slackMm || 0,
+      ...(s.short ? { tooShortMm: Number(s.short.toFixed(1)) } : {}),
+      loosePocket,
+      spool: pocket ? byId.get(pocket.instanceId)?.label : null,
+      through
+    });
+  }
+  return out;
+}
+
+/** The parts (of `others`) a rope's drawn path (or `line`, its straight runs as pairs of world points) passes through, more than a little: their labels. */
+function ropeThroughParts(rope, line, others) {
+  const pts = rope.shape.path.points.map((p) => new THREE.Vector3(p[0] + rope.position[0], p[1] + rope.position[1], p[2] + rope.position[2]));
+  // The stretches to test: `line`'s runs, or the drawn path point to point
+  const runs = line || pts.slice(0, -1).map((p, k) => [p, pts[k + 1]]);
+  if (!runs.length) return [];
+  const box = new THREE.Box3().setFromPoints(runs.flat());
+  const hits = [];
+  const ray = new THREE.Ray();
+  for (const inst of others) {
+    const part = partOf(inst);
+    if (!part?.bbox || isRopePart(part)) continue;
+    const m = buildWorldMatrix(inst.position, inst.rotation);
+    const wbox = new THREE.Box3(new THREE.Vector3(...part.bbox.min), new THREE.Vector3(...part.bbox.max)).applyMatrix4(m);
+    if (!wbox.intersectsBox(box)) continue;
+    let pieces;
+    try {
+      const got = getPartDeepCollisionBvh(part);
+      pieces = (Array.isArray(got) ? got : got?.pieces || [got]).map((g) => g?.geo || g).filter((g) => g?.boundsTree);
+    } catch {
+      continue;
+    }
+    const inv = m.clone().invert();
+    let hit = false;
+    for (let k = 0; k < runs.length && !hit; k++) {
+      const a = runs[k][0].clone().applyMatrix4(inv);
+      const b = runs[k][1].clone().applyMatrix4(inv);
+      const len = a.distanceTo(b);
+      if (len < 0.5 || !wbox.intersectsBox(new THREE.Box3().setFromPoints(runs[k]))) continue;
+      const dir = b.clone().sub(a).normalize();
+      ray.origin.copy(a);
+      ray.direction.copy(dir);
+      // The segment enters and leaves the solid: hit going and coming back
+      const there = pieces.map((g) => g.boundsTree.raycastFirst(ray, THREE.DoubleSide)).filter(Boolean).sort((x, y) => x.distance - y.distance)[0];
+      if (!there || there.distance > len - 0.3) continue;
+      ray.origin.copy(b);
+      ray.direction.copy(dir.clone().negate());
+      const back = pieces.map((g) => g.boundsTree.raycastFirst(ray, THREE.DoubleSide)).filter(Boolean).sort((x, y) => x.distance - y.distance)[0];
+      if (back && back.distance < len - 0.3) hit = true;
+    }
+    if (hit) hits.push(inst.label || part.name);
+  }
+  return hits;
 }
 
 // In Play, a pin a little off a hole's line (a diagonal brace) only counts as in it this deep
@@ -2569,6 +2737,19 @@ export function mirrorSubassembly(state, options = {}) {
     const strung = route ? stringBand(bare, route, workingInstances, partOf, picks ? { picks, back: src.shape.back } : null) : null;
     const { shape, ...flat } = mir;
     const next = strung && !strung.error ? { ...flat, position: strung.position, rotation: strung.rotation, shape: strung.shape } : flat;
+    mirroredInstances[k] = next;
+    const at = workingInstances.findIndex((i) => i.instanceId === mir.instanceId);
+    if (at >= 0) workingInstances[at] = next;
+  }
+  // Ropes too (openspec rope-and-spool): routed on the mirrored parts, winding the mirrored way
+  for (let k = 0; k < mirroredInstances.length; k++) {
+    const src = sourceInstances[k];
+    if (!isRoutedRope(src)) continue;
+    const mir = mirroredInstances[k];
+    const route = mirroredRope(src.shape, idMap, workingInstances, axisIdx, planeOffsetMm, partOf);
+    const { shape: _old, ...bare } = mir;
+    const strung = route ? stringRope(bare, route, workingInstances, partOf, { allowShort: true }) : null;
+    const next = strung && !strung.error ? { ...bare, position: strung.position, rotation: strung.rotation, shape: strung.shape } : bare;
     mirroredInstances[k] = next;
     const at = workingInstances.findIndex((i) => i.instanceId === mir.instanceId);
     if (at >= 0) workingInstances[at] = next;
@@ -3121,7 +3302,7 @@ const PAWL_NEAR_MM = 60; // parts further than this from the ratchet can't hold 
 function pawlNeighbours(visible, ratchetInst, ratchet, pawlId) {
   const out = [];
   for (const inst of visible) {
-    if (inst.instanceId === ratchetInst.instanceId || inst.instanceId === pawlId || isRoutedBand(inst)) continue;
+    if (inst.instanceId === ratchetInst.instanceId || inst.instanceId === pawlId || isRoutedBand(inst) || isRoutedRope(inst)) continue;
     const part = partOf(inst);
     if (!part?.bbox) continue;
     const box = new THREE.Box3(new THREE.Vector3(...part.bbox.min), new THREE.Vector3(...part.bbox.max)).applyMatrix4(buildWorldMatrix(inst.position, inst.rotation));

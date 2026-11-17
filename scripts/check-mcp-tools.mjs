@@ -1157,6 +1157,35 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
 }
 
 // ---------------------------------------------------------------------------
+// Ropes (openspec rope-and-spool): place_rope, listing, too short, four pulleys, reports, following
+{
+  const names = (await rpc('tools/list')).result?.tools?.map((t) => t.name) || [];
+  check('tools/list has place_rope', names.includes('place_rope'));
+  writeState({ ...emptyState(), instances: [mk('Shaft', '4x Pitch Shaft', [0, 0, 0]), mk('Spool', '2x Wide Spool', [0, 0, 0]), mk('Arm Pin', '1x1 Connector Pin', [0, 220, 0])] });
+  let res = await call('place_rope', { instanceId: 'Spool', list: true });
+  check('place_rope with a spool and list returns its pocket and drum and changes nothing', res.data?.ok && res.data.ends?.some((e) => e.feature === 'pocket') && res.data.spots?.some((e) => e.feature === 'drum') && readState().instances.length === 3, JSON.stringify(res.data).slice(0, 200));
+  res = await call('place_rope', { ropePartId: '228-2500-430', from: { instanceId: 'Spool', feature: 'pocket' }, to: { instanceId: 'Arm Pin', feature: 'post:pin' } });
+  check('place_rope with a 12x rope on a 220 mm route places nothing and names the rope that fits', res.isError && /24x Pitch Rope/.test(res.data?.error || '') && readState().instances.length === 3, JSON.stringify(res.data));
+  res = await call('place_rope', { from: { instanceId: 'Spool', feature: 'pocket' }, to: { instanceId: 'Arm Pin', feature: 'post:pin' } });
+  check('place_rope from a spool pocket to a pin places a 24x rope and gives its used length, spare and turns', res.data?.size === '24x Pitch Rope' && res.data.usedMm > 200 && res.data.spareMm > 50 && res.data.turns >= 1, JSON.stringify(res.data));
+  const ropeId = res.data?.instanceId;
+  let got = await call('get_assembly');
+  const rep = got.data?.instances?.find((i) => i.instanceId === ropeId)?.rope;
+  check("get_assembly reports the rope's route, used length, spare, slack and turns", rep && rep.usedMm > 200 && rep.turns >= 1 && rep.ends.length === 2, JSON.stringify(rep));
+  got = await call('get_part_details', { instanceId: ropeId });
+  check("get_part_details reports the rope", got.data?.rope?.size === '24x Pitch Rope', JSON.stringify(got.data?.rope));
+  const turns0 = rep?.turns;
+  await call('update_part', { instanceId: 'Arm Pin', position: [0, 250, 0] });
+  got = await call('get_assembly');
+  const rep2 = got.data?.instances?.find((i) => i.instanceId === ropeId)?.rope;
+  check('moving the pin the rope ends on takes turns off the spool, in the same step', rep2 && rep2.turns < turns0 && rep2.usedMm > rep.usedMm + 25, JSON.stringify(rep2));
+  // Four pulleys, no side given: the reply lists the turn used at each
+  writeState({ ...emptyState(), instances: [mk('Start', '1x1 Connector Pin', [-30, 0, 0]), mk('End', '1x1 Connector Pin', [70, 140, 0]), ...[0, 1, 2, 3].map((k) => mk(`P${k}`, '.5x Pitch Idler Pulley', [k * 15, k % 2 ? 40 : 100, 0]))] });
+  res = await call('place_rope', { from: { instanceId: 'Start', feature: 'post:pin' }, via: [0, 1, 2, 3].map((k) => ({ instanceId: `P${k}`, feature: 'groove' })), to: { instanceId: 'End', feature: 'post:pin' }, ignoreInWay: true });
+  check('place_rope over four pulleys with no turn given replies with the turn chosen for each', res.data?.via?.length === 4 && res.data.via.every((v) => v.turn === 1 || v.turn === -1), JSON.stringify(res.data));
+}
+
+// ---------------------------------------------------------------------------
 // right-angle-gears: mesh_right_angle lists spots then places; wrong pairs; place_parts meshes a worm
 // ---------------------------------------------------------------------------
 {
@@ -1286,6 +1315,31 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   const listed = readState().instances.find((i) => i.label === 'Listed Pawl');
   const rel2 = listed && pawlRelation(worldRatchet(fpR('16 Tooth Ratchet'), [0, 0, 0], [0, 0, 0]), worldPawl(PAWL, listed.position, listed.rotation), { pivots: [{ point: new THREE.Vector3(25.4, 12.7, 0), axis: new THREE.Vector3(0, 0, 1) }] });
   check('  and so does place_parts', Boolean(rel2?.holds), JSON.stringify({ rotation: listed?.rotation, parts: res.data?.parts }));
+}
+
+// ---------------------------------------------------------------------------
+// Motor stopping modes (openspec motor-stopping): update_part sets them, get_assembly reports them
+{
+  writeState(emptyState());
+  await call('place_parts', { parts: [{ partQuery: 'Smart Motor', label: 'Motor', position: [0, 0, 0] }, { partQuery: '1x6 Beam', label: 'Beam', position: [0, 80, 0] }] });
+  const motorId = readState().instances.find((i) => i.label === 'Motor')?.instanceId;
+  const beamId = readState().instances.find((i) => i.label === 'Beam')?.instanceId;
+  let got = await call('get_assembly');
+  check('get_assembly reports a Smart Motor with no mode set as brake', got.data?.instances?.find((i) => i.label === 'Motor')?.stopping === 'brake', JSON.stringify(got.data?.instances?.[0]?.stopping));
+  for (const mode of ['coast', 'hold', 'brake']) {
+    const res = await call('update_part', { instanceId: motorId, stopping: mode });
+    got = await call('get_assembly');
+    check(`update_part sets a Smart Motor's stopping to ${mode}, and get_assembly reports it`, !res.isError && readState().instances.find((i) => i.label === 'Motor').stopping === mode && got.data.instances.find((i) => i.label === 'Motor').stopping === mode, JSON.stringify(res.data));
+  }
+  let res = await call('update_part', { instanceId: motorId, stopping: 'float' });
+  check('update_part refuses another stopping value with a message', res.isError && /coast, brake, hold/.test(res.data?.error || res.error || JSON.stringify(res)) && readState().instances.find((i) => i.label === 'Motor').stopping === 'brake', JSON.stringify(res));
+  res = await call('update_part', { instanceId: beamId, stopping: 'hold' });
+  check("update_part refuses a stopping mode on a part that isn't a Smart Motor", res.isError && /Smart Motor/.test(JSON.stringify(res)) && !readState().instances.find((i) => i.label === 'Beam').stopping, JSON.stringify(res));
+  await call('update_part', { instanceId: motorId, stopping: 'hold' });
+  const undone = await call('undo');
+  check('undo puts the previous stopping mode back (one step: "update_part: set stopping Motor")', readState().instances.find((i) => i.label === 'Motor')?.stopping === 'brake' && /stopping/.test(undone.data?.undone?.[0] || ''), JSON.stringify(undone.data));
+  const details = await call('get_part_details', { instanceId: motorId });
+  check('get_part_details reports the motor\'s stopping mode', details.data?.stopping === 'brake', JSON.stringify(details.data?.stopping));
 }
 
 // ---------------------------------------------------------------------------

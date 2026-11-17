@@ -1008,3 +1008,112 @@ export function measureMotorHub(part, socketFeature, socketShape, cylinders) {
   if (face == null || floor == null) return null;
   return { radiusMm: round(radiusMm), faceOffsetMm: round(face), depthMm: round(face - floor) };
 }
+
+// Spools (openspec rope-and-spool, design §4)
+export const SPOOL_PATTERN = /\bSpool\b/i;
+
+/**
+ * A spool about its local Z axis, from rays cast across it every 0.1 mm along Z: the drum's core
+ * radius and span, the flange radius, the square bore (at one end) and the round pocket at the
+ * other end with the slot the rope leaves it by. Returns { measured: true, axis, coreRadiusMm,
+ * flangeRadiusMm, drumSpanMm, bore: { spanMm, halfWidthMm, squarePhaseDeg }, pocket: { center,
+ * radiusMm, spanMm, slotDeg } } or { measured: false, reason }.
+ */
+export function measureSpool(part) {
+  const cast = makeRaycaster(part);
+  const { min, max } = part.bbox;
+  const R0 = Math.max(...[min[0], min[1], max[0], max[1]].map(Math.abs)) + 10;
+  const ANGLES = 36;
+  const rows = [];
+  for (let z = min[2] + 0.05; z < max[2]; z += 0.1) {
+    const outer = [];
+    const inner = [];
+    for (let k = 0; k < ANGLES; k++) {
+      const t = (k / ANGLES) * Math.PI * 2;
+      const d = new THREE.Vector3(Math.cos(t), Math.sin(t), 0);
+      const o = cast(new THREE.Vector3(R0 * d.x, R0 * d.y, z), d.clone().negate());
+      outer.push(o == null ? null : R0 - o);
+      inner.push(cast(new THREE.Vector3(0, 0, z), d));
+    }
+    rows.push({ z, outer, inner });
+  }
+  const med = (a) => median(a.filter((x) => x != null));
+  // The drum: the most common outer radius over the middle half
+  const mid = rows.filter((r) => Math.abs(r.z - (min[2] + max[2]) / 2) < (max[2] - min[2]) / 4);
+  const core = median(mid.map((r) => med(r.outer)));
+  if (!Number.isFinite(core) || core < 3) return { measured: false, reason: 'drum not found' };
+  const onDrum = rows.filter((r) => Math.abs(med(r.outer) - core) < 0.1);
+  const drumSpanMm = [round(Math.min(...onDrum.map((r) => r.z)) - 0.05, 2), round(Math.max(...onDrum.map((r) => r.z)) + 0.05, 2)];
+  const flange = Math.max(...rows.map((r) => Math.max(...r.outer.filter((x) => x != null))));
+  // The pocket: rows whose inner radius is a round 3.5..5 mm with a slot (rays that miss) one way
+  const pocketRows = rows.filter((r) => {
+    const m = med(r.inner);
+    return m > 3.5 && m < 5 && r.inner.some((x) => x == null);
+  });
+  if (!pocketRows.length) return { measured: false, reason: 'pocket not found' };
+  const pz = pocketRows.map((r) => r.z);
+  const pocketSpan = [Math.min(...pz) - 0.05, Math.max(...pz) + 0.05];
+  // The pocket's mouth widens into the flange; it runs to the spool's end on its side
+  const pocketEnd = Math.abs(pocketSpan[1] - max[2]) < Math.abs(pocketSpan[0] - min[2]) ? max[2] : min[2];
+  const span = pocketEnd === max[2] ? [pocketSpan[0], max[2]] : [min[2], pocketSpan[1]];
+  const pocketRadius = median(pocketRows.map((r) => med(r.inner)));
+  // The slot: the middle of the rays that miss
+  let sx = 0;
+  let sy = 0;
+  for (const r of pocketRows)
+    r.inner.forEach((x, k) => {
+      if (x != null) return;
+      const t = (k / ANGLES) * Math.PI * 2;
+      sx += Math.cos(t);
+      sy += Math.sin(t);
+    });
+  const slotDeg = round(mod(THREE.MathUtils.radToDeg(Math.atan2(sy, sx)), 360), 1);
+  // The square bore: the rows at the other end whose inner radius is under 2.5 mm
+  const boreRows = rows.filter((r) => (pocketEnd === max[2] ? r.z < 0 : r.z > 0) && med(r.inner) < 2.4);
+  if (!boreRows.length) return { measured: false, reason: 'bore not found' };
+  const bz = boreRows.map((r) => r.z);
+  const boreSpan = [round(Math.min(...bz) - 0.05, 2), round(Math.max(...bz) + 0.05, 2)];
+  const shape = measureOpeningShape(part, { origin: [0, 0, (boreSpan[0] + boreSpan[1]) / 2], axis: [0, 0, 1], tMin: boreSpan[0], tMax: boreSpan[1] });
+  if (shape.shape !== 'square') return { measured: false, reason: 'bore is not square' };
+  return {
+    measured: true,
+    axis: [0, 0, 1],
+    coreRadiusMm: round(core, 2),
+    flangeRadiusMm: round(flange, 2),
+    drumSpanMm,
+    bore: { spanMm: boreSpan, halfWidthMm: shape.halfWidthMm, squarePhaseDeg: shape.squarePhaseDeg },
+    pocket: { center: [0, 0, round((span[0] + span[1]) / 2, 2)], radiusMm: round(pocketRadius, 2), spanMm: span.map((z) => round(z, 2)), slotDeg }
+  };
+}
+
+/**
+ * A pulley's groove about its local Z axis (openspec rope-and-spool, task 1.4): the radius at the
+ * groove's bottom and the span along Z where the groove is below the rim. Returns
+ * { grooveRadiusMm, grooveSpanMm } or null.
+ */
+export function measurePulleyGroove(part) {
+  const cast = makeRaycaster(part);
+  const { min, max } = part.bbox;
+  const R0 = Math.max(...[min[0], min[1], max[0], max[1]].map(Math.abs)) + 10;
+  const rows = [];
+  for (let z = min[2] + 0.05; z < max[2]; z += 0.05) {
+    const radii = [];
+    for (let k = 0; k < 12; k++) {
+      const t = ((k + 0.37) / 12) * Math.PI * 2;
+      const d = cast(new THREE.Vector3(R0 * Math.cos(t), R0 * Math.sin(t), z), new THREE.Vector3(-Math.cos(t), -Math.sin(t), 0));
+      if (d != null) radii.push(R0 - d);
+    }
+    if (radii.length) rows.push({ z, r: median(radii) });
+  }
+  if (!rows.length) return null;
+  const rim = Math.max(...rows.map((r) => r.r));
+  // The groove: rows between the two rim flanges
+  const rimRows = rows.filter((r) => r.r > rim - 0.1).map((r) => r.z);
+  const lo = Math.min(...rimRows.filter((z) => z < (min[2] + max[2]) / 2));
+  const hi = Math.max(...rimRows.filter((z) => z > (min[2] + max[2]) / 2));
+  const inGroove = rows.filter((r) => r.z > lo && r.z < hi && r.r < rim - 0.3);
+  if (!inGroove.length) return null;
+  const bottom = Math.min(...inGroove.map((r) => r.r));
+  const flat = inGroove.filter((r) => r.r < bottom + 0.1).map((r) => r.z);
+  return { grooveRadiusMm: round(bottom, 2), grooveSpanMm: [round(Math.min(...flat), 2), round(Math.max(...flat), 2)] };
+}

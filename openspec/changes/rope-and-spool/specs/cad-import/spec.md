@@ -23,7 +23,7 @@ The report SHALL list each rope: its size, its ends and spots, its used length, 
 
 #### Scenario: Hero Bot Huey ropes
 - **WHEN** the script imports `4063-2025-2026_viqrc_hero_bot_huey`
-- **THEN** two 24x Pitch Ropes are placed, one each side, each from a 0x2 Connector Pin on the Claw Mount, over a .5x Pitch Idler Pulley on the Elevator Middle Stage, to a 0x2 Connector Pin on the Elevator Holder
+- **THEN** two 24x Pitch Ropes are placed, one each side, each from a 0x2 Connector Pin on the Claw Mount, over a .5x Pitch Idler Pulley on the Elevator Middle Stage (and the 0.5x Pitch Standoff just below it that the rope bears on), to a 0x2 Connector Pin on the Elevator Holder
 - **AND** the report gives each rope's slack, and the straight pieces' length above the pulleys is left out
 
 #### Scenario: Rope end not found

@@ -248,6 +248,12 @@ const shaftInputs = (offDeg) => ({
   const g = buildBodyGraph(playInputs(state));
   const labels = new Map(state.instances.map((i) => [i.instanceId, i.label]));
   check('Clawbot: four Smart Motors, each driving a hinge', g.motors.length === 4 && g.motors.every((m) => g.hinges.some((h) => h.id === m.hinge && h.motor === m.id)), JSON.stringify(g.motors));
+  {
+    // Stopping modes (openspec motor-stopping): none set reads brake; one set to hold reads hold
+    const armId = state.instances.find((i) => i.label === 'Arm Motor')?.instanceId;
+    const held = buildBodyGraph(playInputs({ instances: state.instances.map((i) => (i.instanceId === armId ? { ...i, stopping: 'hold' } : i)) }));
+    check('stopping mode: a motor with none set brakes, one set to hold holds', g.motors.every((m) => m.stopping === 'brake') && held.motors.find((m) => m.id === armId)?.stopping === 'hold' && held.motors.filter((m) => m.stopping === 'brake').length === 3, JSON.stringify(held.motors.map((m) => [m.label, m.stopping])));
+  }
   check('Clawbot: arm gears meshed 12 to 36 and claw crank arms meshed 1 to 1', g.links.some((l) => l.kind === 'gear' && Math.abs(l.ratio - 1 / 3) < 1e-9) && g.links.some((l) => l.kind === 'gear' && Math.abs(l.ratio - 1) < 1e-9));
   const k = createKinematic(g);
   for (let i = 0; i < 10; i++) k.step(0.05, new Map(g.motors.map((m) => [m.id, 1])));
@@ -318,7 +324,32 @@ const shaftInputs = (offDeg) => ({
   const driveMs = Date.now() - t;
   check(`free drive shaft at full throttle: about 120 rpm (${Math.round(p.status()[drive.id].rpm)})`, Math.abs(p.status()[drive.id].rpm - 120) < 3);
   check(`2 s of motion take well under 2 s to work out (${driveMs} ms)`, driveMs < 1000);
-  run(p, 1, new Map());
+  run(p, 0.5, new Map());
+  check(`stopping mode Brake (the default): the free drive shaft stops within 0.5 s (${Math.round(p.status()[drive.id].rpm)} rpm)`, Math.abs(p.status()[drive.id].rpm) < 5);
+  run(p, 0.5, new Map());
+  {
+    // Hold (openspec motor-stopping): the arm, swinging up at full speed, stopped, doesn't spring back
+    const armId = claw.instances.find((i) => i.label === 'Arm Motor').instanceId;
+    const heldState = { instances: claw.instances.map((i) => (i.instanceId === armId ? { ...i, stopping: 'hold' } : i)) };
+    const hg = buildBodyGraph(playInputs(heldState));
+    const hp = await createPhysics(hg, heldState.instances, shapesFor(heldState));
+    const hArm = hg.motors.find((m) => m.id === armId);
+    const hShaft = hg.hinges.find((h) => h.id === hArm.hinge).b;
+    const armBody = hg.links.find((l) => l.kind === 'gear' && l.a === hShaft).b;
+    const swing = () => THREE.MathUtils.radToDeg(new THREE.Euler().setFromRotationMatrix(hp.deltas().get(armBody)).z);
+    run(hp, 0.4, new Map([[armId, 1]]));
+    const stoppedAt = swing();
+    const seen = [];
+    for (let i = 0; i < 30; i++) {
+      run(hp, 1 / 30, new Map());
+      seen.push(swing());
+    }
+    run(hp, 1, new Map());
+    seen.push(swing());
+    const back = Math.max(...seen.map((a) => Math.sign(stoppedAt) * (stoppedAt - a)));
+    check(`stopping mode Hold: the geared arm stopped mid-swing bounces back no more than 5° and comes back within 2.5° (${back.toFixed(1)}°, then ${(stoppedAt - seen.at(-1)).toFixed(1)}°)`, back < 5 && Math.abs(stoppedAt - seen.at(-1)) < 2.5, JSON.stringify({ stoppedAt, last: seen.slice(-3) }));
+    hp.dispose?.();
+  }
 
   // The arm: 12 tooth on the motor shaft to 36 tooth on the arm, until the arm folds onto the tower
   const arm = g.motors.find((m) => m.label === 'Arm Motor');
@@ -942,7 +973,7 @@ const shaftInputs = (offDeg) => ({
     const out = pairBC();
     const cFree = r.rpm(gc);
     run(r.p, 0.5, new Map([[motor, 0]]));
-    check(`Swinging out of mesh: C is no longer driven (${out.offMm.toFixed(1)} mm apart, not engaged) and turns on freely when the motor stops (${cFree.toFixed(0)} rpm, then ${r.rpm(gc).toFixed(0)})`, !out.engaged && out.offMm > 1.5 && Math.abs(r.rpm(gc)) > 0.5 * Math.abs(cFree) && Math.abs(r.rpm(gb)) < Math.abs(r.rpm(gc)), JSON.stringify(out));
+    check(`Swinging out of mesh: C is no longer driven (${out.offMm.toFixed(1)} mm apart, not engaged) and turns on freely when the motor stops its own shaft (the arm it sits on swings freely) (${cFree.toFixed(0)} rpm, then ${r.rpm(gc).toFixed(0)})`, !out.engaged && out.offMm > 1.5 && Math.abs(r.rpm(gc)) > 0.5 * Math.abs(cFree) && Math.abs(r.p.status()[motor].rpm) < 0.2 * Math.abs(r.rpm(gc)), JSON.stringify({ ...out, motorRpm: r.p.status()[motor].rpm }));
     r.p.dispose();
   }
   {

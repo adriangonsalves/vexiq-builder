@@ -63,6 +63,8 @@ import ToolsMenu from './components/ToolsMenu.jsx';
 import BendSheetDialog from './components/BendSheetDialog.jsx';
 import BandBuilderPanel from './components/BandBuilderPanel.jsx';
 import { useBandBuilder } from './components/useBandBuilder.js';
+import RopeBuilderPanel from './components/RopeBuilderPanel.jsx';
+import { useRopeBuilder } from './components/useRopeBuilder.js';
 import AuditPanel from './components/AuditPanel.jsx';
 import { auditIssues, problemCount } from './utils/auditIssues.js';
 import { buildChainPath, checkSprocketsForChain } from './utils/chainPath.js';
@@ -123,6 +125,7 @@ import {
 import { connectedFrom, layersFrom } from './utils/jointLayers.js';
 import { describeShape, shapedPart } from './utils/shapedParts.js';
 import { bandReport, copiedBand, followBands, isRoutedBand } from './utils/bandRoute.js';
+import { copiedRope, followRopes, isRoutedRope, repairRopes, ropeReport } from './utils/ropeRoute.js';
 import { STRETCH_COLORS } from './sim/bandStrength.js';
 import { BAND_SPECS } from './utils/bandPath.js';
 import { isPlasticSheet } from './utils/sheetBend.js';
@@ -638,7 +641,7 @@ export default function App() {
       isBusy: () => Boolean(playRef.current) || explodeModeRef.current !== 'off',
       // A teammate's save: new parts and history, the camera stays where it is
       replaceBuildContent: (content) => {
-        const parts = Array.isArray(content?.instances) ? content.instances : [];
+        const parts = repairRopes(Array.isArray(content?.instances) ? content.instances : [], partOfRef.current).instances;
         const hist = loadHistory(content?.history, parts, { source: 'app', label: 'Teammate change' });
         setPreview(null);
         setSelectedId(null);
@@ -698,8 +701,9 @@ export default function App() {
    * e.g. the viewport updating overlap flags). meta: { label, source ('app' | 'assistant'), mergeKey }.
    */
   const setInstances = useCallback((updater, meta = {}) => {
-    // A past point on the timeline, and Play mode, are read-only
-    if (lockedRef.current) {
+    // A past point on the timeline, and Play mode, are read-only (except a motor's stopping mode,
+    // chosen in Play: meta.inPlay)
+    if (lockedRef.current && !(meta.inPlay && lockedRef.current === PLAY_LOCK)) {
       setActionFeedback({ message: lockedRef.current, isError: true });
       return;
     }
@@ -709,7 +713,12 @@ export default function App() {
       if (proposed === b.instances) return b;
       // Bands follow the parts they're strung on (openspec rubber-bands), in the same step
       const followed = followBands(b.instances, proposed, partOfRef.current);
-      const next = followed.instances;
+      // ...and ropes theirs (openspec rope-and-spool)
+      const roped = followRopes(b.instances, followed.instances, partOfRef.current);
+      const next = roped.instances;
+      if (roped.flattened.length) {
+        queueMicrotask(() => setActionFeedback({ message: `${roped.flattened.join(', ')} lost ${roped.flattened.length > 1 ? 'their' : 'its'} ends and ${roped.flattened.length > 1 ? 'are' : 'is'} a straight rope again.`, isError: false }));
+      }
       if (followed.flattened.length) {
         queueMicrotask(() => setActionFeedback({ message: `${followed.flattened.join(', ')} lost ${followed.flattened.length > 1 ? 'their' : 'its'} spots and ${followed.flattened.length > 1 ? 'are' : 'is'} a flat ring again.`, isError: false }));
       }
@@ -1410,6 +1419,13 @@ export default function App() {
     setPlayHover(null);
   };
   const togglePlay = () => (play ? closePlay() : openPlay());
+  // A motor's stopping mode (openspec motor-stopping): saved with the build as one step, and given to
+  // the running sim at once, so Play doesn't start again
+  const handlePlayStopping = (motorId, mode) => {
+    const name = instances.find((i) => i.instanceId === motorId)?.label || 'motor';
+    setInstances((prev) => prev.map((i) => (i.instanceId === motorId ? { ...i, stopping: mode } : i)), { label: `Set stopping ${name}: ${mode}`, inPlay: true });
+    playRef.current?.runner?.engine?.setStopping?.(motorId, mode);
+  };
   const handlePlayThrottle = useCallback((id, value) => {
     playRef.current?.runner?.setThrottle(id, value);
     setPlayThrottles((prev) => {
@@ -1916,7 +1932,7 @@ export default function App() {
     ];
     const copy = {
       // A band copied without its parts is a flat ring (openspec rubber-bands)
-      ...copiedBand(selectedInstance, new Map()),
+      ...copiedRope(copiedBand(selectedInstance, new Map()), new Map()),
       instanceId: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       label: `${selectedInstance.label} (Copy)`,
       position: copyPos,
@@ -2370,7 +2386,10 @@ export default function App() {
     setExplodeMode('off');
     setSelectedId(null);
     placingIdsRef.current = new Set();
-    setBuild({ instances: parts, history: loadHistory(hist, parts, { source: 'app', label: 'External change' }) });
+    // Ropes whose parts are gone come back with that end free, or straight (openspec rope-and-spool)
+    const repaired = repairRopes(parts || [], partOfRef.current);
+    if (repaired.messages.length) queueMicrotask(() => setActionFeedback({ message: repaired.messages.join(' '), isError: false }));
+    setBuild({ instances: repaired.instances, history: loadHistory(hist, repaired.instances, { source: 'app', label: 'External change' }) });
     if (viewport) {
       if (viewport.transformMode) setTransformMode(viewport.transformMode);
       if (viewport.snapPitchFactor !== undefined) setSnapPitchFactor(viewport.snapPitchFactor);
@@ -2653,6 +2672,7 @@ export default function App() {
   instancesForBandRef.current = instances;
   // The engine's try of a route for the Band builder's preview: changes nothing, records nothing
   const previewBandPlace = useCallback((params) => backend.runAction('place_band', { instances: instancesForBandRef.current }, params), []);
+  const previewRopePlace = useCallback((params) => backend.runAction('place_rope', { instances: instancesForBandRef.current }, params), []);
   // Strung bands' overlap flags come from the engine's band rule (the view doesn't judge bands): asked
   // when a build loads and whenever bands or the parts change (openspec rubber-bands)
   const bandFlagKey = useMemo(() => (instances.some(isRoutedBand) ? instances.map((i) => `${i.instanceId}:${i.position}:${i.rotation}:${i.visible}:${isRoutedBand(i) ? `${i.shape.path?.lengthMm}:${Boolean(i.isIntersecting)}` : ''}`).join('|') : ''), [instances]);
@@ -2687,7 +2707,11 @@ export default function App() {
     };
   }, [bandFlagKey]);
   const band = useBandBuilder({ instances, catalog, catalogMap, selectedIds, runAction: runBandAction, previewPlace: previewBandPlace, setFeedback: setActionFeedback, locked: Boolean(preview || play || readOnlyViewer) });
+  // The Rope builder (openspec rope-and-spool): picking in the view as the Band builder does
+  const rope = useRopeBuilder({ instances, catalog, catalogMap, selectedIds, runAction: runBandAction, previewPlace: previewRopePlace, setFeedback: setActionFeedback, locked: Boolean(preview || play || readOnlyViewer) });
+  const pick = rope.session ? { view: rope.viewportRope, onHover: rope.onHover, onPick: rope.onPick, onHandle: rope.onHandle } : { view: band.viewportBand, onHover: band.onHover, onPick: band.onPick, onHandle: band.onHandle };
   const selectedBand = selectedIds.length === 1 && isRoutedBand(instances.find((i) => i.instanceId === selectedIds[0])) ? instances.find((i) => i.instanceId === selectedIds[0]) : null;
+  const selectedRope = selectedIds.length === 1 && isRoutedRope(instances.find((i) => i.instanceId === selectedIds[0])) ? instances.find((i) => i.instanceId === selectedIds[0]) : null;
   const flattenBand = (inst) => {
     if (!inst) return;
     const { shape, ...flat } = inst;
@@ -3005,8 +3029,8 @@ export default function App() {
     const only = count === 1 ? instances.find((i) => i.instanceId === selectedIds[0]) : null;
     const part = only ? shapedPart(catalogMap.get(only.partId), only.shape) : null;
     const stampable = Boolean(part) && (getLocalFeatures(part).some((f) => f.kind === 'pin' || f.kind === 'shaft') || isBorePart(part));
-    return { count, wholeGroup: count > 1 && Boolean(selectionGroup), stampable, locked: Boolean(only?.locked), hidden: only?.visible === false, band: Boolean(selectedBand) };
-  }, [selectedIds, instances, catalogMap, selectionGroup, selectedBand]);
+    return { count, wholeGroup: count > 1 && Boolean(selectionGroup), stampable, locked: Boolean(only?.locked), hidden: only?.visible === false, band: Boolean(selectedBand), rope: Boolean(selectedRope), ropeBetween: count === 2 && rope.betweenCheck.ok };
+  }, [selectedIds, instances, catalogMap, selectionGroup, selectedBand, selectedRope, rope.betweenCheck.ok]);
 
   // Stamp copies turns off when the selection changes, and in Explode or Play; Grow selection closes
   // on any selection change it didn't make itself
@@ -3189,6 +3213,9 @@ export default function App() {
       case 'onePartOfGroup':
         setExactPick((v) => !v);
         break;
+      case 'ropeBetween':
+        rope.placeBetween();
+        break;
       case 'duplicate':
         handleDuplicateSelected();
         break;
@@ -3366,13 +3393,23 @@ export default function App() {
               bendReason={bendCheck.ok || bendFromHole ? null : bendCheck.error}
               onBendSheet={openBendSheet}
               bandOpen={Boolean(band.session)}
-              onBand={() => (band.session ? band.close() : band.open())}
+              onBand={() => {
+                rope.close();
+                return band.session ? band.close() : band.open();
+              }}
+              ropeOpen={Boolean(rope.session)}
+              onRope={() => {
+                band.close();
+                return rope.session ? rope.close() : rope.open();
+              }}
+              ropeBetweenReason={rope.betweenCheck.ok ? null : rope.betweenCheck.error}
+              onRopeBetween={rope.placeBetween}
               betweenReason={band.betweenCheck.ok ? null : band.betweenCheck.error}
               onBandBetween={() => band.open(band.betweenCheck.route)}
               beltReason={band.beltCheck.ok ? null : band.beltCheck.error}
               onBelt={() => band.open(band.beltCheck.route, { size: '228-2500-221' })}
-              flattenBandReason={selectedBand ? null : 'Select a strung band.'}
-              onFlattenBand={() => flattenBand(selectedBand)}
+              flattenBandReason={selectedBand || selectedRope ? null : 'Select a strung band or a routed rope.'}
+              onFlattenBand={() => flattenBand(selectedBand || selectedRope)}
               pawlReason={pawlCheck.reason ?? null}
               onSetPawl={() => pawlCheck.pawlId && setPawl(pawlCheck.pawlId, pawlCheck.ratchetId)}
             />
@@ -3702,10 +3739,10 @@ export default function App() {
             onTargetChange={handleTargetChange}
             onHoleAltClick={handleHoleAltClick}
             holePicking={Boolean(bendHoles) && !locked}
-            bandPick={locked ? null : band.viewportBand}
-            onBandHover={band.onHover}
-            onBandPick={band.onPick}
-            onBandHandle={band.onHandle}
+            bandPick={locked ? null : pick.view}
+            onBandHover={pick.onHover}
+            onBandPick={pick.onPick}
+            onBandHandle={pick.onHandle}
             transformMode={transformMode}
             snapPitchFactor={snapPitchFactor}
             rotationSnapDeg={rotationSnapDeg}
@@ -3756,6 +3793,7 @@ export default function App() {
               limitSpeedByLoad={playLimitSpeedByLoad}
               onLimitSpeedByLoad={handlePlayLimitSpeedByLoad}
               simulateGravity={playSimulateGravity}
+              ropeHanging={Boolean(play.graph?.roped?.length)}
               onSimulateGravity={handlePlaySimulateGravity}
               dropReport={playDropReport}
               dropUnavailable={Boolean(play?.graph && !Array.isArray(play.graph.joints))}
@@ -3767,6 +3805,8 @@ export default function App() {
               onDrop={handlePlayDrop}
               onResetDrop={handlePlayResetDrop}
               onThrottle={handlePlayThrottle}
+              stopping={Object.fromEntries((play.graph?.motors || []).map((m) => [m.id, instances.find((i) => i.instanceId === m.id)?.stopping || 'brake']))}
+              onStopping={play.mode === 'kinematic' ? null : handlePlayStopping}
               onHover={setPlayHover}
               onClose={closePlay}
               onHelp={() => openHelpAt('play-mode')}
@@ -3774,6 +3814,7 @@ export default function App() {
           )}
 
           {band.session && <BandBuilderPanel band={band} touch={interaction?.input === 'touch'} onHelp={() => openHelpAt('rubber-bands')} />}
+          {rope.session && <RopeBuilderPanel rope={rope} touch={interaction?.input === 'touch'} />}
 
           {explodeMode !== 'off' && (
             <ExplodePanel
@@ -4207,7 +4248,61 @@ export default function App() {
                 </div>
 
                 {/* A copy with its own shape: a bent sheet (openspec shaped-parts-and-sheet-bending) */}
-                {selectedInstance.shape && !isRoutedBand(selectedInstance) && (
+                {/* A routed rope (openspec rope-and-spool): size, used, spare, slack, ends and spots, winding */}
+                {isRoutedRope(selectedInstance) && (() => {
+                  const rep = ropeReport(selectedInstance, (i) => catalogMap.get(i.partId));
+                  if (!rep) return null;
+                  const name = (id) => instances.find((i) => i.instanceId === id)?.label || id;
+                  const route = { instanceId: selectedInstance.instanceId, from: rep.ends[0], to: rep.ends[1], via: rep.via.filter((v) => !v.auto), allowShort: true };
+                  return (
+                    <div className="field-group">
+                      <div className="field-label">
+                        <span>Rope</span>
+                      </div>
+                      <p className="settings-note" style={{ margin: 0 }}>
+                        {rep.size}: {Math.round(rep.usedMm)} of {Math.round(rep.lengthMm)} mm used
+                        {rep.turns ? `, ${rep.turns} turn${rep.turns === 1 ? '' : 's'} on the spool` : ''}
+                        {rep.slackMm > 0.5 ? `, ${Math.round(rep.slackMm)} mm slack` : ''}
+                        {rep.hangMm > 0.5 ? `, ${Math.round(rep.hangMm)} mm hanging free` : ''}
+                      </p>
+                      {rep.tooShortMm ? <p className="settings-note" role="alert" style={{ margin: 0, color: '#dc2626' }}>Too short by {Math.round(rep.tooShortMm)} mm</p> : null}
+                      <p className="settings-note" style={{ margin: 0 }}>
+                        From {rep.ends[0] ? name(rep.ends[0].instanceId) : 'a free end'}
+                        {rep.via.filter((v) => !v.auto).length ? ` over ${rep.via.filter((v) => !v.auto).map((v) => name(v.instanceId)).join(', ')}` : ''} to {rep.ends[1] ? name(rep.ends[1].instanceId) : 'a free end'}
+                      </p>
+                      {rep.winding && (
+                        <div className="band-panel-row">
+                          <span className="settings-note">Turns on spool</span>
+                          <span className="band-wraps">
+                            <button type="button" className="icon-btn" disabled={!rep.turns} onClick={() => handleRunSmartAction('rope_winding', { instanceId: selectedInstance.instanceId, turns: Math.max(0, rep.turns - 0.25) })} aria-label="Fewer turns">
+                              −
+                            </button>
+                            <span>{rep.turns}</span>
+                            <button type="button" className="icon-btn" disabled={rep.slackMm + (rep.hangMm || 0) < 12} onClick={() => handleRunSmartAction('rope_winding', { instanceId: selectedInstance.instanceId, turns: rep.turns + 0.25 })} aria-label="More turns">
+                              +
+                            </button>
+                          </span>
+                          <button type="button" className="chip" onClick={() => handleRunSmartAction('rope_winding', { instanceId: selectedInstance.instanceId, flip: true })} title="Wind the rope round the drum the other way">
+                            Flip winding
+                          </button>
+                        </div>
+                      )}
+                      <div className="band-panel-row">
+                        <button type="button" className="btn btn-outline" onClick={() => rope.editRope(selectedInstance)} title="Drag the rope's end and spot handles to other places; drag one off to take it off">
+                          Edit route
+                        </button>
+                        <button type="button" className="btn btn-outline" onClick={() => handleRunSmartAction('place_rope', route)} title="Route it again from its ends and spots">
+                          Route again
+                        </button>
+                        <button type="button" className="btn btn-outline" onClick={() => flattenBand(selectedInstance)} title="Take the rope off its route: a straight rope where it is">
+                          Flatten
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {selectedInstance.shape && !isRoutedBand(selectedInstance) && !isRoutedRope(selectedInstance) && (
                   <div className="field-group">
                     <div className="field-label">
                       <span>Shape</span>

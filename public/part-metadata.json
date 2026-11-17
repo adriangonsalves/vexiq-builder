@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-11-13T17:01:03.803Z",
+  "generatedAt": "2026-11-16T18:03:23.766Z",
   "partCount": 482,
   "totalVerifiedPorts": 4242,
   "parts": {
@@ -24,6 +24,11 @@
           0,
           0,
           1
+        ],
+        "grooveRadiusMm": 3.17,
+        "grooveSpanMm": [
+          -0.6,
+          0.6
         ]
       },
       "fastenerSpecs": null,
@@ -1939,19 +1944,82 @@
       ],
       "originType": "centered",
       "gearSpecs": null,
+      "spoolSpecs": {
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "coreRadiusMm": 7.49,
+        "flangeRadiusMm": 12.55,
+        "drumSpanMm": [
+          -4.25,
+          4.25
+        ],
+        "pocket": {
+          "center": [
+            0,
+            0,
+            3.47
+          ],
+          "radiusMm": 4.04,
+          "spanMm": [
+            0.75,
+            6.2
+          ],
+          "slotDeg": 90
+        },
+        "boreSpanMm": [
+          -5.45,
+          -0.85
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 0,
+        "total": 1,
         "pinHoles": 0,
-        "shaftBores": 0,
+        "shaftBores": 1,
         "pinPegs": 0,
         "shafts": 0
       },
-      "ports": []
+      "ports": [
+        {
+          "portId": "sq.thru.0_0_0",
+          "type": "shaft_bore",
+          "origin": [
+            0,
+            0,
+            -0.075
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "through": true,
+          "spanMm": [
+            -6.35,
+            6.2
+          ],
+          "shape": "square",
+          "squarePhaseDeg": 0,
+          "pitchCoord": [
+            0,
+            0,
+            0
+          ],
+          "verified": true,
+          "faces": [
+            "+z",
+            "-z"
+          ],
+          "kind": "sq"
+        }
+      ]
     },
     "1x-wide-1x1-corner-connector-228-2500-129-26": {
       "id": "1x-wide-1x1-corner-connector-228-2500-129-26",
@@ -14490,6 +14558,36 @@
       ],
       "originType": "centered",
       "gearSpecs": null,
+      "spoolSpecs": {
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "coreRadiusMm": 7.48,
+        "flangeRadiusMm": 12.55,
+        "drumSpanMm": [
+          -10.6,
+          10.6
+        ],
+        "pocket": {
+          "center": [
+            0,
+            0,
+            9.87
+          ],
+          "radiusMm": 4.04,
+          "spanMm": [
+            7.2,
+            12.55
+          ],
+          "slotDeg": 90
+        },
+        "boreSpanMm": [
+          -11.8,
+          -7.2
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -14497,42 +14595,45 @@
       },
       "portCounts": {
         "total": 1,
-        "pinHoles": 1,
-        "shaftBores": 0,
+        "pinHoles": 0,
+        "shaftBores": 1,
         "pinPegs": 0,
         "shafts": 0
       },
       "ports": [
         {
-          "portId": "hole.+z.0_0_4",
-          "type": "pin_hole",
+          "portId": "sq.thru.0_0_0",
+          "type": "shaft_bore",
           "origin": [
             0,
             0,
-            12.55
+            -0.075
           ],
           "axis": [
             0,
             0,
             1
           ],
-          "through": false,
+          "through": true,
           "spanMm": [
-            -24.014,
-            48.047
+            -12.7,
+            12.55
           ],
+          "shape": "square",
+          "squarePhaseDeg": 0,
           "pitchCoord": [
             0,
             0,
-            0.99
+            0
           ],
           "verified": true,
-          "shape": "round",
           "faces": [
-            "+z"
+            "+z",
+            "-z"
           ],
-          "kind": "hole",
+          "kind": "sq",
           "aliases": [
+            "hole.+z.0_0_4",
             "hole_1"
           ]
         }
@@ -95676,6 +95777,11 @@
           0,
           0,
           1
+        ],
+        "grooveRadiusMm": 4.99,
+        "grooveSpanMm": [
+          -0.62,
+          0.68
         ]
       },
       "fastenerSpecs": null,
@@ -96457,52 +96563,41 @@
       ],
       "originType": "centered",
       "gearSpecs": null,
+      "ropeSpecs": {
+        "lengthMm": 139.7,
+        "cordMm": 1.2,
+        "tab": {
+          "widthMm": 8,
+          "thickMm": 4.57,
+          "lengthMm": 11.5,
+          "holeRadiusMm": 2.1
+        },
+        "holes": [
+          [
+            69.85,
+            0,
+            0
+          ],
+          [
+            -69.85,
+            0,
+            0
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 3,
-        "pinHoles": 3,
+        "total": 2,
+        "pinHoles": 2,
         "shaftBores": 0,
         "pinPegs": 0,
         "shafts": 0
       },
       "ports": [
-        {
-          "portId": "hole.-x.-23_0_0",
-          "type": "pin_hole",
-          "origin": [
-            -73.85,
-            0,
-            0
-          ],
-          "axis": [
-            1,
-            0,
-            0
-          ],
-          "through": false,
-          "spanMm": [
-            -62.8,
-            62.8
-          ],
-          "pitchCoord": [
-            -5.81,
-            0,
-            0
-          ],
-          "verified": true,
-          "shape": "round",
-          "faces": [
-            "-x"
-          ],
-          "kind": "hole",
-          "aliases": [
-            "hole_1"
-          ]
-        },
         {
           "portId": "hole.thru.22_0_0",
           "type": "pin_hole",
@@ -117199,6 +117294,11 @@
           0,
           0,
           1
+        ],
+        "grooveRadiusMm": 9.99,
+        "grooveSpanMm": [
+          -0.63,
+          0.62
         ]
       },
       "fastenerSpecs": null,
@@ -117263,14 +117363,36 @@
       ],
       "originType": "offset",
       "gearSpecs": null,
+      "ropeSpecs": {
+        "lengthMm": 241.3,
+        "cordMm": 1.2,
+        "tab": {
+          "widthMm": 8,
+          "thickMm": 4.57,
+          "lengthMm": 11.5,
+          "holeRadiusMm": 2.1
+        },
+        "holes": [
+          [
+            98.439,
+            6.676,
+            10.615
+          ],
+          [
+            -142.861,
+            6.676,
+            10.615
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 3,
-        "pinHoles": 3,
+        "total": 2,
+        "pinHoles": 2,
         "shaftBores": 0,
         "pinPegs": 0,
         "shafts": 0
@@ -117342,39 +117464,6 @@
           "kind": "hole",
           "aliases": [
             "hole_2"
-          ]
-        },
-        {
-          "portId": "hole.-x.-46_2_3",
-          "type": "pin_hole",
-          "origin": [
-            -146.86,
-            6.676,
-            10.613
-          ],
-          "axis": [
-            1,
-            0,
-            0
-          ],
-          "through": false,
-          "spanMm": [
-            -135.811,
-            91.389
-          ],
-          "pitchCoord": [
-            -11.56,
-            0.53,
-            0.84
-          ],
-          "verified": true,
-          "shape": "round",
-          "faces": [
-            "-x"
-          ],
-          "kind": "hole",
-          "aliases": [
-            "hole_3"
           ]
         }
       ]
@@ -118520,6 +118609,28 @@
       ],
       "originType": "centered",
       "gearSpecs": null,
+      "ropeSpecs": {
+        "lengthMm": 292.1,
+        "cordMm": 1.2,
+        "tab": {
+          "widthMm": 8,
+          "thickMm": 4.57,
+          "lengthMm": 11.5,
+          "holeRadiusMm": 2.1
+        },
+        "holes": [
+          [
+            -146.05,
+            0,
+            0
+          ],
+          [
+            146.05,
+            0,
+            0
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -119351,6 +119462,11 @@
           0,
           0,
           1
+        ],
+        "grooveRadiusMm": 14.98,
+        "grooveSpanMm": [
+          -0.63,
+          0.62
         ]
       },
       "fastenerSpecs": null,
@@ -122182,6 +122298,11 @@
           0,
           0,
           1
+        ],
+        "grooveRadiusMm": 19.98,
+        "grooveSpanMm": [
+          -0.63,
+          0.62
         ]
       },
       "fastenerSpecs": null,
@@ -123694,52 +123815,41 @@
       ],
       "originType": "centered",
       "gearSpecs": null,
+      "ropeSpecs": {
+        "lengthMm": 596.9,
+        "cordMm": 1.2,
+        "tab": {
+          "widthMm": 8,
+          "thickMm": 4.57,
+          "lengthMm": 11.5,
+          "holeRadiusMm": 2.1
+        },
+        "holes": [
+          [
+            -298.45,
+            0,
+            0
+          ],
+          [
+            298.45,
+            0,
+            0
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 3,
-        "pinHoles": 3,
+        "total": 2,
+        "pinHoles": 2,
         "shaftBores": 0,
         "pinPegs": 0,
         "shafts": 0
       },
       "ports": [
-        {
-          "portId": "hole.-x.-95_0_0",
-          "type": "pin_hole",
-          "origin": [
-            -302.45,
-            0,
-            0
-          ],
-          "axis": [
-            1,
-            0,
-            0
-          ],
-          "through": false,
-          "spanMm": [
-            -291.4,
-            291.4
-          ],
-          "pitchCoord": [
-            -23.81,
-            0,
-            0
-          ],
-          "verified": true,
-          "shape": "round",
-          "faces": [
-            "-x"
-          ],
-          "kind": "hole",
-          "aliases": [
-            "hole_1"
-          ]
-        },
         {
           "portId": "hole.thru.-94_0_0",
           "type": "pin_hole",
@@ -126214,52 +126324,41 @@
       ],
       "originType": "centered",
       "gearSpecs": null,
+      "ropeSpecs": {
+        "lengthMm": 1511.3,
+        "cordMm": 1.2,
+        "tab": {
+          "widthMm": 8,
+          "thickMm": 4.57,
+          "lengthMm": 11.5,
+          "holeRadiusMm": 2.1
+        },
+        "holes": [
+          [
+            -755.65,
+            0,
+            0
+          ],
+          [
+            755.65,
+            0,
+            0
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
         "minFastenersRequired": 1
       },
       "portCounts": {
-        "total": 3,
-        "pinHoles": 3,
+        "total": 2,
+        "pinHoles": 2,
         "shaftBores": 0,
         "pinPegs": 0,
         "shafts": 0
       },
       "ports": [
-        {
-          "portId": "hole.-x.-239_0_0",
-          "type": "pin_hole",
-          "origin": [
-            -759.65,
-            0,
-            0
-          ],
-          "axis": [
-            1,
-            0,
-            0
-          ],
-          "through": false,
-          "spanMm": [
-            -748.6,
-            748.6
-          ],
-          "pitchCoord": [
-            -59.81,
-            0,
-            0
-          ],
-          "verified": true,
-          "shape": "round",
-          "faces": [
-            "-x"
-          ],
-          "kind": "hole",
-          "aliases": [
-            "hole_1"
-          ]
-        },
         {
           "portId": "hole.thru.-238_0_0",
           "type": "pin_hole",

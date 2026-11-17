@@ -193,6 +193,7 @@ export function kinematicNotes(graph) {
   const fixed = new Set(graph.fixed || []);
   return [
     ...(graph.bands || []).map((b) => ({ partId: b.id, text: `${b.label}: bands don't pull without physics` })),
+    ...(graph.ropes || []).map((r) => ({ partId: r.id, text: `${r.label}: ropes don't pull without physics` })),
     ...(graph.ratchets || []).filter((r) => !fixed.has(r.holderBody)).map((r) => ({ partId: r.pawl, text: `${graph.partInfo?.[r.pawl]?.label || 'A pawl'} rides on a moving part, so it isn't run without physics` }))
   ];
 }

@@ -102,3 +102,20 @@ Low-priority items left open when a change was closed. Pick one up by proposing 
 2. **A one-part build added to another comes in as a loose part**, not a group (a group needs two or more parts).
 3. **Adding while another tab is open** wasn't checked: the static preview has no bridge, and the live server shares the user's open build. The add is an ordinary history step, so it should reach other tabs like any change.
 
+
+## From rope-and-spool and motor-stopping (collected 2026-11-16)
+
+1. **Huey's lift doesn't run in Play: linear motion parts aren't joints.** The 1x6 Continuous Linear Motion Rack Gear and the Linear Motion brackets snap on with no pin holes, so the library gives them no ports, the audit lists them as unsecured, no rack link forms and the lift motor can't raise the Middle Stage. Needs a change of its own. The rope side is ready: both ropes import and pull.
+2. **The slider rule for a carriage held by ropes** (rope-and-spool tasks 7.5, 8.2 to 8.4, design decision 10) waits on item 1, where it can be checked on a lift that moves. Tried without it on Huey: the stages are pushed out of their tight fits, tilt 3° to 5° and jam. A carriage carrying its own motor (Huey's Claw Mount) is held still today, not hung on its ropes.
+3. **VEX keeps some parts in different frames from robot to robot.** `cad-frames.json` now holds a robot's own placement under `projects[<id>]` (23 part types for Huey). A new robot needs `node scripts/fit-cad-frames.mjs <project> --write` before importing.
+4. **The imported Huey has 25 overlaps and 13 unsecured parts**, none of them ropes; not looked into.
+5. **`place_rope` can't bend a rope round a round post in its way**, only round the corners of beams and plates: it says to pick the post as a spot. The import does this by itself.
+6. **A block hanging on two ropes, or on two frictionless pulleys, rocks and doesn't settle** (about 5° each way; rig R5 swings 4 mm about its rope length). Real pulleys have friction; ours have none.
+7. **Motor shafts are too light.** A shaft with nothing on it is about 6.6e-7 kg·m² and the motor adds no rotor weight, so a sudden twist, or one past stall, spins it too far. Giving the motor a rotor broke four Play checks when tried; it may deserve its own change.
+8. **Hold on a geared shaft** misjudges a twist put straight on the shaft's own gear, and the Clawbot arm in Hold bounces about 4° and rests about 1.7° short (gears are coupled by speed only).
+9. **A spool driven through gears isn't held for its rope** by an idle motor; only a spool on the motor's own shaft is.
+10. **Rope strength is assumed, not measured** (`src/sim/ropeStrength.js`), and pulleys don't turn as the rope runs over them.
+11. **Rigs not built:** R2 (arm, band and rope to a fixed pin), R6 (three pulleys on three bodies) and R7 (pulley on an arm); the travel halves of R4 and R5 (100 mm wound lifts 50 and 25 mm); the spool's back-torque against `T ×` leaving radius.
+12. **Rope builder in the app:** the Rope lift starter has no pulley, so "Lift rope over a pulley" was checked over a standoff; a tap on a small pulley's side picks the side only when it lands well off its middle, else the tight side is used and Flip side corrects it.
+13. **Undo of a stopping-mode change** from the Play panel wasn't tried in the app (it is checked through the tools).
+14. **Help for ropes and stopping modes** (rope-and-spool 4.2, 10.2, 10.3; motor-stopping 6.2) was left out on request, apart from one line each on the saving and context bar pages.

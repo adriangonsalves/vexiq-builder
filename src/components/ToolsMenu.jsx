@@ -19,7 +19,7 @@ import PopoverMenu, { MenuDivider, MenuHeading, MenuItem } from './PopoverMenu.j
  * band off its spots.
  * Set pawl (openspec ratchet-and-pawl) rests the selected pawl in a ratchet's teeth, pinned beside it.
  */
-export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, bendReason = null, playing = false, playReason = null, onPlay, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack, onBendSheet, bandOpen = false, onBand, betweenReason = null, onBandBetween, beltReason = null, onBelt, flattenBandReason = null, onFlattenBand, pawlReason = null, onSetPawl }) {
+export default function ToolsMenu({ disabledReason = null, fixReason = null, auditReason = null, chainCheck, chainInTheWay = [], exploded = false, auditOpen = false, bendReason = null, playing = false, playReason = null, onPlay, onFixAssembly, onAudit, onBlueprint, onExplode, onChain, onTrack, onBendSheet, bandOpen = false, onBand, betweenReason = null, onBandBetween, beltReason = null, onBelt, flattenBandReason = null, onFlattenBand, pawlReason = null, onSetPawl, ropeOpen = false, onRope, ropeBetweenReason = null, onRopeBetween }) {
   const buttonRef = useRef(null);
   const [at, setAt] = useState(null);
   const close = useCallback(() => setAt(null), []);
@@ -146,6 +146,16 @@ export default function ToolsMenu({ disabledReason = null, fixReason = null, aud
           <MenuItem disabled={Boolean(disabledReason || flattenBandReason)} onSelect={choose(onFlattenBand)} title={disabledReason || flattenBandReason || 'Take the selected band off its spots: a flat ring where it is'}>
             Flatten band
           </MenuItem>
+          {onRope && (
+            <MenuItem checked={ropeOpen} disabled={Boolean(disabledReason) && !ropeOpen} onSelect={choose(onRope)} title={ropeOpen ? 'Close the Rope builder (Esc)' : disabledReason || 'Run a rope: tap where its first end goes, the pulleys or posts it passes, and where its other end goes'}>
+              Rope builder
+            </MenuItem>
+          )}
+          {onRopeBetween && (
+            <MenuItem disabled={Boolean(disabledReason || ropeBetweenReason)} onSelect={choose(onRopeBetween)} title={disabledReason || ropeBetweenReason || 'Put a rope between the two selected parts (a spool, pin, standoff or shaft)'}>
+              Rope between these
+            </MenuItem>
+          )}
           {disabledReason && <div className="popover-note">{disabledReason}</div>}
         </PopoverMenu>
       )}

@@ -10,6 +10,7 @@ import path from 'node:path';
 import * as THREE from 'three';
 import { ROOT_DIR, auditAssembly, findPart } from '../mcp/assembly-engine.mjs';
 import { stringBand } from '../src/utils/bandRoute.js';
+import { placeRope } from '../src/engine/ropeRouting.js';
 
 const swish = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'scripts', 'fixtures', 'swish-winch.json'), 'utf8'));
 const seen = new Map();
@@ -57,6 +58,18 @@ const belts = swish.bands.map((b, k) => {
   const strung = stringBand(band, b.spots, parts, (i) => findPart(i.partId));
   return { ...band, position: strung.position, rotation: strung.rotation, shape: strung.shape };
 });
+// The rope (openspec rope-and-spool): one end in the spool's pocket, four turns wound, the rest
+// hanging free, ready to be tied to a build. It names the starter's own ids (inst-ratchet-winch-<row>),
+// which starters.js gives each row, not the fixture's.
+const rowId = (k) => `inst-ratchet-winch-${k + 1}`;
+const ropeRow = parts.findIndex((x) => findPart(x.partId)?.partNumber === '228-2500-438');
+const spoolRow = parts.findIndex((x) => findPart(x.partId)?.partNumber === '228-2500-421');
+const asRows = parts.map((x, k) => ({ ...x, instanceId: rowId(k) }));
+const roped = placeRope({ instances: asRows.filter((_, k) => k !== ropeRow) }, { instanceId: undefined, ropePartId: parts[ropeRow].partId, from: { instanceId: rowId(spoolRow), feature: 'pocket' }, turns: 4, label: parts[ropeRow].label });
+if (!roped.ok) throw new Error(`Rope: ${roped.error}`);
+const ropeInst = roped.state.instances.find((i) => i.instanceId === roped.instanceId);
+parts[ropeRow] = { ...parts[ropeRow], position: ropeInst.position, rotation: ropeInst.rotation, shape: ropeInst.shape };
+console.log(`Rope: ${roped.message}`);
 const instances = [...parts, ...belts].map(instance);
 const audit = auditAssembly({ instances });
 const round = (x) => Math.round(x * 1000) / 1000;
@@ -76,3 +89,4 @@ fs.writeFileSync(
 console.log(`Wrote ${path.relative(ROOT_DIR, out)}: ${rows.length} parts.`);
 console.log('Ratchets:', JSON.stringify(audit.ratchets.map((r) => ({ pawl: r.pawl, ratchet: r.ratchet, holds: r.holds, turns: r.freeDirection, pressed: r.pressed }))));
 console.log('Overlaps:', audit.collisions.length);
+console.log('Ropes:', JSON.stringify(auditAssembly({ instances: instances.map((x, k) => ({ ...x, instanceId: rowId(k), ...(x.shape?.kind === 'rope' ? {} : {}) })) }).ropes));

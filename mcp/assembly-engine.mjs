@@ -11,6 +11,7 @@ import { applyOps, diffParts, fromLegacy, loadHistory, recordStep, summarize } f
 import { isLinearHistory, normalizeSettings } from '../src/utils/appSettings.js';
 import { syncSelection } from '../src/utils/partGroups.js';
 import { followBands } from '../src/utils/bandRoute.js';
+import { followRopes } from '../src/utils/ropeRoute.js';
 import { withBandFlags } from '../src/engine/bandFit.js';
 import { rerouteBands } from '../src/engine/bandRouting.js';
 import {
@@ -140,6 +141,8 @@ export async function writeAssemblyState(nextState, options = {}) {
     {
       const followed = followBands(before, instances, partOf);
       instances = withBandFlags(followed.changed.length ? rerouteBands(followed.instances, followed.changed).instances : followed.instances);
+      // ...and ropes theirs (openspec rope-and-spool)
+      instances = followRopes(before, instances, partOf).instances;
     }
   }
 

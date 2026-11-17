@@ -27,6 +27,7 @@ import { createBandOverlay } from './bandOverlay.js';
 
 // A strung band can't be moved or turned by itself (openspec rubber-bands)
 const BAND_FOLLOWS = 'A band follows its spots: drag a handle (Edit route) to move it';
+const ROPE_FOLLOWS = 'A rope follows its ends and spots: use Edit route to move it';
 import { spotsNearPoint } from '../utils/bandRoute.js';
 import { isBandPart } from '../utils/bandPath.js';
 import { joinKindFor } from '../utils/contextToolbarItems.js';
@@ -1647,13 +1648,15 @@ export default function Viewport3D({
     partsRoot.traverse((child) => {
       if (child.isMesh && child.userData.isPartMesh && child.userData.instanceId && child.parent?.visible !== false) meshes.push(child);
     });
-    const routedBand = (id) => instancesRef.current.find((i) => i.instanceId === id)?.shape?.kind === 'band';
+    const routedBand = (id) => ['band', 'rope'].includes(instancesRef.current.find((i) => i.instanceId === id)?.shape?.kind);
     const hit = raycaster.intersectObjects(meshes, false).find((h) => !routedBand(h.object.userData.instanceId));
     const prev = bandHoverRef.current;
     let next = null;
     if (hit) {
       const inst = instancesRef.current.find((i) => i.instanceId === hit.object.userData.instanceId);
-      const list = inst ? spotsNearPoint(inst, partFor(inst), hit.point, 8) : [];
+      // The Rope builder brings its own places (pockets, posts, grooves, edges) (openspec rope-and-spool)
+      const near = bandPickRef.current?.spotsAt || spotsNearPoint;
+      const list = inst ? near(inst, partFor(inst), hit.point, 8) : [];
       if (list.length) {
         const same = prev && prev.list.length === list.length && prev.list.every((x, i) => x.instanceId === list[i].instanceId && x.feature === list[i].feature);
         next = { list, index: same ? prev.index : 0, point: hit.point.toArray() };
@@ -1889,7 +1892,8 @@ export default function Viewport3D({
   const routedBandIds = () => {
     const list = instancesRef.current;
     if (bandIdsCache.current.list !== list) {
-      bandIdsCache.current = { list, ids: new Set(list.filter((i) => i.shape?.kind === 'band' && Array.isArray(i.shape.route)).map((i) => i.instanceId)) };
+      // ...and so are strung ropes (openspec rope-and-spool): a rope coiled in its spool isn't an overlap
+      bandIdsCache.current = { list, ids: new Set(list.filter((i) => (i.shape?.kind === 'band' && Array.isArray(i.shape.route)) || i.shape?.kind === 'rope').map((i) => i.instanceId)) };
     }
     return bandIdsCache.current.ids;
   };
@@ -4632,6 +4636,7 @@ export default function Viewport3D({
     }
     if (inst.locked) return clear('Part is locked');
     if (inst.shape?.kind === 'band') return clear(BAND_FOLLOWS);
+    if (inst.shape?.kind === 'rope') return clear(ROPE_FOLLOWS);
     if (explodeModeRef.current !== 'off') return clear("Can't rotate in Explode view");
     if (arrowOverlayRef.current?.isShown() || pickModeRef.current?.kind === 'pick' || pickModeRef.current?.hidGizmo || !group.userData.localBox) return clear();
 
@@ -4950,7 +4955,8 @@ export default function Viewport3D({
     const selId = selectedIdRef.current;
     const group = selId ? meshMapRef.current.get(selId) : null;
     const inst = selId ? instancesRef.current.find((i) => i.instanceId === selId) : null;
-    const isBand = inst?.shape?.kind === 'band';
+    // (a routed rope follows its ends and spots, as a band does)
+    const isBand = inst?.shape?.kind === 'band' || inst?.shape?.kind === 'rope';
     const canMove =
       transformModeRef.current === 'translate' &&
       explodeModeRef.current === 'off' &&
@@ -5086,7 +5092,7 @@ export default function Viewport3D({
     const h = bandHoverRef.current;
     const spot = h ? h.list[h.index] : null;
     if (!spot) return false;
-    onBandPickRef.current?.({ instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, label: spot.label, height: spot.height });
+    onBandPickRef.current?.({ instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, label: spot.label, height: spot.height, point: h.point });
     return true;
   };
 
@@ -6043,7 +6049,8 @@ export default function Viewport3D({
       // Band builder: a press on a spot handle starts dragging it to another spot
       if (bandPickRef.current && e.button === 0) {
         setRayFromEvent(e);
-        const index = bandOverlayRef.current?.pickHandle(raycaster) ?? -1;
+        const slop = bandPickRef.current.handleSlop ? { px: e.pointerType === 'touch' ? 24 : 14, viewHeight: inputEl.clientHeight } : null;
+        const index = bandOverlayRef.current?.pickHandle(raycaster, slop) ?? -1;
         if (index >= 0) {
           bandDragRef.current = { index };
           orbit.enabled = false;
@@ -6307,9 +6314,11 @@ export default function Viewport3D({
           const { index } = bandDragRef.current;
           bandDragRef.current = null;
           orbit.enabled = true;
+          // A press on a handle let go where it was is no drag: nothing moves and nothing comes off
+          if (Math.hypot(dx, dy) <= (e.pointerType === 'touch' ? 12 : 5)) return;
           const h = bandHoverRef.current;
           const spot = h ? h.list[h.index] : null;
-          onBandHandleRef.current?.(index, spot ? { instanceId: spot.instanceId, feature: spot.feature, height: spot.height } : null, { done: true });
+          onBandHandleRef.current?.(index, spot ? { instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, height: spot.height } : null, { done: true });
           return;
         }
         if (touch && Math.hypot(dx, dy) <= tapSlop) {
@@ -6332,7 +6341,7 @@ export default function Viewport3D({
         if (Math.hypot(dx, dy) <= 5) {
           const h = bandHoverRef.current;
           const spot = h ? h.list[h.index] : null;
-          if (spot) onBandPickRef.current?.({ instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, label: spot.label, height: spot.height });
+          if (spot) onBandPickRef.current?.({ instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, label: spot.label, height: spot.height, point: h.point });
         }
         return;
       }
@@ -6480,7 +6489,7 @@ export default function Viewport3D({
         if (e.buttons === 0 || bandDragRef.current) {
           setRayFromEvent(e);
           const spot = updateBandHover(raycaster, partsRoot);
-          if (bandDragRef.current) onBandHandleRef.current?.(bandDragRef.current.index, spot ? { instanceId: spot.instanceId, feature: spot.feature, height: spot.height } : null, { done: false });
+          if (bandDragRef.current) onBandHandleRef.current?.(bandDragRef.current.index, spot ? { instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, height: spot.height } : null, { done: false });
         }
         return;
       }
@@ -6935,7 +6944,7 @@ export default function Viewport3D({
       orbit.enabled = true;
       const h = bandHoverRef.current;
       const spot = h ? h.list[h.index] : null;
-      onBandHandleRef.current?.(index, spot ? { instanceId: spot.instanceId, feature: spot.feature, height: spot.height } : null, { done: true });
+      onBandHandleRef.current?.(index, spot ? { instanceId: spot.instanceId, feature: spot.feature, kind: spot.kind, height: spot.height } : null, { done: true });
     };
     window.addEventListener('pointerup', endBandDragAnywhere);
     window.addEventListener('pointercancel', endBandDragAnywhere);

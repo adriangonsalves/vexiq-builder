@@ -7,7 +7,9 @@
  * Downloads the project's archive once (cached in .cache/cad-projects/), decodes each part's Draco
  * mesh, and for each CAD part number tries the 24 quarter turns, lining up the two models' box
  * centres, then refines the offset. The best fit is written as a `mesh` entry when its mean distance
- * is at most 0.5 mm (with --write); a `pins` entry is never replaced. Without --write it only reports,
+ * is at most 0.5 mm (with --write). An existing entry is never replaced: where this robot's CAD keeps
+ * the part in another frame, its placement is written beside the entry, under `projects[<id>]`
+ * (src/engine/cadFrames.js frameEntryFor). Without --write it only reports,
  * including how each existing entry compares with the best fit.
  */
 import fs from 'node:fs';
@@ -15,7 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { getPartRawGeometry } from '../mcp/assembly-engine.mjs';
-import { frameOffset, frameTurn } from '../src/engine/cadFrames.js';
+import { frameEntryFor, frameOffset, frameTurn } from '../src/engine/cadFrames.js';
 import { loadProject, projectIdFrom, walkAssembly } from './import-cad.mjs';
 import { dracoDecoder, nodeMeshes, nodesByPath, projectArchive } from './cad-meshes.mjs';
 
@@ -139,8 +141,8 @@ async function main(argv) {
     process.exit(1);
   }
   const only = args.includes('--only') ? args[args.indexOf('--only') + 1].split(',') : null;
-  const projectId = projectIdFrom(source);
   const project = await loadProject(source);
+  const projectId = project.id || projectIdFrom(source);
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.json'), 'utf8'));
   const libraryNumbers = new Set(catalog.map((p) => p.partNumber));
   const walked = walkAssembly(project, { isLibraryPart: (n) => libraryNumbers.has(n) });
@@ -151,11 +153,13 @@ async function main(argv) {
   const scale = walked.scaleFactor;
 
   const written = [];
+  const own = [];
   const poor = [];
   const compared = [];
   for (const [cadPn, meshes] of meshesByPartNumber(project, walked)) {
     if (only && !only.includes(cadPn)) continue;
-    const existing = frames[cadPn];
+    // This robot's own placement, when the table already has one
+    const existing = frames[cadPn] ? frameEntryFor(frames, cadPn, projectId) : null;
     const libPart = catalog.find((p) => p.partNumber === (existing?.library || cadPn) || p.name === existing?.library);
     if (!libPart) continue;
     // The part's CAD model in mm, in its node's frame
@@ -174,13 +178,19 @@ async function main(argv) {
     const fit = fitPart(libPart, sample);
     const entry = entryOf(fit, libPart, cadPn, existing?.library, projectId);
 
-    if (existing && existing.source !== 'mesh') {
+    if (existing) {
       // How the existing entry compares: the same placement, or one that fits as well (a symmetric part)
       const Qe = frameTurn(existing);
       const oe = frameOffset(existing, libPart);
       const gap = cornerGap(libPart, Qe, oe, fit.Q, fit.o);
       const existingMean = meanDistance(getPartRawGeometry(libPart), sample, Qe, oe).mean;
-      compared.push({ cadPn, source: existing.source, gapMm: gap, existingMeanMm: existingMean, bestMeanMm: fit.mean, best: entry, agrees: gap <= 0.5 || existingMean <= fit.mean + 0.05 });
+      const agrees = gap <= 0.5 || existingMean <= fit.mean + 0.05;
+      compared.push({ cadPn, source: existing.source, gapMm: gap, existingMeanMm: existingMean, bestMeanMm: fit.mean, best: entry, agrees });
+      // This robot's CAD keeps the part in another frame: its own placement beside the entry
+      if (!agrees && fit.mean <= MAX_MEAN_MM) {
+        frames[cadPn].projects = { ...(frames[cadPn].projects || {}), [projectId]: { rule: entry.rule, ...(entry.turn ? { turn: entry.turn } : {}), ...(entry.offsetMm ? { offsetMm: entry.offsetMm } : {}), source: 'mesh', meanErrorMm: entry.meanErrorMm } };
+        own.push(cadPn);
+      }
       continue;
     }
     if (fit.mean > MAX_MEAN_MM) {
@@ -202,8 +212,10 @@ async function main(argv) {
   if (args.includes('--write')) {
     fs.writeFileSync(FRAMES_PATH, `${JSON.stringify(table, null, 1)}\n`);
     console.log(`Wrote ${written.length} mesh entries: ${written.join(', ') || 'none'}`);
-  } else if (written.length) {
-    console.log(`Would write ${written.length} mesh entries (run with --write): ${written.join(', ')}`);
+    if (own.length) console.log(`Wrote this robot's own placement for ${own.length} part types whose entry differs: ${own.join(', ')}`);
+  } else {
+    if (written.length) console.log(`Would write ${written.length} mesh entries (run with --write): ${written.join(', ')}`);
+    if (own.length) console.log(`Would write this robot's own placement for ${own.length} part types whose entry differs (run with --write): ${own.join(', ')}`);
   }
 }
 

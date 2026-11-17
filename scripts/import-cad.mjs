@@ -30,6 +30,11 @@ const PART_NUMBER = /^(228-\d{4}(-\d{3,4})?)/;
 // Rubber bands and belts (openspec rubber-bands): strung on the spots VEX's band touches
 const BAND_NUMBERS = new Set(['228-2500-468', '228-2500-470', '228-2500-474', '228-2500-475', '228-2500-1225', '228-2500-221', '228-2500-222', '228-2500-223', '228-2500-224']);
 
+// Ropes (openspec rope-and-spool): VEX draws one rope as several pieces (a straight library rope, a
+// bent piece named for it, loose end tabs); they are joined and strung as one rope (importRopes)
+const ROPE_NUMBERS = new Set(['228-2500-430', '228-2500-436', '228-2500-438', '228-2500-442', '228-2500-448']);
+const isRopePiece = (w, tail) => ROPE_NUMBERS.has(basePartNumber(w.cadPartNumber)) || /rope/i.test(w.cadPartNumber) || /rope/i.test(tail);
+
 // Kinds of CAD parts the library doesn't have, with the reason given in the report
 const NOT_IN_LIBRARY = [
   { test: /^6P6C|cable/i, reason: 'cable plug' },
@@ -148,16 +153,18 @@ const quatOf = (rot) => new THREE.Quaternion().setFromEuler(new THREE.Euler(...r
 
 /**
  * Converts the walked parts to place_parts items. Returns { items, leftOut, duplicates, unchecked }.
- * `catalog`: the library; `frames`: cad-frames.json's frames; `looksTheSame(part, poseA, poseB)`:
+ * `catalog`: the library; `frames`: cad-frames.json's frames; `projectId`: the project's id, for the
+ * frames VEX changed in that robot's CAD; `looksTheSame(part, poseA, poseB)`:
  * whether two poses fill the same space (the engine's; default: the same turn within 1°).
  */
-export function convertParts(walked, { catalog, frames, liftMm = null, looksTheSame = null }) {
+export function convertParts(walked, { catalog, frames, liftMm = null, looksTheSame = null, projectId = null }) {
   const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
   const byName = new Map(catalog.map((p) => [p.name, p]));
   const leftOut = [];
   const unchecked = new Set();
   const converted = [];
   const bandParts = [];
+  const ropeParts = [];
   for (const w of walked.parts) {
     const tail = w.path.split('/').pop();
     if (w.hidden) {
@@ -171,8 +178,14 @@ export function convertParts(walked, { catalog, frames, liftMm = null, looksTheS
       bandParts.push({ w, lib: byNumber.get(bandPn), sub: subassemblyName(w.top) });
       continue;
     }
+    // A rope piece: joined with the other pieces of its rope and strung after the parts are placed
+    if (isRopePiece(w, tail)) {
+      const ropePn = basePartNumber(w.cadPartNumber);
+      ropeParts.push({ w, lib: ROPE_NUMBERS.has(ropePn) && w.cadPartNumber === ropePn ? byNumber.get(ropePn) || null : null, named: [...ROPE_NUMBERS].find((n) => w.cadPartNumber.startsWith(n)) || null, sub: subassemblyName(w.top) });
+      continue;
+    }
     const kind = NOT_IN_LIBRARY.find((k) => k.test.test(w.cadPartNumber) || k.test.test(tail));
-    const entry = frameEntryFor(frames, w.cadPartNumber);
+    const entry = frameEntryFor(frames, w.cadPartNumber, projectId);
     const lib = byNumber.get(entry.library || w.cadPartNumber) || byName.get(entry.library);
     if (kind || !lib) {
       leftOut.push({ path: w.path, cadPartNumber: w.cadPartNumber, reason: kind ? kind.reason : 'not in the library' });
@@ -236,12 +249,12 @@ export function convertParts(walked, { catalog, frames, liftMm = null, looksTheS
       rotation: c.pose.rotation,
       subassembly: c.sub,
       isPin: c.lib.category === 'Pins & Standoffs',
-      ...(frameEntryFor(frames, c.w.cadPartNumber).bend === 'pins' ? { bendThroughPins: true } : {})
+      ...(frameEntryFor(frames, c.w.cadPartNumber, projectId).bend === 'pins' ? { bendThroughPins: true } : {})
     };
   });
   // Structural parts first, pins after, so pins go into parts already there
   items.sort((a, b) => Number(a.isPin) - Number(b.isPin));
-  return { items, leftOut, duplicates, unchecked: [...unchecked].sort(), liftMm: Number(lift.toFixed(3)), bandParts };
+  return { items, leftOut, duplicates, unchecked: [...unchecked].sort(), liftMm: Number(lift.toFixed(3)), bandParts, ropeParts };
 }
 
 /** A stdio client for the MCP server, as any agent would use it. */
@@ -288,7 +301,7 @@ export function startMcp(env = process.env) {
 }
 
 /** Places the items in batches, groups them per subassembly and returns the audit summary. */
-export async function placeItems(items, { clear = false, env, bands = [] } = {}) {
+export async function placeItems(items, { clear = false, env, bands = [], ropes = [] } = {}) {
   const mcp = startMcp(env);
   await mcp.ready;
   try {
@@ -329,9 +342,31 @@ export async function placeItems(items, { clear = false, env, bands = [] } = {})
         b.error = err.message;
       }
     }
+    // Ropes, each from its pieces in VEX's CAD
+    const strungRopes = [];
+    for (const r of ropes) {
+      if (r.error) continue;
+      const ref = (e) => (e ? { ...e, instanceId: idOfItem.get(e.instanceId) } : undefined);
+      try {
+        const res = await mcp.call('place_rope', {
+          ropePartId: r.partQuery,
+          label: r.label,
+          from: ref(r.from),
+          ...(r.to ? { to: ref(r.to) } : {}),
+          via: r.via.map(ref),
+          ...(r.winding ? { winding: r.winding } : {}),
+          allowShort: true
+        });
+        strungRopes.push({ label: r.label, usedMm: res.usedMm, turns: res.turns, slackMm: res.slackMm, tooShortMm: res.tooShortMm || 0 });
+        if (!idsBySub.has(r.sub)) idsBySub.set(r.sub, []);
+        idsBySub.get(r.sub).push(res.instanceId);
+      } catch (err) {
+        r.error = err.message;
+      }
+    }
     for (const [name, ids] of idsBySub) if (ids.length >= 2) await mcp.call('group_parts', { instanceIds: ids, name });
     const audit = await mcp.call('audit_assembly');
-    return { placed, groups: [...idsBySub].map(([name, ids]) => ({ name, parts: ids.length })), audit, strungBands: strung };
+    return { placed, groups: [...idsBySub].map(([name, ids]) => ({ name, parts: ids.length })), audit, strungBands: strung, strungRopes };
   } finally {
     mcp.close();
   }
@@ -426,6 +461,316 @@ export async function importBands(project, walked, converted, { source }) {
 }
 
 /**
+ * The ropes VEX's CAD shows (openspec rope-and-spool, design decision 11). Rope pieces that touch are
+ * one rope. Its size is the library rope among them; its ends are the tabs that sit on a post or in a
+ * spool's pocket; its spots are the grooves and posts its cord lies on, in order from one end to the
+ * other, each on the side VEX drew. Returns [{ label, partQuery, sub, from, to, via, winding, names,
+ * usedMm, turns, slackMm, shortMm, sizeChosen, pieces }] or [{ label, error, pieces }].
+ */
+export async function importRopes(project, walked, converted, { source, keepPoints = false }) {
+  if (!converted.ropeParts?.length) return [];
+  const { partOf, buildWorldMatrix } = await import('../mcp/assembly-engine.mjs');
+  const { partSpots, spotByFeature, worldSpot } = await import('../src/utils/bandPath.js');
+  const { endPlaces, ropeSpec, spoolSpec, suggestRope } = await import('../src/utils/ropePath.js');
+  const { stringRope } = await import('../src/utils/ropeRoute.js');
+  const { appMeshPoints, dracoDecoder, nodesByPath, projectArchive, thin } = await import('./cad-meshes.mjs');
+  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.json'), 'utf8'));
+  const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
+  const meshDir = await projectArchive(fs.existsSync(String(source)) ? project.id : source);
+  const decode = await dracoDecoder({ faces: true });
+  const nodes = nodesByPath(project);
+  const instances = converted.items.map((it, k) => ({ instanceId: `import-${k}`, partId: it.partQuery, label: it.label, position: it.position, rotation: it.rotation, visible: true, ...(it.shape ? { shape: it.shape } : {}) }));
+  const V = (p) => new THREE.Vector3(p[0], p[1], p[2]);
+  const triples = (flat) => {
+    const out = [];
+    for (let i = 0; i < flat.length; i += 3) out.push(new THREE.Vector3(flat[i], flat[i + 1], flat[i + 2]));
+    return out;
+  };
+
+  // Each piece's bodies: cord (long and thin) and tabs (about 8 x 11.5 x 4.6 mm); the small ball at a
+  // cord's end is neither
+  const pieces = converted.ropeParts.map((rp) => {
+    const bodies = appMeshPoints(rp.w, nodes.get(rp.w.path), { meshDir, decode, scaleFactor: walked.scaleFactor, liftMm: converted.liftMm, sampleMm: 0.5, byBody: true }) || [];
+    const cord = [];
+    const tabs = [];
+    for (const b of bodies) {
+      const pts = triples(thin(Array.from(b), 0.75));
+      const size = new THREE.Box3().setFromPoints(pts).getSize(new THREE.Vector3()).toArray().sort((x, y) => x - y);
+      if (size[2] > 20) cord.push(...pts);
+      else if (size[2] >= 9 && size[2] <= 14 && size[0] >= 3.5) tabs.push({ points: pts, centre: pts.reduce((s, p) => s.add(p), new THREE.Vector3()).divideScalar(pts.length) });
+    }
+    return { ...rp, cord, tabs, all: [...cord, ...tabs.flatMap((t) => t.points)] };
+  });
+
+  // Pieces whose points come within 3 mm are one rope
+  const cellsOf = (pts) => new Set(pts.map((p) => `${Math.round(p.x / 3)},${Math.round(p.y / 3)},${Math.round(p.z / 3)}`));
+  const cells = pieces.map((p) => cellsOf(p.all));
+  const touch = (a, b) => {
+    for (const k of cells[a]) {
+      const [x, y, z] = k.split(',').map(Number);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) if (cells[b].has(`${x + dx},${y + dy},${z + dz}`)) return true;
+    }
+    return false;
+  };
+  const group = pieces.map((_, i) => i);
+  const find = (i) => (group[i] === i ? i : (group[i] = find(group[i])));
+  for (let a = 0; a < pieces.length; a++) for (let b = a + 1; b < pieces.length; b++) if (find(a) !== find(b) && touch(a, b)) group[find(b)] = find(a);
+  const ropes = new Map();
+  pieces.forEach((p, i) => {
+    if (!ropes.has(find(i))) ropes.set(find(i), []);
+    ropes.get(find(i)).push(p);
+  });
+
+  // Where a tab sits: a post through its hole, or a spool's pocket
+  const world = instances.map((inst) => {
+    const part = partOf(inst);
+    const m = part ? buildWorldMatrix(inst.position, inst.rotation) : null;
+    return { inst, part, m, box: part?.bbox ? new THREE.Box3(V(part.bbox.min), V(part.bbox.max)).applyMatrix4(m).expandByScalar(8) : null };
+  });
+  const seatOf = (tab) => {
+    let best = null;
+    for (const { inst, part, m, box } of world) {
+      if (!box || !box.containsPoint(tab.centre)) continue;
+      const q = new THREE.Quaternion().setFromRotationMatrix(m);
+      for (const place of endPlaces(part)) {
+        if (place.kind === 'pocket') {
+          const d = V(place.center).applyMatrix4(m).distanceTo(tab.centre);
+          if (d <= 7 && (!best || d - 10 < best.score)) best = { score: d - 10, end: { instanceId: inst.instanceId, feature: 'pocket' }, inst };
+          continue;
+        }
+        const spot = worldSpot(spotByFeature(part, place.feature), m);
+        const axis = spot.axis.clone().normalize();
+        const rel = tab.centre.clone().sub(spot.center);
+        const at = rel.dot(axis);
+        if (at < Math.min(...spot.span) - 2 || at > Math.max(...spot.span) + 2) continue;
+        const off = rel.addScaledVector(axis, -at).length();
+        if (off > 5) continue;
+        // The post goes through the tab's hole: no tab point on its line
+        const nearest = Math.min(...tab.points.map((p) => p.clone().sub(spot.center).cross(axis).length()));
+        if (nearest < 0.8 || nearest > 4) continue;
+        if (!best || off < best.score) best = { score: off, end: { instanceId: inst.instanceId, feature: place.feature, at: Number(at.toFixed(2)) }, inst };
+      }
+      void q;
+    }
+    return best;
+  };
+
+  const out = [];
+  for (const parts of ropes.values()) {
+    const straight = parts.find((p) => p.lib);
+    const named = parts.find((p) => p.named);
+    const sub = (straight || parts.find((p) => p.w.path.includes('/')) || parts[0]).sub;
+    const pieceNames = parts.map((p) => p.w.path.split('/').pop().split('^')[0].trim());
+    const cord = parts.flatMap((p) => p.cord);
+    const seats = parts.flatMap((p) => p.tabs).map((t) => ({ tab: t, seat: seatOf(t) })).filter((x) => x.seat).sort((a, b) => a.seat.score - b.seat.score);
+    let lib = straight?.lib || (named ? byNumber.get(named.named) : null) || null;
+    const baseLabel = `${sub}: ${lib ? lib.name : 'rope'}`;
+    if (!seats.length || !cord.length) {
+      out.push({ label: baseLabel, error: !cord.length ? 'no cord was found among its pieces' : 'no end was found on a pin, standoff, shaft or spool', pieces: pieceNames });
+      continue;
+    }
+    // Two ends at most, and not the same place twice
+    const ends = [];
+    for (const s of seats) if (ends.length < 2 && !ends.some((e) => e.seat.end.instanceId === s.seat.end.instanceId && e.seat.end.feature === s.seat.end.feature)) ends.push(s);
+    // A spool's pocket is the rope's first end
+    ends.sort((a, b) => Number(b.seat.end.feature === 'pocket') - Number(a.seat.end.feature === 'pocket'));
+    const from = ends[0].seat.end;
+    const to = ends[1]?.seat.end || null;
+    const endIds = new Set(ends.map((e) => e.seat.end.instanceId));
+
+    // How far along the cord each point is from the first end (steps through touching 2 mm cubes)
+    const key = (p) => `${Math.round(p.x / 2)},${Math.round(p.y / 2)},${Math.round(p.z / 2)}`;
+    const cubes = new Map();
+    for (const p of [...cord, ...parts.flatMap((x) => x.tabs.flatMap((t) => t.points))]) if (!cubes.has(key(p))) cubes.set(key(p), Infinity);
+    let queue = [key(ends[0].tab.centre)];
+    if (!cubes.has(queue[0])) queue = [key(ends[0].tab.points[0])];
+    cubes.set(queue[0], 0);
+    while (queue.length) {
+      const next = [];
+      for (const k of queue) {
+        const [x, y, z] = k.split(',').map(Number);
+        for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) {
+          const n = `${x + dx},${y + dy},${z + dz}`;
+          if (cubes.get(n) === Infinity) {
+            cubes.set(n, cubes.get(k) + 1);
+            next.push(n);
+          }
+        }
+      }
+      queue = next;
+    }
+    const along = (p) => cubes.get(key(p));
+
+    // The grooves and posts the cord lies on
+    const cordBox = new THREE.Box3().setFromPoints(cord).expandByScalar(15);
+    const touched = [];
+    for (const { inst, part, m, box } of world) {
+      if (!box || endIds.has(inst.instanceId) || !cordBox.intersectsBox(box)) continue;
+      for (const s of partSpots(part)) {
+        if (s.hidden || s.shape !== 'circle' || !['groove', 'post'].includes(s.kind)) continue;
+        const spot = worldSpot(s, m);
+        const axis = spot.axis.clone().normalize();
+        const radius = s.kind === 'groove' && Number.isFinite(s.grooveRadiusMm) ? s.grooveRadiusMm : spot.radius;
+        const [lo, hi] = [Math.min(...spot.span) - 1, Math.max(...spot.span) + 1];
+        const hits = [];
+        let deep = 0;
+        for (const p of cord) {
+          const d = p.clone().sub(spot.center);
+          const t = d.dot(axis);
+          if (t < lo || t > hi) continue;
+          const r = d.addScaledVector(axis, -t).length();
+          if (r < radius - 1) deep++;
+          else if (r <= radius + 2.4) hits.push(p);
+        }
+        if (hits.length < 5 || deep > Math.max(2, hits.length * 0.1)) continue;
+        touched.push({ kind: s.kind, centre: spot.center.clone(), axis, radius, span: [lo + 1, hi - 1], ref: { instanceId: inst.instanceId, feature: s.feature }, name: `${inst.label} ${s.label} (${part.name})`, hits: hits.length, along: Math.min(...hits.map(along).filter(Number.isFinite), Infinity) });
+      }
+    }
+    // One spot a part: the one with the most cord on it
+    const bestOf = new Map();
+    for (const t of touched) if (!bestOf.has(t.ref.instanceId) || bestOf.get(t.ref.instanceId).hits < t.hits) bestOf.set(t.ref.instanceId, t);
+    // A post on a touched groove's own line is the pin that pulley turns on
+    const axleOf = (t) => t.kind === 'post' && touched.some((g) => g.kind === 'groove' && Math.abs(g.axis.dot(t.axis)) > 0.999 && g.centre.clone().sub(t.centre).cross(t.axis).length() < 1);
+    let spots = [...bestOf.values()].filter((t) => Number.isFinite(t.along) && !axleOf(t)).sort((a, b) => a.along - b.along);
+
+    // Strung each way round its spots (and each winding): the one lying closest to VEX's cord. A spot
+    // the tight rope doesn't press on was only passed by, and goes.
+    const spoolInst = from.feature === 'pocket' ? instances.find((i) => i.instanceId === from.instanceId) : null;
+    const spool = spoolInst ? spoolSpec(partOf(spoolInst)) : null;
+    const spoolM = spoolInst ? buildWorldMatrix(spoolInst.position, spoolInst.rotation) : null;
+    const spoolAxis = spool ? V(spool.axis).applyQuaternion(new THREE.Quaternion().setFromRotationMatrix(spoolM)).normalize() : null;
+    const spoolAt = spool ? new THREE.Vector3().setFromMatrixPosition(spoolM) : null;
+    const probe = lib || byNumber.get('228-2500-448');
+    const ropeInst = { instanceId: 'import-rope', partId: probe.id, position: [0, 0, 0], rotation: [0, 0, 0] };
+    const coarse = triples(thin(cord.flatMap((p) => [p.x, p.y, p.z]), 2));
+    const fit = (strung) => {
+      let sum = 0;
+      let n = 0;
+      // The tight line through its contacts (no sag), a point every 3 mm
+      const line = strung.contacts.flatMap((c, k) => (k === 0 ? [V(c.b)] : k === strung.contacts.length - 1 ? [V(c.a)] : [V(c.a), V(c.b)]));
+      const sampled = [];
+      for (let k = 0; k + 1 < line.length; k++) {
+        const steps = Math.max(1, Math.ceil(line[k].distanceTo(line[k + 1]) / 3));
+        for (let j = 0; j < steps; j++) sampled.push(line[k].clone().lerp(line[k + 1], j / steps));
+      }
+      for (const p of sampled) {
+        if (spool) {
+          const d = p.clone().sub(spoolAt);
+          if (d.addScaledVector(spoolAxis, -d.dot(spoolAxis)).length() < spool.flangeRadiusMm + 2) continue;
+        }
+        let best = Infinity;
+        for (const c of coarse) best = Math.min(best, c.distanceToSquared(p));
+        best = Math.sqrt(best);
+        sum += best;
+        n++;
+      }
+      return n ? sum / n : 30;
+    };
+    const tryAll = (list) => {
+      let best = null;
+      const n = Math.min(list.length, 5);
+      for (let mask = 0; mask < 1 << n; mask++) {
+        for (const winding of spool ? [1, -1] : [1]) {
+          const via = list.map((s, k) => ({ ...s.ref, wraps: 1, ...(k < n ? { turn: mask & (1 << k) ? 1 : -1 } : {}) }));
+          const strung = stringRope(ropeInst, { ends: [from, to], via, spool: spool ? { winding } : null }, instances, partOf, { allowShort: true });
+          if (strung.error) {
+            if (!best) best = { error: strung.error, buried: strung.buried };
+            continue;
+          }
+          const miss = fit(strung);
+          if (!best || best.error || miss < best.miss - 1e-6) best = { strung, via, winding, miss };
+        }
+      }
+      return best;
+    };
+    // Which of the touched spots the rope really goes round, and in what order: VEX draws a rope's
+    // slack as a bulge that can lie against a post the tight rope never touches, and the two legs of
+    // a rope over a pulley lie too close together to tell the order from the cord alone. Every choice
+    // and order of up to four spots is strung; one is ruled out when the rope would be too short, would
+    // barely bend at a spot, or would run through a touched post it leaves out. Of the rest, the one
+    // lying closest to VEX's cord, each spot costing 1 mm (so a spot stays only when it helps).
+    const segGap = (p1, q1, p2, q2) => {
+      const d1 = q1.clone().sub(p1);
+      const d2 = q2.clone().sub(p2);
+      const r = p1.clone().sub(p2);
+      const [a, e, f] = [d1.dot(d1), d2.dot(d2), d2.dot(r)];
+      const [b, c] = [d1.dot(d2), d1.dot(r)];
+      const den = a * e - b * b;
+      let sN = den > 1e-9 ? Math.min(1, Math.max(0, (b * f - c * e) / den)) : 0;
+      let tN = e > 1e-9 ? (b * sN + f) / e : 0;
+      if (tN < 0) { tN = 0; sN = a > 1e-9 ? Math.min(1, Math.max(0, -c / a)) : 0; } else if (tN > 1) { tN = 1; sN = a > 1e-9 ? Math.min(1, Math.max(0, (b - c) / a)) : 0; }
+      return p1.clone().addScaledVector(d1, sN).distanceTo(p2.clone().addScaledVector(d2, tN));
+    };
+    const cutsPost = (strung, t) => {
+      const [p, q] = [t.centre.clone().addScaledVector(t.axis, t.span[0]), t.centre.clone().addScaledVector(t.axis, t.span[1])];
+      const c = strung.contacts;
+      for (let k = 0; k + 1 < c.length; k++) if (segGap(V(c[k].b), V(c[k + 1].a), p, q) < t.radius - 0.3) return true;
+      return false;
+    };
+    const orders = (list) => (list.length <= 1 ? [list] : list.flatMap((x, i) => orders(list.filter((_, j) => j !== i)).map((rest) => [x, ...rest])));
+    const posts = spots.filter((t) => t.kind === 'post');
+    const lengthMm = lib ? ropeSpec(lib).lengthMm : Infinity;
+    let got = null;
+    let fallback = null;
+    const pool = spots.slice(0, 4);
+    for (let mask = 0; mask < 1 << pool.length; mask++) {
+      const chosen = pool.filter((_, k) => mask & (1 << k));
+      for (const order of orders(chosen)) {
+        const t = tryAll(order);
+        if (!t) continue;
+        if (t.error) {
+          if (!fallback) fallback = t;
+          continue;
+        }
+        const score = t.miss + order.length;
+        if (!fallback || fallback.error || score < fallback.score) fallback = { ...t, score, spots: order };
+        if (t.strung.usedMm > lengthMm + 1) continue;
+        if (order.some((_, k) => (t.strung.contacts[k + 1]?.wrapDeg ?? 0) < 5)) continue;
+        if (posts.some((x) => !order.includes(x) && cutsPost(t.strung, x))) continue;
+        if (!got || score < got.score) got = { ...t, score, spots: order };
+      }
+    }
+    got = got || fallback;
+    if (got?.spots) spots = got.spots;
+    if (!got || got.error) {
+      out.push({ label: baseLabel, error: got?.error || "couldn't string it", pieces: pieceNames });
+      continue;
+    }
+    // No library rope among the pieces: the shortest that fits the route
+    let sizeChosen = false;
+    if (!lib) {
+      const pick = suggestRope(got.strung.usedMm, spool);
+      lib = pick ? byNumber.get(pick.partNumber) : probe;
+      sizeChosen = true;
+    }
+    const final = stringRope({ ...ropeInst, partId: lib.id }, { ends: [from, to], via: got.via, spool: spool ? { winding: got.winding } : null }, instances, partOf, { allowShort: true });
+    const nameOf = (e) => {
+      const inst = instances.find((i) => i.instanceId === e.instanceId);
+      return `${inst.label}${e.feature === 'pocket' ? ' pocket' : ''} (${partOf(inst).name})`;
+    };
+    out.push({
+      label: `${sub}: ${lib.name}`,
+      partQuery: lib.id,
+      sub,
+      from,
+      to,
+      via: got.via,
+      winding: spool ? (got.winding === -1 ? 'under' : 'over') : null,
+      names: { from: nameOf(from), to: to ? nameOf(to) : null, via: spots.map((s) => s.name) },
+      usedMm: Number(final.usedMm.toFixed(1)),
+      turns: final.turns,
+      slackMm: Number(final.slackMm.toFixed(1)),
+      shortMm: final.short ? Number((-final.spareMm).toFixed(1)) : 0,
+      missMm: Number(got.miss.toFixed(2)),
+      sizeChosen,
+      pieces: pieceNames,
+      ...(keepPoints ? { points: thin(cord.flatMap((p) => [p.x, p.y, p.z]), 2) } : {})
+    });
+  }
+  return out;
+}
+
+/**
  * Sheets bent in VEX CAD (`bendThroughPins`), laid on the pins that hold them and bent through the rest
  * with the engine, in item order so a later sheet stacks on an earlier one. Changes the sheet items'
  * pose and adds their shape; returns [{ label, anchored, unanchored, error }] for the report.
@@ -476,6 +821,13 @@ export function reportLines(r) {
     lines.push(`Bent ${b.label}: ${rows.join(', ') || 'held rows only'}.`);
     for (const u of b.unanchored) lines.push(`  not anchored on ${u.on}: ${u.reason}`);
   }
+  for (const b of r.ropes || []) {
+    if (b.error) lines.push(`Rope left out: ${b.label}: ${b.error} (pieces: ${b.pieces.join(', ')}).`);
+    else {
+      const spare = b.shortMm ? `too short by ${b.shortMm} mm` : b.turns ? `${b.turns} turns on the spool${b.slackMm > 0.5 ? `, ${b.slackMm} mm slack` : ''}` : `${b.slackMm} mm slack`;
+      lines.push(`Rope ${b.label}${b.sizeChosen ? ' (no library rope among its pieces: the shortest that fits)' : ''}: from ${b.names.from}${b.names.via.length ? ` over ${b.names.via.join(', ')}` : ''} to ${b.names.to || 'a free end'}; ${b.usedMm} mm used, ${spare}. Pieces joined: ${b.pieces.join(', ')}.`);
+    }
+  }
   for (const b of r.bands || []) {
     if (b.error) lines.push(`Band left out: ${b.label}: ${b.error}.`);
     else lines.push(`Band ${b.label}: round ${b.names.join(', ')}${b.folded ? ' (folded out and back)' : ''}${b.stretch ? `, ${b.stretch.toFixed(2)}× (${b.state})` : ''}.`);
@@ -504,10 +856,11 @@ async function main(argv) {
   const { looksTheSame } = await import('../mcp/assembly-engine.mjs');
   const libraryNumbers = new Set(catalog.map((p) => p.partNumber));
   const walked = walkAssembly(project, { isLibraryPart: (n) => libraryNumbers.has(n) });
-  const converted = convertParts(walked, { catalog, frames, liftMm: lift === null ? null : Number(lift), looksTheSame });
+  const converted = convertParts(walked, { catalog, frames, liftMm: lift === null ? null : Number(lift), looksTheSame, projectId: project.id || null });
   converted.bentSheets = await bendImportedSheets(converted.items);
   converted.bands = await importBands(project, walked, converted, { source });
-  const result = flag('--dry-run') ? converted : { ...converted, ...(await placeItems(converted.items, { clear: flag('--clear'), bands: converted.bands })) };
+  converted.ropes = await importRopes(project, walked, converted, { source });
+  const result = flag('--dry-run') ? converted : { ...converted, ...(await placeItems(converted.items, { clear: flag('--clear'), bands: converted.bands, ropes: converted.ropes })) };
   for (const line of reportLines(result)) console.log(line);
   if (value('--report')) fs.writeFileSync(value('--report'), JSON.stringify(result, null, 2));
 }

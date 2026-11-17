@@ -24,7 +24,10 @@ import {
   measureRack,
   measureShaftFlat,
   measureSpurGear,
-  measureSprocket
+  measureSprocket,
+  measureSpool,
+  measurePulleyGroove,
+  SPOOL_PATTERN
 } from './measure-part-geometry.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -674,6 +677,11 @@ function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasu
       gearSpecs.measured = false;
       unmeasured.push(`${part.name}: ${m.reason}`);
     }
+  } else if (gearSpecs?.gearType === 'pulley') {
+    // Where a rope or belt lies: the groove's bottom, not the rim (openspec rope-and-spool)
+    const m = measurePulleyGroove(part);
+    if (m) Object.assign(gearSpecs, m);
+    else unmeasured.push(`${part.name}: groove not found`);
   } else if (gearSpecs?.gearType === 'rack') {
     const m = measureRack(part);
     if (m.measured) rackSpecs = m;
@@ -711,6 +719,54 @@ function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasu
     if (flat) fastenerSpecs.squarePhaseDeg = flat.squarePhaseDeg;
   }
   return { rackSpecs, hubSpecs, ratchetSpecs };
+}
+
+/**
+ * A spool's square bore (openspec rope-and-spool, design §4): measured from its mesh, it replaces the
+ * hole the cylinder search finds (the 2x Wide Spool's blind round hole; the 1x has none). Returns
+ * the spool's sizes for `spoolSpecs`, or null for any other part.
+ */
+function addSpoolBore(part, ports, unmeasured) {
+  if (!SPOOL_PATTERN.test(part.name)) return null;
+  const m = measureSpool(part);
+  if (!m.measured) {
+    unmeasured.push(`${part.name}: ${m.reason}`);
+    return null;
+  }
+  const { measured, bore, ...specs } = m;
+  ports.splice(0, ports.length);
+  const { min, max } = part.bbox;
+  ports.push({
+    portId: 'bore_1',
+    type: 'shaft_bore',
+    origin: [0, 0, Number(((min[2] + max[2]) / 2).toFixed(3))],
+    axis: [0, 0, 1],
+    through: true,
+    spanMm: [min[2], max[2]],
+    shape: 'square',
+    squarePhaseDeg: bore.squarePhaseDeg,
+    pitchCoord: [0, 0, 0],
+    verified: true
+  });
+  return { ...specs, boreSpanMm: bore.spanMm };
+}
+
+/**
+ * A rope's two tab holes (openspec rope-and-spool): drops the stray hole the cylinder search reads at
+ * the cord's end (its axis runs along the rope), and returns the rope's sizes for `ropeSpecs`.
+ */
+function fixRopePorts(part, ports) {
+  if (!/\bPitch Rope\b/.test(part.name)) return null;
+  const tabs = ports.filter((p) => p.type === 'pin_hole' && Math.abs(p.axis[2]) > 0.99);
+  ports.splice(0, ports.length, ...tabs);
+  if (tabs.length !== 2) return null;
+  const [a, b] = tabs.map((p) => p.origin);
+  return {
+    lengthMm: Number(Math.hypot(...a.map((v, i) => v - b[i])).toFixed(2)),
+    cordMm: 1.2,
+    tab: { widthMm: Number(part.bbox.size[1].toFixed(2)), thickMm: Number(part.bbox.size[2].toFixed(2)), lengthMm: 11.5, holeRadiusMm: 2.1 },
+    holes: [a, b]
+  };
 }
 
 /** A pawl's hole ids, nearest its tip first (after the ports have their stable ids). */
@@ -1350,9 +1406,21 @@ async function main() {
     const { rackSpecs, hubSpecs, ratchetSpecs } = measureShapes(part, ports, gearSpecs, fastenerSpecs, rawCylinders, unmeasured);
     // 7. Shafts: their axis, ends, cross-section and cap or stop ring
     addShaftPort(part, ports, fastenerSpecs, rawRaycast);
+    // 8. Spools and ropes (openspec rope-and-spool)
+    const spoolSpecs = addSpoolBore(part, ports, unmeasured);
+    const ropeSpecs = fixRopePorts(part, ports);
     // Facts for every point, then ids from where each point is, keeping today's ids as aliases
     describePorts(part, ports, fastenerSpecs, partBvh);
     assignStableIds(part, ports, oldPortsById.get(part.id) || [], lostIds);
+    // The 2x Wide Spool's old round hole is now its square bore; saved builds name it by its old ids
+    if (spoolSpecs) {
+      const bore = ports.find((p) => p.type === 'shaft_bore');
+      const old = (oldPortsById.get(part.id) || []).flatMap((o) => [o.portId, ...(o.aliases || [])]).filter((id) => id !== bore.portId);
+      const legacy = part.partNumber === '228-2500-421' ? ['hole.+z.0_0_4', 'hole_1'] : [];
+      const aliases = [...new Set([...(bore.aliases || []), ...old, ...legacy])].filter((id) => id !== bore.portId);
+      if (aliases.length) bore.aliases = aliases;
+      lostIds.splice(0, lostIds.length, ...lostIds.filter((l) => !l.startsWith(`${part.name}:`)));
+    }
     if (ratchetSpecs?.kind === 'pawl') ratchetSpecs.holes = pawlHoleIds(ratchetSpecs, ports);
 
     const portCounts = {
@@ -1373,6 +1441,8 @@ async function main() {
       gearSpecs,
       ...(rackSpecs ? { rackSpecs } : {}),
       ...(ratchetSpecs ? { ratchetSpecs } : {}),
+      ...(spoolSpecs ? { spoolSpecs } : {}),
+      ...(ropeSpecs ? { ropeSpecs } : {}),
       ...(CHAIN_SPECS[part.partNumber] ? { chainSpecs: CHAIN_SPECS[part.partNumber] } : {}),
       fastenerSpecs,
       ...(hubSpecs ? { hubSpecs } : {}),
@@ -1390,6 +1460,10 @@ async function main() {
     if (rackSpecs) part.rackSpecs = rackSpecs;
     if (ratchetSpecs) part.ratchetSpecs = ratchetSpecs;
     else delete part.ratchetSpecs;
+    if (spoolSpecs) part.spoolSpecs = spoolSpecs;
+    else delete part.spoolSpecs;
+    if (ropeSpecs) part.ropeSpecs = ropeSpecs;
+    else delete part.ropeSpecs;
     if (CHAIN_SPECS[part.partNumber]) part.chainSpecs = CHAIN_SPECS[part.partNumber];
     else delete part.chainSpecs;
     part.fastenerSpecs = fastenerSpecs;

@@ -37,7 +37,9 @@ The turns on the spool SHALL be shown as coils on the drum, updated as it winds.
 - **THEN** the coils on the drum grow and the arm is pulled toward the spool, stretching the bands
 
 #### Scenario: Motor stops with no ratchet
-- **WHEN** the motor of that winch is released without Hold and nothing else holds the spool
+- **WHEN** the motor of that winch is released (its throttle not kept) and nothing else holds the spool
+- **THEN** the arm does what the motor's stopping mode allows (openspec motor-stopping): with Hold it stays where it is; with Brake the bands pull it back slowly as the rope pays out; with Coast they pull it back quickly
+- **AND WHEN** the motor then runs in reverse
 - **THEN** the bands pull the arm back and the spool turns backward as the rope pays out
 
 #### Scenario: Swish winds, holds and fires

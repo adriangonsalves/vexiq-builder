@@ -61,7 +61,7 @@ function unionFind(ids) {
 }
 
 export function buildBodyGraph(inputs) {
-  const { parts, seated, groups, meshes, chains, tracks = [], sprocketAxes = {}, bays = [], bands = [], ratchets = [], spurGears = [] } = inputs;
+  const { parts, seated, groups, meshes, chains, tracks = [], sprocketAxes = {}, bays = [], bands = [], ropes = [], ratchets = [], spurGears = [] } = inputs;
   const byId = new Map(parts.map((p) => [p.id, p]));
   const labelOf = (id) => byId.get(id)?.label || id;
   const warnings = [];
@@ -324,7 +324,7 @@ export function buildBodyGraph(inputs) {
     const h = hinges[index];
     if (h.a !== a) Object.assign(h, { a, b: h.a });
     Object.assign(h, { axis: groups[group].axis, point: groups[group].point, motor });
-    motors.push({ id: motor, label: labelOf(motor), hinge: h.id });
+    motors.push({ id: motor, label: labelOf(motor), hinge: h.id, stopping: byId.get(motor)?.stopping || 'brake' });
   }
 
   // Gears, racks and chains drive each other
@@ -610,13 +610,60 @@ export function buildBodyGraph(inputs) {
     return { ...b, bodies: spotBodies, pulls: !pressesPawl && new Set(spotBodies.filter(Boolean)).size > 1, ...(pressesPawl ? { pressesPawl: true } : {}) };
   });
 
+  // Ropes (openspec rope-and-spool, design decision 8): no body either; each element belongs to the
+  // body of its part. A rope pulls when both ends are held and its elements are on more than one body.
+  // Bodies joined to the robot by no pin or shaft but holding a rope's end or spot (a carriage, a
+  // hook) hang on the rope instead of being loose (design decision 10): pulled by it, falling when
+  // gravity is on, colliding as other moving bodies do
+  const roped = [];
+  const ropeBodyIds = new Set(ropes.flatMap((r) => r.elements.map((e) => (e.instanceId ? bodyOf(e.instanceId) : null)).filter(Boolean)));
+  // ...with the loose bodies hinged to them (a hook on a pin in the rope's tab carrier)
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const h of hinges) {
+      for (const [x, y] of [[h.a, h.b], [h.b, h.a]]) {
+        if (ropeBodyIds.has(x) && loose.includes(y) && !ropeBodyIds.has(y)) {
+          ropeBodyIds.add(y);
+          grew = true;
+        }
+      }
+    }
+  }
+  for (const id of [...loose]) {
+    if (!ropeBodyIds.has(id)) continue;
+    loose.splice(loose.indexOf(id), 1);
+    roped.push(id);
+    const b = bodies.find((x) => x.id === id);
+    for (let k = warnings.length - 1; k >= 0; k--) if (b?.parts.includes(warnings[k].partId)) warnings.splice(k, 1);
+  }
+  const ropeList = ropes.map((r) => {
+    // A pulley or post that spins on one pin and nothing else (an idler pulley) only passes the rope's
+    // pull on through its axle: a frictionless pulley feels the same pull both sides, so the two add
+    // up to one force through the axle. The rope's spot is carried by, and pulls on, the part that
+    // pin is in.
+    const ownBodies = r.elements.map((e) => (e.instanceId ? bodyOf(e.instanceId) : null));
+    const elBodies = r.elements.map((e, i) => {
+      const b = ownBodies[i];
+      if (!b || e.shape !== 'circle' || (r.spool && i === r.spool.element)) return b;
+      const own = hinges.filter((h) => h.a === b || h.b === b);
+      if (own.length !== 1 || !sameLine({ axis: own[0].axis, point: own[0].point }, { axis: e.axis, point: e.center })) return b;
+      return own[0].a === b ? own[0].b : own[0].a;
+    });
+    // The pulleys whose spots another body carries ride with it: [carried body | null per element]
+    const riders = ownBodies.map((b, i) => (b && b !== elBodies[i] ? b : null));
+    const spool = r.spool ? { ...r.spool, body: elBodies[r.spool.element] } : null;
+    return { ...r, bodies: elBodies, riders, spool, pulls: !r.free && new Set(elBodies.filter(Boolean)).size > 1 };
+  });
+
   return {
     bodies: bodies.map(({ root, ...rest }) => rest),
     tracks: trackList,
     bands: bandList,
+    ropes: ropeList,
     ground: bodies[0]?.id || null,
     fixed,
     loose,
+    roped,
     sliders,
     hinges,
     hingePairs,

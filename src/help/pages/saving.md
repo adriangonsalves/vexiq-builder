@@ -80,11 +80,15 @@ Choose [[File → Starter]] to start a new build from a ready-made one, or to ad
 **Flop**
 ![Flop](shot:saving-starter-flop)
 
+**Huey** is the 2025-26 Hero Bot, with the two ropes of its lift.
+
 ## The assembly starters
 **Sample starter** is what a new browser opens with: a beam, a pin, a shaft and a gear.
 ![Sample starter](shot:saving-starter-sample)
 
 **Ratchet winch** is the winch from Hero Bot Swish: a ratchet and pawl on a swinging arm. In [[Tools → Play mode]], run the motors forward to wind the spool, stop to hold it, and reverse to let it go.
+
+**Rope winch** and **Rope lift** show a rope on a spool. In [[Tools → Play mode]], run the motor to wind the rope in.
 
 **Simple drivetrain** is the Clawbot's base: chassis, wheels and drive motors, without the brain.
 ![Simple drivetrain](shot:saving-starter-simple-drivetrain)

@@ -14,9 +14,19 @@ import * as THREE from 'three';
 
 const C = new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1);
 
-/** The frame entry for a CAD part number, or the box-centre rule marked unchecked. */
-export function frameEntryFor(frames, cadPartNumber) {
-  return frames?.[cadPartNumber] || { rule: 'centre', source: 'default' };
+/**
+ * The frame entry for a CAD part number, or the box-centre rule marked unchecked. VEX's CAD doesn't
+ * keep one frame for a part across robots (Huey's standoffs sit on their end, Flop's on their
+ * middle): an entry's `projects[projectId]` holds the placement for a robot that differs, and
+ * replaces the entry's own rule, turn and offset for that project.
+ */
+export function frameEntryFor(frames, cadPartNumber, projectId = null) {
+  const entry = frames?.[cadPartNumber];
+  if (!entry) return { rule: 'centre', source: 'default' };
+  const own = projectId && entry.projects?.[projectId];
+  if (!own) return entry;
+  const { rule: _r, turn: _t, offsetMm: _o, projects: _p, ...rest } = entry;
+  return { ...rest, ...own };
 }
 
 /** The turn Q of a frame entry (p_lib = Q · p_cad + o) as a Matrix4. */

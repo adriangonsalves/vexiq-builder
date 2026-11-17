@@ -11,11 +11,17 @@
  * Bands (openspec rubber-bands) have no body either: each frame a band's path is found again from its
  * spots carried by their bodies' moves, its strip is drawn along it, and it takes its stretch colour.
  * Leaving Play puts every band's strip and colour back.
+ *
+ * Ropes (openspec rope-and-spool) likewise: each frame a rope is drawn again from its ends and spots
+ * carried by their bodies, with the turns on its spool now (the physics' ropeStates), tight runs
+ * straight and slack as a sag, its tabs on their posts. Leaving Play puts each rope back.
  */
 import * as THREE from 'three';
 import { solveBandPath, stretchOf } from '../utils/bandPath.js';
 import { bandKind } from '../utils/bandShape.js';
 import { STRETCH_COLORS, stretchState } from './bandStrength.js';
+import { remeshRope, ropeTabTriangles } from '../utils/ropeShape.js';
+import { ropeDrawingNow, ropeElementsNow, solveRopeNow } from './ropeSim.js';
 
 const MAX_DT = 1 / 20; // a slow frame doesn't jump the motion
 
@@ -55,7 +61,7 @@ function trackState(track, byId) {
 
 export function createPlayRunner(graph, instances, engine) {
   const byId = new Map(instances.map((i) => [i.instanceId, i]));
-  const looseSet = new Set(graph.loose || []);
+  const looseSet = new Set([...(graph.loose || []), ...(graph.roped || [])]); // bodies hanging on ropes move too
   const moving = []; // { id, body, start }
   const allParts = []; // { id, body, start } including fixed chassis parts when a drop test moves the whole robot
   for (const b of graph.bodies) {
@@ -133,6 +139,74 @@ export function createPlayRunner(graph, instances, engine) {
     }
   };
 
+  // Ropes: drawn again each frame from their parts and the spool's turns now
+  const ropeStates = (graph.ropes || []).map((r) => ({ rope: r, inst: byId.get(r.id), saved: null, tabTris: null }));
+  const meshOf = (group) => group?.children.find((c) => c.isMesh && c.userData.isPartMesh) || group?.children.find((c) => c.isMesh);
+  const drawRopes = (meshMap, deltas) => {
+    const live = new Map((engine.ropeStates?.() || []).map((r) => [r.id, r]));
+    const poseOf = (bodyId) => {
+      const d = bodyId ? deltas.get(bodyId) : null;
+      if (!d) return null;
+      const t = new THREE.Vector3();
+      const q = new THREE.Quaternion();
+      d.decompose(t, q, new THREE.Vector3());
+      return { q, t };
+    };
+    for (const st of ropeStates) {
+      const { rope, inst } = st;
+      const mesh = meshOf(meshMap.get(rope.id));
+      if (!mesh || !inst) continue;
+      const now = live.get(rope.id);
+      const turns = now?.turns ?? rope.spool?.turns ?? 0;
+      const winding = now?.winding ?? rope.spool?.winding ?? 1;
+      const turnsArr = [...rope.turns];
+      if (rope.spool) turnsArr[rope.spool.element] = rope.spool.element === 0 ? -winding : winding;
+      const r = { ...rope, turns: turnsArr };
+      const els = ropeElementsNow(r, poseOf, turns, now?.anchor || null);
+      const path = solveRopeNow(r, els);
+      if (!path) continue;
+      const drawn = ropeDrawingNow(r, els, path, turns, winding, poseOf);
+      if (!st.saved) {
+        // The build's outline lines (and any other piece of the part) show the rope where it was: hidden in Play
+        const hidden = (mesh.parent?.children || []).filter((c) => c !== mesh && c.visible).map((c) => c);
+        for (const c of hidden) c.visible = false;
+        st.saved = { geometry: mesh.geometry, position: mesh.position.clone(), quaternion: mesh.quaternion.clone(), hidden };
+      }
+      // The cord in the rope's own frame (its group stays where the build has it, unturned)
+      const at = new THREE.Vector3(...inst.position);
+      const local = (p) => p.clone().sub(at).toArray();
+      const shape = {
+        path: { points: drawn.points.map(local), radiusMm: rope.cordMm / 2 },
+        tabs: drawn.tabs.map((t) => (t ? { position: local(t.position), quaternion: t.quaternion } : null))
+      };
+      if (!st.tabTris) {
+        // Every piece of the part drawn in the build, searched once for the tabs' triangles
+        st.tabTris = [st.saved.geometry, ...st.saved.hidden.filter((c) => c.isMesh).map((c) => c.geometry)].flatMap((g0) => ropeTabTriangles(g0.attributes.position?.array, g0.attributes.normal?.array, g0.index?.array, inst.shape));
+      }
+      const arrays = remeshRope(st.tabTris, inst.shape, shape);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(arrays.pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(arrays.norm, 3));
+      geo.setIndex(new THREE.BufferAttribute(arrays.idx, 1));
+      if (mesh.geometry !== st.saved.geometry) mesh.geometry.dispose();
+      mesh.geometry = geo;
+      mesh.position.set(0, 0, 0);
+      mesh.quaternion.identity();
+    }
+  };
+  const restoreRopes = () => {
+    for (const st of ropeStates) {
+      const mesh = meshOf(lastMeshMap?.get(st.rope.id));
+      if (!mesh || !st.saved) continue;
+      if (mesh.geometry !== st.saved.geometry) mesh.geometry.dispose();
+      mesh.geometry = st.saved.geometry;
+      mesh.position.copy(st.saved.position);
+      mesh.quaternion.copy(st.saved.quaternion);
+      for (const c of st.saved.hidden || []) c.visible = true;
+      st.saved = null;
+    }
+  };
+
   const throttles = new Map();
   let last = null;
   let wasDropping = false;
@@ -182,6 +256,7 @@ export function createPlayRunner(graph, instances, engine) {
       }
       lastMeshMap = meshMap;
       if (bandStates.length) drawBands(meshMap, deltas);
+      if (ropeStates.length) drawRopes(meshMap, deltas);
       for (const t of dropping ? allTracks : tracks) {
         const frameDelta = deltas.get(t.track.frame) || new THREE.Matrix4();
         if (t.order) {
@@ -221,8 +296,11 @@ export function createPlayRunner(graph, instances, engine) {
       }
     },
     status: () => engine.status(),
+    /** Each rope's pull, slack and turns now (from the physics; empty without it). */
+    ropeStates: () => engine.ropeStates?.() || [],
     dispose: () => {
       restoreBands();
+      restoreRopes();
       return engine.dispose?.();
     }
   };

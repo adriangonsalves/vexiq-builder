@@ -29,9 +29,11 @@ import { bendSheet, sheetBendChoices } from './sheetBending.js';
 import { placeBand, rerouteBands } from './bandRouting.js';
 import { meshRightAngle } from './rightAngleGears.js';
 import { followBands } from '../utils/bandRoute.js';
+import { followRopes } from '../utils/ropeRoute.js';
+import { placeRope, setRopeWinding } from './ropeRouting.js';
 import { withBandFlags } from './bandFit.js';
 
-export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'line_up_after_insert', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet', 'play_setup', 'place_band', 'band_routes', 'band_flags', 'mesh_right_angle', 'set_pawl'];
+export const ACTIONS = ['auto_fasten', 'mate_parts', 'mesh_gear_train', 'build_chain', 'mirror_subassembly', 'joint_graph', 'audit_and_blueprint', 'audit', 'blueprint', 'fix_assembly', 'fit_set', 'line_up_after_insert', 'contacts', 'chain_plan', 'sheet_bend_choices', 'bend_sheet', 'play_setup', 'place_band', 'band_routes', 'band_flags', 'mesh_right_angle', 'set_pawl', 'place_rope', 'rope_winding'];
 
 export function runAction(action, state, params = {}) {
   const result = runActionOnce(action, state, params);
@@ -42,7 +44,9 @@ export function runAction(action, state, params = {}) {
     // ...routed again where the move left their bends wrong, and flagged by the band rule
     const rerouted = followed.changed.length ? rerouteBands(followed.instances, followed.changed).instances : followed.instances;
     const flagged = followed.changed.length ? withBandFlags(rerouted, followed.changed) : rerouted;
-    if (flagged !== result.state.instances) return { ...result, state: { ...result.state, instances: flagged } };
+    // Ropes follow too (openspec rope-and-spool)
+    const roped = followRopes(state.instances || [], flagged, partOf).instances;
+    if (roped !== result.state.instances) return { ...result, state: { ...result.state, instances: roped } };
   }
   return result;
 }
@@ -367,6 +371,13 @@ function runActionOnce(action, state, params = {}) {
   }
   if (action === 'place_band') {
     return placeBand(state, params);
+  }
+  // Rope builder (openspec rope-and-spool): route a rope (or list its places), and set its winding
+  if (action === 'place_rope') {
+    return placeRope(state, params);
+  }
+  if (action === 'rope_winding') {
+    return setRopeWinding(state, params);
   }
   if (action === 'band_routes') {
     // The ways round for the given spots (Other way round), as place_band with list gives them

@@ -92,10 +92,32 @@ export function createBandOverlay() {
         return m;
       });
     },
-    /** The handle under a ray, by its index, or -1. */
-    pickHandle(raycaster) {
+    /**
+     * The handle under a ray, by its index, or -1. With `slop` ({ px, viewHeight }), a press that
+     * misses the thin ring still takes the handle whose middle is within `px` on screen (the Rope
+     * builder's handles, which must work by finger).
+     */
+    pickHandle(raycaster, slop = null) {
       const hit = raycaster.intersectObjects(handles.children, false)[0];
-      return hit ? hit.object.userData.handleIndex : -1;
+      if (hit) return hit.object.userData.handleIndex;
+      const cam = raycaster.camera;
+      if (!slop?.px || !cam || !slop.viewHeight) return -1;
+      let best = -1;
+      let bestPx = slop.px;
+      for (const h of handles.children) {
+        const to = h.position.clone().sub(raycaster.ray.origin);
+        const along = to.dot(raycaster.ray.direction);
+        if (along <= 0) continue;
+        const off = to.addScaledVector(raycaster.ray.direction, -along).length();
+        // Millimetres a pixel covers at the handle
+        const mmPerPx = cam.isPerspectiveCamera ? (2 * along * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2)) / slop.viewHeight : (cam.top - cam.bottom) / cam.zoom / slop.viewHeight;
+        const px = off / mmPerPx;
+        if (px < bestPx) {
+          bestPx = px;
+          best = h.userData.handleIndex;
+        }
+      }
+      return best;
     },
     clear() {
       clearGroup(lit);

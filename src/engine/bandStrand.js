@@ -17,6 +17,8 @@ import { partHull, partWrapEdges } from './bandHull.js';
 import { bandSpec, isBandPart, partSpots, worldSpot } from '../utils/bandPath.js';
 import { instanceMatrix, isRoutedBand, stringBand } from '../utils/bandRoute.js';
 import { bandOverlaps } from './bandFit.js';
+import { isRoutedRope } from '../utils/ropeRoute.js';
+import { isRopePart } from '../utils/ropePath.js';
 
 export const STRAND_LIMITS = { rounds: 8, bends: 8, stretch: 3, ms: 300 };
 const MAX_BEND_DEG = 135; // the most a band turns round one corner of a part
@@ -111,9 +113,9 @@ function partsOnLine(p, q, instances, skip, cache, grow = 0) {
   const out = [];
   const seg = new THREE.Box3().setFromPoints([p, q]);
   for (const inst of instances) {
-    if (skip.has(inst.instanceId) || inst.visible === false || isRoutedBand(inst)) continue;
+    if (skip.has(inst.instanceId) || inst.visible === false || isRoutedBand(inst) || isRoutedRope(inst)) continue;
     const part = partOf(inst);
-    if (!part?.bbox || isBandPart(part) || part.gearSpecs?.teeth) continue;
+    if (!part?.bbox || isBandPart(part) || isRopePart(part) || part.gearSpecs?.teeth) continue;
     const box = new THREE.Box3(v3(part.bbox.min), v3(part.bbox.max)).applyMatrix4(buildWorldMatrix(inst.position, inst.rotation));
     if (!box.expandByScalar(grow).intersectsBox(seg)) continue;
     if (!lineMisses(p, q, solidOf(inst, cache), grow)) out.push(inst.instanceId);
@@ -418,6 +420,40 @@ export function sideKeys(inst, bend) {
   return cornersOf(inst, new Set())
     .filter((c) => v3(c.local.out).normalize().dot(w) > 0.5)
     .map((c) => c.key);
+}
+
+/**
+ * The shortest clear way from point `pA` to point `pB` round the parts between, as bends round their
+ * corners (openspec rope-and-spool: a rope's stretch from one spot to the next). Parts in `skip` (the
+ * rope's own route) don't count. Returns { bends: [route entries] } or { blockedBy }.
+ */
+export function clearBends(state, skip, pA, pB, { grow = 0.4, offMm = 1.3, banned = new Set(), limits = STRAND_LIMITS } = {}) {
+  const deadline = Date.now() + limits.ms;
+  const instances = state.instances;
+  const byId = new Map(instances.map((i) => [i.instanceId, i]));
+  const cache = new Map();
+  const gathered = new Set(partsOnLine(pA, pB, instances, skip, cache, grow));
+  if (!gathered.size) return { bends: [] };
+  for (let round = 0; round < limits.rounds; round++) {
+    if (Date.now() > deadline) break;
+    const solids = [...gathered].map((id) => byId.get(id)).filter(Boolean).map((i) => solidOf(i, cache));
+    const corners = [...gathered].flatMap((id) => (byId.get(id) ? cornersOf(byId.get(id), banned) : []));
+    const reachable = (node) => solids.every((so) => !so.hull || so.inst.instanceId === node.corner.instanceId || !insideGrown(so.hull, node.p.clone().applyMatrix4(so.inv), grow));
+    const pts = corners.flatMap((c) => cornerPoints(c, pA, pB, offMm).filter(reachable));
+    const chain = shortestChain(pA, pB, pts, solids, deadline, grow);
+    if (!chain) break;
+    const line = [pA, ...chain.map((x) => x.p), pB];
+    const fresh = new Set();
+    for (let k = 0; k + 1 < line.length; k++) for (const pid of partsOnLine(line[k], line[k + 1], instances, skip, cache, grow)) if (!gathered.has(pid)) fresh.add(pid);
+    if (fresh.size) {
+      for (const pid of fresh) gathered.add(pid);
+      continue;
+    }
+    const bends = [];
+    for (const node of chain) if (!bends.length || bends[bends.length - 1].key !== node.corner.key) bends.push(node.corner);
+    return { bends: bends.map(bendEntry) };
+  }
+  return { blockedBy: [...gathered].map((id) => ({ instanceId: id, label: byId.get(id)?.label })) };
 }
 
 export { r3 };

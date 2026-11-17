@@ -47,8 +47,9 @@ function setsMeet(a, b) {
     };
     parts.forEach((p) => walk(p, ''));
   }
-  const allowed = new Set(['shape.route[].instanceId', 'shape.picks[].instanceId']);
-  check('references: no starter part names another part outside a band route', [...found].every((f) => allowed.has(f)), [...found].join(', '));
+  // ...and rope routes (openspec rope-and-spool)
+  const allowed = new Set(['shape.route[].instanceId', 'shape.picks[].instanceId', 'shape.ends[].instanceId', 'shape.via[].instanceId']);
+  check('references: no starter part names another part outside a band or rope route', [...found].every((f) => allowed.has(f)), [...found].join(', '));
 }
 
 // --- Hand-made: a drive base and a claw --------------------------------------------------------------
@@ -122,6 +123,14 @@ const mk = (id, label, position, extra = {}) => ({ instanceId: id, partId: beam.
     return r ? JSON.stringify([r.lengthMm, r.stretch, r.state]) : null;
   };
   check('winch: belts stay strung with the same length and stretch', copies.length === bands.length && copies.every((c, i) => c.shape.path && rep(c) === rep(bands[i])), copies.map(rep).join(' / '));
+}
+{
+  // The rope winch's rope stays routed on the added copies (openspec rope-and-spool)
+  const winch = build('rope-winch');
+  const added = addBuildAsGroup(build('clawbot'), winch, 'Rope winch', bboxOf);
+  const rope = added.parts.find((p) => p.shape?.kind === 'rope');
+  const ids = new Set(added.parts.map((p) => p.instanceId));
+  check('rope winch: the rope stays routed, its ends on the added copies', rope && rope.shape.ends.every((e) => !e || ids.has(e.instanceId)) && rope.shape.spool?.turns > 0);
 }
 {
   // A band strung between two parts of the added build points at their copies

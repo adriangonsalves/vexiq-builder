@@ -5,10 +5,19 @@ import HelpQ from '../help/HelpQ.jsx';
 
 /**
  * The Play panel (openspec play-mode): one throttle per Smart Motor, from full reverse through stop
- * to full forward. A throttle springs back to stop when let go, unless that motor's Hold is ticked.
+ * to full forward. A throttle springs back to stop when let go, unless that motor's Keep is ticked.
+ * Under each throttle, "When stopped: Coast · Brake · Hold" picks the motor's stopping mode
+ * (openspec motor-stopping), saved with the build.
  * Each row shows the motor's speed, or Stalled when a collision or a jammed train stops it; hovering
  * a row lights the motor up in the view. Below, a global option to limit speed by load and any warnings.
  */
+// A Smart Motor's stopping modes, as VEX's "set motor stopping" block has them
+const STOPPING = [
+  ['coast', 'Coast', 'Spins freely when stopped'],
+  ['brake', 'Brake', 'Slows it to a stop; a heavy load creeps'],
+  ['hold', 'Hold', 'Keeps it where it stopped']
+];
+
 export default function PlayPanel({
   ready,
   error,
@@ -20,6 +29,7 @@ export default function PlayPanel({
   limitSpeedByLoad = false,
   onLimitSpeedByLoad,
   simulateGravity = false,
+  ropeHanging = false,
   onSimulateGravity,
   dropReport = null,
   dropUnavailable = false,
@@ -31,6 +41,8 @@ export default function PlayPanel({
   onDrop,
   onResetDrop,
   onThrottle,
+  stopping = {},
+  onStopping,
   onHover,
   onClose,
   onHelp
@@ -109,7 +121,7 @@ export default function PlayPanel({
                     <span className="play-motor-name" title={m.label}>{m.label}</span>
                     <label className="play-motor-hold" data-help="play-hold" title="Keep this motor's throttle where you let go of it (double-click the slider to stop it)">
                       <input type="checkbox" checked={held} onChange={(e) => toggleHold(m.id, e.target.checked)} />
-                      Hold
+                      Keep
                     </label>
                     <span className="play-motor-speed" role="status">
                       {s?.stalled ? 'Stalled' : `${Math.round(Math.abs(s?.rpm || 0))} rpm`}
@@ -130,6 +142,19 @@ export default function PlayPanel({
                     onPointerCancel={() => !held && onThrottle(m.id, 0)}
                     onDoubleClick={() => onThrottle(m.id, 0)}
                   />
+                  {onStopping && (
+                    <div className="play-stopping" role="radiogroup" aria-label={`${m.label}: when stopped`}>
+                      <span className="play-stopping-label">When stopped:</span>
+                      {STOPPING.map(([mode, name, tip]) => {
+                        const on = (stopping[m.id] || m.stopping || 'brake') === mode;
+                        return (
+                          <button key={mode} type="button" role="radio" aria-checked={on} className={`play-stopping-chip ${on ? 'active' : ''}`} title={tip} onClick={() => !on && onStopping(m.id, mode)}>
+                            {name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -146,6 +171,11 @@ export default function PlayPanel({
                 <input type="checkbox" checked={simulateGravity} onChange={(e) => onSimulateGravity?.(e.target.checked)} />
                 Simulate gravity
               </label>
+              {ropeHanging && !simulateGravity && (
+                <p className="play-hint" role="note" style={{ margin: '2px 0 4px', fontSize: 12, color: '#fbbf24' }}>
+                  Turn on gravity so parts on ropes can come down.
+                </p>
+              )}
               <div className="play-drop-section">
                 <div className="explode-panel-row" style={{ gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 12, color: '#cbd5e1' }} title="Drop the robot onto the floor and see which joints let go">

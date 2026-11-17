@@ -1,5 +1,8 @@
 import FLOP from './starters/flop.js';
+import HUEY from './starters/huey.js';
 import RATCHET_WINCH from './starters/assemblies/ratchet-winch.js';
+import ROPE_WINCH from './starters/assemblies/rope-winch.js';
+import ROPE_LIFT from './starters/assemblies/rope-lift.js';
 import { worldBoxOf } from './utils/partGroups.js';
 
 /**
@@ -443,6 +446,29 @@ function flopStarter(catalog) {
   });
 }
 
+/**
+ * Hero Bot Huey (VEX IQ 2025-26), imported from VEX's CAD as the instructions finish it
+ * (scripts/make-huey-starter.mjs): its four groups (Drive, Elevator Holder, Elevator Middle Stage,
+ * Claw Mount) and the two lift ropes, each from a pin on the Claw Mount over a pulley on the Middle
+ * Stage to a pin on the Holder. The ropes' routes name the starter's own ids.
+ */
+function hueyStarter(catalog) {
+  const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
+  const groupIds = new Map();
+  return HUEY.flatMap(([number, label, position, rotation, color, groupName, socketAngleDeg, shape], i) => {
+    const p = byNumber.get(number);
+    if (!p) return [];
+    const inst = { ...part(p, `inst-huey-${i + 1}`, position, rotation, color || p.defaultColor), label };
+    if (groupName) {
+      if (!groupIds.has(groupName)) groupIds.set(groupName, `group-huey-${groupName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+      Object.assign(inst, { groupId: groupIds.get(groupName), groupName });
+    }
+    if (socketAngleDeg) inst.socketAngleDeg = socketAngleDeg;
+    if (shape) inst.shape = shape;
+    return [inst];
+  });
+}
+
 /** Hero Bot Swish's winch (src/starters/assemblies/): a ratchet and pawl on a swinging arm, with its two belts. */
 function ratchetWinchStarter(catalog) {
   const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
@@ -454,6 +480,29 @@ function ratchetWinchStarter(catalog) {
     return [inst];
   });
 }
+
+/**
+ * A rope winch (openspec rope-and-spool, src/starters/assemblies/rope-winch.js): a motor winds a rope
+ * on a spool and pulls an arm over against a belt. Its rope and belt name the ids made here.
+ */
+function ropeStarter(rows, id, { stopping } = {}) {
+  return (catalog) => {
+    const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
+    return rows.flatMap(([number, label, position, rotation, color, groupName, socketAngleDeg, shape], i) => {
+      const p = byNumber.get(number);
+      if (!p) return [];
+      const inst = { ...part(p, `inst-${id}-${i + 1}`, position, rotation, color || p.defaultColor), label, groupId: `group-${id}`, groupName };
+      if (socketAngleDeg) inst.socketAngleDeg = socketAngleDeg;
+      if (shape) inst.shape = shape;
+      // Its motor's stopping mode (openspec motor-stopping)
+      if (stopping && p.hubSpecs) inst.stopping = stopping;
+      return [inst];
+    });
+  };
+}
+const ropeWinchStarter = ropeStarter(ROPE_WINCH, 'rope-winch', { stopping: 'hold' });
+/** A rope lift (src/starters/assemblies/rope-lift.js): the same motor and spool lift a weight hanging on the rope. */
+const ropeLiftStarter = ropeStarter(ROPE_LIFT, 'rope-lift', { stopping: 'hold' });
 
 /**
  * Pieces of the Clawbot (openspec starter-assemblies), sorted by the Clawbot's own labels so a fix to
@@ -506,7 +555,10 @@ export const STARTERS = [
   { id: 'basebot', name: 'BaseBot', section: 'robots', build: basebotStarter },
   { id: 'clawbot', name: 'Clawbot', section: 'robots', build: clawbotStarter },
   { id: 'flop', name: 'Flop', section: 'robots', build: flopStarter },
+  { id: 'huey', name: 'Huey', section: 'robots', build: hueyStarter },
   { id: 'ratchet-winch', name: 'Ratchet winch', section: 'assemblies', build: ratchetWinchStarter },
+  { id: 'rope-winch', name: 'Rope winch', section: 'assemblies', build: ropeWinchStarter },
+  { id: 'rope-lift', name: 'Rope lift', section: 'assemblies', build: ropeLiftStarter },
   { id: 'simple-drivetrain', name: 'Simple drivetrain', section: 'assemblies', build: clawbotPiece('simple-drivetrain', 'Simple drivetrain') },
   { id: 'simple-arm', name: 'Simple arm', section: 'assemblies', build: clawbotPiece('simple-arm', 'Simple arm') },
   { id: 'simple-claw', name: 'Simple claw', section: 'assemblies', build: clawbotPiece('simple-claw', 'Simple claw') }

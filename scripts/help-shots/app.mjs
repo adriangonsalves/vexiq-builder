@@ -61,7 +61,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * Opens the app in a new context at `layout` and returns the driver. `touch` emulates a touch screen
  * (for tablet and phone pictures). `hash` opens at an address such as `#help/gears`.
  */
-export async function openApp(browser, { url = DEFAULT_URL, layout = 'large', touch, hash = '', welcomeSeen = true } = {}) {
+export async function openApp(browser, { url = DEFAULT_URL, layout = 'large', touch, hash = '', welcomeSeen = true, waitUntil = 'networkidle0' } = {}) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
   const size = LAYOUTS[layout];
@@ -78,7 +78,7 @@ export async function openApp(browser, { url = DEFAULT_URL, layout = 'large', to
     });
   }
   page.on('pageerror', (err) => console.warn(`  page error: ${err.message}`));
-  await page.goto(url + hash, { waitUntil: 'networkidle0', timeout: 60000 });
+  await page.goto(url + hash, { waitUntil, timeout: 60000 });
   await page.waitForSelector('.topbar', { timeout: 30000 });
   const app = makeDriver(page, { layout, hasTouch });
   app.context = context;

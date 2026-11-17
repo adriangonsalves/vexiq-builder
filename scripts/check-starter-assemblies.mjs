@@ -24,8 +24,19 @@ const lowest = (list) => Math.min(...list.map((i) => worldBoxOf(i, byId.get(i.pa
 const sectionIds = new Set(STARTER_SECTIONS.map((s) => s.id));
 check('every starter has a known section', STARTERS.every((s) => sectionIds.has(s.section)), STARTERS.filter((s) => !sectionIds.has(s.section)).map((s) => s.name).join(', '));
 const names = (section) => STARTERS.filter((s) => s.section === section).map((s) => s.name).join(', ');
-check('Robots: Speedbot 2.0, BaseBot, Clawbot, Flop', names('robots') === 'Speedbot 2.0, BaseBot, Clawbot, Flop', names('robots'));
-check('Assemblies: Sample starter, Ratchet winch, Simple drivetrain, Simple arm, Simple claw', names('assemblies') === 'Sample starter, Ratchet winch, Simple drivetrain, Simple arm, Simple claw', names('assemblies'));
+check('Robots: Speedbot 2.0, BaseBot, Clawbot, Flop, Huey', names('robots') === 'Speedbot 2.0, BaseBot, Clawbot, Flop, Huey', names('robots'));
+{
+  // Huey (VEX's CAD, scripts/make-huey-starter.mjs): its groups, and both lift ropes on the starter's own parts
+  const huey = starterById('huey').build(catalog);
+  const ids = new Set(huey.map((i) => i.instanceId));
+  const ropes = huey.filter((i) => i.shape?.kind === 'rope');
+  const refs = ropes.flatMap((r) => [...r.shape.ends.filter(Boolean), ...(r.shape.via || [])].map((x) => x.instanceId));
+  check('Huey: 486 parts in four groups (Drive, Elevator Holder, Elevator Middle Stage, Claw Mount)', huey.length === 486 && [...new Set(huey.map((i) => i.groupName))].sort().join() === 'Claw Mount,Drive,Elevator Holder,Elevator Middle Stage', `${huey.length} parts, ${[...new Set(huey.map((i) => i.groupName))].join()}`);
+  check("Huey: two lift ropes, their ends and spots naming the starter's own parts", ropes.length === 2 && refs.length >= 8 && refs.every((id) => ids.has(id)), JSON.stringify(refs.filter((id) => !ids.has(id))));
+  const audit = auditAssembly({ instances: huey });
+  check('Huey: each rope is held at both ends and passes through no part', audit.ropes.length === 2 && audit.ropes.every((r) => !r.through.length && !r.loosePocket && !r.tooShortMm && r.slackMm > 10), JSON.stringify(audit.ropes.map((r) => [r.through, r.slackMm])));
+}
+check('Assemblies: Sample starter, Ratchet winch, Rope winch, Rope lift, Simple drivetrain, Simple arm, Simple claw', names('assemblies') === 'Sample starter, Ratchet winch, Rope winch, Rope lift, Simple drivetrain, Simple arm, Simple claw', names('assemblies'));
 check('headings: Robots then Assemblies', STARTER_SECTIONS.map((s) => s.name).join() === 'Robots,Assemblies');
 
 // --- Every Clawbot part in exactly one piece or the brain list ---------------------------------------
@@ -68,6 +79,13 @@ const arm = pieces.find((p) => p.id === 'simple-arm').parts;
 check('arm: arm motor, both 12 and 36 tooth gears, tower uprights', arm.some((p) => p.label === 'Arm Motor') && arm.filter((p) => /^Gear (12T|36T)/.test(p.label)).length === 4 && arm.filter((p) => /^Tower Upright/.test(p.label)).length === 2);
 const claw = pieces.find((p) => p.id === 'simple-claw').parts;
 check('claw: wrist plate, claw motor, both tips', claw.some((p) => p.label === 'Wrist 4x4 Plate') && claw.some((p) => p.label === 'Claw Smart Motor') && claw.filter((p) => /^Claw Tip/.test(p.label)).length === 2);
+
+// Stopping modes (openspec motor-stopping): the rope starters' motors hold; other starters' motors don't set one (brake)
+for (const id of ['rope-lift', 'rope-winch']) {
+  const motors = starterById(id).build(catalog).filter((p) => byId.get(p.partId)?.hubSpecs);
+  check(`${id}: its motor's stopping mode is hold`, motors.length === 1 && motors[0].stopping === 'hold', JSON.stringify(motors.map((m) => m.stopping)));
+}
+check('clawbot: no motor sets a stopping mode (they brake)', clawbot.filter((p) => byId.get(p.partId)?.hubSpecs).every((m) => m.stopping === undefined));
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll starter assembly checks passed');
 process.exit(failures ? 1 : 0);

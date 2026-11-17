@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Check, Copy, Move, RotateCw, Trash2, X } from 'lucide-react';
+import { Cable, Check, Copy, Move, RotateCw, Trash2, X } from 'lucide-react';
 import PopoverMenu, { MenuItem } from './PopoverMenu.jsx';
 import ThumbWheel from './ThumbWheel.jsx';
 import { JOIN_TIPS } from '../utils/contextToolbarItems.js';
@@ -67,6 +67,8 @@ function iconFor(id, { on, hasTarget, turnStep, joinKind }) {
       return <GrowSelectionIcon />;
     case 'onePartOfGroup':
       return <OnePartOfGroupIcon />;
+    case 'ropeBetween':
+      return <Cable size={18} />;
     case 'duplicate':
       return <Copy size={18} />;
     case 'delete':

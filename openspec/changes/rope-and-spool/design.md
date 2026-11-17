@@ -9,6 +9,7 @@ See proposal.md for why. What exists today, and what was measured for this chang
   - a round pocket of radius 4 mm at the +z end (z 8 to 12.55), with a slot out through the flange. This is where a rope's end tab sits.
   
   Its catalog entry has one wrong port (a blind round hole). The 1x Wide Spool (420) has no ports at all, so it can't be placed on a shaft. Neither has `gearSpecs`.
+- **1x Wide Spool** (420), measured the same way (task 1.1): core 7.49 mm, flange 12.55 mm, drum z −4.25 to 4.25 (8.5 mm, 7 turns of 1.2 mm cord a layer), square bore 3.17 mm across at z −5.45 to −0.85, pocket radius 4.04 mm at z 0.75 to 6.2 with its slot toward +y. Both spools now carry a square `shaft_bore` and `spoolSpecs`.
 - **.5x Pitch Idler Pulley** (1413): `gearType: "pulley"`, `pitchRadiusMm: 5.5` (its rim, not its groove), one round hole, so it turns freely on a pin. The 10 to 40 mm pulleys have square bores.
 - **Swish in VEX's CAD** (`Catapult Winch`, app frame, mm): the rope's first tab is in the spool's pocket at spool z ≈ 9.4, on the 4x Pitch Shaft (spool at (76.05, 28.74, 0), axis along z). VEX draws the rope twice: the straight library rope standing up from the spool to y = 318, and a bent piece ("228-2500-438 bent for catapultbot") leaving the spool radially through the flange slot and running to (64, 231, 0), then bending to the Catapult Arm, where a loose tab ("228-2500-ROPE-OVERMOLD-MASTER") sits on the arm's 3x Pitch Motor Shaft at about (37, 247, 0), beside a Rubber Shaft Collar. The drawn path is about 225 mm, so about 67 mm of the 292.1 mm rope is spare. VEX draws no turns on the drum.
 - **Huey in VEX's CAD:** no spool. Each side: the straight library rope's tab on a Claw Mount 0x2 Connector Pin at (238, 66, ±57), its cord straight up past the .5x Pitch Idler Pulley on the Elevator Middle Stage at (235, 231.6, ±50.8) (axis along x) and on to y = 355; a bent piece ("Lift Rope", "Lift Rope- Left") from the top of the pulley down to (214, 159, ±73); and a loose tab on an Elevator Holder 0x2 Connector Pin at (212.7, 155.6, ±69.8). Up 166 mm, round the pulley, down about 90 mm: about 270 mm, so about 22 mm of slack as drawn.
@@ -81,6 +82,13 @@ See proposal.md for why. What exists today, and what was measured for this chang
 
    The flow is kept to "tap the start, tap what it passes, tap the end, Done". Which post is the second end isn't asked: the last post tapped is the end.
 
+   *As built:*
+   - A pulley or post tapped well off its middle takes the rope on that side (`turnForSide` in `ropePath.js`); a tap near the middle leaves the tight side, and **Flip side** changes either.
+   - **Rope between these** is on the context bar and in Tools for two selected parts that can each hold an end.
+   - A placed rope is edited with **Edit route** in the Inspector, as a band is: the panel opens on its route with a handle on each end and spot. A press within 14 px of a handle (24 by finger) takes it, since the ring itself is too thin to hit. Dropped on another place the end or spot moves there; dropped in the open a spot comes off and an end hangs free; a tap on a pulley or post adds it before the far end. Each change routes the rope again as one history step and closes the panel.
+   - A routed rope can't be moved or turned by its arrows (it follows its ends and spots), as a band can't.
+   - On a tablet or phone every button in the panel is 44 px; on a phone the bottom Cancel row is left out (the cross does the same). The panel then covers a good part of a phone's view, and the build may need sliding out from under it.
+
 8. **Play: one pull along the whole rope, acting on every body it touches.**
 
    The rope is treated as weightless, frictionless and unable to stretch. So a tight rope has one pull `T ≥ 0` (newtons) along its whole length, however many pulleys it passes, and the only thing to find each step is `T`.
@@ -131,6 +139,13 @@ See proposal.md for why. What exists today, and what was measured for this chang
    - Rapier's rope joint for everything. It limits the distance between two anchors only: no shared length over pulleys, no moving leaving point on a drum.
    - Moving bodies to fit after each step. Rejected: it fights the gear and ratchet cluster solver that keeps Swish's winch in mesh.
 
+   *As built (tasks 7.2–7.4, 8):* none of the fallbacks was needed, but three changes to steps 6–8 were:
+   - a body's velocity at a contact is read with the step's gravity already added, since gravity acts inside `world.step` after the pull; without it a hanging weight sat about 1 mm low and was kicked back up every step;
+   - slack is judged at the end of the step: the pass works on `rate + (C > 0 ? β·C : C) / h`, so a slack rope may close its gap up to exactly taut and no further, and a rope coming taut mid-fall catches without bouncing;
+   - an element on a body that spins on one pin through the element's centre (an idler pulley) is carried by, and pulls on, the body that pin is in (`bodies[i]`), with the pulley as a rider (`riders[i]`) that takes its share of the push by mass. A frictionless pulley feels the same pull both sides, so the two add up to one force through its axle.
+   A stalled motor pushing into something holds the bodies it turns: the rope treats them as fixed. So does an idle motor with torque to spare, for its own shaft: the rope's turning on that shaft counts against the motor's stall torque, and past it the shaft is let go and turns against the brake. (A spool driven through gears still takes the pull as a free body.) R1 and R4 meet their numbers (pull within 1% and 0.3%, path within 0.1 mm).
+   *Later (advice on joints):* the sums treat each body as free, so a part hanging on a pin under the roped body pulls through its joint unseen and the rope ran up to 0.7 mm over. Each step now compares where the rope ended up with where the sums said, and carries that difference (smoothed, `biasGain` 0.5) into the next step's aim. It is paused, and fades, while a body on the rope presses into something, since a contact pushes back however hard the rope pulls and the pull would only grow until the part went through. A block on two ropes now splits its weight 0.503 / 0.497 with both paths at 139.70 mm; a hook on a pin under a roped block keeps the path within 0.15 mm. Damping went from 0.1 to 0.3 for all bodies. Still open: the two-rope block rocks about 5° each way about the line through its two rope pins and doesn't settle.
+
 9. **Play: winding follows the spool's turning.**
 
    For a rope with a spool, each step before finding `C`:
@@ -147,7 +162,15 @@ See proposal.md for why. What exists today, and what was measured for this chang
 
    `playRunner.js` redraws ropes with the live `turns` (coils from decision 5) and puts the saved shape back on leaving Play, as it does for bands.
 
+   *As built (after testing the Rope lift):* paid right out, the rope no longer flips to the other side of the drum in one step: that moved its leaving point across the drum at once and yanked the load. It is tied on where it left the drum (a point carried by the spool) and runs straight from there; when that point has turned far enough that the rope would cut into the drum, it winds on again the way that leaves it nearest the tie point. A motor stopped by a load hanging on its own rope (wound up against the spool) ignores that load's presses while it runs the other way, paying out, until it winds forward again; before, the knocks of the load against the turning spool blocked it in reverse.
+
 10. **Play: a body held only by ropes.**
+
+    *As built:* rope-held loose bodies (and loose bodies hinged to them) are listed as `roped`: always dynamic, gravity only when it's on, colliding as other moving bodies do. The audit counts a rope as joining its parts, so a weight on a rope isn't an island.
+
+    *Task 8.1, tried on the imported Huey (gravity on, nothing driven):* collisions alone don't hold the lift steady. In the first half second the Middle Stage is pushed 16 mm up and 8 mm sideways and tilts 5°, the Claw Mount 9 mm up and tilts 3°, as the physics pushes the stages out of the tight fits VEX's CAD has them in; they then jam and keep creeping about 1 mm a second. It also runs at about 0.6 of real time on a desktop. So the slider rule below is needed.
+
+    *Not built: the slider rule and Huey's lift (tasks 7.5, 8.2 to 8.4).* Huey's lift can't run in Play whatever the ropes do: its racks (1x6 Continuous Linear Motion Rack Gear) and slide brackets are snap-on linear motion parts with no pin holes, so the library gives them no ports, the audit lists them as unsecured, no rack link forms, and the lift motor can't raise the Middle Stage. The Claw Mount also carries its own motor, so its piece is held still rather than roped. Both need the linear motion parts understood as joints first (a change of its own; see `openspec/follow-ups.md`). The slider rule should be built with that change, where it can be checked on a lift that moves.
 
     After pieces are found, a body in `loose` that holds a rope end or a `via` spot becomes `roped` instead:
     - **One line of travel.** For each rope-held body, test moves of ±3 mm along the three axes of the neighbouring body it overlaps boxes with (the body it is nested in), using the collision meshes the audit already uses. If exactly one axis is clear both ways, and turning ±3° about each axis is blocked, the body is a slider on that neighbour along that axis: a prismatic joint between the two (not to the frame, as rack sliders are), with travel limits found by stepping along the axis until parts meet. This is Huey's Claw Mount on the Middle Stage.

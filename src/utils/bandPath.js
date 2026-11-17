@@ -50,6 +50,7 @@ export function setBandSpotTable(table) {
 }
 
 const PITCH = 12.7;
+const IDLER_PULLEY = '228-2500-1413';
 const PIN_LEG_RADIUS = 2.1; // a pin's leg, where a band sits on it (catalog `cylinders`)
 const v3 = (a) => (a?.isVector3 ? a.clone() : new THREE.Vector3(...a));
 const arr = (v) => [v.x, v.y, v.z].map((n) => Number(n.toFixed(4)) + 0);
@@ -94,7 +95,11 @@ function findSpots(part) {
   }
 
   if (g?.gearType === 'pulley' && g.pitchRadiusMm) {
-    out.push(circle('groove', 'groove', 'groove', [0, 0, 0], g.boreAxis || [0, 0, 1], g.pitchRadiusMm, [-0.5, 0.5]));
+    // The idler pulley's groove is deep (3.2 mm against a 5.5 mm rim): a band or rope lies in it
+    // (openspec rope-and-spool). The other pulleys keep their pitch radius for bands; ropes read
+    // `grooveRadiusMm` themselves.
+    const r = part.partNumber === IDLER_PULLEY && g.grooveRadiusMm ? g.grooveRadiusMm : g.pitchRadiusMm;
+    out.push({ ...circle('groove', 'groove', 'groove', [0, 0, 0], g.boreAxis || [0, 0, 1], r, [-0.5, 0.5]), ...(g.grooveRadiusMm ? { grooveRadiusMm: g.grooveRadiusMm } : {}) });
   } else if (g?.teeth && g.tipRadiusMm && g.rootRadiusMm) {
     const axis = v3(g.boreAxis || [0, 0, 1]);
     const span = g.faceSpanMm || [-2.5, 2.5];
@@ -237,7 +242,8 @@ export function solveBandPath(elements, opts = {}) {
   // A band there and back between two hooks (its spots A, m1..mk, B, mk..m1) may go round each hook
   // either way; one pairing crosses its two strands over each other, which is longer. Keep the way
   // round the hooks that leaves the band shortest (uncrossed).
-  const hooks = foldHooks(first.keys, elements);
+  // (an open path, a rope, has two ends and keeps the sides it is given: no fold search)
+  const hooks = opts.open ? null : foldHooks(first.keys, elements);
   if (hooks) {
     for (const i of hooks) {
       const e = elements[i];
@@ -259,6 +265,13 @@ export function solveBandPath(elements, opts = {}) {
     return before ? { ...e, layer: (e.layer || 0) + before } : e;
   });
   return layered.some((e, i) => e !== elements[i]) ? solveOnce(layered, { ...opts, turns: first.turns }) : first;
+}
+
+/**
+ * Open paths (openspec rope-and-spool, design "The `open` option"): `opts.open` makes the path run
+ * from the first element to the last with no closing run. An end is a `point` element (a tab's hole
+ * centre: the path starts or stops on it) or a circle (a spool's drum: the path leaves it along the
+ * tangent toward the next contact, on the side `turns[0]` gives).
 }
 
 /**
@@ -287,6 +300,8 @@ function solveOnce(elements, opts = {}) {
       const radial = v3(e.radial).normalize();
       base.R = (e.rootMm ?? 0) + thickMm / 2;
       base.radialDir = radial;
+    } else if (e.shape === 'point') {
+      base.R = 0;
     } else {
       base.R = (e.radius || 0) + thickMm / 2;
     }
@@ -300,6 +315,10 @@ function solveOnce(elements, opts = {}) {
   // Starting contacts: each element's middle
   const pointOf = (e, h, theta) => e.c.clone().addScaledVector(e.axis, h).addScaledVector(e.u, e.R * Math.cos(theta)).addScaledVector(e.v, e.R * Math.sin(theta));
   const slotPoint = (e, h) => e.c.clone().addScaledVector(e.axis, h).addScaledVector(e.radialDir, e.R);
+  const open = Boolean(opts.open);
+  // Neighbour contacts: on an open path the first element has none before it and the last none after
+  const prevIdx = (i) => (open ? (i > 0 ? i - 1 : null) : (i - 1 + n) % n);
+  const nextIdx = (i) => (open ? (i < n - 1 ? i + 1 : null) : (i + 1) % n);
   const contacts = els.map((e) => {
     const p = e.shape === 'slot' ? slotPoint(e, e.h) : e.c.clone().addScaledVector(e.axis, e.h);
     return { a: p.clone(), b: p.clone(), thetaA: 0, thetaB: 0, s: 1 };
@@ -309,9 +328,11 @@ function solveOnce(elements, opts = {}) {
   const centroid = els.reduce((s, e) => s.add(e.shape === 'slot' ? slotPoint(e, e.h) : e.c.clone().addScaledVector(e.axis, e.h)), new THREE.Vector3()).divideScalar(n);
   for (let i = 0; i < n; i++) {
     const e = els[i];
-    if (e.shape === 'slot') continue;
-    const prev = contacts[(i - 1 + n) % n].b;
-    const next = contacts[(i + 1) % n].a;
+    if (e.shape === 'slot' || e.shape === 'point') continue;
+    const pi = prevIdx(i);
+    const ni = nextIdx(i);
+    const prev = contacts[pi ?? ni].b;
+    const next = contacts[ni ?? pi].a;
     const ang = (p) => {
       const d = p.clone().sub(e.c);
       return Math.atan2(d.dot(e.v), d.dot(e.u));
@@ -331,13 +352,14 @@ function solveOnce(elements, opts = {}) {
   }
   // Turns asked for (solveBandPath trying the other way round a hook)
   if (Array.isArray(opts.turns)) els.forEach((e, i) => {
-    if (e.shape !== 'slot' && (opts.turns[i] === 1 || opts.turns[i] === -1)) e.s = opts.turns[i];
+    if (e.shape !== 'slot' && e.shape !== 'point' && (opts.turns[i] === 1 || opts.turns[i] === -1)) e.s = opts.turns[i];
   });
   // A crossed run (a figure-8): the next circle turns the other way
   for (let i = 0; i < n; i++) {
     const e = els[i];
+    if (open && i === n - 1) break;
     const f = els[(i + 1) % n];
-    if (!e.cross || e.shape === 'slot' || f.shape === 'slot') continue;
+    if (!e.cross || e.shape === 'slot' || f.shape === 'slot' || e.shape === 'point' || f.shape === 'point') continue;
     f.s = -e.s * Math.sign(e.axis.dot(f.axis) || 1);
   }
 
@@ -346,9 +368,30 @@ function solveOnce(elements, opts = {}) {
     let moved = 0;
     for (let i = 0; i < n; i++) {
       const e = els[i];
-      const P = contacts[(i - 1 + n) % n].b;
-      const Q = contacts[(i + 1) % n].a;
+      const pi = prevIdx(i);
+      const ni = nextIdx(i);
       const c = contacts[i];
+      if (e.shape === 'point') {
+        const p = e.c.clone().addScaledVector(e.axis, e.h);
+        c.a.copy(p);
+        c.b.copy(p);
+        continue;
+      }
+      if (pi === null || ni === null) {
+        // A circle at an open end (a spool's drum): the path only leaves it (first) or arrives (last)
+        const other = pi === null ? contacts[ni].a : contacts[pi].b;
+        e.h = bestHeight(e, (h) => e.c.clone().addScaledVector(e.axis, h), other, other);
+        const t = tangentAngles(e, other, other, e.s);
+        const theta = pi === null ? t.thetaB : t.thetaA;
+        const A = pointOf(e, e.h, theta);
+        moved = Math.max(moved, A.distanceTo(c.a));
+        Object.assign(c, { thetaA: theta, thetaB: theta, s: e.s });
+        c.a.copy(A);
+        c.b.copy(A);
+        continue;
+      }
+      const P = contacts[pi].b;
+      const Q = contacts[ni].a;
       if (e.shape === 'slot') {
         e.h = bestHeight(e, (h) => slotPoint(e, h), P, Q);
         const p = slotPoint(e, e.h);
@@ -377,12 +420,13 @@ function solveOnce(elements, opts = {}) {
   for (let i = 0; i < n; i++) {
     const e = els[i];
     const c = contacts[i];
-    if (e.shape === 'slot') {
+    if (e.shape === 'slot' || e.shape === 'point') {
       points.push(c.a.clone());
       ups.push(e.axis.clone());
       owners.push(i);
     } else {
-      const sweep = modTwoPi(e.s * (c.thetaB - c.thetaA)) + TWO_PI * (e.wraps - 1);
+      const atEnd = open && (i === 0 || i === n - 1);
+      const sweep = atEnd ? 0 : modTwoPi(e.s * (c.thetaB - c.thetaA)) + TWO_PI * (e.wraps - 1);
       c.wrapRad = sweep;
       lengthMm += e.R * sweep;
       const steps = Math.max(1, Math.ceil(THREE.MathUtils.radToDeg(sweep) / arcStepDeg));
@@ -395,7 +439,7 @@ function solveOnce(elements, opts = {}) {
         owners.push(i);
       }
     }
-    lengthMm += c.b.distanceTo(contacts[(i + 1) % n].a);
+    if (!(open && i === n - 1)) lengthMm += c.b.distanceTo(contacts[(i + 1) % n].a);
     c.height = e.h;
   }
   return {

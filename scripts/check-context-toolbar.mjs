@@ -10,7 +10,7 @@ const check = (label, ok, detail = '') => {
   if (!ok) failures += 1;
 };
 
-const none = { count: 0, wholeGroup: false, stampable: false, locked: false, hidden: false, band: false };
+const none = { count: 0, wholeGroup: false, stampable: false, locked: false, hidden: false, band: false, ropeBetween: false };
 const sel = (extra = {}) => ({ ...none, count: 1, ...extra });
 const base = (extra = {}) => ({
   selection: none,
@@ -63,6 +63,14 @@ const show = (a) => JSON.stringify(a);
   const join = item(input, 'join');
   check('locked part: Join is disabled with "Part is locked"', !!join && join.state === 'disabled' && /Part is locked/.test(join.disabledReason || ''), show(join));
   check('locked part: no World arrows', !ids(input).includes('worldArrows'), show(ids(input)));
+}
+{
+  const roped = base({ selection: sel({ rope: true }) });
+  check('routed rope: Move and Rotate disabled (it follows its ends and spots), no World arrows', ['move', 'rotate'].every((id) => item(roped, id)?.state === 'disabled' && /rope follows/.test(item(roped, id).disabledReason)) && !ids(roped).includes('worldArrows'), show(ids(roped)));
+  // Spool and shaft selected (openspec rope-and-spool): Rope between these, for two parts that can hold a rope's ends
+  const two = ids(base({ selection: sel({ count: 2, ropeBetween: true }) }));
+  check('two parts that can hold a rope: Rope between these, before Duplicate', two.includes('ropeBetween') && two.indexOf('ropeBetween') < two.indexOf('duplicate'), show(two));
+  check('two parts that cannot, or one part, or three: no Rope between these', !ids(base({ selection: sel({ count: 2 }) })).includes('ropeBetween') && !ids(base({ selection: sel({ count: 1, ropeBetween: true }) })).includes('ropeBetween') && !ids(base({ selection: sel({ count: 3, ropeBetween: true }) })).includes('ropeBetween'));
 }
 {
   const got = ids(base({ selection: sel({ hidden: true }) }));

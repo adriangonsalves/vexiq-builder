@@ -5,7 +5,7 @@
 
 export const BAR_IDS = [
   'move', 'rotate', 'addToSelection', 'markHole', 'join', 'stampCopies', 'worldArrows',
-  'freeMove', 'turnStep', 'growSelection', 'onePartOfGroup', 'duplicate', 'delete'
+  'freeMove', 'turnStep', 'growSelection', 'onePartOfGroup', 'ropeBetween', 'duplicate', 'delete'
 ];
 
 export const WHEEL_IDS = ['wheel', 'stepUp', 'stepDown', 'turnStep', 'worldArrows', 'pinsOnly', 'commit', 'cancel'];
@@ -25,6 +25,7 @@ export const BAR_TIPS = {
   turnStep: ['Turn step', 'How far each turn step goes', null],
   growSelection: ['Grow selection', 'Add the parts joined to this one, layer by layer', 'Shift + wheel'],
   onePartOfGroup: ['One part of a group', 'Pick a single part inside the group', 'Shift + Alt + click'],
+  ropeBetween: ['Rope between these', 'Run a rope from one of the two selected parts to the other', null],
   duplicate: ['Duplicate', 'Make a copy next to it', 'D'],
   delete: ['Delete', 'Remove it (Undo brings it back)', 'Del'],
   wheel: ['Wheel', 'Turn it for the next or previous one', 'Mouse wheel'],
@@ -69,13 +70,14 @@ function wheelItems(stepper, arrowsShowing) {
 export function barItems({ selection, transformMode, locked, explode, playing, previewing, immersive, hasTarget, stepper }) {
   if (locked || explode || playing || previewing || immersive) return [];
 
-  const { count, wholeGroup, stampable, locked: partLocked, hidden, band } = selection;
-  const arrowsShowing = count === 1 && !partLocked && !hidden && !band;
+  const { count, wholeGroup, stampable, locked: partLocked, hidden, band, rope, ropeBetween } = selection;
+  const arrowsShowing = count === 1 && !partLocked && !hidden && !band && !rope;
   if (stepper) return wheelItems(stepper, arrowsShowing);
 
   const some = count >= 1;
   const bandReason = 'A band follows its spots: drag a handle';
-  const mode = (id, on) => (band && count === 1 ? disabled(id, bandReason) : item(id, on ? 'on' : 'off'));
+  const ropeReason = 'A rope follows its ends and spots: use Edit route';
+  const mode = (id, on) => (band && count === 1 ? disabled(id, bandReason) : rope && count === 1 ? disabled(id, ropeReason) : item(id, on ? 'on' : 'off'));
 
   const items = [
     mode('move', transformMode === 'translate'),
@@ -90,6 +92,8 @@ export function barItems({ selection, transformMode, locked, explode, playing, p
   if (some && transformMode === 'rotate') items.push(item('turnStep'));
   if (some) items.push(item('growSelection'));
   if (wholeGroup) items.push(item('onePartOfGroup'));
+  // Two parts that can each hold a rope's end (a spool, pin, standoff or shaft) (openspec rope-and-spool)
+  if (count === 2 && ropeBetween) items.push(item('ropeBetween'));
   if (some) items.push(item('duplicate'), item('delete'));
   return items;
 }

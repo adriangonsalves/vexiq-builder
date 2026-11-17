@@ -20,6 +20,7 @@ import {
   jointGraph,
   mirrorSubassembly,
   partOf,
+  STOPPING_MODES,
   summarizeAudit,
   applyPosePatches,
   placeParts,
@@ -34,6 +35,8 @@ import { bendSheet, sheetBendChoices } from '../src/engine/sheetBending.js';
 import { placeBand } from '../src/engine/bandRouting.js';
 import { meshRightAngle } from '../src/engine/rightAngleGears.js';
 import { bandReport } from '../src/utils/bandRoute.js';
+import { ropeReport } from '../src/utils/ropeRoute.js';
+import { placeRope } from '../src/engine/ropeRouting.js';
 import { describeShape } from '../src/utils/shapedParts.js';
 import { MCP_OFF_MESSAGE } from '../src/utils/appSettings.js';
 import {
@@ -195,7 +198,7 @@ const TOOLS = [
   {
     name: 'update_part',
     description:
-      'Move, rotate, recolor, lock/unlock, or show/hide an existing part instance in the 3D assembly.',
+      'Move, rotate, recolor, lock/unlock, or show/hide an existing part instance in the 3D assembly, or set a Smart Motor\'s stopping mode.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -239,6 +242,11 @@ const TOOLS = [
         locked: {
           type: 'boolean',
           description: 'Whether the part is locked from gizmo dragging.'
+        },
+        stopping: {
+          type: 'string',
+          enum: ['coast', 'brake', 'hold'],
+          description: "A Smart Motor's stopping mode in Play: coast (spins freely), brake (the default: resists by speed, a load creeps down) or hold (keeps the angle where it stopped, up to stall torque)."
         }
       },
       required: ['instanceId']
@@ -828,6 +836,28 @@ const TOOLS = [
     }
   },
   {
+    name: 'place_rope',
+    description:
+      'Route a rope (12x, 20x, 24x, 48x or 120x Pitch Rope) on the build, as the app\'s Tools → Rope builder does. from and to are its ends, each { instanceId, feature }: "post:pin" (a pin\'s shank), "post:body" (a standoff), "post:shaft" (a shaft past the parts on it), "pocket" (a spool\'s pocket: the tab sits on the spool\'s shaft and the spare winds onto its drum), or "free"; to left out means a free end that hangs straight down. at: mm along the post (else the tab sits against the nearest part on it). via: an ordered list of any length of { instanceId, feature, turn, wraps } naming grooves ("groove": the idler pulley and the 10-40 mm pulleys), posts and edges ("edge:<holePortId>", "edge:side+|side-|end+|end-") as place_band names them, on any parts, the same spot more than once if wanted; turn is 1 or -1, the way the rope goes round the spot\'s own axis (right-hand rule), left out for the side a tight rope presses on (the reply gives the turn used). Runs that would pass through a part bend round its corners (bends); a part no way round clears comes back in needsRoute. ropePartId left out: the shortest rope that fits (with a spool, one more full turn). Spare rope winds on the spool (turns caps it, to a quarter turn; winding "over" | "under" flips the way round); otherwise it hangs as slack. A rope too short is refused with the size that fits (suggestion) unless allowShort. With list: true, or only an instanceId, nothing changes and the reply lists the end places and spots on those parts ({ ends, spots }). Reply: size, lengthMm, usedMm, spareMm, slackMm, turns, winding, via (with turn), bends. A rope follows its parts when they move. In Play it pulls every part it touches when tight. One undo step.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ropePartId: { type: 'string', description: 'The rope to add (part id, number or name). Left out: the shortest that fits.' },
+        instanceId: { type: 'string', description: 'A placed rope to route again, or with list a part whose places to list.' },
+        from: { type: 'object', properties: { instanceId: { type: 'string' }, feature: { type: 'string' }, at: { type: 'number' } }, required: ['instanceId', 'feature'] },
+        to: { type: 'object', properties: { instanceId: { type: 'string' }, feature: { type: 'string' }, at: { type: 'number' } } },
+        via: { type: 'array', items: { type: 'object', properties: { instanceId: { type: 'string' }, feature: { type: 'string' }, turn: { type: 'number', enum: [1, -1] }, wraps: { type: 'number' } }, required: ['instanceId', 'feature'] } },
+        turns: { type: 'number', description: 'Turns on the spool (quarter turns), at most what the spare allows.' },
+        winding: { type: 'string', enum: ['over', 'under'] },
+        allowShort: { type: 'boolean', description: 'Place a rope too short for its route anyway (marked too short).' },
+        list: { type: 'boolean', description: 'List end places and spots; change nothing.' },
+        near: { type: 'array', items: { type: 'string' }, description: 'With list: more parts whose places to list.' },
+        ignoreInWay: { type: 'boolean', description: 'Route as given even where a run passes through a part (CAD import).' },
+        label: { type: 'string' }
+      }
+    }
+  },
+  {
     name: 'ungroup_parts',
     description: 'Dissolve a group (groupId), or every group the given parts are in (instanceIds). The parts stay where they are. One undo step.',
     inputSchema: {
@@ -993,10 +1023,12 @@ async function executeTool(name, args = {}) {
       ...(part.rackSpecs ? { rackSpecs: part.rackSpecs } : {}),
       fastenerSpecs: part.fastenerSpecs || null,
       ...(part.hubSpecs ? { hubSpecs: part.hubSpecs } : {}),
+      ...(copy && part.hubSpecs ? { stopping: STOPPING_MODES.includes(copy.stopping) ? copy.stopping : 'brake' } : {}),
       ...(part.chainSpecs ? { chainSpecs: part.chainSpecs } : {}),
       ...cadFrameEntries(part),
       ...(copy?.shape ? { instanceId: copy.instanceId, shape: copy.shape, shapeDescription: describeShape(copy.shape) } : {}),
       ...(copy && bandReport(copy, partOf) ? { band: bandReport(copy, partOf) } : {}),
+      ...(copy && ropeReport(copy, partOf) ? { rope: ropeReport(copy, partOf) } : {}),
       connections: describePartConnections(part)
     };
     if (!args.verbose) return compact;
@@ -1034,10 +1066,11 @@ async function executeTool(name, args = {}) {
           partNumber: part?.partNumber || 'UNKNOWN',
           pitchPosition: inst.position.map((c) => Number((c / VEX_PITCH_MM).toFixed(2))),
           // A Smart Motor's drive hub angle (missing in older saves means 0)
-          ...(part?.hubSpecs ? { socketAngleDeg: Number(inst.socketAngleDeg) || 0 } : {}),
+          ...(part?.hubSpecs ? { socketAngleDeg: Number(inst.socketAngleDeg) || 0, stopping: STOPPING_MODES.includes(inst.stopping) ? inst.stopping : 'brake' } : {}),
           // A copy with its own shape, such as a bent sheet or a strung band
           ...(inst.shape ? { shapeDescription: describeShape(inst.shape) } : {}),
-          ...(bandReport(inst, partOf) ? { band: bandReport(inst, partOf) } : {})
+          ...(bandReport(inst, partOf) ? { band: bandReport(inst, partOf) } : {}),
+          ...(ropeReport(inst, partOf) ? { rope: ropeReport(inst, partOf) } : {})
         };
       })
     };
@@ -1169,6 +1202,19 @@ async function executeTool(name, args = {}) {
     const res = placeBand(state, args);
     if (!res.ok) return { isError: true, error: res.error, ...(res.needsRoute ? { needsRoute: res.needsRoute } : {}), ...(res.suggestion ? { suggestion: res.suggestion } : {}) };
     if (!res.state) return { ok: true, spots: res.spots, routes: res.routes };
+    await writeAssemblyState(res.state, { stepLabel: res.stepLabel });
+    const { state: _s, record: _r, stepLabel: _l, ...reply } = res;
+    return reply;
+  }
+
+  if (name === 'place_rope') {
+    const state = readAssemblyState();
+    const res = placeRope(state, args);
+    if (!res.ok) return { isError: true, error: res.error, ...(res.needsRoute ? { needsRoute: res.needsRoute } : {}), ...(res.suggestion ? { suggestion: res.suggestion } : {}) };
+    if (!res.state) {
+      const { ok: _o, ...listed } = res;
+      return { ok: true, ...listed };
+    }
     await writeAssemblyState(res.state, { stepLabel: res.stepLabel });
     const { state: _s, record: _r, stepLabel: _l, ...reply } = res;
     return reply;
@@ -1434,6 +1480,10 @@ async function executeTool(name, args = {}) {
     if (!target) {
       return { isError: true, error: `Instance "${args.instanceId}" not found in assembly.` };
     }
+    if (args.stopping !== undefined) {
+      if (!STOPPING_MODES.includes(args.stopping)) return { isError: true, error: `stopping must be one of ${STOPPING_MODES.join(', ')}.` };
+      if (!partOf(target)?.hubSpecs) return { isError: true, error: `${target.label || target.instanceId} isn't a Smart Motor, so it has no stopping mode.` };
+    }
 
     let position = [...target.position];
     if (Array.isArray(args.position) && args.position.length === 3) {
@@ -1454,7 +1504,8 @@ async function executeTool(name, args = {}) {
       color: args.color !== undefined ? args.color : target.color,
       label: args.label !== undefined ? args.label : target.label,
       visible: args.visible !== undefined ? Boolean(args.visible) : target.visible,
-      locked: args.locked !== undefined ? Boolean(args.locked) : target.locked
+      locked: args.locked !== undefined ? Boolean(args.locked) : target.locked,
+      ...(args.stopping !== undefined ? { stopping: args.stopping } : {})
     };
 
     const { isIntersecting, collidingWith, tightFits } = checkCandidateCollision(updated, state.instances);

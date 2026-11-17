@@ -25,6 +25,9 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { solveBandPath } from '../utils/bandPath.js';
 import { bandPullN } from './bandStrength.js';
+import { ROPE_PULL } from './ropeStrength.js';
+import { leaveAngle, ropeElementsNow, ropeGiven, ropePathMm, solveRopeNow } from './ropeSim.js';
+import { turnsThatFit } from '../utils/ropePath.js';
 import { sameLine } from './bodyGraph.js';
 import { meshTurn } from '../utils/gearMeshing.js';
 import { MOTOR_FREE_RAD_S } from './kinematic.js';
@@ -51,6 +54,11 @@ const MOTOR_RESPONSE = 0.02; // s: how fast a motor steers to its speed below th
 const STALL_BELOW = 0.1; // of the throttle's speed ...
 const STALL_AFTER = 0.3; // ... for this long (s)
 const STALL_CLEAR = 0.25;
+const COAST_DRAG = 0.1; // a coasting motor's own gears drag at this share of a braking one's (assumed)
+const HOLD_RETURN = 0.3; // s: a held shaft turned away goes back over about this long (assumed)
+const BACK_OUT_TURN = THREE.MathUtils.degToRad(15); // rad: backing out ends once the shaft has turned this far back
+const BACK_OUT_PRESS = 0.1; // s: backing out, a deeper press must last this long to block it again
+const BACK_OUT_CLEAR = 0.25; // s: backing out of a block lasts until what it pressed into stays clear this long
 const SPEED_SMOOTHING = 0.15; // s
 const BLOCK_DEPTH = 0.0008; // m: a motor stops when what it moves presses this far into something
 const WOBBLE_TIME = 0.35; // s: damped rebound wobble after a heavy assembly hits a hard stop
@@ -152,6 +160,8 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   const byId = new Map(instances.map((i) => [i.instanceId, i]));
   const fixed = new Set(graph.fixed);
   const looseSet = new Set(graph.loose || []);
+  // Bodies hanging on ropes (openspec rope-and-spool): always moving, gravity only when it's on
+  const ropedSet = new Set(graph.roped || []);
   const sliders = new Set(graph.sliders || []);
   // Connector pins sit inside holes and have no shape; standoffs are solid posts and do. Chain and track
   // parts on a track riding a moving body join that body as shapes (they stay where they were on it,
@@ -227,10 +237,10 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     const partOfCollider = new Map(); // collider handle -> instance id
     const bodyColliders = new Map(); // body id -> [Collider]
     for (const b of graph.bodies) {
-      const isLoose = looseSet.has(b.id);
+      const isLoose = looseSet.has(b.id) || ropedSet.has(b.id);
       const isFixed = fixed.has(b.id) && !sliders.has(b.id) && !isLoose;
       const desc = isFixed ? RAPIER.RigidBodyDesc.fixed() : RAPIER.RigidBodyDesc.dynamic().setGravityScale(0);
-      desc.setAngularDamping(0.1).setLinearDamping(0.1);
+      desc.setAngularDamping(0.3).setLinearDamping(0.3);
       if (sliders.has(b.id)) desc.lockRotations();
       const body = w.createRigidBody(desc);
       bodies.set(b.id, body);
@@ -258,7 +268,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
           const spread = extra * MIN_RADIUS * MIN_RADIUS;
           body.setAdditionalMassProperties(extra, vec(centre), { x: spread, y: spread, z: spread }, { x: 0, y: 0, z: 0, w: 1 }, true);
         }
-        if (isLoose && (probe || !simulateGravity)) {
+        if (looseSet.has(b.id) && (probe || !simulateGravity)) {
           body.setBodyType(RAPIER.RigidBodyType.Fixed, true);
         }
       }
@@ -987,7 +997,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   // a part that builds up while it stays off (for the friction, damping and linkages that weighs
   // nothing for); both within the motor's stall torque.
   const motorState = new Map(
-    graph.motors.map((m) => [m.id, { rel: 0, smooth: 0, slowFor: 0, stalled: false, push: 0, blocked: 0, depth: 0, wobbleTime: 0, wobbleAmp: 0, wobbleFreq: WOBBLE_FREQ }])
+    graph.motors.map((m) => [m.id, { rel: 0, smooth: 0, slowFor: 0, stalled: false, push: 0, lastDir: 0, relAfter: null, holdLoad: 0, holdAngle: 0, holdRef: null, mode: m.stopping || 'brake', blocked: 0, depth: 0, wobbleTime: 0, wobbleAmp: 0, wobbleFreq: WOBBLE_FREQ }])
   );
   // What else each motor turns through its gears and chains: [{ body, axis, gear, factor }], where
   // the body turns `factor` times as fast as the shaft, so it weighs factor² as much on the motor
@@ -1153,6 +1163,12 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     if (r.length() > 0.006) unheldGravityBodies.add(b.id);
   }
   function applyGravityMode() {
+    for (const bId of ropedSet) {
+      const body = rb.get(bId);
+      if (!body) continue;
+      body.setGravityScale(simulateGravity ? 1 : 0, true);
+      body.wakeUp();
+    }
     for (const bId of looseSet) {
       const body = rb.get(bId);
       if (!body) continue;
@@ -1254,12 +1270,27 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
    * shapes, leaving out pairs let off at the start (and any between two of its own bodies on a hinge,
    * which have no contacts).
    */
-  function pressDepth(motorId) {
+  /** Rapier handles of the parts hanging on ropes wound on spools this motor turns. */
+  const ropeLoads = new Map();
+  function ropeLoadsOf(motorId) {
+    if (!ropeLoads.has(motorId)) {
+      const turned = new Set(driven.get(motorId) || []);
+      const out = new Set();
+      for (const r of graph.ropes || []) {
+        if (!r.spool || !turned.has(r.spool.body)) continue;
+        for (const id of [...r.bodies, ...(graph.roped || [])]) if (id && !turned.has(id) && (graph.roped || []).includes(id) && rb.get(id)) out.add(rb.get(id).handle);
+      }
+      ropeLoads.set(motorId, out);
+    }
+    return ropeLoads.get(motorId);
+  }
+  function pressDepth(motorId, ignore = null) {
     let deepest = 0;
     for (const bodyId of driven.get(motorId)) {
       for (const c of bodyColliders.get(bodyId) || []) {
         world.contactPairsWith(c, (other) => {
           if (skip.has(pairKey(c.handle, other.handle))) return;
+          if (ignore && ignore.has(other.parent()?.handle)) return;
           world.contactPair(c, other, (manifold) => {
             for (let i = 0; i < manifold.numContacts(); i++) deepest = Math.max(deepest, -manifold.contactDist(i));
           });
@@ -1312,15 +1343,19 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         }
       }
       const target = throttle * maxSpeed;
-      // Pressing into something stops the motor, and only turning the other way frees it
-      if (st.blocked && dir !== 0 && dir !== st.blocked) {
+      // Pressing into something stops the motor, and only turning the other way (or letting go, when it
+      // brakes instead) frees it
+      if (st.blocked && dir !== st.blocked) {
+        // Let go, it may still back out the other way without blocking at once
+        st.clearingDir = dir || -st.blocked;
+        st.clearFor = 0;
+        st.backTurn = 0;
         st.blocked = 0;
-        st.clearingDir = dir;
         st.stalled = false;
         st.slowFor = 0;
         st.wobbleTime = 0;
         st.wobbleAmp = 0;
-        st.depth = pressDepth(m.id); // deepening from here on, not from when it stopped, blocks it again
+        st.depth = Math.max(st.depth, pressDepth(m.id)); // pressing deeper than it was while stopped blocks it again
       }
       let turned = inertiaAbout(B, axis, point);
       for (const t of trains.get(m.id)) turned += t.factor * t.factor * inertiaAbout(rb.get(t.body), axisNow(t.body, t.axis), worldPointOf(t.body, t.gear));
@@ -1346,6 +1381,20 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         st.stalled = dir === st.blocked;
         continue;
       }
+      if (!dir) {
+        // Stopped: its stopping mode acts later in the step (stopMotors), after outside pushes, so it
+        // feels them in the same step
+        st.idle = true;
+        st.push = 0;
+        st.slowFor = 0;
+        st.stalled = false;
+        continue;
+      }
+      st.idle = false;
+      st.relAfter = null;
+      st.holdLoad = 0;
+      st.holdSat = false;
+      st.ropeTorque = 0;
       const off = target - st.rel;
       const steer = (inertia * off) / MOTOR_RESPONSE;
       // The push only builds while the torque isn't already at the limit that way
@@ -1357,8 +1406,11 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       const pushRate = Math.max(inertia / MOTOR_RESPONSE, STALL_TORQUE / MOTOR_FREE_RAD_S) / PUSH_RISE;
       const grow = Math.sign(off) * Math.min(pushRate * Math.abs(off) * dt, (inertia * Math.abs(off)) / dt);
       if (!atLimit) st.push = THREE.MathUtils.clamp(st.push + grow, -STALL_TORQUE, STALL_TORQUE);
-      // Stopped, or asked the other way than it was pushing (reversed out of a stall): let go at once
-      if (!target || Math.sign(st.push) === -Math.sign(target)) st.push = 0;
+      // The push starts again from nothing when the throttle changes way (started, reversed). Otherwise
+      // it builds either way to keep the shaft at its speed, up to stall torque, so it brakes a load
+      // that runs ahead of it (idle, the hold below takes over)
+      if (dir !== st.lastDir) st.push = 0;
+      st.lastDir = dir;
       // When gravity is simulated and exceeds the motor's stall torque, the excess pulls the shaft back
       const gravPull =
         simulateGravity && Math.abs(tauGrav) > STALL_TORQUE
@@ -1388,19 +1440,47 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   }
 
   /** Stops each motor whose moving parts have run into something (see pressDepth). */
-  function checkBlocked(throttles) {
+  function checkBlocked(throttles, h) {
     for (const m of graph.motors) {
       const st = motorState.get(m.id);
       const dir = Math.sign(throttles.get(m.id) || 0);
-      const depth = pressDepth(m.id);
-      if (depth < BLOCK_DEPTH * 0.5) st.clearingDir = 0;
+      // Stopped by a part hanging on its own rope (a weight wound up to its spool), run the other way it
+      // pays the rope out and can't pull that part any deeper: its knocks don't block it, until it winds
+      // that way again
+      if (dir && dir === st.loadBlockDir && !st.blocked) st.loadBlockDir = 0;
+      const loads = ropeLoadsOf(m.id);
+      const depth = st.loadBlockDir && dir === -st.loadBlockDir ? pressDepth(m.id, loads) : pressDepth(m.id);
+      // Backing out ends once nothing has pressed for a while: a load pulled up against what turns it
+      // (a weight wound up to its spool) bounces on and off it, and one clear step isn't out
+      // (counted while it runs: held idle against what it pressed, it hasn't backed out yet)
+      if (dir) st.clearFor = depth < BLOCK_DEPTH * 0.5 ? (st.clearFor || 0) + h : 0;
+      if (st.clearFor >= BACK_OUT_CLEAR) st.clearingDir = 0;
       if (!dir || st.blocked) {
-        st.depth = depth;
+        st.depth = st.blocked || st.clearingDir ? Math.max(st.depth, depth) : depth;
         continue;
+      }
+      // While backing out, only pressing deeper than it ever was, for a while, blocks it again (starting
+      // back, the turning part may knock into what it was against before that gets out of its way)
+      // ...and it has backed out once the shaft has turned clearly back the other way
+      if (st.clearingDir === dir) {
+        st.backTurn = (st.backTurn || 0) + Math.max(0, st.rel * dir) * h;
+        if (st.backTurn >= BACK_OUT_TURN) st.clearingDir = 0;
+      }
+      if (st.clearingDir === dir) {
+        const deeper = depth > st.depth + BLOCK_DEPTH && st.rel * dir >= -0.05;
+        st.deeperFor = deeper ? (st.deeperFor || 0) + h : 0;
+        if (st.deeperFor >= BACK_OUT_PRESS) {
+          st.clearingDir = 0;
+          st.deeperFor = 0;
+        } else {
+          if (!deeper) st.depth = Math.max(st.depth, depth);
+          continue;
+        }
       }
       const growMargin = st.clearingDir === dir ? BLOCK_DEPTH : 0.00001;
       // Only when it is deep and still getting deeper, not while backing out of something
       if (depth > BLOCK_DEPTH && depth > st.depth + growMargin && st.rel * dir >= -0.05) {
+        st.loadBlockDir = loads.size && pressDepth(m.id, loads) <= BLOCK_DEPTH ? dir : 0;
         st.blocked = dir;
         st.clearingDir = 0;
         st.wobbleTime = 0;
@@ -1531,7 +1611,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
           world.removeCollider(c, false);
         }
         bodyColliders.set(bId, []);
-        const isFixed = fixed.has(b.id) && !sliders.has(b.id) && !looseSet.has(b.id);
+        const isFixed = fixed.has(b.id) && !sliders.has(b.id) && !looseSet.has(b.id) && !ropedSet.has(b.id);
         let shaped = 0;
         for (const id of [...b.parts, ...(carried.get(b.id) || [])]) {
           const cd = colliderFor(id, isFixed);
@@ -1574,7 +1654,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     brokenHingeIds.clear();
     for (const b of graph.bodies) {
       const body = rb.get(b.id);
-      const isFixed = fixed.has(b.id) && !sliders.has(b.id) && !looseSet.has(b.id);
+      const isFixed = fixed.has(b.id) && !sliders.has(b.id) && !looseSet.has(b.id) && !ropedSet.has(b.id);
       for (const c of bodyColliders.get(b.id) || []) {
         c.setRestitution(0);
         c.setFriction(0);
@@ -1872,6 +1952,339 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     }
   }
 
+  // Ropes (openspec rope-and-spool, design decisions 8 and 9): weightless, frictionless and unable to
+  // stretch, so a tight rope has one pull T along its whole length; T is carried from step to step and
+  // corrected by what the bodies' masses say stops the path growing. Every body holding an end or a
+  // spot feels T along both runs leaving it, at the points they leave it. A spool winds the rope as
+  // it turns, and the pull turns it back.
+  const pullingRopes = (graph.ropes || []).filter((r) => r.pulls);
+  const ropeState = new Map(
+    (graph.ropes || []).map((r) => [r.id, { T: 0, bias: 0, expectC: null, anchor: null, turns: r.spool?.turns ?? 0, winding: r.spool?.winding ?? 1, phi: null, slackMm: 0, pathMm: 0, overFull: false, turnsArr: [...r.turns] }])
+  );
+  const poseOfBody = (id) => {
+    const body = id ? rb.get(id) : null;
+    if (!body) return null;
+    return { q: toV3q(body.rotation()), t: toV3(body.translation()).multiplyScalar(1 / MM) };
+  };
+  /** The world velocity (m/s) of a body at a point (m); zero for a fixed body. */
+  // The step the rope's pull is found for: gravity acts within it, so a body's velocity is taken with
+  // the step's gravity already added (else gravity stretches the rope a little every step and the
+  // correction kicks the body back up)
+  let ropeStepH = STEP;
+  const ropeVelocityAt = (body, p) => {
+    if (!body || body.isFixed()) return new THREE.Vector3();
+    const com = toV3(body.worldCom());
+    const v = toV3(body.linvel()).add(toV3(body.angvel()).cross(p.clone().sub(com)));
+    if (body.gravityScale() > 0 && world.gravity) v.y += world.gravity.y * body.gravityScale() * ropeStepH;
+    return v;
+  };
+  /** I⁻¹ τ in the world for a dynamic body. */
+  const invInertia = (body, tau) => {
+    const frame = toV3q(body.rotation()).multiply(toV3q(body.principalInertiaLocalFrame()));
+    const local = tau.clone().applyQuaternion(frame.clone().invert());
+    const i = body.principalInertia();
+    local.set(i.x > 1e-12 ? local.x / i.x : 0, i.y > 1e-12 ? local.y / i.y : 0, i.z > 1e-12 ? local.z / i.z : 0);
+    return local.applyQuaternion(frame);
+  };
+  /** One rope's situation now: its path, how far over its length it is (m), and per body what a 1 N pull does. */
+  /** A point carried by the spool's body, in world mm, and back to the body's start frame. */
+  const spoolToWorld = (r, p) => {
+    const pose = poseOfBody(r.spool.body);
+    const out = new THREE.Vector3(...p);
+    return pose ? out.applyQuaternion(pose.q).add(pose.t) : out;
+  };
+  const spoolToStart = (r, p) => {
+    const pose = poseOfBody(r.spool.body);
+    const out = new THREE.Vector3(...p);
+    return (pose ? out.sub(pose.t).applyQuaternion(pose.q.clone().invert()) : out).toArray();
+  };
+  /** The rope's path now, with its drum wound `winding` way, or from its tie point while unwound. */
+  function ropePathNow(r, st) {
+    if (r.spool) st.turnsArr[r.spool.element] = r.spool.element === 0 ? -st.winding : st.winding;
+    const els = ropeElementsNow(r, poseOfBody, st.turns, st.anchor ? spoolToWorld(r, st.anchor).toArray() : null);
+    return { els, path: solveRopeNow({ ...r, turns: st.turnsArr }, els) };
+  }
+  function ropeNow(r, st) {
+    let { els, path } = ropePathNow(r, st);
+    if (!path) return null;
+    // Winding (decision 9): the leaving point's angle in the spool's own frame
+    if (r.spool) {
+      const k = r.spool.element;
+      const c = path.contacts[k];
+      if (st.anchor) {
+        // Unwound: the rope runs straight from where it's tied on the drum, which turns with the spool.
+        // Once that point has turned far enough that the rope would cut into the drum, it wraps on
+        // again, the way the drum now meets it (starting where it touches, so nothing jumps)
+        const d = r.elements[k];
+        const axis = new THREE.Vector3(...d.axis).applyQuaternion(poseOfBody(r.spool.body)?.q || new THREE.Quaternion()).normalize();
+        const centre = spoolToWorld(r, d.center);
+        const tie = spoolToWorld(r, st.anchor);
+        const next = new THREE.Vector3(...(k === 0 ? path.contacts[1].a : path.contacts[path.contacts.length - 2].b));
+        const flat = (v) => v.clone().sub(axis.clone().multiplyScalar(v.dot(axis)));
+        const out = flat(tie.clone().sub(centre)).normalize();
+        const run = flat(next.clone().sub(tie)).normalize();
+        if (out.dot(run) < -0.02) {
+          // The way that puts the leaving point nearest the tie point
+          let best = null;
+          for (const w of [1, -1]) {
+            const trial = { ...st, anchor: null, turns: 0, winding: w, turnsArr: [...st.turnsArr] };
+            const got = ropePathNow(r, trial);
+            if (!got.path) continue;
+            const cc = got.path.contacts[k];
+            const gap = new THREE.Vector3(...(k === 0 ? cc.b : cc.a)).distanceTo(tie);
+            if (!best || gap < best.gap) best = { w, gap, got };
+          }
+          if (best) {
+            st.anchor = null;
+            st.turns = 0;
+            st.winding = best.w;
+            ({ els, path } = best.got);
+            st.phi = leaveAngle(r, els, k === 0 ? path.contacts[k].b : path.contacts[k].a, poseOfBody(r.spool.body));
+          }
+        }
+      } else {
+        const phi = leaveAngle(r, els, k === 0 ? c.b : c.a, poseOfBody(r.spool.body));
+        if (st.phi !== null) {
+          let dphi = phi - st.phi;
+          dphi = ((dphi + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+          st.turns += (-st.winding * dphi) / (2 * Math.PI);
+          st.overFull = st.turns > turnsThatFit(r.spool.spec, r.cordMm);
+        }
+        st.phi = phi;
+        if (st.turns <= 0) {
+          // Paid right out (or never wound): tied on where it leaves the drum now
+          st.turns = 0;
+          st.anchor = spoolToStart(r, k === 0 ? c.b : c.a);
+          st.phi = null;
+        }
+      }
+    }
+    const pathMm = ropePathMm(r, path);
+    const C = (pathMm - ropeGiven(r, st.turns)) * MM;
+    st.pathMm = pathMm;
+    st.slackMm = Math.max(0, -C / MM);
+    const pts = path.contacts.map((x) => ({ a: new THREE.Vector3(...x.a).multiplyScalar(MM), b: new THREE.Vector3(...x.b).multiplyScalar(MM) }));
+    const n = pts.length;
+    const runs = [];
+    for (let i = 0; i < n - 1; i++) {
+      const d = pts[i + 1].a.clone().sub(pts[i].b);
+      runs.push(d.lengthSq() > 1e-14 ? d.normalize() : new THREE.Vector3());
+    }
+    // Per body: the forces of a 1 N pull and where they act (a body a stalled motor holds counts as
+    // fixed: the motor carries the pull, up to its stall torque, which the stall already means)
+    const held = heldByMotors();
+    const per = new Map();
+    const onHeld = [];
+    for (let i = 0; i < n; i++) {
+      const id = r.bodies[i];
+      const body = id ? rb.get(id) : null;
+      if (body && held.has(id)) {
+        if (i > 0) onHeld.push([id, runs[i - 1].clone().negate(), pts[i].a]);
+        if (i < n - 1) onHeld.push([id, runs[i].clone(), pts[i].b]);
+      }
+      if (!body || !body.isDynamic() || held.has(id)) continue;
+      const e = per.get(id) || { body, forces: [], f: new THREE.Vector3(), tau: new THREE.Vector3(), riders: new Set() };
+      // A pulley spinning on this body's pin moves with it: it takes its share of the pull
+      const rider = r.riders?.[i] ? rb.get(r.riders[i]) : null;
+      if (rider?.isDynamic()) e.riders.add(rider);
+      if (i > 0) e.forces.push([runs[i - 1].clone().negate(), pts[i].a]);
+      if (i < n - 1) e.forces.push([runs[i].clone(), pts[i].b]);
+      per.set(id, e);
+    }
+    let w = 0;
+    for (const e of per.values()) {
+      const com = toV3(e.body.worldCom());
+      for (const [f, at] of e.forces) {
+        e.f.add(f);
+        e.tau.add(at.clone().sub(com).cross(f));
+      }
+      const m = e.body.mass();
+      const M = m + [...e.riders].reduce((sum, b) => sum + b.mass(), 0);
+      e.share = M > 0 ? m / M : 1;
+      e.M = Math.max(M, 1e-9);
+      w += e.f.lengthSq() / Math.max(M, 1e-9) + e.share * e.share * e.tau.dot(invInertia(e.body, e.tau));
+    }
+    const bodyFor = (id) => (id && !held.has(id) ? rb.get(id) : null);
+    const stretchRate = () => {
+      let rate = 0;
+      for (let i = 0; i < n - 1; i++) {
+        const vb = ropeVelocityAt(bodyFor(r.bodies[i]), pts[i].b);
+        const va = ropeVelocityAt(bodyFor(r.bodies[i + 1]), pts[i + 1].a);
+        rate += runs[i].dot(va.sub(vb));
+      }
+      return rate;
+    };
+    return { path, C, per, w, stretchRate, onHeld };
+  }
+  /** The motor's hinge now: its two bodies, axis, a point on it, the shaft's speed against the motor's
+   * body, and the inertia a turn about it moves (gear trains included). */
+  function hingeNow(m) {
+    const h = hingeAxis.get(m.hinge);
+    const A = rb.get(h.a);
+    const B = rb.get(h.b);
+    const axis = axisNow(h.a, h.axis);
+    const point = h.point.clone().applyQuaternion(toV3q(A.rotation())).add(toV3(A.translation()));
+    const rel = toV3(B.angvel()).sub(toV3(A.angvel())).dot(axis);
+    let turned = inertiaAbout(B, axis, point);
+    for (const t of trains.get(m.id)) turned += t.factor * t.factor * inertiaAbout(rb.get(t.body), axisNow(t.body, t.axis), worldPointOf(t.body, t.gear));
+    const inertia = 1 / (1 / inertiaAbout(A, axis, point) + 1 / turned);
+    // How far the shaft is turned against the motor's body, about the axis (rad, −π to π)
+    const q = toV3q(A.rotation()).invert().multiply(toV3q(B.rotation()));
+    const angle = 2 * Math.atan2(new THREE.Vector3(q.x, q.y, q.z).dot(h.axis.clone().normalize()), q.w);
+    return { A, B, axis, point, rel, inertia, angle };
+  }
+  const wrapAngle = (a) => ((((a + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
+  /**
+   * Stopped motors, by stopping mode (openspec motor-stopping), just before the gear links and the step.
+   * Each sets the speed the shaft should have at the end of the step, given the turning it felt over
+   * the last step (`holdLoad`: a hanging load, a belt, gravity), up to stall torque:
+   * - Brake, a shorted motor: resisted in proportion to speed (c·ω, stall torque at top speed, nothing
+   *   when still), so a steady load τ turns it at τ / c; Coast only turns the motor's own gears, a
+   *   tenth of that. Solved for the end of the step, since a light shaft pushed by c·ω would overshoot.
+   * - Hold: still, and turned back toward where it stopped over HOLD_RETURN; a load past stall turns it.
+   */
+  function stopMotors(dt) {
+    for (const m of graph.motors) {
+      const st = motorState.get(m.id);
+      if (!st.idle || st.blocked) {
+        st.relAfter = null;
+        continue;
+      }
+      const { A, B, axis, point, rel, inertia, angle } = hingeNow(m);
+      if (st.relAfter === null || st.holdRef === null) {
+        st.holdRef = angle;
+        if (st.relAfter === null) st.holdLoad = 0;
+      }
+      st.holdAngle = wrapAngle(angle - st.holdRef);
+      st.inertiaNow = inertia;
+      const fromLoad = (st.holdLoad * dt) / inertia;
+      let atEnd = 0;
+      st.holdSat = true; // only Hold keeps its shaft still for the ropes
+      if (st.mode === 'hold') {
+        atEnd = -st.holdAngle / HOLD_RETURN;
+        // A rope pulling on the held shaft counts against the stall torque too: past it, the shaft is let
+        // go next step and the rope turns it against the hold
+        const want = (inertia * (atEnd - fromLoad - rel)) / dt;
+        st.holdSat = Math.abs(want - (st.ropeTorque || 0)) >= STALL_TORQUE;
+      } else {
+        const c = ((st.mode === 'brake' ? 1 : COAST_DRAG) * STALL_TORQUE) / MOTOR_FREE_RAD_S;
+        atEnd = (rel + fromLoad) / (1 + (c * dt) / inertia);
+      }
+      const torque = THREE.MathUtils.clamp((inertia * (atEnd - fromLoad - rel)) / dt, -STALL_TORQUE, STALL_TORQUE);
+      turnAboutLine(B, axis, point, torque * dt);
+      turnAboutLine(A, axis, point, -torque * dt);
+      st.relAfter = rel + (torque * dt) / inertia;
+    }
+  }
+  /** After the step: what turned each stopped shaft during it, and how far it has turned since it stopped. */
+  function feltOverStep(dt) {
+    for (const m of graph.motors) {
+      const st = motorState.get(m.id);
+      if (!st.idle || st.relAfter === null) continue;
+      const { rel } = hingeNow(m);
+      st.holdLoad += 0.5 * ((st.inertiaNow * (rel - st.relAfter)) / dt - st.holdLoad);
+    }
+  }
+  /** Bodies turned by a motor that is stopped against something and still asked to push that way. */
+  let lastThrottles = new Map();
+  function heldByMotors() {
+    const out = new Set();
+    for (const m of graph.motors) {
+      const st = motorState.get(m.id);
+      const dir = Math.sign(lastThrottles.get(m.id) || 0);
+      if (st?.blocked && dir === st.blocked) for (const id of driven.get(m.id) || []) out.add(id);
+      // Idle with torque to spare, a motor holds its own shaft still: a rope on a spool there pulls
+      // on the motor (its budget below), not on the shaft
+      else if (!dir && st && st.relAfter !== null && !st.holdSat) out.add(hingeAxis.get(m.hinge).b);
+    }
+    return out;
+  }
+  /** Per idle motor: the turning the ropes put on its held shaft this step (N·m, about its axis). */
+  function ropeTorqueOnMotors(live) {
+    for (const m of graph.motors) {
+      const st = motorState.get(m.id);
+      st.ropeTorque = 0;
+      const h = hingeAxis.get(m.hinge);
+      const A = rb.get(h.a);
+      const axis = axisNow(h.a, h.axis);
+      const point = h.point.clone().applyQuaternion(toV3q(A.rotation())).add(toV3(A.translation()));
+      for (const [, rst, now] of live) {
+        for (const [id, f, at] of now.onHeld || []) if (id === h.b) st.ropeTorque += rst.T * at.clone().sub(point).cross(f).dot(axis);
+      }
+    }
+  }
+  /** A body touching something it isn't joined to (deeper than a hair). */
+  const pressing = (bodyId) => {
+    for (const c of bodyColliders.get(bodyId) || []) {
+      let found = false;
+      world.contactPairsWith(c, (other) => {
+        if (found || skip.has(pairKey(c.handle, other.handle))) return;
+        world.contactPair(c, other, (manifold) => {
+          for (let i = 0; i < manifold.numContacts(); i++) if (manifold.contactDist(i) < -0.00005) found = true;
+        });
+      });
+      if (found) return true;
+    }
+    return false;
+  };
+  const pullImpulse = (now, J) => {
+    if (Math.abs(J) < 1e-12) return;
+    for (const e of now.per.values()) {
+      for (const [f, at] of e.forces) {
+        const imp = f.clone().multiplyScalar(J);
+        e.body.applyImpulseAtPoint(vec(imp.clone().multiplyScalar(e.share ?? 1)), vec(at), true);
+        for (const b of e.riders) b.applyImpulse(vec(imp.clone().multiplyScalar(b.mass() / e.M)), true);
+      }
+    }
+  };
+  function pullRopes(h) {
+    ropeStepH = h;
+    const live = [];
+    for (const r of pullingRopes) {
+      const st = ropeState.get(r.id);
+      const now = ropeNow(r, st);
+      if (!now) continue;
+      // Clearly slack, even at the end of this step: no pull
+      if (now.w <= 0 || now.C + Math.max(0, now.stretchRate()) * h < -ROPE_PULL.slackMm * MM) {
+        st.T = 0;
+        st.bias = 0;
+        st.expectC = null;
+        continue;
+      }
+      // What the last step stretched it that the sums didn't see (a part hanging on a pin under the one
+      // the rope holds pulls through its joint within the step): carried into this step's aim, smoothed.
+      // Not while a part on the rope presses into something: what holds it there pushes back however
+      // hard the rope pulls, and the pull would only grow until the part went through
+      if (st.expectC !== null) {
+        if ([...now.per.keys()].some(pressing)) st.bias *= 0.5;
+        else st.bias += ROPE_PULL.biasGain * ((now.C - st.expectC) / h - st.bias);
+      }
+      pullImpulse(now, st.T * h);
+      live.push([r, st, now]);
+    }
+    for (let pass = 0; pass < ROPE_PULL.passes; pass++) {
+      for (const [, st, now] of live) {
+        // How far over its length the rope would be at the end of the step: a slack rope may close
+        // its gap (up to exactly taut), a rope already over is drawn back by a share β each step
+        const rate = now.stretchRate();
+        const err = rate + st.bias + (now.C > 0 ? ROPE_PULL.beta * now.C : now.C) / h;
+        const T = THREE.MathUtils.clamp(st.T + (ROPE_PULL.gamma * err) / (now.w * h), 0, ROPE_PULL.maxN);
+        pullImpulse(now, (T - st.T) * h);
+        st.T = T;
+      }
+    }
+    // Where each rope should be at the end of the step, by the sums
+    for (const [, st, now] of live) st.expectC = now.C + now.stretchRate() * h;
+    ropeTorqueOnMotors(live);
+  }
+  /** Ropes that don't pull (a free end, all on one body) still wind as their spool turns. */
+  function windIdleRopes() {
+    for (const r of graph.ropes || []) {
+      if (r.pulls || !r.spool) continue;
+      ropeNow(r, ropeState.get(r.id));
+    }
+  }
+
   // Outside pushes (a debugging aid for the checks, standing in for a part pushing): body -> { axis, point (m), speed (rad/s) }
   const pushes = new Map();
   const pulls = new Map();
@@ -1889,6 +2302,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       carry = Math.min(carry + dt * (dropState.active ? dropTimeScale : 1), (dropState.active ? MAX_DROP_STEPS : MAX_STEPS) * h);
       while (carry >= h) {
         carry -= h;
+        lastThrottles = throttles;
         driveMotors(throttles, h);
         if (ratchetState.length) rideRatchets(h);
         for (const [bodyId, pull] of pulls) {
@@ -1901,17 +2315,34 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
           const w = toV3(body.angvel()).dot(push.axis);
           if (w < push.speed) spinAboutLine(body, push.axis, push.point, push.speed - w);
         }
+        stopMotors(h);
         holdLinks(h);
         if (pullingBands.length) pullBands(h);
+        if (pullingRopes.length) pullRopes(h);
         world.step(events, hooks);
+        feltOverStep(h);
         stepDrop(h);
-        checkBlocked(throttles);
+        checkBlocked(throttles, h);
         trackDrift(h);
         if (ratchetState.length) trackRatchets(h);
         if (meshState.length) trackMeshes();
         // Contacts and hinges may have pulled the ratios apart within the step: put the speeds back
         holdLinks(h, false);
       }
+      if ((graph.ropes || []).length) windIdleRopes();
+    },
+    /** A body's mass (kg) and speed (m/s) now (a debugging aid for the checks). */
+    massOf: (bodyId) => rb.get(bodyId)?.mass() ?? 0,
+    speedOf: (bodyId) => {
+      const b = rb.get(bodyId);
+      return b ? toV3(b.linvel()).length() : 0;
+    },
+    /** Each rope's pull (N), slack (mm), turns on its spool and path length (mm) now. */
+    ropeStates() {
+      return (graph.ropes || []).map((r) => {
+        const st = ropeState.get(r.id);
+        return { id: r.id, tensionN: st.T, slackMm: st.slackMm, turns: st.turns, winding: st.winding, anchor: st.anchor ? spoolToWorld(r, st.anchor).toArray() : null, pathMm: st.pathMm, overFull: st.overFull, pulls: r.pulls };
+      });
     },
     /** How fast a drop plays: 1 real time, 0.25 a quarter speed. */
     setDropTimeScale(scale) {
@@ -1996,6 +2427,16 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         weakSpots,
         estimates: !allMeasured()
       };
+    },
+    /** Changes a motor's stopping mode at once (openspec motor-stopping). Switched to Hold while
+     * stopped, it holds from where the shaft is now. */
+    setStopping(motorId, mode) {
+      const st = motorState.get(motorId);
+      if (!st || !['coast', 'brake', 'hold'].includes(mode) || st.mode === mode) return;
+      st.mode = mode;
+      st.holdRef = null;
+      st.holdLoad = 0;
+      st.holdSat = mode !== 'hold';
     },
     status() {
       const motors = {};

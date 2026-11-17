@@ -12,8 +12,9 @@
  */
 import { SHEET_BEND_KIND, sheetBendKind } from './sheetBend.js';
 import { BAND_KIND, bandKind } from './bandShape.js';
+import { ROPE_KIND, ropeKind } from './ropeShape.js';
 
-export const SHAPE_KINDS = { [SHEET_BEND_KIND]: sheetBendKind, [BAND_KIND]: bandKind };
+export const SHAPE_KINDS = { [SHEET_BEND_KIND]: sheetBendKind, [BAND_KIND]: bandKind, [ROPE_KIND]: ropeKind };
 
 const roundDeep = (v) => {
   if (typeof v === 'number') return Number(v.toFixed(3)) + 0;
@@ -46,7 +47,7 @@ export function shapeKindOf(shape) {
 export function shapeError(part, shape) {
   const kind = shapeKindOf(shape);
   if (!kind) return `Unknown shape kind "${shape?.kind}".`;
-  if (!kind.accepts(part)) return shape.kind === SHEET_BEND_KIND ? 'Only plastic sheets can be bent.' : shape.kind === BAND_KIND ? 'Only rubber bands and belts can be strung.' : `A ${part.name} can't take a ${shape.kind} shape.`;
+  if (!kind.accepts(part)) return shape.kind === SHEET_BEND_KIND ? 'Only plastic sheets can be bent.' : shape.kind === BAND_KIND ? 'Only rubber bands and belts can be strung.' : shape.kind === ROPE_KIND ? 'Only ropes can be routed.' : `A ${part.name} can't take a ${shape.kind} shape.`;
   return kind.check(shape, part);
 }
 

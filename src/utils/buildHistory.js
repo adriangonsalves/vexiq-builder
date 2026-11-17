@@ -26,7 +26,8 @@ export const MERGE_WINDOW_MS = 1000;
 // socketAngleDeg: a Smart Motor's drive hub angle (openspec square-shaft-fit)
 // groupId / groupName: the part's group (openspec outliner-part-groups); missing = no group
 // shape: the copy's own shape, e.g. a bent sheet (openspec shaped-parts-and-sheet-bending); missing = none
-export const BUILD_FIELDS = ['position', 'rotation', 'color', 'label', 'visible', 'locked', 'socketAngleDeg', 'groupId', 'groupName', 'shape'];
+// stopping: a Smart Motor's stopping mode (openspec motor-stopping); missing = brake
+export const BUILD_FIELDS = ['position', 'rotation', 'color', 'label', 'visible', 'locked', 'socketAngleDeg', 'groupId', 'groupName', 'shape', 'stopping'];
 const GROUP_FIELDS = new Set(['groupId', 'groupName']);
 export const SOURCES = ['app', 'mcp', 'assistant', 'action'];
 
@@ -37,6 +38,7 @@ const normalizeField = (field, value) => {
   if (field === 'visible') return value !== false;
   if (field === 'locked') return value === true;
   if (field === 'socketAngleDeg') return Number(value) || 0;
+  if (field === 'stopping') return value || 'brake';
   if (GROUP_FIELDS.has(field) || field === 'shape') return value || null;
   return value;
 };
@@ -87,7 +89,7 @@ export function diffParts(before = [], after = []) {
     for (const field of BUILD_FIELDS) {
       if (!sameField(field, prev[field], part[field])) {
         // A missing hub angle means 0 and a missing group null; recorded that way so the value survives saving (JSON drops undefined)
-        const stored = (value) => (field === 'socketAngleDeg' || field === 'shape' || GROUP_FIELDS.has(field) ? normalizeField(field, value) : value);
+        const stored = (value) => (field === 'socketAngleDeg' || field === 'shape' || field === 'stopping' || GROUP_FIELDS.has(field) ? normalizeField(field, value) : value);
         fieldsBefore[field] = clone(stored(prev[field]));
         fieldsAfter[field] = clone(stored(part[field]));
       }
@@ -258,7 +260,8 @@ const VERBS = {
   color: ['recolor', 'Recolor'],
   label: ['rename', 'Rename'],
   locked: ['lock', 'Lock'],
-  visible: ['hide', 'Hide']
+  visible: ['hide', 'Hide'],
+  stopping: ['set stopping', 'Set stopping']
 };
 
 const updateVerb = (op, app) => {
