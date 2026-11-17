@@ -42,6 +42,7 @@ import { isRopePart, spoolSpec } from '../utils/ropePath.js';
 import { bandSpec } from '../utils/bandPath.js';
 import { mirrorShape, normalizeShape, shapeError, shapeMeshArrays, shapedPart } from '../utils/shapedParts.js';
 import { SHEET_PRESS_MM, isPlasticSheet } from '../utils/sheetBend.js';
+import { MOTOR_GROUP_FIELDS } from '../utils/motorGroups.js';
 import { sheetFlexDepth, sheetsStacked } from '../utils/sheetContact.js';
 import { EXPLODE_GAP_MM, SPREAD_ABOVE_PARTS, SPREAD_BELOW_SHARE, buildExplodePlan, explodedOffsets, partsMovedBy, spreadExplodePlan } from '../utils/explodePlan.js';
 
@@ -4350,6 +4351,7 @@ function mirrorPlacedParts(placed, mirror) {
     // New parts are added outside any group
     delete mirroredInst.groupId;
     delete mirroredInst.groupName;
+    for (const k of MOTOR_GROUP_FIELDS) delete mirroredInst[k];
     // Its own mirror image: every feature lands where the original's are
     const original = worldFeaturesFor(p.inst).map((f) => [f.start, f.end]);
     const image = worldFeaturesFor(mirroredInst).map((f) => [f.start, f.end]);

@@ -56,6 +56,7 @@ import {
   wholeGroupOf
 } from '../src/utils/partGroups.js';
 import { connectedFrom, layersFrom } from '../src/utils/jointLayers.js';
+import { breakMotorGroup, makeMotorGroup, motorGroupsOf, removeFromMotorGroup, renameMotorGroup, setMotorReversed } from '../src/utils/motorGroups.js';
 import {
   branchesAt,
   currentLine,
@@ -858,6 +859,23 @@ const TOOLS = [
     }
   },
   {
+    name: 'group_motors',
+    description:
+      'Motor groups (separate from part groups): two or more Smart Motors driven by one throttle in Play mode, each turning the same way as the group or the opposite way (as a VEXcode motor group). A motor can be in a part group and a motor group at once, and in one motor group at most. action "create": instanceIds (Default: the current selection; parts that are not Smart Motors are refused), optional name (default "Motor group N"), optional opposite (ids to turn the opposite way; left out, a motor whose shaft points against the first motor\'s, as on a mirrored drive, starts opposite); motors leave their old motor group and a group left with one motor breaks up. "set_direction": instanceId and opposite (true/false). "rename": groupId and name. "remove": instanceIds taken out of their groups. "break": groupId. Moves nothing. One undo step. get_assembly lists motorGroups and each grouped motor\'s motorGroupId, motorGroupName and motorDirection.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['create', 'set_direction', 'rename', 'remove', 'break'] },
+        instanceIds: { type: 'array', items: { type: 'string' } },
+        instanceId: { type: 'string' },
+        groupId: { type: 'string' },
+        name: { type: 'string' },
+        opposite: { description: 'create: array of motor ids to turn opposite. set_direction: true or false.' }
+      },
+      required: ['action']
+    }
+  },
+  {
     name: 'ungroup_parts',
     description: 'Dissolve a group (groupId), or every group the given parts are in (instanceIds). The parts stay where they are. One undo step.',
     inputSchema: {
@@ -1062,6 +1080,8 @@ async function executeTool(name, args = {}) {
       history: headPosition(state.history),
       instanceCount: state.instances.length,
       groups: groupList(state.instances, catalogById),
+      // Motor groups (openspec motor-groups): driven by one throttle in Play
+      motorGroups: [...motorGroupsOf(state.instances).values()].map((g) => ({ groupId: g.id, name: g.name, motors: g.motors.map((m) => ({ instanceId: m.id, direction: m.reversed ? 'opposite' : 'same' })) })),
       instances: state.instances.map((inst) => {
         const part = partOf(inst);
         return {
@@ -1071,6 +1091,7 @@ async function executeTool(name, args = {}) {
           pitchPosition: inst.position.map((c) => Number((c / VEX_PITCH_MM).toFixed(2))),
           // A Smart Motor's drive hub angle (missing in older saves means 0)
           ...(part?.hubSpecs ? { socketAngleDeg: Number(inst.socketAngleDeg) || 0, stopping: STOPPING_MODES.includes(inst.stopping) ? inst.stopping : 'brake' } : {}),
+          ...(part?.hubSpecs && inst.motorGroupId ? { motorDirection: inst.motorReversed ? 'opposite' : 'same' } : {}),
           // A copy with its own shape, such as a bent sheet or a strung band
           ...(inst.shape ? { shapeDescription: describeShape(inst.shape) } : {}),
           ...(bandReport(inst, partOf) ? { band: bandReport(inst, partOf) } : {}),
@@ -1222,6 +1243,61 @@ async function executeTool(name, args = {}) {
     await writeAssemblyState(res.state, { stepLabel: res.stepLabel });
     const { state: _s, record: _r, stepLabel: _l, ...reply } = res;
     return reply;
+  }
+
+  if (name === 'group_motors') {
+    const state = readAssemblyState();
+    const byId = new Map(state.instances.map((i) => [i.instanceId, i]));
+    const labelOf = (id) => byId.get(id)?.label || id;
+    const groupReply = (instances, groupId) => {
+      const g = motorGroupsOf(instances).get(groupId);
+      return g ? { groupId: g.id, name: g.name, motors: g.motors.map((m) => ({ instanceId: m.id, label: instances.find((i) => i.instanceId === m.id)?.label, direction: m.reversed ? 'opposite' : 'same' })) } : null;
+    };
+    const save = async (patches, stepLabel) => {
+      const instances = applyPatches(state.instances, patches);
+      await writeAssemblyState({ ...state, instances }, { stepLabel });
+      return instances;
+    };
+    try {
+      if (args.action === 'create') {
+        const ids = Array.isArray(args.instanceIds) ? args.instanceIds : state.selectedIds || (state.selectedId ? [state.selectedId] : []);
+        const unknown = ids.filter((id) => !byId.has(id));
+        if (unknown.length) return { isError: true, error: `Not in the build: ${unknown.join(', ')}` };
+        const notMotors = ids.filter((id) => !partOf(byId.get(id))?.hubSpecs);
+        if (notMotors.length) return { isError: true, error: `Not a Smart Motor: ${notMotors.map(labelOf).join(', ')}` };
+        if (args.opposite !== undefined && !Array.isArray(args.opposite)) return { isError: true, error: 'opposite must be a list of motor ids for create.' };
+        const made = makeMotorGroup(state.instances, ids, partOf, { name: args.name, ...(args.opposite ? { opposite: args.opposite } : {}) });
+        const instances = await save(made.patches, `Group ${made.motorIds.length} motors as ${made.name}`);
+        return { ok: true, ...groupReply(instances, made.groupId) };
+      }
+      if (args.action === 'set_direction') {
+        if (!byId.has(args.instanceId)) return { isError: true, error: `Not in the build: ${args.instanceId}` };
+        if (typeof args.opposite !== 'boolean') return { isError: true, error: 'opposite must be true or false for set_direction.' };
+        const { patches } = setMotorReversed(state.instances, args.instanceId, args.opposite);
+        const instances = await save(patches, `Set ${labelOf(args.instanceId)} to turn ${args.opposite ? 'opposite' : 'the same way'}`);
+        return { ok: true, ...groupReply(instances, byId.get(args.instanceId).motorGroupId) };
+      }
+      if (args.action === 'rename') {
+        const renamed = renameMotorGroup(state.instances, args.groupId, args.name);
+        const instances = await save(renamed.patches, `Rename ${renamed.oldName} to ${renamed.name}`);
+        return { ok: true, ...groupReply(instances, args.groupId) };
+      }
+      if (args.action === 'remove') {
+        const ids = Array.isArray(args.instanceIds) ? args.instanceIds : [];
+        const { removed, patches } = removeFromMotorGroup(state.instances, ids);
+        if (!removed.length) return { isError: true, error: 'None of those parts are in a motor group.' };
+        await save(patches, removed.length === 1 ? `Take ${labelOf(removed[0])} out of its motor group` : `Take ${removed.length} motors out of their motor groups`);
+        return { ok: true, removed };
+      }
+      if (args.action === 'break') {
+        const { name: groupName, patches } = breakMotorGroup(state.instances, args.groupId);
+        await save(patches, `Break up ${groupName}`);
+        return { ok: true, broken: { groupId: args.groupId, name: groupName } };
+      }
+      return { isError: true, error: 'action must be create, set_direction, rename, remove or break.' };
+    } catch (err) {
+      return { isError: true, error: err.message };
+    }
   }
 
   if (name === 'ungroup_parts') {

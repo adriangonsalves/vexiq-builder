@@ -10,6 +10,7 @@ import { copiedRope, isRoutedRope } from './ropeRoute.js';
 import * as THREE from 'three';
 import { quaternionToEulerDeg } from './gearMeshing.js';
 import { collectWorldFeatures, gridPivot } from './pinHoleAlignment.js';
+import { MOTOR_GROUP_FIELDS } from './motorGroups.js';
 
 export const newGroupId = () => `group-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -135,7 +136,8 @@ export function applyPatches(instances, patches) {
     const fields = byId.get(inst.instanceId);
     if (!fields) return inst;
     const next = { ...inst, ...fields };
-    for (const key of ['groupId', 'groupName']) if (next[key] == null || next[key] === '') delete next[key];
+    for (const key of ['groupId', 'groupName', 'motorGroupId', 'motorGroupName']) if (next[key] == null || next[key] === '') delete next[key];
+    if (!next.motorReversed) delete next.motorReversed; // a motor-group motor turning the same way (openspec motor-groups)
     // A pose set here is the part's new known good pose
     if (fields.position || fields.rotation) {
       next.lastValidPosition = [...next.position];
@@ -342,6 +344,7 @@ export function cloneSet(instances, ids, offset, { newId, groupId = newGroupId()
       };
       delete copy.groupId;
       delete copy.groupName;
+      for (const k of MOTOR_GROUP_FIELDS) delete copy[k]; // copies are in no motor group (openspec motor-groups)
       if (group) Object.assign(copy, { groupId, groupName: `${group.name} copy` });
       return copy;
     });
@@ -434,6 +437,7 @@ export function addBuildAsGroup(instances, incoming, name, bboxOf, { pitch = 12.
       groupId,
       groupName
     };
+    for (const k of MOTOR_GROUP_FIELDS) delete copy[k]; // an added build's motors are in no motor group (openspec motor-groups)
     if (isRoutedBand(inst)) {
       copy.shape = { ...inst.shape, route: remap(inst.shape.route), ...(Array.isArray(inst.shape.picks) ? { picks: remap(inst.shape.picks) } : {}) };
     }

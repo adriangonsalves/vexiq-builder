@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, ArrowRight, ChevronDown, ChevronRight, ChevronUp, X } from 'lucide-react';
+import { controlStatus } from '../utils/motorGroups.js';
 import { LANDINGS } from '../sim/impact.js';
 import HelpQ from '../help/HelpQ.jsx';
 
@@ -10,6 +11,8 @@ import HelpQ from '../help/HelpQ.jsx';
  * (openspec motor-stopping), saved with the build.
  * Each row shows the motor's speed, or Stalled when a collision or a jammed train stops it; hovering
  * a row lights the motor up in the view. Below, a global option to limit speed by load and any warnings.
+ * A motor group (openspec motor-groups) is one row: one throttle, Keep and stopping mode for all its
+ * motors, Stalled when any of them is; opened, it lists its motors to flip one's direction.
  */
 // A Smart Motor's stopping modes, as VEX's "set motor stopping" block has them
 const STOPPING = [
@@ -23,6 +26,8 @@ export default function PlayPanel({
   error,
   mode,
   motors = [],
+  controls,
+  onMotorGroupEdit,
   throttles,
   status = {},
   warnings = [],
@@ -48,6 +53,9 @@ export default function PlayPanel({
   onHelp
 }) {
   const [holds, setHolds] = useState(() => new Set());
+  const [openGroups, setOpenGroups] = useState(() => new Set());
+  // One row per control; without controls, one per motor
+  const rows = controls || motors.map((m) => ({ key: m.id, label: m.label, group: false, motors: [{ id: m.id, label: m.label, reversed: false, stopping: m.stopping }] }));
   const [showWarnings, setShowWarnings] = useState(false);
   const [dropHeight, setDropHeight] = useState(0.5);
   const [dropLanding, setDropLanding] = useState('flat');
@@ -106,25 +114,50 @@ export default function PlayPanel({
           {motors.length === 0 ? (
             <div className="play-empty">This build has no Smart Motors to run.</div>
           ) : (
-            motors.map((m) => {
-              const value = Math.round((throttles.get(m.id) || 0) * 100);
-              const s = status[m.id];
-              const held = holds.has(m.id);
+            rows.map((m) => {
+              const value = Math.round((throttles.get(m.key) || 0) * 100);
+              const s = controlStatus(m, status);
+              const held = holds.has(m.key);
+              const modes = new Set(m.motors.map((x) => stopping[x.id] || x.stopping || 'brake'));
+              const mode = modes.size === 1 ? [...modes][0] : null; // a group's motors set differently: none shows
+              const groupOpen = openGroups.has(m.key);
               return (
                 <div
-                  key={m.id}
-                  className={`play-motor ${s?.stalled ? 'stalled' : ''}`}
-                  onPointerEnter={() => onHover(m.id)}
+                  key={m.key}
+                  className={`play-motor ${s.stalled ? 'stalled' : ''}`}
+                  onPointerEnter={() => onHover(m.key)}
                   onPointerLeave={() => onHover(null)}
                 >
                   <div className="explode-panel-row">
-                    <span className="play-motor-name" title={m.label}>{m.label}</span>
+                    {m.group && (
+                      <button
+                        type="button"
+                        className="explode-close play-group-toggle"
+                        style={{ marginLeft: 0 }}
+                        aria-expanded={groupOpen}
+                        aria-label={groupOpen ? `Close ${m.label}` : `Show the motors in ${m.label}`}
+                        title={groupOpen ? 'Hide the motors' : 'Show the motors and which way each turns'}
+                        onClick={() =>
+                          setOpenGroups((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(m.key)) next.delete(m.key);
+                            else next.add(m.key);
+                            return next;
+                          })
+                        }
+                      >
+                        {groupOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </button>
+                    )}
+                    <span className="play-motor-name" title={m.group ? `${m.label}: ${m.motors.length} motors` : m.label}>
+                      {m.label}
+                    </span>
                     <label className="play-motor-hold" data-help="play-hold" title="Keep this motor's throttle where you let go of it (double-click the slider to stop it)">
-                      <input type="checkbox" checked={held} onChange={(e) => toggleHold(m.id, e.target.checked)} />
+                      <input type="checkbox" checked={held} onChange={(e) => toggleHold(m.key, e.target.checked)} />
                       Keep
                     </label>
                     <span className="play-motor-speed" role="status">
-                      {s?.stalled ? 'Stalled' : `${Math.round(Math.abs(s?.rpm || 0))} rpm`}
+                      {s.stalled ? 'Stalled' : `${Math.round(Math.abs(s.rpm || 0))} rpm`}
                     </span>
                   </div>
                   <input
@@ -137,18 +170,38 @@ export default function PlayPanel({
                     value={value}
                     aria-label={`${m.label} throttle`}
                     aria-valuetext={value === 0 ? 'stopped' : `${Math.abs(value)}% ${value > 0 ? 'forward' : 'reverse'}`}
-                    onChange={(e) => onThrottle(m.id, Number(e.target.value) / 100)}
-                    onPointerUp={() => !held && onThrottle(m.id, 0)}
-                    onPointerCancel={() => !held && onThrottle(m.id, 0)}
-                    onDoubleClick={() => onThrottle(m.id, 0)}
+                    onChange={(e) => onThrottle(m.key, Number(e.target.value) / 100)}
+                    onPointerUp={() => !held && onThrottle(m.key, 0)}
+                    onPointerCancel={() => !held && onThrottle(m.key, 0)}
+                    onDoubleClick={() => onThrottle(m.key, 0)}
                   />
+                  {m.group && groupOpen && (
+                    <div className="play-group-motors">
+                      {m.motors.map((x) => (
+                        <div key={x.id} className="play-group-motor">
+                          <span title={x.label}>{x.label}</span>
+                          <button
+                            type="button"
+                            className={`motor-dir-btn ${x.reversed ? 'opposite' : ''}`}
+                            disabled={!onMotorGroupEdit}
+                            aria-label={`${x.label}: turns ${x.reversed ? 'the opposite way' : 'the same way'}. Tap to flip`}
+                            title={x.reversed ? 'Turns the opposite way to the group: tap to make it turn the same way' : 'Turns the same way as the group: tap to make it turn the opposite way'}
+                            onClick={() => onMotorGroupEdit?.({ kind: 'reverse', id: x.id, reversed: !x.reversed })}
+                          >
+                            {x.reversed ? <ArrowLeftRight size={12} /> : <ArrowRight size={12} />}
+                            {x.reversed ? 'Opposite' : 'Same'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {onStopping && (
                     <div className="play-stopping" role="radiogroup" aria-label={`${m.label}: when stopped`}>
                       <span className="play-stopping-label">When stopped:</span>
-                      {STOPPING.map(([mode, name, tip]) => {
-                        const on = (stopping[m.id] || m.stopping || 'brake') === mode;
+                      {STOPPING.map(([chip, name, tip]) => {
+                        const on = mode === chip;
                         return (
-                          <button key={mode} type="button" role="radio" aria-checked={on} className={`play-stopping-chip ${on ? 'active' : ''}`} title={tip} onClick={() => !on && onStopping(m.id, mode)}>
+                          <button key={chip} type="button" role="radio" aria-checked={on} className={`play-stopping-chip ${on ? 'active' : ''}`} title={tip} onClick={() => !on && onStopping(m.key, chip)}>
                             {name}
                           </button>
                         );

@@ -169,7 +169,7 @@ check('initialize instructions say how a ratchet and pawl go together (set_pawl)
 {
   const list = await rpc('tools/list');
   const names = list.result.tools.map((t) => t.name);
-  check('tools/list has the selection and group tools', ['select_parts', 'group_parts', 'ungroup_parts', 'update_group'].every((n) => names.includes(n)), names.join(', '));
+  check('tools/list has the selection and group tools', ['select_parts', 'group_parts', 'ungroup_parts', 'update_group', 'group_motors'].every((n) => names.includes(n)), names.join(', '));
   check('tools/list returns the original 15 tools', ['search_parts', 'get_part_details', 'get_assembly', 'place_part', 'update_part', 'align_part_to_hole', 'remove_part', 'clear_assembly', 'configure_viewport', 'auto_fasten_joint', 'audit_assembly', 'mate_parts', 'mesh_gear_train', 'mirror_subassembly', 'capture_viewport_views'].every((n) => names.includes(n)), names.join(', '));
   const placed = await call('place_part', { partQuery: '1x6 Beam', position: [0, 0, 0] });
   check('place_part writes to the temporary assembly file', placed.data?.ok && readState().instances.length === 1, JSON.stringify(placed.data)?.slice(0, 200));
@@ -978,6 +978,52 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   check('ungroup_parts dissolves the group and moves nothing', res.data?.ok && readState().instances.every((i) => i.groupId !== stackId) && readState().history.steps.at(-1).label === 'ungroup_parts: Ungroup Claw');
   res = await callRaw('ungroup_parts', { instanceIds: ['Loose'] });
   check('ungroup_parts on ungrouped parts is refused', res.isError);
+}
+
+// ---------------------------------------------------------------------------
+// motor-groups: group_motors, get_assembly motorGroups
+// ---------------------------------------------------------------------------
+{
+  writeSettings({ advanced: true, history: 'branches', mcpEnabled: true });
+  // A left motor and the right motor facing the other way (a mirrored drive), a third motor and a beam
+  writeState({
+    ...emptyState(),
+    instances: [mk('MotorL', 'VEX IQ Smart Motor', [0, 0, 0]), mk('MotorR', 'VEX IQ Smart Motor', [0, 200, 0], [180, 0, 0]), mk('MotorArm', 'VEX IQ Smart Motor', [200, 0, 0]), mk('Beam', '1x6 Beam', [0, 0, 100])]
+  });
+  let res = await callRaw('group_motors', { action: 'create', instanceIds: ['MotorL', 'Beam'] });
+  check('group_motors refuses a part that is not a Smart Motor, by name', res.isError && /Not a Smart Motor: Beam/.test(res.data?.error) && !readState().instances.some((i) => i.motorGroupId), JSON.stringify(res.data));
+  res = await callRaw('group_motors', { action: 'create', instanceIds: ['MotorL'] });
+  check('group_motors refuses one motor', res.isError && /two or more/.test(res.data?.error));
+  res = await call('group_motors', { action: 'create', instanceIds: ['MotorL', 'MotorR'], name: 'Drive' });
+  const driveId = res.data?.groupId;
+  check('group_motors create: "Drive" holds both motors, mirrored one opposite', res.data?.ok && res.data.name === 'Drive' && res.data.motors.map((m) => `${m.instanceId}:${m.direction}`).join() === 'MotorL:same,MotorR:opposite', JSON.stringify(res.data));
+  check('  one step labeled with the group', readState().history.steps.at(-1).label === 'group_motors: Group 2 motors as Drive', readState().history.steps.at(-1)?.label);
+  let asm = (await call('get_assembly')).data;
+  const motorL = asm.instances.find((i) => i.instanceId === 'MotorL');
+  const motorR = asm.instances.find((i) => i.instanceId === 'MotorR');
+  check('get_assembly lists motorGroups', asm.motorGroups?.length === 1 && asm.motorGroups[0].name === 'Drive' && asm.motorGroups[0].motors.length === 2, JSON.stringify(asm.motorGroups));
+  check('get_assembly gives each grouped motor its group and direction', motorL.motorGroupId === driveId && motorL.motorGroupName === 'Drive' && motorL.motorDirection === 'same' && motorR.motorDirection === 'opposite' && !('motorDirection' in asm.instances.find((i) => i.instanceId === 'MotorArm')));
+  res = await call('group_motors', { action: 'set_direction', instanceId: 'MotorR', opposite: false });
+  check('group_motors set_direction', res.data?.ok && res.data.motors[1].direction === 'same' && !readState().instances.find((i) => i.instanceId === 'MotorR').motorReversed);
+  res = await call('group_motors', { action: 'rename', groupId: driveId, name: 'Base' });
+  check('group_motors rename', res.data?.name === 'Base');
+  res = await callRaw('group_motors', { action: 'rename', groupId: driveId, name: '  ' });
+  check('group_motors rename refuses an empty name', res.isError && readState().instances.find((i) => i.instanceId === 'MotorL').motorGroupName === 'Base');
+  res = await call('group_motors', { action: 'create', instanceIds: ['MotorL', 'MotorArm'], opposite: ['MotorArm'] });
+  const st = readState();
+  check('group_motors create moves a motor; the old group left with one breaks up', res.data?.name === 'Motor group 1' && res.data.motors[1].direction === 'opposite' && !st.instances.find((i) => i.instanceId === 'MotorR').motorGroupId, JSON.stringify(res.data));
+  await call('undo');
+  check('  one undo restores "Base"', readState().instances.filter((i) => i.motorGroupId === driveId).length === 2);
+  res = await call('group_motors', { action: 'remove', instanceIds: ['MotorR'] });
+  check('group_motors remove of the second-last motor breaks the group', res.data?.ok && !readState().instances.some((i) => i.motorGroupId));
+  await call('undo');
+  res = await call('group_motors', { action: 'break', groupId: driveId });
+  check('group_motors break', res.data?.ok && !readState().instances.some((i) => i.motorGroupId));
+  res = await call('update_part', { instanceId: 'MotorL', position: [0, 0, 12.7] });
+  await call('undo');
+  await call('undo');
+  res = await call('update_part', { instanceId: 'MotorL', position: [0, 0, 12.7] });
+  check('update_part keeps a motor\'s motor group', readState().instances.find((i) => i.instanceId === 'MotorL').motorGroupId === driveId);
 }
 
 // ---------------------------------------------------------------------------
