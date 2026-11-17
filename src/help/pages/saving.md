@@ -82,6 +82,9 @@ Choose [[File → Starter]] to start a new build from a ready-made one, or to ad
 
 **Huey** is the 2025-26 Hero Bot, with the two ropes of its lift.
 
+**Swish** is the 2024-25 Hero Bot, a catapult. A rope on a ratchet winch pulls its arm down, and a pawl holds the winch until it lets go. Its Optical and Distance Sensors aren't in the parts library yet, so it comes without them.
+![Swish](shot:saving-starter-swish)
+
 ## The assembly starters
 **Sample starter** is what a new browser opens with: a beam, a pin, a shaft and a gear.
 ![Sample starter](shot:saving-starter-sample)

@@ -2457,6 +2457,13 @@
   "name": "Flop"
  },
  {
+  "feature": "File → Starter → Swish",
+  "kind": "starter",
+  "page": "saving",
+  "section": "the-robot-starters",
+  "name": "Swish"
+ },
+ {
   "feature": "File → Starter → Ratchet winch",
   "kind": "starter",
   "page": "saving",

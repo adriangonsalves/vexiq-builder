@@ -1,5 +1,6 @@
 import FLOP from './starters/flop.js';
 import HUEY from './starters/huey.js';
+import SWISH from './starters/swish.js';
 import RATCHET_WINCH from './starters/assemblies/ratchet-winch.js';
 import ROPE_WINCH from './starters/assemblies/rope-winch.js';
 import ROPE_LIFT from './starters/assemblies/rope-lift.js';
@@ -469,6 +470,30 @@ function hueyStarter(catalog) {
   });
 }
 
+/**
+ * Hero Bot Swish (VEX IQ 2024-25), imported from VEX's CAD as the instructions finish it
+ * (scripts/make-swish-starter.mjs): a catapult whose arm is wound down by a rope on a ratchet winch
+ * and let go by a pawl, with its arm bands, intake bands and the winch's two belts. The bands' and
+ * rope's routes name the starter's own ids. VEX's Gen 2 Optical and Distance Sensors aren't in the
+ * library, so their mounts come without them.
+ */
+function swishStarter(catalog) {
+  const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
+  const groupIds = new Map();
+  return SWISH.flatMap(([number, label, position, rotation, color, groupName, socketAngleDeg, shape], i) => {
+    const p = byNumber.get(number);
+    if (!p) return [];
+    const inst = { ...part(p, `inst-swish-${i + 1}`, position, rotation, color || p.defaultColor), label };
+    if (groupName) {
+      if (!groupIds.has(groupName)) groupIds.set(groupName, `group-swish-${groupName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+      Object.assign(inst, { groupId: groupIds.get(groupName), groupName });
+    }
+    if (socketAngleDeg) inst.socketAngleDeg = socketAngleDeg;
+    if (shape) inst.shape = shape;
+    return [inst];
+  });
+}
+
 /** Hero Bot Swish's winch (src/starters/assemblies/): a ratchet and pawl on a swinging arm, with its two belts. */
 function ratchetWinchStarter(catalog) {
   const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
@@ -556,6 +581,7 @@ export const STARTERS = [
   { id: 'clawbot', name: 'Clawbot', section: 'robots', build: clawbotStarter },
   { id: 'flop', name: 'Flop', section: 'robots', build: flopStarter },
   { id: 'huey', name: 'Huey', section: 'robots', build: hueyStarter },
+  { id: 'swish', name: 'Swish', section: 'robots', build: swishStarter },
   { id: 'ratchet-winch', name: 'Ratchet winch', section: 'assemblies', build: ratchetWinchStarter },
   { id: 'rope-winch', name: 'Rope winch', section: 'assemblies', build: ropeWinchStarter },
   { id: 'rope-lift', name: 'Rope lift', section: 'assemblies', build: ropeLiftStarter },

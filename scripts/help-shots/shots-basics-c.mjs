@@ -93,6 +93,7 @@ export default [
   starter('basebot', 'BaseBot'),
   starter('clawbot', 'Clawbot'),
   starter('flop', 'Flop'),
+  starter('swish', 'Swish'),
   starter('simple-drivetrain', 'Simple drivetrain'),
   starter('simple-arm', 'Simple arm'),
   starter('simple-claw', 'Simple claw', 0.75)

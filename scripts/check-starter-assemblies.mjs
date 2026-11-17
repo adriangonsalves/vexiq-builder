@@ -24,7 +24,7 @@ const lowest = (list) => Math.min(...list.map((i) => worldBoxOf(i, byId.get(i.pa
 const sectionIds = new Set(STARTER_SECTIONS.map((s) => s.id));
 check('every starter has a known section', STARTERS.every((s) => sectionIds.has(s.section)), STARTERS.filter((s) => !sectionIds.has(s.section)).map((s) => s.name).join(', '));
 const names = (section) => STARTERS.filter((s) => s.section === section).map((s) => s.name).join(', ');
-check('Robots: Speedbot 2.0, BaseBot, Clawbot, Flop, Huey', names('robots') === 'Speedbot 2.0, BaseBot, Clawbot, Flop, Huey', names('robots'));
+check('Robots: Speedbot 2.0, BaseBot, Clawbot, Flop, Huey, Swish', names('robots') === 'Speedbot 2.0, BaseBot, Clawbot, Flop, Huey, Swish', names('robots'));
 {
   // Huey (VEX's CAD, scripts/make-huey-starter.mjs): its groups, and both lift ropes on the starter's own parts
   const huey = starterById('huey').build(catalog);
@@ -39,6 +39,18 @@ check('Robots: Speedbot 2.0, BaseBot, Clawbot, Flop, Huey', names('robots') === 
   const unsecured = new Set(audit.unsecuredParts.map((u) => u.instanceId));
   const racksAndIdlers = huey.filter((i) => ['1x6 Continuous Linear Motion Rack Gear', '36 Tooth Gear', '48 Tooth Gear'].includes(partOf(i)?.name) && i.groupName !== 'Claw Mount');
   check(`Huey: its racks and idler gears are held (${racksAndIdlers.length} of them, none unsecured), and the Middle Stage slides on the Holder by one slide`, racksAndIdlers.length >= 8 && racksAndIdlers.every((i) => !unsecured.has(i.instanceId)) && audit.slides.length === 1 && audit.slides[0].moving.name === 'Elevator Middle Stage' && !audit.slides[0].locked, JSON.stringify({ unsecured: racksAndIdlers.filter((i) => unsecured.has(i.instanceId)).map((i) => i.label), slides: audit.slides.length }));
+}
+{
+  // Swish (VEX's CAD, scripts/make-swish-starter.mjs): its groups, the winch's ratchet held by its pawl,
+  // the rope and six bands on the starter's own parts
+  const swish = starterById('swish').build(catalog);
+  const ids = new Set(swish.map((i) => i.instanceId));
+  const refs = (JSON.stringify(swish.map((i) => i.shape || null)).match(/"instanceId":"[^"]+"/g) || []).map((r) => r.split('"')[3]);
+  check('Swish: 465 parts; groups Arm, Chassis, Distance Sensor Mount, Intake, Optical Sensor Mount, Winch', swish.length === 465 && [...new Set(swish.map((i) => i.groupName).filter(Boolean))].sort().join() === 'Arm,Chassis,Distance Sensor Mount,Intake,Optical Sensor Mount,Winch', `${swish.length} parts`);
+  check("Swish: one rope and six bands, their routes naming the starter's own parts", swish.filter((i) => i.shape?.kind === 'rope').length === 1 && swish.filter((i) => i.shape?.kind === 'band').length === 6 && refs.length > 20 && refs.every((id) => ids.has(id)), JSON.stringify(refs.filter((id) => !ids.has(id))));
+  const audit = auditAssembly({ instances: swish });
+  check('Swish: the ratchet is held one way by one pawl on one pivot, pressed on its teeth', audit.ratchets.length === 1 && audit.ratchets[0].holds && audit.ratchets[0].pressed && audit.ratchets[0].pivotCount === 1 && !audit.ratchets[0].wrongWay, JSON.stringify(audit.ratchets));
+  check('Swish: the rope is held at both ends and passes through no part; nothing unsecured', audit.ropes.length === 1 && !audit.ropes[0].through.length && !audit.ropes[0].loosePocket && !audit.ropes[0].tooShortMm && audit.unsecuredPartCount === 0, JSON.stringify({ ropes: audit.ropes, unsecured: audit.unsecuredPartCount }));
 }
 check('Assemblies: Sample starter, Ratchet winch, Rope winch, Rope lift, Simple drivetrain, Simple arm, Simple claw', names('assemblies') === 'Sample starter, Ratchet winch, Rope winch, Rope lift, Simple drivetrain, Simple arm, Simple claw', names('assemblies'));
 check('headings: Robots then Assemblies', STARTER_SECTIONS.map((s) => s.name).join() === 'Robots,Assemblies');

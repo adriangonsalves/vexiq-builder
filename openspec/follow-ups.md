@@ -126,3 +126,8 @@ Low-priority items left open when a change was closed. Pick one up by proposing 
 19. **The Rack Gear and Linear Slide pair** (the older non-continuous linear motion parts) aren't measured or understood as a slide.
 20. **A carriage flung by its ropes with gravity off coasts on** until it meets the top of its rails (nothing slows it but damping); with gravity off a carriage is only promised not to be pulled down.
 21. **Starting Play with gravity on and a motor driven at once** on a build with loose parts: checked only on Huey after the "loose parts don't stall a motor" rule.
+
+## From the Swish starter (2026-11-17)
+
+1. **Swish comes without its Optical Sensor (228-7082) and Distance Sensor (228-7106).** These Gen 2 sensors aren't in the library (VEX's CAD download has only display meshes, no STEP files), so the import leaves them out and their 8 pins are half-seated in the mounts. Add the two parts from their STEP files, then rebuild with `scripts/make-swish-starter.mjs`.
+2. **The imported Swish has 13 overlaps**: gear teeth on the winch (228-2500-214 pairs) and intake (228-2500-235 against 228-2500-083), and a shaft in a beam on the arm and the intake. Not looked into.
