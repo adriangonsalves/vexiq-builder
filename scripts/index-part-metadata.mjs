@@ -14,6 +14,7 @@ import { getLocalFeatures, measurePinEnds, SHAFT_FASTENER_TYPES, THIN_PART_MAX_M
 import {
   measureBevelGear,
   measureCrownGear,
+  measureHybridFace,
   measureMotorHub,
   measureOpeningShape,
   measurePawl,
@@ -663,8 +664,14 @@ function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasu
 
   if (gearSpecs?.gearType === 'spur') {
     const m = measureSpurGear(part, gearSpecs.teeth);
-    if (m.measured) Object.assign(gearSpecs, m);
-    else {
+    if (m.measured) {
+      Object.assign(gearSpecs, m);
+      // A hybrid gear's extended teeth, which mesh with another hybrid gear at 90° (openspec
+      // hybrid-right-angle-gears)
+      const hybrid = measureHybridFace(part, gearSpecs);
+      if (hybrid) gearSpecs.hybrid = hybrid;
+      else delete gearSpecs.hybrid;
+    } else {
       gearSpecs.measured = false;
       if (gearSpecs.teeth && m.reason !== 'not a meshing gear') unmeasured.push(`${part.name}: ${m.reason}`);
     }
@@ -1438,7 +1445,11 @@ async function main() {
       const z = part.bbox.center[2];
       for (const p of ports) {
         const onAxis = p.type === 'pin_hole' && Math.abs(Math.abs(p.axis[2]) - 1) < 1e-3 && Math.hypot(p.origin[0], p.origin[1]) < 0.5 && Math.abs(p.origin[2] - z) < part.bbox.size[2];
-        if (onAxis) Object.assign(p, { type: 'shaft_bore', shape: 'square', wasHole: true });
+        if (!onAxis) continue;
+        // Its flats and its length as a bore (the pin probe measured it as a hole, too long)
+        const opening = measureOpeningShape(part, { origin: [0, 0, z], axis: [0, 0, 1], tMin: part.bbox.min[2], tMax: part.bbox.max[2] });
+        Object.assign(p, { type: 'shaft_bore', shape: 'square', spanMm: [part.bbox.min[2], part.bbox.max[2]], wasHole: true });
+        if (opening.shape === 'square') p.squarePhaseDeg = opening.squarePhaseDeg;
       }
     }
     // 7. Shafts: their axis, ends, cross-section and cap or stop ring

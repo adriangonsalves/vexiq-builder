@@ -30,6 +30,7 @@ async function cropBox(app, x0, y0, x1, y1) {
 }
 
 export default [
+  { name: 'gears-hybrid-corner', layout: 'large', build: BUILDS + 'hybrid-corner.vexiq.json', async setup(app) { await cropBox(app, 0.25, 0.2, 0.75, 0.8); }, crop: ['css:#help-crop-box'] },
   { name: 'gears-pair', layout: 'large', build: BUILDS + 'gear-pair.vexiq.json', async setup(app) { await cropBox(app, 0.2, 0.2, 0.8, 0.8); }, crop: ['css:#help-crop-box'] },
   {
     name: 'chain-menu', layout: 'large', build: BUILDS + 'two-sprockets.vexiq.json',

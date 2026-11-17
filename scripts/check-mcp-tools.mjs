@@ -1228,6 +1228,19 @@ const subset = (labels) => drivetrain.instances.filter((i) => labels.includes(i.
   writeState({ ...emptyState(), instances: [mk('Worm', 'Worm Gear', [0, 0, 0])] });
   res = await call('mesh_right_angle', { part: '24 Tooth Sprocket', targetInstanceId: 'Worm' });
   check('mesh_right_angle with a sprocket and a worm is refused, naming the pairs that mesh', res.isError && /pairs that do/.test(res.data?.error || '') && /Worm Gear with a standard spur gear/.test(res.data?.error || ''), JSON.stringify(res.data));
+  check('  the refusal names the hybrid pair too', /two hybrid gears/i.test(res.data?.error || ''), res.data?.error);
+
+  // hybrid-right-angle-gears: a 12 Tooth Hybrid round a 24 Tooth Hybrid
+  writeState({ ...emptyState(), instances: [mk('Hybrid A', '24 Tooth Hybrid Gear', [0, 0, 0], [-90, 0, 0])] });
+  res = await call('mesh_right_angle', { part: '12 Tooth Hybrid Gear', targetInstanceId: 'Hybrid A' });
+  check('mesh_right_angle lists four spots for a 12 Tooth Hybrid round a 24 Tooth Hybrid, adding nothing', res.data?.ok && res.data.spots?.length === 4 && readState().instances.length === 1, JSON.stringify(res.data).slice(0, 300));
+  res = await call('mesh_right_angle', { part: '12 Tooth Hybrid Gear', targetInstanceId: 'Hybrid A', spot: 1, label: 'Hybrid B' });
+  const hAudit = (await call('audit_assembly')).data;
+  check(
+    '  with spot 1 it adds the gear, meshed as a hybrid pair, and the audit finds no overlap',
+    res.data?.ok && /^Meshed Hybrid B with Hybrid A/.test(res.data.message || '') && hAudit.collisionCount === 0 && hAudit.kinematics.meshedGearPairs.some((pr) => pr.kind === 'hybrid'),
+    JSON.stringify({ reply: res.data, collisions: hAudit.collisions, pairs: hAudit.kinematics?.meshedGearPairs })
+  );
 
   // A worm pushed onto a shaft that lies where it meshes with a 36 Tooth Gear, rollDeg 0
   const { findPart: fp } = await import('../mcp/assembly-engine.mjs');

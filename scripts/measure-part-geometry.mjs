@@ -777,6 +777,53 @@ export function measureCrownGear(part, teeth) {
   };
 }
 
+const HYBRID_MIN_STANDOUT_MM = 1; // teeth standing this far past one face (more than the other) make a hybrid gear
+
+/**
+ * A hybrid gear's extended teeth (openspec hybrid-right-angle-gears): on one face the spur teeth carry
+ * on past the hub with sloped tops, and that face meshes with another hybrid gear at 90°. Rays along
+ * the axis onto rings between root and tip give the highest point reached toward each face (the tooth
+ * tops). Returns { face, plainZ, pitchTopZ, tipZ, stretchMm } along the part's Z (the frame of
+ * `faceSpanMm`), or null for a gear whose two faces stand alike (a plain spur gear). `plainZ` is where
+ * the flat face would be on the extended side (the other face, mirrored); `stretchMm` the stretch past
+ * the gear's center where its teeth are whole at the pitch radius, from the plain face to the sloped top
+ * there less a quarter module.
+ */
+export function measureHybridFace(part, gearSpecs) {
+  const g = gearSpecs;
+  if (!g?.measured || !(g.tipRadiusMm > g.rootRadiusMm)) return null;
+  const cast = makeRaycaster(part);
+  const axis = new THREE.Vector3(0, 0, 1);
+  const [u, v] = refAxes(axis);
+  const { min, max } = part.bbox;
+  // Highest point reached toward `face` on the ring of radius r (outward along `face`)
+  const topAt = (face, r) => {
+    const start = face > 0 ? max[2] + 2 : min[2] - 2;
+    let top = -Infinity;
+    for (let i = 0; i < 720; i++) {
+      const th = (i / 720) * Math.PI * 2;
+      const origin = u.clone().multiplyScalar(r * Math.cos(th)).addScaledVector(v, r * Math.sin(th)).setZ(start);
+      const d = cast(origin, new THREE.Vector3(0, 0, -face));
+      if (d != null) top = Math.max(top, face * (start - face * d));
+    }
+    return top;
+  };
+  const r = g.pitchRadiusMm;
+  const tops = { [1]: topAt(1, r), [-1]: topAt(-1, r) };
+  const face = tops[1] >= tops[-1] ? 1 : -1;
+  if (!(tops[face] - tops[-face] > HYBRID_MIN_STANDOUT_MM)) return null;
+  const plain = tops[-face];
+  const pitchTop = tops[face];
+  const tip = topAt(face, g.tipRadiusMm - 0.25);
+  return {
+    face,
+    plainZ: round(face * plain),
+    pitchTopZ: round(face * pitchTop),
+    tipZ: round(face * tip),
+    stretchMm: [round(plain), round(pitchTop - g.moduleMm / 4)]
+  };
+}
+
 const WORM_SPACING_AGREE_MM = 0.05; // the thread spacing found at each angle must agree this well
 
 /**

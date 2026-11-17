@@ -131,3 +131,10 @@ Low-priority items left open when a change was closed. Pick one up by proposing 
 
 1. **Swish comes without its Optical Sensor (228-7082) and Distance Sensor (228-7106).** These Gen 2 sensors aren't in the library (VEX's CAD download has only display meshes, no STEP files), so the import leaves them out and their 8 pins are half-seated in the mounts. Add the two parts from their STEP files, then rebuild with `scripts/make-swish-starter.mjs`.
 2. **The imported Swish has 13 overlaps**: gear teeth on the winch (228-2500-214 pairs) and intake (228-2500-235 against 228-2500-083), and a shaft in a beam on the arm and the intake. Not looked into.
+
+## From hybrid-right-angle-gears (2026-11-17)
+
+1. **Dragging a loose hybrid gear into mesh wasn't tried in the app.** Join (Auto Join) moves a 12 Tooth Hybrid into mesh beside a 24 Tooth Hybrid and one undo puts it back (checked in the static preview); the drag uses the same mesh spots but the browser script couldn't pick the gear on screen without the dev server's point helper. Try it by hand, with a mouse and a finger.
+2. **Double-clicking the partner gear wasn't tried for hybrid gears** (it goes through the same spots as Join). The Help page only names Auto Join for now.
+3. **A hybrid gear at 90° with a plain spur gear** is refused. Swish's 12 Tooth's face acts much like a crown for the 24 Tooth's teeth, so a plain spur gear might mesh there too; not looked into.
+4. **The rule rests on one real pair** (Swish's 24 and 12) plus the models. Build a 12 with 36 Tooth Hybrid by Join and compare with a real one if one is to hand.

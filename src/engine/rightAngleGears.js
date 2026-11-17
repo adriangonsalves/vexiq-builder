@@ -7,7 +7,7 @@ import { applyPosePatches, checkCandidateCollision, findPart, partOf, settlePlac
 import { meshSpots, quaternionToEulerDeg, rightAnglePair, worldToothed } from '../utils/gearMeshing.js';
 
 export const RIGHT_ANGLE_PAIRS_TEXT =
-  'a bevel gear with a bevel gear of the same tooth count (18 Tooth with 18 Tooth, 12 Tooth High Strength with 12 Tooth High Strength); the 36 Tooth Crown Gear with a standard spur gear (12, 24, 36, 48 or 60 Tooth); the Worm Gear with a standard spur gear';
+  'a bevel gear with a bevel gear of the same tooth count (18 Tooth with 18 Tooth, 12 Tooth High Strength with 12 Tooth High Strength); the 36 Tooth Crown Gear with a standard spur gear (12, 24, 36, 48 or 60 Tooth); the Worm Gear with a standard spur gear; two hybrid gears of the same tooth size (12, 24, 36, 48 or 60 Tooth Hybrid with each other, or 8, 16 or 24 Tooth High Strength Hybrid with each other), their extended faces toward each other';
 
 const round3 = (v) => v.toArray().map((x) => Math.round(x * 1000) / 1000 + 0);
 

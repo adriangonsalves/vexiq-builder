@@ -4,7 +4,7 @@ group: mechanisms
 order: 3
 summary: Place gears so their teeth fit, and know what turns what.
 icon: settings
-keywords: gear, teeth, mesh, meshed, sprocket, ratio, shaft, square, motor, hub, pitch, rack, idler
+keywords: gear, teeth, mesh, meshed, sprocket, ratio, shaft, square, motor, hub, pitch, rack, idler, hybrid, bevel, crown, worm, corner, right angle
 answers: gear
 tags: gear, sprocket, mechanism, shaft, motor, play, fit
 devOnly: false
@@ -24,7 +24,16 @@ Gears turn each other when their teeth fit. The app turns a gear a little when y
 Count the distance in pitches (a pitch is the space between two holes). Add the two tooth counts and divide by 24 to get the distance. A 12 and a 24 tooth gear sit 1.5 pitches apart. Two 24 tooth gears sit 2 pitches apart. A 12 and a 36 sit 2. A 24 and a 36 sit 2.5. Two 36s sit 3. A 24 and a 48 sit 3. Two 48s sit 4. Two 60s sit 5.
 
 ## Gears that don't mesh
-Only regular gears mesh. High strength gears (8, 16 and 24 teeth) mesh only with each other. Bevel gears, crown gears, ratchets, sprockets and the idler's round hole never turn to mesh. Chain goes on sprockets: see [Chain and track](help:chain-and-track).
+Side by side, only regular gears mesh. High strength gears (8, 16 and 24 teeth) mesh only with each other. Ratchets, sprockets and the idler's round hole never turn to mesh. Bevel, crown, worm and hybrid gears mesh at a right angle: see the next section. Chain goes on sprockets: see [Chain and track](help:chain-and-track).
+
+## Gears that meet at a right angle
+Some gears turn a drive round a corner. A hybrid gear's teeth stick out past one face. Two hybrid gears mesh at a right angle when those faces point at each other. Regular hybrids pair with regular ones, and high strength with high strength. A bevel gear pairs with a bevel gear of the same size. The crown gear and the worm gear pair with a regular gear.
+
+To mesh one, select the gear you are adding. Then select **Auto Join** [[Auto Join]] on the context bar. The gear jumps beside the other one, turned so the teeth fit.
+
+![A 24 tooth and a 12 tooth hybrid gear meshed at a right angle, each on a short shaft](shot:gears-hybrid-corner)
+
+Add the shafts afterwards, from each gear's flat side. Long shafts would cross where the two gears meet.
 
 ## What the Meshed messages mean
 "Meshed A with B (turned 5°)" says the gear turned that far to fit. "Couldn't mesh with B as well" says one neighbour is still a little off, so move a shaft. "Is held off its axis, so it wasn't turned to mesh" says a pin holds the gear off its own shaft.

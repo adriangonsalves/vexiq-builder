@@ -1,0 +1,65 @@
+{
+  "version": "1.1",
+  "pitchUnitMm": 12.7,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "instances": [
+    {
+      "instanceId": "inst-1794939930154-0-r14s",
+      "partId": "24-tooth-hybrid-gear-228-2500-251-317",
+      "label": "24 Tooth Hybrid Gear #1",
+      "position": [
+        0,
+        30,
+        0
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#0075c9",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        30,
+        0
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794939930154-1-flmp",
+      "partId": "12-tooth-hybrid-gear-228-2500-250-292",
+      "label": "12 Tooth Hybrid Gear #1",
+      "position": [
+        30,
+        10,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": "#0075c9",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        30,
+        10,
+        0
+      ],
+      "lastValidRotation": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

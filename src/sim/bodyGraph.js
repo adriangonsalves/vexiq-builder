@@ -383,7 +383,7 @@ export function buildBodyGraph(inputs) {
     }
     if (m.kind === 'gear') {
       links.push({ kind: 'gear', a, b, gears: [m.a, m.b], ratio: m.teethA / m.teethB, sign: -Math.sign(dot(m.axisA, m.axisB)) || -1, axisA: m.axisA, axisB: m.axisB });
-    } else if (m.kind === 'bevel' || m.kind === 'crown' || m.kind === 'worm') {
+    } else if (m.kind === 'bevel' || m.kind === 'crown' || m.kind === 'worm' || m.kind === 'hybrid') {
       // Gears at 90° (openspec right-angle-gears): `ratio` is signed (b about axisB per a about
       // axisA); a worm (always a) drives its gear one way only
       links.push({ kind: 'gear', pair: m.kind, a, b, gears: [m.a, m.b], ratio: Math.abs(m.ratio), sign: Math.sign(m.ratio) || -1, axisA: m.axisA, axisB: m.axisB, ...(m.oneWay ? { oneWay: true } : {}) });

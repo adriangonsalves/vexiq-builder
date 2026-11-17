@@ -14,7 +14,8 @@ import { angleAbout, directionAt, refAxes, wrapDeg } from './axisFrame.js';
  * For a rack (contact at s along its length, t_R = frac((s − s₀)/spacing), n out of its teeth):
  *   t_G + sign((g × n)·d)·t_R ≡ ½
  *
- * Gears at 90° (openspec right-angle-gears): bevel with bevel, crown with spur, worm with spur. At
+ * Gears at 90° (openspec right-angle-gears): bevel with bevel, crown with spur, worm with spur, and
+ * hybrid with hybrid (openspec hybrid-right-angle-gears: spur gears whose teeth carry on past one face). At
  * the point P where the two touch, with T the direction their teeth move there, each part's tooth
  * pattern is read as u = the fraction of a tooth period from P to the next tooth center going along
  * +T. A tooth of one faces a gap of the other when u_A − u_B ≡ ½; rolling moves both u together.
@@ -63,6 +64,7 @@ export function rightAnglePair(metaA, metaB) {
   if (kinds === 'bevel+bevel') return a.teeth === b.teeth ? 'bevel' : null;
   if (kinds === 'crown+spur') return sameModule(a, b) ? 'crown' : null;
   if (kinds === 'spur+worm') return sameModule(a, b) ? 'worm' : null;
+  if (kinds === 'spur+spur') return a.hybrid && b.hybrid && sameModule(a, b) ? 'hybrid' : null;
   return null;
 }
 
@@ -91,7 +93,9 @@ export function worldToothed(partMeta, position, rotation, instanceId = null) {
       toothDir: directionAt([0, 0, 1], g.toothPhaseDeg).applyQuaternion(q),
       faceSpan: [t0 + lo, t0 + hi],
       faceMid: origin.clone().addScaledVector(axis, (lo + hi) / 2),
-      tipRadiusMm: g.tipRadiusMm
+      tipRadiusMm: g.tipRadiusMm,
+      // A hybrid gear's extended face (world direction) and its 90° tooth stretch along it from the center
+      ...(g.hybrid ? { hybrid: { face: axis.clone().multiplyScalar(g.hybrid.face), stretch: [...g.hybrid.stretchMm] } } : {})
     };
   }
   if (isRightAngleGear(partMeta)) {
@@ -179,7 +183,7 @@ const spanAlong = (gear, axis) => {
 export function meshRelation(gear, other) {
   if (!gear || !other || gear === other) return null;
   if (other.instanceId != null && other.instanceId === gear.instanceId) return null;
-  if (RIGHT_ANGLE_KINDS.has(gear.kind) || RIGHT_ANGLE_KINDS.has(other.kind)) return rightAngleRelation(gear, other);
+  if (RIGHT_ANGLE_KINDS.has(gear.kind) || RIGHT_ANGLE_KINDS.has(other.kind) || hybridAtRightAngle(gear, other)) return rightAngleRelation(gear, other);
   if (gear.kind !== 'gear') return null;
   if (Math.abs(gear.moduleMm - other.moduleMm) > 0.01 * gear.moduleMm) return null;
   const g = gear.axis;
@@ -307,6 +311,40 @@ function wormContact(worm, spur, tol = MESH_CENTER_TOLERANCE_MM) {
   return { P: Q.addScaledVector(toSpur, worm.pitchRadiusMm), T: w.clone(), tau, distanceMm: Math.max(sideways, Math.abs(apart - worm.pitchRadiusMm - spur.pitchRadiusMm)) };
 }
 
+/** Two hybrid gears whose axes are at 90°: the pair the hybrid rule judges (parallel ones mesh as spur gears). */
+function hybridAtRightAngle(a, b) {
+  return a?.kind === 'gear' && b?.kind === 'gear' && Boolean(a.hybrid && b.hybrid) && perpendicular(a.axis, b.axis);
+}
+
+/**
+ * Where two hybrid gears meet at 90°, or null when out of mesh range (openspec
+ * hybrid-right-angle-gears): same tooth size; the axes cross; each gear's extended face points at the
+ * crossing O; and each gear's pitch circle passes through the other's 90° tooth stretch: a gear's
+ * distance to O, less its partner's pitch radius, lies within its own stretch. They touch at
+ * P = O − r_B·face_A − r_A·face_B, one pitch radius from each axis.
+ */
+function hybridContact(a, b, tol = MESH_CENTER_TOLERANCE_MM) {
+  if (!sameModule(a, b) || !hybridAtRightAngle(a, b)) return null;
+  const fa = a.hybrid.face;
+  const fb = b.hybrid.face;
+  // The closest points of the two axes (perpendicular, so the formula is short)
+  const w = a.center.clone().sub(b.center);
+  const c = fa.dot(fb);
+  const den = 1 - c * c;
+  const sa = (c * fb.dot(w) - fa.dot(w)) / den;
+  const sb = (fb.dot(w) - c * fa.dot(w)) / den;
+  const pa = a.center.clone().addScaledVector(fa, sa);
+  const pb = b.center.clone().addScaledVector(fb, sb);
+  const gap = pa.distanceTo(pb);
+  if (gap > tol || !(sa > 0) || !(sb > 0)) return null;
+  const outside = (h, [lo, hi]) => Math.max(0, lo - h, h - hi);
+  const offA = outside(sa - b.pitchRadiusMm, a.hybrid.stretch);
+  const offB = outside(sb - a.pitchRadiusMm, b.hybrid.stretch);
+  if (offA > tol || offB > tol) return null;
+  const O = pa.add(pb).multiplyScalar(0.5);
+  return { P: O.addScaledVector(fa, -b.pitchRadiusMm).addScaledVector(fb, -a.pitchRadiusMm), distanceMm: Math.max(gap, offA, offB) };
+}
+
 /** A turning gear's tooth pattern at P along T: u(φ) for tooth angle φ, and the φ that gives u. */
 function angularPattern(part, axisPoint, P, T) {
   const r = across(P.clone().sub(axisPoint), part.axis);
@@ -351,6 +389,9 @@ function rightAngleContact(a, b, tol = MESH_CENTER_TOLERANCE_MM) {
   } else if (kinds === 'gear+worm') {
     contact = wormContact(...pick('worm'), tol);
     pair = 'worm';
+  } else if (kinds === 'gear+gear') {
+    contact = hybridContact(a, b, tol);
+    pair = 'hybrid';
   }
   if (!contact) return null;
   if (!contact.T) {
@@ -385,7 +426,7 @@ export const NEAR_MESH_MM = 3;
  * within NEAR_MESH_MM but one is more than the mesh tolerance off, else null.
  */
 export function rightAngleNearMiss(a, b) {
-  if (!a || !b || !(RIGHT_ANGLE_KINDS.has(a.kind) || RIGHT_ANGLE_KINDS.has(b.kind))) return null;
+  if (!a || !b || !(RIGHT_ANGLE_KINDS.has(a.kind) || RIGHT_ANGLE_KINDS.has(b.kind) || hybridAtRightAngle(a, b))) return null;
   if (rightAngleContact(a, b)) return null;
   const loose = rightAngleContact(a, b, NEAR_MESH_MM);
   return loose ? { pair: loose.pair, offMm: Math.round(loose.distanceMm * 10) / 10 } : null;
@@ -447,9 +488,9 @@ export function meshSnapSlides(a, b, { slideB = true } = {}) {
 }
 const round3 = (n) => Math.round(n * 1000) / 1000 + 0;
 
-/** The 90° pair kind ('bevel', 'crown', 'worm') of two world toothed parts in mesh range, or null. */
+/** The 90° pair kind ('bevel', 'crown', 'worm', 'hybrid') of two world toothed parts in mesh range, or null. */
 export function rightAngleMeshKind(a, b) {
-  return a && b && (RIGHT_ANGLE_KINDS.has(a.kind) || RIGHT_ANGLE_KINDS.has(b.kind)) ? rightAngleContact(a, b)?.pair ?? null : null;
+  return a && b && (RIGHT_ANGLE_KINDS.has(a.kind) || RIGHT_ANGLE_KINDS.has(b.kind) || hybridAtRightAngle(a, b)) ? rightAngleContact(a, b)?.pair ?? null : null;
 }
 
 /**
@@ -503,7 +544,14 @@ export function meshSpots(partMeta, pose, partner, partnerMeta) {
   const p = partner.axis;
   const candidates = []; // { axis, position }
   for (const d of quarterDirections(p)) {
-    if (pair === 'bevel') {
+    if (pair === 'hybrid') {
+      // The axes cross on the partner's extended side, each pitch circle in the middle of the other's
+      // stretch; this gear out along d with its extended face back toward the partner's axis
+      const mid = (st) => (st[0] + st[1]) / 2;
+      const O = partner.center.clone().addScaledVector(partner.hybrid.face, g.pitchRadiusMm + mid(partner.hybrid.stretch));
+      const axis = d.clone().multiplyScalar(-g.hybrid.face);
+      candidates.push({ axis, position: O.addScaledVector(d, partner.pitchRadiusMm + mid(g.hybrid.stretchMm)) });
+    } else if (pair === 'bevel') {
       // Cone points together, this gear's body out along d
       const axis = d.clone().negate();
       candidates.push({ axis, position: partner.apex.clone().addScaledVector(axis, -g.conePointZ) });

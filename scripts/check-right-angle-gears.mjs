@@ -8,6 +8,8 @@ import * as THREE from 'three';
 import { auditAssembly, checkCandidateCollision, findPart, getPartRawGeometry, worldFeaturesFor } from '../mcp/assembly-engine.mjs';
 import { refAxes } from '../src/utils/axisFrame.js';
 import { settlePlacement } from '../src/utils/placementFit.js';
+import { starterById } from '../src/starters.js';
+import { getCatalog } from '../mcp/assembly-engine.mjs';
 import {
   canTurnToMesh,
   meshRatio,
@@ -15,6 +17,7 @@ import {
   meshSpots,
   meshTurn,
   quaternionToEulerDeg,
+  rightAngleMeshKind,
   rightAnglePair,
   turnQuaternion,
   worldToothed
@@ -335,6 +338,106 @@ const bevelB = atSpot(BEVEL18, bevelSpots[0], '18 Tooth Bevel Gear #2');
   b = { ...b, rotation: quaternionToEulerDeg(turnQuaternion(b.rotation, ...(() => { const m = meshTurn(toothed(b), [toothed(a)]); return [m.axis, m.turnDeg]; })())) };
   const r = meshRatio(toothed(a), toothed(b));
   check(`12 to 36 tooth spur gears: ratio ${r?.toFixed(4)} = −1/3`, near(r, -1 / 3, 1e-3));
+}
+
+// --- Hybrid gears at 90° (openspec hybrid-right-angle-gears) -------------------------------------
+{
+  const HYBRIDS = ['12 Tooth Hybrid Gear', '24 Tooth Hybrid Gear', '36 Tooth Hybrid Gear', '48 Tooth Hybrid Gear', '60 Tooth Hybrid Gear', '8 Tooth High Strength Hybrid Gear', '16 Tooth High Strength Hybrid Gear', '24 Tooth High Strength Hybrid Gear'].map(part);
+  check(
+    'Hybrid gears are measured: all eight record their extended face (+z) and a 90° tooth stretch holding Swish\'s 2.45 and 3.3 mm; a plain 24 Tooth Gear records none',
+    HYBRIDS.every((p) => p.gearSpecs.hybrid?.face === 1 && p.gearSpecs.hybrid.stretchMm[0] <= 2.45 && p.gearSpecs.hybrid.stretchMm[1] >= 3.3) && !G24.gearSpecs.hybrid,
+    HYBRIDS.filter((p) => !p.gearSpecs.hybrid).map((p) => p.name).join(', ')
+  );
+  const H12 = part('12 Tooth Hybrid Gear');
+  const H24 = part('24 Tooth Hybrid Gear');
+  const H36 = part('36 Tooth Hybrid Gear');
+
+  // Swish's intake pair, as the starter has it
+  const swish = starterById('swish').build(getCatalog().catalog);
+  const s24 = swish.find((i) => i.label === 'Intake: 228-2500-251-1');
+  const s12 = swish.find((i) => i.label === 'Intake: 228-2500-250-1');
+  check("Swish's intake gears: a 24 and a 12 Tooth Hybrid pair at 90°", rightAnglePair(H24, H12) === 'hybrid' && rightAnglePair(H24, HS24) === null && rightAnglePair(H24, G24) === null);
+  const rel = meshRelation(toothed(s12), toothed(s24));
+  check("Swish's intake gears: in mesh range, reported as a hybrid pair", Boolean(rel) && rightAngleMeshKind(toothed(s24), toothed(s12)) === 'hybrid', JSON.stringify(rel && { distanceMm: rel.distanceMm }));
+  // Flipped on its shaft: the extended face points away from the crossing
+  const q12 = new THREE.Quaternion().setFromEuler(new THREE.Euler(...s12.rotation.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ'));
+  const flipped = { ...s12, rotation: quaternionToEulerDeg(q12.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI))) };
+  check('Hybrid face turned away: not in mesh range', !meshRelation(toothed(flipped), toothed(s24)) && !rightAngleMeshKind(toothed(flipped), toothed(s24)));
+  const plain = { ...s24, partId: G24.id };
+  check('Hybrid with a plain spur gear at 90°: not in mesh range', !meshRelation(toothed(s12), toothed(plain)) && !rightAngleMeshKind(toothed(plain), toothed(s12)));
+  // Speed ratio from the meshing rule: 24 to 12 turns the 12 twice as fast, teeth moving together where they meet
+  const ratio = meshRatio(toothed(s24), toothed(s12));
+  check(`Swish's pair: ratio ${ratio?.toFixed(4)} is ±2`, near(Math.abs(ratio ?? 0), 2, 1e-3));
+
+  // Placing: the 12 Tooth turned 4° off its meshing turn and settled on its shaft turns to mesh, with no contact
+  const settle = (placedId, instances) => settlePlacement({ placedId, instances, partOf: (i) => findPart(i.partId), featuresOf: worldFeaturesFor });
+  const off = { ...spun(s12, 4), label: '12 Tooth Hybrid Gear #1' };
+  const g24 = { ...s24, label: '24 Tooth Hybrid Gear #1' };
+  const r = settle(off.instanceId, [g24, off]);
+  const after = r.patches.find((x) => x.instanceId === off.instanceId);
+  const placed = after ? { ...off, ...after } : off;
+  const relAfter = meshRelation(toothed(placed), toothed(g24));
+  check(
+    'Hybrid gear slid onto a shaft: it turns to mesh, the message says so, and there is no contact',
+    Boolean(after) && relAfter && Math.abs(relAfter.errorTeeth(meshPhase(placed))) < 0.01 && !collides(placed, [g24]) && /^Meshed 12 Tooth Hybrid Gear #1 with 24 Tooth Hybrid Gear #1/.test(r.messages[0] || ''),
+    JSON.stringify(r)
+  );
+
+  // Spots: four round a Y-axis 24 Tooth Hybrid, each meshed with no contact
+  const hub = inst(H24, [0, 0, 0], Y_UP, '24 Tooth Hybrid Gear #2');
+  const spots = meshSpots(H12, { position: [30, 30, 30], rotation: [0, 0, 0] }, toothed(hub), H24);
+  const dirs = spots.map((sp) => sp.axis.toArray().map((x) => Math.round(x)).join(','));
+  check(
+    'Four spots round a hybrid gear: a 12 Tooth Hybrid has four round a Y-axis 24 Tooth Hybrid, axes along ±X and ±Z',
+    spots.length === 4 && ['1,0,0', '-1,0,0', '0,0,1', '0,0,-1'].every((d) => dirs.includes(d)),
+    dirs.join(' ')
+  );
+  check(
+    '  every spot is in mesh range, under a quarter tooth off, on the 24 Tooth\'s extended side with its own extended face toward it',
+    spots.length === 4 &&
+      spots.every((sp) => {
+        const b = atSpot(H12, sp);
+        const rr = meshRelation(toothed(b), toothed(hub));
+        const toHub = vec(hub.position).sub(sp.position);
+        return rr && Math.abs(rr.errorTeeth(meshPhase(b))) < 0.25 && sp.axis.dot(toHub) > 0 && toothed(hub).axis.dot(sp.position.clone().sub(vec(hub.position))) > 0;
+      })
+  );
+  for (const [label, moving, fixed] of [['12 Tooth Hybrid on a 24 Tooth Hybrid', H12, H24], ['12 Tooth Hybrid on a 36 Tooth Hybrid', H12, H36], ['24 Tooth Hybrid on a 12 Tooth Hybrid', H24, H12]]) {
+    let clean = true;
+    let count = 0;
+    for (const sp of [0, 7, 13]) {
+      const a = spun(inst(fixed, [0, 0, 0], Y_UP), sp);
+      for (const spot of meshSpots(moving, { position: [30, 30, 30], rotation: [0, 0, 0] }, toothed(a), fixed)) {
+        count++;
+        if (collides(atSpot(moving, spot), [a])) clean = false;
+      }
+    }
+    check(`${label}: meshed at every spot (${count}) with no contact`, count > 0 && clean);
+  }
+  // Half a tooth off must touch, or the no-contact checks prove nothing
+  {
+    const sp = spots[0];
+    const b = atSpot(H12, sp);
+    const half = { ...b, rotation: quaternionToEulerDeg(turnQuaternion(sp.quaternion, sp.axis, 180 / toothed(b).teeth)) };
+    check('  half a tooth off, the hybrid teeth touch', collides(half, [hub]));
+  }
+  // Swish's own pair, turned to mesh from several starting angles
+  {
+    let clean = true;
+    for (const start of [0, 9, 17, 23]) {
+      const g = spun(s12, start);
+      const m = meshTurn(toothed(g), [toothed(s24)]);
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...g.rotation.map((d) => THREE.MathUtils.degToRad(d)), 'XYZ'));
+      const turned = { ...g, rotation: quaternionToEulerDeg(turnQuaternion(q, m.axis, m.turnDeg)) };
+      if (!m || collides(turned, [s24])) clean = false;
+    }
+    check("Swish's pair: turned to mesh from four starting angles, no contact", clean);
+  }
+  const beam = inst(BEAM, spots[0]?.center.toArray() ?? [0, 0, 0], [0, 0, 0]);
+  check('  with a beam in one spot, three are left', spots.filter((sp) => !collides(atSpot(H12, sp), [beam])).length === 3);
+  // Side by side, hybrid gears still mesh as spur gears
+  const side = inst(H24, [19.05, 0, 0]);
+  check('Hybrid gears side by side still mesh as spur gears', Boolean(meshRelation(toothed(inst(H12, [0, 0, 0])), toothed(side))) && !rightAngleMeshKind(toothed(inst(H12, [0, 0, 0])), toothed(side)));
 }
 
 function meshPhase(i) {

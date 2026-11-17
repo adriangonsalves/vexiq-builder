@@ -67,6 +67,30 @@ const BUILDS = {
     });
   },
 
+  /** A 24 Tooth Hybrid Gear standing on a shaft, and a 12 Tooth Hybrid meshed with it at 90° on a shaft of its own. */
+  async 'hybrid-corner'(m) {
+    const placed = await m.call('place_parts', { parts: [{ ref: 'g24', partQuery: '228-2500-251', label: '24 Tooth Hybrid Gear #1', position: [0, 30, 0], rotation: FLAT }] });
+    const g24 = placed.parts[0].instanceId;
+    const meshed = await m.call('mesh_right_angle', { part: '228-2500-250', targetInstanceId: g24, spot: 1, label: '12 Tooth Hybrid Gear #1' });
+    await m.call('place_parts', {
+      parts: [
+        // Short shafts from each gear's flat side: long ones would cross where the two axes meet
+        { partQuery: '228-2500-117', label: 'Shaft #1', insert: { into: { instanceId: g24, port: 'sq.thru.0_0_0' }, fromSide: '-' } },
+        { partQuery: '228-2500-117', label: 'Shaft #2', insert: { into: { instanceId: meshed.instanceId, port: 'sq.thru.0_0_0' }, fromSide: '-' } }
+      ]
+    });
+  },
+
+  /** A 24 Tooth Hybrid Gear standing up, and a loose 12 Tooth Hybrid lying beside it, ready to Join. */
+  async 'hybrid-join'(m) {
+    await m.call('place_parts', {
+      parts: [
+        { partQuery: '228-2500-251', label: '24 Tooth Hybrid Gear #1', position: [0, 30, 0], rotation: FLAT },
+        { partQuery: '228-2500-250', label: '12 Tooth Hybrid Gear #1', position: [30, 10, 0], rotation: [0, 0, 0] }
+      ]
+    });
+  },
+
   /** Two 16 tooth sprockets on shafts at the ends of a beam, ready for the chain builder. */
   async 'two-sprockets'(m) {
     await m.call('place_parts', {

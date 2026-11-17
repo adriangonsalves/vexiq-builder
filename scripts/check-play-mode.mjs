@@ -170,7 +170,8 @@ const shaftInputs = (offDeg) => ({
   for (const [label, gearName, partnerName, partnerRot, startRot, expect] of [
     ['18 to 18 tooth bevel', '18 Tooth Bevel Gear', '18 Tooth Bevel Gear', [-90, 0, 0], [0, 0, 0], 1],
     ['12 tooth onto the 36 tooth crown', '36 Tooth Crown Gear', '12 Tooth Gear', [0, 90, 0], [0, 0, 0], 1 / 3],
-    ['worm onto a 36 tooth gear', '36 Tooth Gear', 'Worm Gear', [0, 90, 0], [0, 0, 0], 1 / 36]
+    ['worm onto a 36 tooth gear', '36 Tooth Gear', 'Worm Gear', [0, 90, 0], [0, 0, 0], 1 / 36],
+    ['24 to 12 tooth hybrid at 90°', '12 Tooth Hybrid Gear', '24 Tooth Hybrid Gear', [-90, 0, 0], [0, 0, 0], 2]
   ]) {
     const { gear, partner } = pairAt(gearName, partnerName, partnerRot, startRot);
     const r = meshRatio(partner, gear);
@@ -213,6 +214,13 @@ const shaftInputs = (offDeg) => ({
     const k = createKinematic(g);
     k.step(0.1, new Map([['motor', 1]]));
     check('bevel gears turn a corner: the second shaft turns at 120 rpm', Math.abs(Math.abs(rpmOf(k, g, 'bevel2', X)) - 120) < 1e-6 && !k.status().motor.stalled, JSON.stringify(g.links));
+  }
+  {
+    // Hybrid gears turn a corner (openspec hybrid-right-angle-gears): a 24 Tooth Hybrid on the motor shaft, a 12 Tooth Hybrid at 90°
+    const g = buildBodyGraph(cornerInputs('hybrid12', { a: 'gear', b: 'hybrid12', kind: 'hybrid', ratio: -2, axisA: Z, axisB: X }));
+    const k = createKinematic(g);
+    k.step(0.1, new Map([['motor', 1]]));
+    check('hybrid gears turn a corner: a 24 Tooth Hybrid at 120 rpm turns the 12 Tooth Hybrid at 240 rpm, two-way', Math.abs(Math.abs(rpmOf(k, g, 'hybrid12', X)) - 240) < 1e-6 && !k.status().motor.stalled && !g.links[0]?.oneWay, JSON.stringify(g.links));
   }
   {
     const g = buildBodyGraph(cornerInputs('crown', { a: 'gear', b: 'crown', kind: 'crown', ratio: 1 / 3, axisA: Z, axisB: X }));
@@ -1036,6 +1044,31 @@ const shaftInputs = (offDeg) => ({
     check(`Releasing: the arm swings away with the motor shaft (to ${r.tz(armB).toFixed(1)}°), its gear leaves C's within ${freedAt === null ? 'never' : `${(freedAt * 1000).toFixed(0)} ms`}, and C turns freely (C ${cR.toFixed(0)} rpm, B ${bR.toFixed(0)})`, freedAt !== null && r.tz(armB) > armAt + 15 && r.cPairs().every((m) => !m.engaged) && Math.abs(cR) > 20 && Math.abs(bR) < 0.5 * Math.abs(cR), JSON.stringify({ freedAt, bR, cR }));
     r.p.dispose();
   }
+}
+
+// --- Swish's intake runs (openspec hybrid-right-angle-gears): 24 to 12 Tooth Hybrid at 90°, then a 16 to 16 chain ---
+{
+  const catalogJson = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'public', 'catalog.json'), 'utf8'));
+  const instances = starterById('swish').build(catalogJson);
+  const byId = new Map(instances.map((i) => [i.instanceId, i]));
+  const g = buildBodyGraph(playInputs({ instances }));
+  const motor = g.motors.find((m) => m.label.startsWith('Intake:'));
+  const hinge = g.hinges.find((h) => h.id === motor.hinge);
+  const roller = g.bodies.find((b) => b.parts.some((id) => byId.get(id).groupName === 'Intake' && partOf(byId.get(id))?.name === '5x Pitch Capped Plastic Shaft'))?.id;
+  check("Swish's intake: its hybrid gears are linked at 90° (ratio 2)", g.links.some((l) => l.pair === 'hybrid' && Math.abs(l.ratio - 2) < 1e-3), JSON.stringify(g.links.map((l) => [l.pair || l.kind, l.ratio])));
+  const p = await createPhysics(g, instances, { points: (id) => getPartRawGeometry(partOf(byId.get(id))).attributes.position.array });
+  const rpm = (b, axis) => (p.spin(b, axis) * 60) / (2 * Math.PI);
+  const run = (v) => {
+    for (let i = 0; i < 60; i++) p.step(1 / 60, new Map([[motor.id, v]]));
+    return [rpm(hinge.b, hinge.axis), rpm(roller, [0, 0, 1])];
+  };
+  const [mF, rF] = run(1);
+  const [mB, rB] = run(-1);
+  check(
+    `Swish's intake runs: the roller turns at twice the motor shaft's speed (motor ${mF.toFixed(0)}, roller ${rF.toFixed(0)} rpm), and the other way on reversing (${mB.toFixed(0)}, ${rB.toFixed(0)})`,
+    Math.abs(mF) > 60 && Math.abs(Math.abs(rF) - 2 * Math.abs(mF)) <= 0.05 * 2 * Math.abs(mF) && Math.sign(rB) === -Math.sign(rF) && Math.abs(Math.abs(rB) - 2 * Math.abs(mB)) <= 0.05 * 2 * Math.abs(mB) && !p.status()[motor.id].stalled
+  );
+  p.dispose();
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll play mode checks passed');

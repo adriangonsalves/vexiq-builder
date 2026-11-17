@@ -3015,5 +3015,12 @@
   "page": "looking-around",
   "section": "using-the-view-cube",
   "name": "View cube"
+ },
+ {
+  "feature": "Context bar → Auto Join, with a gear selected that meshes at 90° (hybrid, bevel, crown, worm)",
+  "kind": "context-bar",
+  "page": "gears",
+  "section": "gears-that-meet-at-a-right-angle",
+  "name": "Auto Join"
  }
 ]

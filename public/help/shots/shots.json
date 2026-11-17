@@ -291,6 +291,11 @@
       }
     ]
   },
+  "gears-hybrid-corner": {
+    "w": 338,
+    "h": 482,
+    "marks": []
+  },
   "gears-pair": {
     "w": 398,
     "h": 482,

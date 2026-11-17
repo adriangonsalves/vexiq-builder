@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-11-17T17:46:20.120Z",
+  "generatedAt": "2026-11-17T18:22:52.611Z",
   "partCount": 482,
   "totalVerifiedPorts": 4242,
   "parts": {
@@ -95088,6 +95088,16 @@
           -2.43,
           4.67
         ],
+        "hybrid": {
+          "face": 1,
+          "plainZ": 2.286,
+          "pitchTopZ": 5.03,
+          "tipZ": 3.369,
+          "stretchMm": [
+            2.286,
+            4.634
+          ]
+        },
         "boreShape": "square"
       },
       "fastenerSpecs": null,
@@ -95118,8 +95128,8 @@
           ],
           "through": true,
           "spanMm": [
-            -500000,
-            9.525
+            -3.18,
+            5.46
           ],
           "pitchCoord": [
             0,
@@ -95128,6 +95138,7 @@
           ],
           "verified": true,
           "shape": "square",
+          "squarePhaseDeg": 0,
           "faces": [
             "+z",
             "-z"
@@ -96635,6 +96646,16 @@
           -2.43,
           4.42
         ],
+        "hybrid": {
+          "face": 1,
+          "plainZ": 2.286,
+          "pitchTopZ": 4.488,
+          "tipZ": 3.6,
+          "stretchMm": [
+            2.286,
+            4.223
+          ]
+        },
         "boreShape": "square"
       },
       "fastenerSpecs": null,
@@ -96665,8 +96686,8 @@
           ],
           "through": true,
           "spanMm": [
-            -14.489,
-            9.525
+            -3.18,
+            5.46
           ],
           "pitchCoord": [
             0,
@@ -96675,6 +96696,7 @@
           ],
           "verified": true,
           "shape": "square",
+          "squarePhaseDeg": 0,
           "faces": [
             "+z",
             "-z"
@@ -116417,6 +116439,16 @@
           -2.43,
           4.67
         ],
+        "hybrid": {
+          "face": 1,
+          "plainZ": 2.286,
+          "pitchTopZ": 5.141,
+          "tipZ": 3.357,
+          "stretchMm": [
+            2.286,
+            4.744
+          ]
+        },
         "boreShape": "square"
       },
       "fastenerSpecs": null,
@@ -118199,6 +118231,16 @@
           -2.43,
           4.67
         ],
+        "hybrid": {
+          "face": 1,
+          "plainZ": 2.286,
+          "pitchTopZ": 5.062,
+          "tipZ": 3.362,
+          "stretchMm": [
+            2.286,
+            4.665
+          ]
+        },
         "boreShape": "square"
       },
       "fastenerSpecs": null,
@@ -118419,6 +118461,16 @@
           -2.43,
           4.42
         ],
+        "hybrid": {
+          "face": 1,
+          "plainZ": 2.286,
+          "pitchTopZ": 4.574,
+          "tipZ": 3.606,
+          "stretchMm": [
+            2.286,
+            4.309
+          ]
+        },
         "boreShape": "square"
       },
       "fastenerSpecs": null,
@@ -120929,6 +120981,16 @@
           -2.43,
           4.42
         ],
+        "hybrid": {
+          "face": 1,
+          "plainZ": 2.286,
+          "pitchTopZ": 4.563,
+          "tipZ": 3.603,
+          "stretchMm": [
+            2.286,
+            4.298
+          ]
+        },
         "boreShape": "square"
       },
       "fastenerSpecs": null,
@@ -123527,6 +123589,16 @@
           -2.43,
           4.42
         ],
+        "hybrid": {
+          "face": 1,
+          "plainZ": 2.286,
+          "pitchTopZ": 4.568,
+          "tipZ": 3.602,
+          "stretchMm": [
+            2.286,
+            4.303
+          ]
+        },
         "boreShape": "square"
       },
       "fastenerSpecs": null,
@@ -124740,6 +124812,16 @@
           -2.43,
           4.42
         ],
+        "hybrid": {
+          "face": 1,
+          "plainZ": 2.286,
+          "pitchTopZ": 4.571,
+          "tipZ": 3.602,
+          "stretchMm": [
+            2.286,
+            4.306
+          ]
+        },
         "boreShape": "square"
       },
       "fastenerSpecs": null,

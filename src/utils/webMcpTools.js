@@ -279,7 +279,7 @@ export function registerVexIqWebMcpTools(contextRef) {
     {
       name: 'mesh_right_angle',
       description:
-        "Puts a gear in mesh with a gear it meshes with at 90° (as the MCP server's mesh_right_angle does): a bevel gear with a bevel gear of the same tooth count, the 36 Tooth Crown Gear with a standard spur gear, or the Worm Gear with a standard spur gear (the worm drives the gear, never the other way). Give instanceId (a gear to move) or part (a gear to add) and targetInstanceId. Without spot it lists the mesh spots [{ spot, axis, center, blocked, blockedBy }] and changes nothing; with spot it puts the gear there, meshed, as one undo step.",
+        "Puts a gear in mesh with a gear it meshes with at 90° (as the MCP server's mesh_right_angle does): a bevel gear with a bevel gear of the same tooth count, the 36 Tooth Crown Gear with a standard spur gear, the Worm Gear with a standard spur gear (the worm drives the gear, never the other way), or two hybrid gears of the same tooth size, their extended faces toward each other. Give instanceId (a gear to move) or part (a gear to add) and targetInstanceId. Without spot it lists the mesh spots [{ spot, axis, center, blocked, blockedBy }] and changes nothing; with spot it puts the gear there, meshed, as one undo step.",
       inputSchema: {
         type: 'object',
         properties: {

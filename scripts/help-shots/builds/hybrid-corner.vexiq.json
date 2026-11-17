@@ -1,0 +1,123 @@
+{
+  "version": "1.1",
+  "pitchUnitMm": 12.7,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "instances": [
+    {
+      "instanceId": "inst-1794939930013-0-tw27",
+      "partId": "24-tooth-hybrid-gear-228-2500-251-317",
+      "label": "24 Tooth Hybrid Gear #1",
+      "position": [
+        0,
+        30,
+        0
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#0075c9",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        30,
+        0
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794939930061-rd94",
+      "partId": "12-tooth-hybrid-gear-228-2500-250-292",
+      "label": "12 Tooth Hybrid Gear #1",
+      "position": [
+        15.955,
+        39.648,
+        0
+      ],
+      "rotation": [
+        14.97,
+        -90,
+        0
+      ],
+      "color": "#0075c9",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        15.955,
+        39.648,
+        0
+      ],
+      "lastValidRotation": [
+        14.97,
+        -90,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794939930069-0-rron",
+      "partId": "2x-pitch-shaft-228-2500-117-90",
+      "label": "Shaft #1",
+      "position": [
+        0,
+        21.572,
+        0
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": "#e2e8f0",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        0,
+        21.572,
+        0
+      ],
+      "lastValidRotation": [
+        -90,
+        0,
+        0
+      ]
+    },
+    {
+      "instanceId": "inst-1794939930069-1-y2h8",
+      "partId": "2x-pitch-shaft-228-2500-117-90",
+      "label": "Shaft #2",
+      "position": [
+        22.305,
+        39.648,
+        0
+      ],
+      "rotation": [
+        14.97,
+        -90,
+        0
+      ],
+      "color": "#e2e8f0",
+      "visible": true,
+      "locked": false,
+      "isIntersecting": false,
+      "lastValidPosition": [
+        22.305,
+        39.648,
+        0
+      ],
+      "lastValidRotation": [
+        14.97,
+        -90,
+        0
+      ]
+    }
+  ]
+}
