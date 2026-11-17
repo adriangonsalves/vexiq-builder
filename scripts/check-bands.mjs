@@ -330,7 +330,9 @@ function stripDepth(band, instances) {
     ['d', '228-2500-470', '297-cp2r', 'post:body', '837-wbyr', 'post:body', 'B']
   ];
   for (const [name, pn, a, fa, b, fb, stage] of cases) {
-    const r = placeBand(W, { bandPartId: byNumber(pn).id, spots: [{ instanceId: id(a), feature: fa }, { instanceId: id(b), feature: fb }] });
+    // (case d's #117B only just fits: 354 mm on a 354 mm route, the band crossing the beam edges on the
+    // slant; this checks the route's shape, so it may be placed slack)
+    const r = placeBand(W, { bandPartId: byNumber(pn).id, spots: [{ instanceId: id(a), feature: fa }, { instanceId: id(b), feature: fb }], allowSlack: name === 'd' });
     const band = r.ok ? r.state.instances.find((i) => i.instanceId === r.instanceId) : null;
     const depth = band ? stripDepth(band, r.state.instances) : {};
     const deepest = Math.max(0, ...Object.values(depth));
@@ -345,6 +347,23 @@ function stripDepth(band, instances) {
     const loose = placeBand(W, { bandPartId: byNumber(pn).id, spots, allowSlack: true });
     check(`[stage A] a ${BAND_SPECS[pn].name} on case (a) is refused as slack with a smaller size named, and placed with allowSlack`, !r.ok && /loose|slack/i.test(r.error || '') && r.suggestion && loose.ok, r.ok ? `placed at ${r.stretch}x` : r.error);
   }
+}
+
+// --- Crossing an edge on the slant ---
+{
+  // Two ends 20 mm apart along an edge, the band bent over it: it crosses on the slant its runs give, so
+  // laid flat the run in, the bend and the run out are one straight line
+  const point = (c) => ({ shape: 'point', center: c, axis: [0, 0, 1] });
+  const edge = { shape: 'circle', kind: 'edge', center: [0, 0, 0], axis: [0, 0, 1], radius: 1, span: [-50, 50], side: 'out' };
+  const path = solveBandPath([point([-20, -10, -10]), edge, point([20, -10, 10])], { open: true, thickMm: 0, maxRounds: 400, tolMm: 0.0005 });
+  const [, c] = path.contacts;
+  const R = 1;
+  const run = Math.sqrt(20 * 20 + 10 * 10 - R * R);
+  const wrap = THREE.MathUtils.degToRad(c.wrapDeg) * R;
+  const flat = Math.hypot(2 * run + wrap, 20);
+  const rise = c.b[2] - c.a[2];
+  const slope = (q, p) => (q[2] - p[2]) / Math.hypot(q[0] - p[0], q[1] - p[1]);
+  check(`a band over an edge crosses it on the slant: it arrives and leaves ${rise.toFixed(2)} mm apart along the edge, as steep as its runs, and is the shortest way (${path.lengthMm.toFixed(3)} mm against ${flat.toFixed(3)})`, Math.abs(rise - (20 * wrap) / (2 * run + wrap)) < 0.01 && c.wrapDeg < 90 && Math.abs(slope(c.a, [-20, -10, -10]) - slope([20, -10, 10], c.b)) < 0.01 && Math.abs(path.lengthMm - flat) < 0.05, JSON.stringify(c));
 }
 // --- 9.4 One overlap rule for bands ---
 {

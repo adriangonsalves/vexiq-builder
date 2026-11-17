@@ -402,8 +402,31 @@ function solveOnce(elements, opts = {}) {
       }
       e.h = bestHeight(e, (h) => e.c.clone().addScaledVector(e.axis, h), P, Q);
       const { thetaA, thetaB } = tangentAngles(e, P, Q, e.s);
-      const A = pointOf(e, e.h, thetaA);
-      const B = pointOf(e, e.h, thetaB);
+      // Over an edge or corner, the band takes the shortest way across: laid flat, the run in, the bend
+      // and the run out are one straight line, so it arrives and leaves at different points along the
+      // edge and crosses it on the slant its runs give (not square across it). Kept within the span.
+      // (Posts and pulleys keep one height: a rope wound round them more than once stacks there)
+      e.hA = e.h;
+      e.hB = e.h;
+      if (e.wraps === 1 && e.kind === 'edge') {
+        const flat = (p) => {
+          const d = p.clone().sub(e.c);
+          const along = d.dot(e.axis);
+          const r2 = d.lengthSq() - along * along;
+          return { along, run: Math.sqrt(Math.max(0, r2 - e.R * e.R)) };
+        };
+        const [fp, fq] = [flat(P), flat(Q)];
+        const arc = e.R * modTwoPi(e.s * (thetaB - thetaA));
+        const total = fp.run + arc + fq.run;
+        if (total > 1e-9) {
+          const clampH = (h) => Math.min(e.hi, Math.max(e.lo, h));
+          e.hA = clampH(fp.along + ((fq.along - fp.along) * fp.run) / total);
+          e.hB = clampH(fp.along + ((fq.along - fp.along) * (fp.run + arc)) / total);
+          e.h = (e.hA + e.hB) / 2;
+        }
+      }
+      const A = pointOf(e, e.hA, thetaA);
+      const B = pointOf(e, e.hB, thetaB);
       moved = Math.max(moved, A.distanceTo(c.a), B.distanceTo(c.b));
       Object.assign(c, { thetaA, thetaB, s: e.s });
       c.a.copy(A);
@@ -428,12 +451,13 @@ function solveOnce(elements, opts = {}) {
       const atEnd = open && (i === 0 || i === n - 1);
       const sweep = atEnd ? 0 : modTwoPi(e.s * (c.thetaB - c.thetaA)) + TWO_PI * (e.wraps - 1);
       c.wrapRad = sweep;
-      lengthMm += e.R * sweep;
+      const rise = e.wraps === 1 && !atEnd && e.kind === 'edge' ? (e.hB ?? e.h) - (e.hA ?? e.h) : 0;
+      lengthMm += Math.hypot(e.R * sweep, rise);
       const steps = Math.max(1, Math.ceil(THREE.MathUtils.radToDeg(sweep) / arcStepDeg));
       for (let k = 0; k <= steps; k++) {
         const t = k / steps;
         // Extra wraps lie side by side along the post, one band width apart
-        const h = e.h + (e.wraps > 1 ? (t * (e.wraps - 1) - (e.wraps - 1) / 2) * widthMm : 0);
+        const h = e.wraps > 1 ? e.h + (t * (e.wraps - 1) - (e.wraps - 1) / 2) * widthMm : atEnd ? e.h : (e.hA ?? e.h) + rise * t;
         points.push(pointOf(e, h, c.thetaA + e.s * sweep * t));
         ups.push(e.axis.clone());
         owners.push(i);
