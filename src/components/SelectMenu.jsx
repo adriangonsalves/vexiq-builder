@@ -1,10 +1,10 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { BoxSelect, ChevronDown, FolderMinus, FolderPlus, MousePointerClick, Network, SquareDashed } from 'lucide-react';
+import { BoxSelect, ChevronDown, Cog, FolderMinus, FolderPlus, MousePointerClick, Network, SquareDashed } from 'lucide-react';
 import PopoverMenu, { MenuDivider, MenuItem } from './PopoverMenu.jsx';
 
 /**
  * The toolbar's Select menu (openspec outliner-part-groups): Select mode, Box select, Select Connected, Select All,
- * Select None, Invert, Group and Ungroup. The button reads "Box select" or "Select mode" while one is on.
+ * Select None, Invert, Group, Ungroup and Group motors (openspec motor-groups). The button reads "Box select" or "Select mode" while one is on.
  */
 export default function SelectMenu({
   selectMode,
@@ -19,7 +19,9 @@ export default function SelectMenu({
   onNone,
   onInvert,
   onGroup,
-  onUngroup
+  onUngroup,
+  canGroupMotors = false,
+  onGroupMotors
 }) {
   const buttonRef = useRef(null);
   const [at, setAt] = useState(null);
@@ -90,6 +92,11 @@ export default function SelectMenu({
           <MenuItem icon={FolderMinus} disabled={!canUngroup} onSelect={choose(onUngroup)} shortcut="Shift+G" title="Break up the selected groups">
             Ungroup
           </MenuItem>
+          {onGroupMotors && (
+            <MenuItem icon={Cog} disabled={!canGroupMotors} onSelect={choose(onGroupMotors)} title={canGroupMotors ? 'Drive the selected Smart Motors with one control in Play mode' : 'Select two or more Smart Motors'}>
+              Group motors
+            </MenuItem>
+          )}
         </PopoverMenu>
       )}
     </>

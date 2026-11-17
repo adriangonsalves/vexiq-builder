@@ -3826,3 +3826,67 @@ dialog.help-modal::backdrop {
   gap: 4px;
   padding: 6px 8px;
 }
+
+/* Motor groups in the Outliner and the Play panel (openspec motor-groups) */
+.motor-groups {
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-strong);
+}
+.motor-group-name-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 2px 6px;
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+.motor-dir-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.motor-dir-btn.opposite {
+  border-color: #ffb54d;
+  color: #ffb54d;
+}
+@media (pointer: coarse) {
+  .motor-dir-btn {
+    min-height: 36px;
+    padding: 0 12px;
+  }
+  .motor-groups .icon-btn {
+    padding: 8px;
+  }
+}
+.play-group-motors {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 2px 8px;
+}
+.play-group-motor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.play-group-motor span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

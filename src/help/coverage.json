@@ -406,6 +406,69 @@
   "name": "Ungroup"
  },
  {
+  "feature": "Select menu → Group motors",
+  "kind": "menu",
+  "page": "outline",
+  "section": "motor-groups",
+  "name": "Group motors"
+ },
+ {
+  "feature": "Outliner, Selected list → Group motors",
+  "kind": "panel",
+  "page": "outline",
+  "section": "motor-groups",
+  "name": "motor button in the Selected list"
+ },
+ {
+  "feature": "Outliner → Motor groups",
+  "kind": "panel",
+  "page": "outline",
+  "section": "motor-groups",
+  "name": "Motor groups"
+ },
+ {
+  "feature": "Outliner, motor group → Same / Opposite",
+  "kind": "panel",
+  "page": "outline",
+  "section": "motor-groups",
+  "name": "Same"
+ },
+ {
+  "feature": "Outliner, motor group → Take out of the group",
+  "kind": "panel",
+  "page": "outline",
+  "section": "motor-groups",
+  "name": "The cross takes a motor out of the group"
+ },
+ {
+  "feature": "Outliner, motor group → Rename",
+  "kind": "panel",
+  "page": "outline",
+  "section": "motor-groups",
+  "name": "The pencil renames the group"
+ },
+ {
+  "feature": "Outliner, motor group → Break up",
+  "kind": "panel",
+  "page": "outline",
+  "section": "motor-groups",
+  "name": "breaks it up"
+ },
+ {
+  "feature": "Play panel → Motor group row",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "driving-motors-together",
+  "name": "one row and one throttle slider"
+ },
+ {
+  "feature": "Play panel, motor group → Same / Opposite",
+  "kind": "panel",
+  "page": "play-mode",
+  "section": "driving-motors-together",
+  "name": "Same or Opposite"
+ },
+ {
   "feature": "Tools menu → Check and fit",
   "kind": "menu",
   "page": "check-and-fix",

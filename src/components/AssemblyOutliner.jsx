@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, Layers, LocateFixed, Lock, Minus, Palette, Search, Trash2, Unlock, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Check, ChevronDown, ChevronRight, Cog, Copy, Eye, EyeOff, Folder, FolderMinus, Layers, LocateFixed, Lock, Minus, Palette, Pencil, Search, Trash2, Unlock, X } from 'lucide-react';
 
 const LOCATE_PINNED_KEY = 'vexiq.outlinerLocatePinned';
 const SELECTED_OPEN_KEY = 'vexiq.outlinerSelectedOpen';
@@ -34,6 +34,10 @@ export default function AssemblyOutliner({
   instances,
   catalogMap,
   groups,
+  motorGroups = new Map(),
+  canGroupMotors = false,
+  onGroupMotors,
+  onMotorGroupEdit,
   selectedIds,
   primaryId,
   selectMode = false,
@@ -492,6 +496,11 @@ export default function AssemblyOutliner({
                   </div>
                 )}
               </div>
+              {onGroupMotors && canGroupMotors && (
+                <button type="button" className="icon-btn" data-help="group-motors" title="Group the selected Smart Motors, to drive them with one control in Play mode" aria-label="Group motors" onClick={onGroupMotors}>
+                  <Cog size={13} />
+                </button>
+              )}
               <button type="button" className="icon-btn" title="Clone the selected parts (D)" aria-label="Clone the selected parts" onClick={onCloneSelection}>
                 <Copy size={13} />
               </button>
@@ -547,6 +556,9 @@ export default function AssemblyOutliner({
       )}
 
       <div className="instance-list scroller" ref={listRef}>
+        {motorGroups.size > 0 && (
+          <MotorGroupsSection groups={motorGroups} byId={byId} selectedSet={selectedSet} onSelectIds={onSelectIds} onEdit={onMotorGroupEdit} />
+        )}
         {rows.map((row, index) => {
           if (row.kind === 'folder') {
             const { group } = row;
@@ -618,5 +630,115 @@ export default function AssemblyOutliner({
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * The "Motor groups" section at the top of the list (openspec motor-groups): one folder per motor group
+ * (arrow, name, motor count, rename, break up); opened, its motors, each with Same/Opposite and a button
+ * to take it out. A folder click selects just its motors (not the part groups they are in). Open state
+ * lives only while the page is open.
+ */
+function MotorGroupsSection({ groups, byId, selectedSet, onSelectIds, onEdit }) {
+  const [open, setOpen] = useState(() => new Set());
+  const [editing, setEditing] = useState(null); // { id, name } of the folder being renamed
+  const toggle = (id) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const stop = (fn) => (e) => {
+    e.stopPropagation();
+    fn();
+  };
+  const finishRename = (save) => {
+    if (save && editing) onEdit?.({ kind: 'rename', groupId: editing.id, name: editing.name });
+    setEditing(null);
+  };
+  return (
+    <div className="motor-groups" data-help="motor-groups">
+      <div className="outliner-heading">Motor groups</div>
+      {[...groups.values()].map((group) => {
+        const ids = group.motors.map((m) => m.id);
+        const isOpen = open.has(group.id);
+        const picked = ids.filter((id) => selectedSet.has(id)).length;
+        const isSelected = picked === ids.length;
+        return (
+          <React.Fragment key={group.id}>
+            <div
+              className={`instance-row folder-row ${isSelected ? 'selected' : picked > 0 ? 'partly-selected' : ''}`}
+              data-row-id={`motor-group:${group.id}`}
+              onClick={() => editing?.id !== group.id && onSelectIds(ids)}
+              title={`${group.name}: select its motors`}
+            >
+              <button type="button" className="icon-btn folder-toggle" aria-label={isOpen ? `Close ${group.name}` : `Open ${group.name}`} aria-expanded={isOpen} onClick={stop(() => toggle(group.id))}>
+                {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              </button>
+              <Cog size={13} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
+              {editing?.id === group.id ? (
+                <input
+                  className="motor-group-name-input"
+                  aria-label="Motor group name"
+                  autoFocus
+                  value={editing.name}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  onBlur={() => finishRename(true)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') finishRename(true);
+                    if (e.key === 'Escape') finishRename(false);
+                  }}
+                />
+              ) : (
+                <span className="instance-row-name" title={group.name}>
+                  {group.name}
+                  <span className="folder-count">{ids.length} motors</span>
+                </span>
+              )}
+              <button type="button" className="icon-btn" title="Rename this motor group" aria-label={`Rename ${group.name}`} onClick={stop(() => setEditing({ id: group.id, name: group.name }))}>
+                <Pencil size={13} />
+              </button>
+              <button type="button" className="icon-btn" title="Break up this motor group (the motors stay)" aria-label={`Break up ${group.name}`} onClick={stop(() => onEdit?.({ kind: 'break', groupId: group.id }))}>
+                <FolderMinus size={13} />
+              </button>
+            </div>
+            {isOpen &&
+              group.motors.map((m) => {
+                const inst = byId.get(m.id);
+                if (!inst) return null;
+                return (
+                  <div
+                    key={m.id}
+                    className={`instance-row in-folder ${selectedSet.has(m.id) ? 'selected' : ''}`}
+                    data-row-id={`motor-group:${group.id}:${m.id}`}
+                    onClick={() => onSelectIds([m.id])}
+                  >
+                    <span className="color-dot" style={{ background: inst.color }} />
+                    <span className="instance-row-name" title={inst.label}>
+                      {inst.label}
+                    </span>
+                    <button
+                      type="button"
+                      className={`motor-dir-btn ${m.reversed ? 'opposite' : ''}`}
+                      aria-label={`${inst.label}: turns ${m.reversed ? 'the opposite way' : 'the same way'}. Tap to flip`}
+                      title={m.reversed ? 'Turns the opposite way to the group: tap to make it turn the same way' : 'Turns the same way as the group: tap to make it turn the opposite way'}
+                      onClick={stop(() => onEdit?.({ kind: 'reverse', id: m.id, reversed: !m.reversed }))}
+                    >
+                      {m.reversed ? <ArrowLeftRight size={12} /> : <ArrowRight size={12} />}
+                      {m.reversed ? 'Opposite' : 'Same'}
+                    </button>
+                    <button type="button" className="icon-btn" title="Take this motor out of the group" aria-label={`Take ${inst.label} out of ${group.name}`} onClick={stop(() => onEdit?.({ kind: 'remove', id: m.id }))}>
+                      <X size={12} />
+                    </button>
+                  </div>
+                );
+              })}
+          </React.Fragment>
+        );
+      })}
+    </div>
   );
 }

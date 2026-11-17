@@ -4,7 +4,7 @@ group: check
 order: 5
 summary: Run the motors and watch gears, shafts and arms move.
 icon: play
-keywords: play, motor, throttle, hold, stalled, gravity, drop test, floor, simulate, rpm, stop, physics, load
+keywords: play, motor, throttle, hold, stalled, gravity, drop test, floor, simulate, rpm, stop, physics, load, motor group, drive, same, opposite, spins
 answers: play, drop-test
 tags: play, test, motor, mechanism, gear, shaft, band
 devOnly: false
@@ -23,6 +23,11 @@ Play mode runs your Smart Motors so you can see what turns. Nothing in your buil
 
 ## What turns and what holds still
 Parts joined by two or more pins or shafts move as one piece. A piece held on one line turns on it like a hinge. A square shaft turns the parts whose square holes fit it. Round holes spin free. Meshed gears turn each other the opposite way. Sprockets joined by a chain turn the same way. The biggest piece holds still.
+
+## Driving motors together
+Put motors that work together, such as the left and right sides of a drive, in a motor group. See [Motor groups](help:outline#motor-groups) to make one. In Play mode a motor group has one row and one throttle slider. Moving it runs every motor in the group at once. The row says **Stalled** if any of its motors stalls.
+
+Each motor in a group turns the **Same** way as the group or the **Opposite** way. If your robot spins on the spot when it should drive straight, one motor is turning the wrong way. {{Click|Tap}} the arrow at the start of the group's row to list its motors. Then {{click|tap}} Same or Opposite on one of them to flip it. The change stays in your build when you leave Play mode.
 
 ## When a motor says Stalled
 A motor stops and says **Stalled** when what it turns hits something, or when a gear train asks one gear for two speeds. Its whole train stops. Only the opposite throttle works until it is free. A list at the bottom says which parts "don't move as built", and why.

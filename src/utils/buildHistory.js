@@ -27,8 +27,9 @@ export const MERGE_WINDOW_MS = 1000;
 // groupId / groupName: the part's group (openspec outliner-part-groups); missing = no group
 // shape: the copy's own shape, e.g. a bent sheet (openspec shaped-parts-and-sheet-bending); missing = none
 // stopping: a Smart Motor's stopping mode (openspec motor-stopping); missing = brake
-export const BUILD_FIELDS = ['position', 'rotation', 'color', 'label', 'visible', 'locked', 'socketAngleDeg', 'groupId', 'groupName', 'shape', 'stopping'];
-const GROUP_FIELDS = new Set(['groupId', 'groupName']);
+// motorGroupId / motorGroupName / motorReversed: a Smart Motor's motor group and direction (openspec motor-groups); missing = none, same way
+export const BUILD_FIELDS = ['position', 'rotation', 'color', 'label', 'visible', 'locked', 'socketAngleDeg', 'groupId', 'groupName', 'shape', 'stopping', 'motorGroupId', 'motorGroupName', 'motorReversed'];
+const GROUP_FIELDS = new Set(['groupId', 'groupName', 'motorGroupId', 'motorGroupName', 'motorReversed']);
 export const SOURCES = ['app', 'mcp', 'assistant', 'action'];
 
 const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));

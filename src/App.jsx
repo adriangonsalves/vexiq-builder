@@ -122,6 +122,18 @@ import {
   ungroupParts,
   wholeGroupOf
 } from './utils/partGroups.js';
+import {
+  breakMotorGroup,
+  controlThrottles,
+  makeMotorGroup,
+  motorGroupsOf,
+  motorIdsIn,
+  playControls,
+  removeFromMotorGroup,
+  renameMotorGroup,
+  setMotorReversed,
+  withoutMotorGroup
+} from './utils/motorGroups.js';
 import { connectedFrom, layersFrom } from './utils/jointLayers.js';
 import { describeShape, shapedPart } from './utils/shapedParts.js';
 import { bandReport, copiedBand, followBands, isRoutedBand } from './utils/bandRoute.js';
@@ -1421,19 +1433,44 @@ export default function App() {
   const togglePlay = () => (play ? closePlay() : openPlay());
   // A motor's stopping mode (openspec motor-stopping): saved with the build as one step, and given to
   // the running sim at once, so Play doesn't start again
-  const handlePlayStopping = (motorId, mode) => {
-    const name = instances.find((i) => i.instanceId === motorId)?.label || 'motor';
-    setInstances((prev) => prev.map((i) => (i.instanceId === motorId ? { ...i, stopping: mode } : i)), { label: `Set stopping ${name}: ${mode}`, inPlay: true });
-    playRef.current?.runner?.engine?.setStopping?.(motorId, mode);
+  // A motor group's row sets every motor in it, in one step (openspec motor-groups)
+  const handlePlayStopping = (key, mode) => {
+    const control = playControlsRef.current.find((c) => c.key === key);
+    const ids = control ? control.motors.map((m) => m.id) : [key];
+    const wanted = new Set(ids);
+    const name = control?.label || instances.find((i) => i.instanceId === key)?.label || 'motor';
+    setInstances((prev) => prev.map((i) => (wanted.has(i.instanceId) ? { ...i, stopping: mode } : i)), { label: `Set stopping ${name}: ${mode}`, inPlay: true });
+    for (const id of ids) playRef.current?.runner?.engine?.setStopping?.(id, mode);
   };
-  const handlePlayThrottle = useCallback((id, value) => {
-    playRef.current?.runner?.setThrottle(id, value);
+  // Play panel rows: one per motor group, one per motor in no group (openspec motor-groups)
+  const motorGroups = useMemo(() => motorGroupsOf(instances), [instances]);
+  const playMotors = play?.graph?.motors;
+  const playControlList = useMemo(() => playControls(playMotors || [], instances, motorGroups), [playMotors, instances, motorGroups]);
+  const playControlsRef = useRef(playControlList);
+  playControlsRef.current = playControlList;
+  const playThrottlesRef = useRef(playThrottles);
+  playThrottlesRef.current = playThrottles;
+  // A row's throttle goes to each of its motors, reversed for an opposite one
+  const handlePlayThrottle = useCallback((key, value) => {
+    const control = playControlsRef.current.find((c) => c.key === key);
+    for (const [id, v] of control ? controlThrottles(control, value) : [[key, value]]) playRef.current?.runner?.setThrottle(id, v);
     setPlayThrottles((prev) => {
       const next = new Map(prev);
-      if (value) next.set(id, value);
-      else next.delete(id);
+      if (value) next.set(key, value);
+      else next.delete(key);
       return next;
     });
+  }, []);
+  // A motor flipped while its group runs turns the new way at once
+  const resendGroupThrottle = (motorId, reversed) => {
+    const control = playControlsRef.current.find((c) => c.group && c.motors.some((m) => m.id === motorId));
+    const value = control ? playThrottlesRef.current.get(control.key) : 0;
+    if (value) playRef.current?.runner?.setThrottle(motorId, reversed ? -value : value);
+  };
+  const handlePlayHover = useCallback((key) => {
+    if (!key) return setPlayHover(null);
+    const control = playControlsRef.current.find((c) => c.key === key);
+    setPlayHover(control ? control.motors.map((m) => m.id) : [key]);
   }, []);
   const handlePlayLimitSpeedByLoad = useCallback((on) => {
     setPlayLimitSpeedByLoad(on);
@@ -1473,7 +1510,7 @@ export default function App() {
   const playAttention = useMemo(() => {
     const ids = Object.entries(playStatus).filter(([, s]) => s.stalled).map(([id]) => id);
     for (const id of playLooseKey ? playLooseKey.split(',') : []) if (!ids.includes(id)) ids.push(id);
-    if (playHover && !ids.includes(playHover)) ids.push(playHover);
+    for (const id of playHover || []) if (!ids.includes(id)) ids.push(id);
     return ids.length ? ids : EMPTY_IDS;
   }, [playStatus, playHover, playLooseKey]);
 
@@ -1659,6 +1696,45 @@ export default function App() {
     const { name, patches } = groupParts(instances, selectedIds);
     setInstances((prev) => applyGroupPatches(prev, patches), { label: `Group ${selectedIds.length} parts as ${name}` });
     setActionFeedback({ message: `Grouped ${selectedIds.length} parts as ${name}.`, isError: false });
+  };
+
+  // Motor groups (openspec motor-groups): the Smart Motors among the selection become one motor group
+  const selectedMotorIds = useMemo(() => motorIdsIn(instances, selectedIds, partOfRef.current), [instances, selectedIds]);
+  const handleGroupMotors = () => {
+    try {
+      const made = makeMotorGroup(instances, selectedIds, partOfRef.current);
+      const opposite = made.patches.filter((p) => made.motorIds.includes(p.id) && p.fields.motorReversed).length;
+      setInstances((prev) => applyGroupPatches(prev, made.patches), { label: `Group ${made.motorIds.length} motors as ${made.name}` });
+      setActionFeedback({
+        message: `Grouped ${made.motorIds.length} motors as ${made.name}${opposite ? `; ${opposite} ${opposite === 1 ? 'turns' : 'turn'} the opposite way` : ''}.`,
+        isError: false
+      });
+    } catch (err) {
+      setActionFeedback({ message: 'Select two or more Smart Motors to make a motor group.', isError: true });
+    }
+  };
+  /** One edit to a motor group, as one history step: { kind: 'reverse' | 'rename' | 'remove' | 'break', ... }. */
+  const handleMotorGroupEdit = (op) => {
+    const labelOf = (id) => instances.find((i) => i.instanceId === id)?.label || 'motor';
+    try {
+      if (op.kind === 'reverse') {
+        const { patches } = setMotorReversed(instances, op.id, op.reversed);
+        // Flipping a motor works while playing too, like its stopping mode
+        setInstances((prev) => applyGroupPatches(prev, patches), { label: `Set ${labelOf(op.id)} to turn ${op.reversed ? 'opposite' : 'the same way'}`, inPlay: true });
+        resendGroupThrottle(op.id, op.reversed);
+      } else if (op.kind === 'rename') {
+        const renamed = renameMotorGroup(instances, op.groupId, op.name);
+        if (renamed.name !== renamed.oldName) setInstances((prev) => applyGroupPatches(prev, renamed.patches), { label: `Rename ${renamed.oldName} to ${renamed.name}` });
+      } else if (op.kind === 'remove') {
+        const { patches } = removeFromMotorGroup(instances, [op.id]);
+        setInstances((prev) => applyGroupPatches(prev, patches), { label: `Take ${labelOf(op.id)} out of its motor group` });
+      } else if (op.kind === 'break') {
+        const { name, patches } = breakMotorGroup(instances, op.groupId);
+        setInstances((prev) => applyGroupPatches(prev, patches), { label: `Break up ${name}` });
+      }
+    } catch (err) {
+      setActionFeedback({ message: err.message, isError: true });
+    }
   };
 
   const handleUngroupSelected = () => {
@@ -1932,7 +2008,8 @@ export default function App() {
     ];
     const copy = {
       // A band copied without its parts is a flat ring (openspec rubber-bands)
-      ...copiedRope(copiedBand(selectedInstance, new Map()), new Map()),
+      // ... and a copied motor is in no motor group (openspec motor-groups)
+      ...withoutMotorGroup(copiedRope(copiedBand(selectedInstance, new Map()), new Map())),
       instanceId: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       label: `${selectedInstance.label} (Copy)`,
       position: copyPos,
@@ -3366,6 +3443,8 @@ export default function App() {
               hasSelection={selectedIds.length > 0}
               canGroup={selectedIds.length >= 2}
               canUngroup={selectedGroupIds.length > 0}
+              canGroupMotors={selectedMotorIds.length >= 2}
+              onGroupMotors={handleGroupMotors}
               onConnected={handleSelectConnected}
               onAll={handleSelectAll}
               onNone={handleSelectNone}
@@ -3787,6 +3866,8 @@ export default function App() {
               error={play.error}
               mode={play.mode}
               motors={play.graph?.motors}
+              controls={playControlList}
+              onMotorGroupEdit={handleMotorGroupEdit}
               throttles={playThrottles}
               status={playStatus}
               warnings={play.mode === 'kinematic' && play.graph ? [...(play.graph.warnings || []), ...kinematicNotes(play.graph)] : play.graph?.warnings}
@@ -3807,7 +3888,7 @@ export default function App() {
               onThrottle={handlePlayThrottle}
               stopping={Object.fromEntries((play.graph?.motors || []).map((m) => [m.id, instances.find((i) => i.instanceId === m.id)?.stopping || 'brake']))}
               onStopping={play.mode === 'kinematic' ? null : handlePlayStopping}
-              onHover={setPlayHover}
+              onHover={handlePlayHover}
               onClose={closePlay}
               onHelp={() => openHelpAt('play-mode')}
             />
@@ -4053,6 +4134,10 @@ export default function App() {
             instances={instances}
             catalogMap={catalogMap}
             groups={groups}
+            motorGroups={motorGroups}
+            canGroupMotors={selectedMotorIds.length >= 2}
+            onGroupMotors={handleGroupMotors}
+            onMotorGroupEdit={handleMotorGroupEdit}
             selectedIds={selectedIds}
             primaryId={primaryId}
             selectMode={selectMode}

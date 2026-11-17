@@ -4,9 +4,9 @@ group: basics
 order: 7
 summary: Find, hide, lock and group parts in the Outline, and see what Properties shows.
 icon: layers
-keywords: outline, list, parts, search, folder, group, hide, lock, rename, locate, properties, checkbox, name
+keywords: outline, list, parts, search, folder, group, hide, lock, rename, locate, properties, checkbox, name, motor group, motors, same, opposite
 answers:
-tags: outline, properties, select, group, hide, lock, name, search
+tags: outline, properties, select, group, hide, lock, name, search, motor
 devOnly: false
 ---
 The Outline lists every part in your build. Properties shows the part you picked.
@@ -29,6 +29,11 @@ A group is a folder. Tap its arrow to open or close it. Its number is how many p
 
 ## Rename a group
 Pick the group. In Properties, change the name in the [[Group name]] box, then press `Enter` or tap away. An empty name is refused. The app can't rename a single part yet. Its label stays as it is.
+
+## Motor groups
+A motor group lets you run two or more Smart Motors with one throttle in [Play mode](help:play-mode). To make one, select the motors and choose [[Select → Group motors]], or {{click|tap}} the motor button in the Selected list. Other parts you selected are left out, so you can select the whole left and right drives. A motor can be in a group of parts and a motor group at the same time.
+
+Motor groups are listed at the top of the Outline, under **Motor groups**. Open one to see its motors. Each motor says **Same** or **Opposite**: which way it turns when the group goes forward. Motors on the far side of a mirrored drive start as Opposite, so the robot drives straight. {{Click|Tap}} the word to flip it. The cross takes a motor out of the group. The pencil renames the group, and the folder button breaks it up. Picking the group's row picks just its motors.
 
 ## Locate and the base name
 A long list is hard to search by eye. Press [[Locate]] (the small target above the list) and the picked part's row scrolls into view. It opens a closed folder if it has to. Hold [[Locate]] for half a second to keep it following your picks. Hold it again to stop. The picked row also shows its base name: the catalog name and number of the part.

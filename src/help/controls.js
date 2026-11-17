@@ -113,7 +113,7 @@ const CONTROLS = {
 const menu = (name, items) => Object.fromEntries(items.map((item) => [`${name} → ${item}`, { menu: name }]));
 
 const MENUS = {
-  ...menu('Select', ['Select mode', 'Box select', 'Select Connected', 'Select All', 'Select None', 'Invert Selection', 'Group', 'Ungroup']),
+  ...menu('Select', ['Select mode', 'Box select', 'Select Connected', 'Select All', 'Select None', 'Invert Selection', 'Group', 'Ungroup', 'Group motors']),
   ...menu('Tools', [
     'Fix assembly', 'Audit', 'Blueprint', 'Explode', 'Play mode', 'Chain builder', 'Track builder…', 'Bend sheet…',
     'Band builder', 'Band between these', 'Belt round these', 'Flatten band'
