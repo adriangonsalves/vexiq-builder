@@ -1431,6 +1431,16 @@ async function main() {
     clampPegSpans(part, ports);
     const mountingRules = classifyMountingRules(part);
     const { rackSpecs, hubSpecs, ratchetSpecs } = measureShapes(part, ports, gearSpecs, fastenerSpecs, rawCylinders, unmeasured);
+    // 6b. A gear whose center opening measures square takes a shaft there, whatever the probe above
+    // made of its bore: the 12 Tooth Hybrid Gear's has a ridge and room for a pin, so it read as a pin
+    // hole and the gear sat loose on Swish's intake shaft
+    if (gearSpecs?.gearType === 'spur' && gearSpecs.boreShape === 'square') {
+      const z = part.bbox.center[2];
+      for (const p of ports) {
+        const onAxis = p.type === 'pin_hole' && Math.abs(Math.abs(p.axis[2]) - 1) < 1e-3 && Math.hypot(p.origin[0], p.origin[1]) < 0.5 && Math.abs(p.origin[2] - z) < part.bbox.size[2];
+        if (onAxis) Object.assign(p, { type: 'shaft_bore', shape: 'square', wasHole: true });
+      }
+    }
     // 7. Shafts: their axis, ends, cross-section and cap or stop ring
     addShaftPort(part, ports, fastenerSpecs, rawRaycast);
     // 8. Spools and ropes (openspec rope-and-spool)
@@ -1447,6 +1457,14 @@ async function main() {
       const old = (oldPortsById.get(part.id) || []).flatMap((o) => [o.portId, ...(o.aliases || [])]).filter((id) => id !== bore.portId);
       const legacy = part.partNumber === '228-2500-421' ? ['hole.+z.0_0_4', 'hole_1'] : [];
       const aliases = [...new Set([...(bore.aliases || []), ...old, ...legacy])].filter((id) => id !== bore.portId);
+      if (aliases.length) bore.aliases = aliases;
+      lostIds.splice(0, lostIds.length, ...lostIds.filter((l) => !l.startsWith(`${part.name}:`)));
+    }
+    // A gear bore that was read as a pin hole (6b): saved builds name it by its old ids
+    for (const bore of ports.filter((p) => p.wasHole)) {
+      delete bore.wasHole;
+      const old = (oldPortsById.get(part.id) || []).filter((o) => o.portId === bore.portId.replace(/^[a-z]+\./, 'hole.') || o.portId === bore.portId).flatMap((o) => [o.portId, ...(o.aliases || [])]);
+      const aliases = [...new Set([...(bore.aliases || []), ...old, bore.portId.replace(/^[a-z]+\./, 'hole.')])].filter((id) => id !== bore.portId);
       if (aliases.length) bore.aliases = aliases;
       lostIds.splice(0, lostIds.length, ...lostIds.filter((l) => !l.startsWith(`${part.name}:`)));
     }

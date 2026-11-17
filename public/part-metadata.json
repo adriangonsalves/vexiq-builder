@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-11-17T06:50:05.519Z",
+  "generatedAt": "2026-11-17T17:46:20.120Z",
   "partCount": 482,
   "totalVerifiedPorts": 4242,
   "parts": {
@@ -95097,15 +95097,15 @@
       },
       "portCounts": {
         "total": 1,
-        "pinHoles": 1,
-        "shaftBores": 0,
+        "pinHoles": 0,
+        "shaftBores": 1,
         "pinPegs": 0,
         "shafts": 0
       },
       "ports": [
         {
-          "portId": "hole.thru.0_0_0",
-          "type": "pin_hole",
+          "portId": "sq.thru.0_0_0",
+          "type": "shaft_bore",
           "origin": [
             0,
             0,
@@ -95127,13 +95127,14 @@
             0.09
           ],
           "verified": true,
-          "shape": "round",
+          "shape": "square",
           "faces": [
             "+z",
             "-z"
           ],
-          "kind": "hole",
+          "kind": "sq",
           "aliases": [
+            "hole.thru.0_0_0",
             "hole_1"
           ]
         }
@@ -96643,15 +96644,15 @@
       },
       "portCounts": {
         "total": 1,
-        "pinHoles": 1,
-        "shaftBores": 0,
+        "pinHoles": 0,
+        "shaftBores": 1,
         "pinPegs": 0,
         "shafts": 0
       },
       "ports": [
         {
-          "portId": "hole.thru.0_0_0",
-          "type": "pin_hole",
+          "portId": "sq.thru.0_0_0",
+          "type": "shaft_bore",
           "origin": [
             0,
             0,
@@ -96673,13 +96674,14 @@
             0.09
           ],
           "verified": true,
-          "shape": "round",
+          "shape": "square",
           "faces": [
             "+z",
             "-z"
           ],
-          "kind": "hole",
+          "kind": "sq",
           "aliases": [
+            "hole.thru.0_0_0",
             "hole_1"
           ]
         }
