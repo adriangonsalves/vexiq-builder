@@ -711,14 +711,21 @@ export function buildBodyGraph(inputs) {
     // A pulley or post that spins on one pin and nothing else (an idler pulley) only passes the rope's
     // pull on through its axle: a frictionless pulley feels the same pull both sides, so the two add
     // up to one force through the axle. The rope's spot is carried by, and pulls on, the part that
-    // pin is in.
+    // pin is in. So does a rope end tied on a shaft that spins freely in a part (Swish's arm), its
+    // tie on the shaft's line: every joint of the shaft's body turns on that one line (a collar riding
+    // on the shaft too), and the spot goes to the part the shaft turns in, not to the collar.
     const ownBodies = r.elements.map((e) => (e.instanceId ? bodyOf(e.instanceId) : null));
+    const onLine = (h, e) => (e.shape === 'circle' ? sameLine({ axis: h.axis, point: h.point }, { axis: e.axis, point: e.center }) : sameLine({ axis: h.axis, point: h.point }, { axis: h.axis, point: e.center }));
     const elBodies = r.elements.map((e, i) => {
       const b = ownBodies[i];
-      if (!b || e.shape !== 'circle' || (r.spool && i === r.spool.element)) return b;
+      if (!b || !(e.shape === 'circle' || e.kind === 'end') || (r.spool && i === r.spool.element)) return b;
       const own = hinges.filter((h) => h.a === b || h.b === b);
-      if (own.length !== 1 || !sameLine({ axis: own[0].axis, point: own[0].point }, { axis: e.axis, point: e.center })) return b;
-      return own[0].a === b ? own[0].b : own[0].a;
+      if (!own.length || own.some((h) => h.motor || !onLine(h, e))) return b;
+      const partners = own.map((h) => (h.a === b ? h.b : h.a));
+      if (partners.length === 1) return partners[0];
+      // The part the shaft turns in is joined to more than the shaft; a collar or spacer on it isn't
+      const held = partners.filter((p) => hinges.some((h) => (h.a === p || h.b === p) && h.a !== b && h.b !== b) || fixed.includes(p));
+      return held.length === 1 ? held[0] : b;
     });
     // The pulleys whose spots another body carries ride with it: [carried body | null per element]
     const riders = ownBodies.map((b, i) => (b && b !== elBodies[i] ? b : null));

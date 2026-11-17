@@ -11,5 +11,7 @@ export const ROPE_PULL = {
   maxN: 150, // the pull cap: above a stalled Smart Motor on a bare 2x spool (51 N) (assumed)
   slackMm: 0.2, // a path this much shorter than the rope is slack (assumed)
   biasGain: 0.5, // share of last step's unseen stretch carried into the next step's aim (assumed)
+  spoolDamping: 8, // a spool's turning drag on its shaft, per second (other bodies 0.3): a free spool stops within about half a second (assumed)
+  easingShare: 0.01, // a contact's push falling by this share in a step counts as the rope drawing its body off it (assumed)
   assumed: true
 };

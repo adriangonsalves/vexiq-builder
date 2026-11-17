@@ -236,11 +236,14 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     const bodies = new Map(); // body id -> RigidBody
     const partOfCollider = new Map(); // collider handle -> instance id
     const bodyColliders = new Map(); // body id -> [Collider]
+    // A spool holding a rope turns on its shaft with some friction (decision 9, Swish): without it a
+    // light spool the rope has spun keeps spinning, pays the rope right out and winds it back
+    const spoolBodies = new Set((graph.ropes || []).map((r) => r.spool?.body).filter(Boolean));
     for (const b of graph.bodies) {
       const isLoose = looseSet.has(b.id) || ropedSet.has(b.id);
       const isFixed = fixed.has(b.id) && !sliders.has(b.id) && !isLoose;
       const desc = isFixed ? RAPIER.RigidBodyDesc.fixed() : RAPIER.RigidBodyDesc.dynamic().setGravityScale(0);
-      desc.setAngularDamping(0.3).setLinearDamping(0.3);
+      desc.setAngularDamping(spoolBodies.has(b.id) ? ROPE_PULL.spoolDamping : 0.3).setLinearDamping(0.3);
       if (sliders.has(b.id)) desc.lockRotations();
       const body = w.createRigidBody(desc);
       bodies.set(b.id, body);
@@ -2086,7 +2089,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   // it turns, and the pull turns it back.
   const pullingRopes = (graph.ropes || []).filter((r) => r.pulls);
   const ropeState = new Map(
-    (graph.ropes || []).map((r) => [r.id, { T: 0, bias: 0, expectC: null, anchor: null, turns: r.spool?.turns ?? 0, winding: r.spool?.winding ?? 1, phi: null, slackMm: 0, pathMm: 0, overFull: false, turnsArr: [...r.turns] }])
+    (graph.ropes || []).map((r) => [r.id, { T: 0, bias: 0, expectC: null, anchor: null, push: null, turns: r.spool?.turns ?? 0, winding: r.spool?.winding ?? 1, phi: null, slackMm: 0, pathMm: 0, overFull: false, turnsArr: [...r.turns] }])
   );
   const poseOfBody = (id) => {
     const body = id ? rb.get(id) : null;
@@ -2130,6 +2133,31 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     if (r.spool) st.turnsArr[r.spool.element] = r.spool.element === 0 ? -st.winding : st.winding;
     const els = ropeElementsNow(r, poseOfBody, st.turns, st.anchor ? spoolToWorld(r, st.anchor).toArray() : null);
     return { els, path: solveRopeNow({ ...r, turns: st.turnsArr }, els) };
+  }
+  /**
+   * Bodies a motor turns through gears that swing into mesh, while engaged (Swish's winch), and what
+   * those turn by gear links: for the ropes, these move as the motor and gears drive or hold them.
+   * The motor's own shaft and its fixed gear train aren't here: the motor's push already carries a
+   * rope on them as a free body.
+   */
+  function gearedToMotors() {
+    const reach = new Set();
+    for (const m of graph.motors) for (const id of directDriven.get(m.id) || []) reach.add(id);
+    const out = new Set();
+    const engaged = meshState.filter((st) => st.engaged).map((st) => [st.m.a, st.m.b]);
+    const add = (id) => {
+      if (reach.has(id) || !rb.get(id)?.isDynamic()) return false;
+      out.add(id);
+      reach.add(id);
+      return true;
+    };
+    for (let grew = true; grew; ) {
+      grew = false;
+      // Across a swinging mesh from anything the motor turns; then on by gear links from those
+      for (const [a, b] of engaged) grew = (reach.has(a) && add(b)) || (reach.has(b) && add(a)) || grew;
+      for (const l of graph.links) grew = (out.has(l.a) && add(l.b)) || (out.has(l.b) && add(l.a)) || grew;
+    }
+    return out;
   }
   function ropeNow(r, st) {
     let { els, path } = ropePathNow(r, st);
@@ -2200,8 +2228,14 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     // Per body: the forces of a 1 N pull and where they act (a body a stalled motor holds counts as
     // fixed: the motor carries the pull, up to its stall torque, which the stall already means)
     const held = heldByMotors();
+    // A spool a motor turns through gears swung into mesh moves as the motor and gears let it, not as
+    // a free light part: the pull is found as if it won't give (else each pass speeds the light spool
+    // up, the pull is taken back, and the rope winds on unseen until it snaps tight), then put on it
+    // once the pull is known, so the motor feels the load and slows or stalls under it
+    const geared = gearedToMotors();
     const per = new Map();
     const onHeld = [];
+    const onGeared = [];
     for (let i = 0; i < n; i++) {
       const id = r.bodies[i];
       const body = id ? rb.get(id) : null;
@@ -2210,6 +2244,11 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         if (i < n - 1) onHeld.push([id, runs[i].clone(), pts[i].b]);
       }
       if (!body || !body.isDynamic() || held.has(id)) continue;
+      if (geared.has(id)) {
+        if (i > 0) onGeared.push([body, runs[i - 1].clone().negate(), pts[i].a]);
+        if (i < n - 1) onGeared.push([body, runs[i].clone(), pts[i].b]);
+        continue;
+      }
       const e = per.get(id) || { body, forces: [], f: new THREE.Vector3(), tau: new THREE.Vector3(), riders: new Set() };
       // A pulley spinning on this body's pin moves with it: it takes its share of the pull
       const rider = r.riders?.[i] ? rb.get(r.riders[i]) : null;
@@ -2241,7 +2280,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       }
       return rate;
     };
-    return { path, C, per, w, stretchRate, onHeld };
+    return { path, C, per, w, stretchRate, onHeld, onGeared };
   }
   /** The motor's hinge now: its two bodies, axis, a point on it, the shaft's speed against the motor's
    * body, and the inertia a turn about it moves (gear trains included). */
@@ -2340,19 +2379,30 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       }
     }
   }
-  /** A body touching something it isn't joined to (deeper than a hair). */
-  const pressing = (bodyId) => {
-    for (const c of bodyColliders.get(bodyId) || []) {
-      let found = false;
-      world.contactPairsWith(c, (other) => {
-        if (found || skip.has(pairKey(c.handle, other.handle))) return;
-        world.contactPair(c, other, (manifold) => {
-          for (let i = 0; i < manifold.numContacts(); i++) if (manifold.contactDist(i) < -0.00005) found = true;
+  /**
+   * How hard the bodies on a rope are pushed by what they touch, deeper than a hair (the sum of the
+   * contacts' push this step, N·s), or null when nothing touches them. A contact that pushes harder as
+   * the rope pulls harder is one the rope drives a body into; one whose push eases as the pull grows
+   * is one the rope draws the body away from (an arm pulled off the stop its bands press it onto).
+   */
+  const ropeContactPush = (now) => {
+    let sum = 0;
+    let any = false;
+    for (const id of now.per.keys()) {
+      for (const c of bodyColliders.get(id) || []) {
+        world.contactPairsWith(c, (other) => {
+          if (skip.has(pairKey(c.handle, other.handle))) return;
+          world.contactPair(c, other, (manifold) => {
+            for (let i = 0; i < manifold.numContacts(); i++) {
+              if (manifold.contactDist(i) >= -0.00005) continue;
+              any = true;
+              sum += manifold.contactImpulse(i);
+            }
+          });
         });
-      });
-      if (found) return true;
+      }
     }
-    return false;
+    return any ? sum : null;
   };
   const pullImpulse = (now, J) => {
     if (Math.abs(J) < 1e-12) return;
@@ -2383,7 +2433,12 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       // Not while a part on the rope presses into something: what holds it there pushes back however
       // hard the rope pulls, and the pull would only grow until the part went through
       if (st.expectC !== null) {
-        if ([...now.per.keys()].some(pressing)) st.bias *= 0.5;
+        // Paused while what the rope's bodies touch pushes back as hard or harder than last step (the
+        // rope drives them into it); not while that push eases (the rope draws them off it)
+        const push = ropeContactPush(now);
+        const pressed = push !== null && !(st.push !== null && push < st.push * (1 - ROPE_PULL.easingShare));
+        st.push = push;
+        if (pressed) st.bias *= 0.5;
         else st.bias += ROPE_PULL.biasGain * ((now.C - st.expectC) / h - st.bias);
       }
       pullImpulse(now, st.T * h);
@@ -2402,6 +2457,8 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     }
     // Where each rope should be at the end of the step, by the sums
     for (const [, st, now] of live) st.expectC = now.C + now.stretchRate() * h;
+    // The pull on spools turned through gears, once it is known
+    for (const [, st, now] of live) for (const [body, f, at] of now.onGeared) body.applyImpulseAtPoint(vec(f.clone().multiplyScalar(st.T * h)), vec(at), true);
     ropeTorqueOnMotors(live);
   }
   /** Ropes that don't pull (a free end, all on one body) still wind as their spool turns. */

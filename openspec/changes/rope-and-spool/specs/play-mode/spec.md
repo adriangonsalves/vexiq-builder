@@ -14,6 +14,12 @@ When the physics couldn't start and parts only turn by gear ratio, ropes SHALL N
 - **WHEN** a hinged arm is pulled away from a fixed pin by a rubber band, and a rope runs from the arm to another fixed pin
 - **THEN** the arm swings until the rope is tight and stops there, with the rope straight
 
+#### Scenario: Rope pulls a part off its stop
+- **WHEN** rubber bands press a hinged arm against a stop, and a spool starts winding a rope that pulls the arm away from that stop
+- **THEN** within 0.5 s the rope pulls as hard as the bands need and the arm leaves the stop, moving as fast as the spool winds; the stop doesn't hold the rope back
+- **AND WHEN** a rope instead pulls a part into something it can't pass
+- **THEN** the pull stops growing and the part doesn't go through
+
 #### Scenario: Slack rope does nothing
 - **WHEN** a rope between two bodies has 20 mm of slack and the bodies move 10 mm apart
 - **THEN** the rope doesn't pull and 10 mm of slack is left
@@ -41,6 +47,14 @@ The turns on the spool SHALL be shown as coils on the drum, updated as it winds.
 - **THEN** the arm does what the motor's stopping mode allows (openspec motor-stopping): with Hold it stays where it is; with Brake the bands pull it back slowly as the rope pays out; with Coast they pull it back quickly
 - **AND WHEN** the motor then runs in reverse
 - **THEN** the bands pull the arm back and the spool turns backward as the rope pays out
+
+#### Scenario: Winch gear on a swinging arm under load
+- **WHEN** a spool is turned through a gear on a swinging arm that the motor swings into mesh (Swish's winch), and the rope pulls as hard as a stalled Smart Motor can wind
+- **THEN** the gears stay in mesh and the spool turns only as fast as the gears allow; the spool spins freely only once the arm has swung the gear out
+
+#### Scenario: Slack spool at rest
+- **WHEN** a spool holds a slack rope and nothing turns it
+- **THEN** the spool stays still (under 1 rpm after 1 s)
 
 #### Scenario: Swish winds, holds and fires
 - **WHEN** Hero Bot Swish is imported and its winch motors run forward, stop, then run in reverse

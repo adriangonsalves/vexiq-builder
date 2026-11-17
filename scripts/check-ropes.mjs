@@ -636,6 +636,50 @@ if (pr.ok) {
   check('gravity off: the weight stays where it is', Math.abs(new THREE.Vector3().setFromMatrixPosition(phys2.deltas().get(g.roped[0])).y) < 0.5);
 }
 
+// --- 7.7 / 7.12 / 7.14 Swish winds, holds and fires (the Swish starter: rope on a ratchet winch, arm bands) ---
+{
+  const instances = starterById('swish').build(catalog);
+  const byId = new Map(instances.map((i) => [i.instanceId, i]));
+  const g = buildBodyGraph(playInputs({ instances }));
+  const bodyWith = (label) => g.bodies.find((b) => b.parts.some((id) => byId.get(id).label === label))?.id;
+  const arm = bodyWith('Arm: 228-2500-023-2');
+  const spool = bodyWith('Winch: 228-2500-421-1');
+  check("Swish: the rope's end on the arm's free-spinning shaft pulls on the arm itself", g.ropes.length === 1 && g.ropes[0].bodies.at(-1) === arm && g.ropes[0].riders.at(-1), JSON.stringify(g.ropes[0]?.bodies));
+  const phys = await createPhysics(g, instances, { points: (pid) => getPartRawGeometry(partOf(byId.get(pid))).attributes.position.array });
+  const winch = g.motors.filter((m) => m.label.startsWith('Winch:')).map((m) => m.id);
+  const thr = (v) => new Map(g.motors.map((m) => [m.id, winch.includes(m.id) ? v : 0]));
+  const armTurn = () => {
+    const q = new THREE.Quaternion().setFromRotationMatrix(phys.deltas().get(arm));
+    return (2 * Math.atan2(q.z, q.w) * 180) / Math.PI;
+  };
+  const spoolRpm = () => (phys.spin(spool, [0, 0, 1]) * 60) / (2 * Math.PI);
+  for (let i = 0; i < 60; i++) phys.step(1 / 60, thr(0));
+  const rest = armTurn();
+  check('Slack spool at rest: the bands settle the arm on its stops and the spool stays still (under 1 rpm after 1 s)', Math.abs(spoolRpm()) < 1, `${spoolRpm().toFixed(1)} rpm, arm ${rest.toFixed(1)}°`);
+  // Wind (the winch's forward is -1 here) until the arm is down, as a driver would, at most 3 s
+  let leftAt = null;
+  let jump = 0;
+  let t = 0;
+  for (let last = armTurn(); t < 3 && armTurn() > -65; t += 1 / 60) {
+    phys.step(1 / 60, thr(-1));
+    if (leftAt === null && armTurn() < rest - 3) leftAt = t;
+    jump = Math.max(jump, Math.abs(armTurn() - last));
+    last = armTurn();
+  }
+  check(`Rope pulls a part off its stop: the arm leaves its stops within 1 s (${leftAt?.toFixed(2)} s) and comes down steadily, under 5° a frame (${jump.toFixed(1)}°), down within 3 s (${t.toFixed(2)} s)`, leftAt !== null && leftAt < 1 && jump < 5 && armTurn() <= -65, `arm ${armTurn().toFixed(1)}°`);
+  for (let i = 0; i < 12; i++) phys.step(1 / 60, thr(-1));
+  const down = armTurn();
+  for (let i = 0; i < 90; i++) phys.step(1 / 60, thr(0));
+  check(`Swish holds: stopped, the pawl holds the spool and the arm stays down (${down.toFixed(1)}° → ${armTurn().toFixed(1)}°)`, Math.abs(armTurn() - down) < 2 && phys.ropeStates()[0].tensionN > 10, `${phys.ropeStates()[0].tensionN.toFixed(1)} N`);
+  let top = -Infinity;
+  for (let i = 0; i < 30; i++) {
+    phys.step(1 / 60, thr(1));
+    top = Math.max(top, armTurn());
+  }
+  check(`Swish fires: reversed, the winch lets go and the bands throw the arm up past its rest within 0.5 s (to ${top.toFixed(1)}°)`, top > rest + 10, `rest ${rest.toFixed(1)}°`);
+  phys.dispose();
+}
+
 // --- Fixtures: VEX's own ropes on Swish and Huey (scripts/make-rope-fixture.mjs) ---
 {
   const load = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
