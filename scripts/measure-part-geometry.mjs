@@ -1117,3 +1117,233 @@ export function measurePulleyGroove(part) {
   const flat = inGroove.filter((r) => r.r < bottom + 0.1).map((r) => r.z);
   return { grooveRadiusMm: round(bottom, 2), grooveSpanMm: [round(Math.min(...flat), 2), round(Math.max(...flat), 2)] };
 }
+
+// Linear motion and idler pins (openspec linear-motion-and-idler-pins, design §1 and §6)
+export const CONTINUOUS_RACK_PATTERN = /Continuous Linear Motion Rack/i;
+export const LINEAR_BRACKET_PATTERN = /Linear Motion Bracket/i;
+// The idler pins the spec names; which of their ends a gear turns on is measured (measureIdlerPin)
+export const IDLER_PIN_PATTERN = /\bIdler Pin\b/i;
+
+const axisVec = (a) => new THREE.Vector3(...a);
+const signedUnit = (i, sign = 1) => new THREE.Vector3().setComponent(i, sign);
+/** The part's bbox range along a local unit axis. */
+function bboxAlong(part, axis) {
+  const { min, max } = part.bbox;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const x of [min[0], max[0]]) for (const y of [min[1], max[1]]) for (const z of [min[2], max[2]]) {
+    const t = x * axis.x + y * axis.y + z * axis.z;
+    lo = Math.min(lo, t);
+    hi = Math.max(hi, t);
+  }
+  return [lo, hi];
+}
+
+/**
+ * The continuous rack's clip seat (design §1): the flat underside that lies on a beam's face (on the
+ * side away from the teeth), the clip legs that go through the beam's holes, and the rail (the
+ * rack's widest band) that slides in a linear motion bracket's slot. Rays are cast from the beam
+ * side every 0.25 mm and across the rack every 0.1 mm of height. All in part-local mm, heights
+ * along `rackSpecs.normal` (the way the teeth face): { measured: true, direction, seatNormal (from
+ * the rack into the beam), seatHeightMm, legs: [{ at (the leg's centre on the seat face), depthMm }],
+ * lengthSpanMm, centerAcrossMm, rail: { heightSpanMm, halfWidthMm } } or { measured: false, reason }.
+ */
+export function measureClipSeat(part, rackSpecs) {
+  if (!rackSpecs?.measured) return { measured: false, reason: 'rack teeth not measured' };
+  const cast = makeRaycaster(part);
+  const dir = axisVec(rackSpecs.direction);
+  const nrm = axisVec(rackSpecs.normal);
+  const acr = axisVec(rackSpecs.axis);
+  const [sLo, sHi] = bboxAlong(part, dir);
+  const [hLo, hHi] = bboxAlong(part, nrm);
+  const [aLo, aHi] = bboxAlong(part, acr);
+  const at = (s, h, a) => dir.clone().multiplyScalar(s).addScaledVector(nrm, h).addScaledVector(acr, a);
+  // Up from under the seat side: the first height each ray meets
+  const hits = [];
+  for (let s = sLo + 0.125; s < sHi; s += 0.25) {
+    for (let a = aLo + 0.125; a < aHi; a += 0.25) {
+      const d = cast(at(s, hLo - 2, a), nrm);
+      if (d != null) hits.push({ s, a, h: hLo - 2 + d });
+    }
+  }
+  if (!hits.length) return { measured: false, reason: 'no underside found' };
+  // The seat: the most common first height (the flat face), to 0.05 mm
+  const counts = new Map();
+  for (const x of hits) {
+    const k = Math.round(x.h * 20);
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  const mode = [...counts.entries()].sort((p, q) => q[1] - p[1])[0][0] / 20;
+  const flat = hits.filter((x) => Math.abs(x.h - mode) < 0.15);
+  const seat = Math.min(...flat.map((x) => x.h));
+  // Legs: what reaches more than 1 mm past the seat, grouped along the rack
+  const below = hits.filter((x) => x.h < seat - 1).sort((p, q) => p.s - q.s);
+  const groups = [];
+  for (const x of below) {
+    const g = groups[groups.length - 1];
+    if (g && x.s - g[g.length - 1].s <= 1) g.push(x);
+    else groups.push([x]);
+  }
+  const legs = groups
+    .filter((g) => g.length >= 4)
+    .map((g) => {
+      const s = (Math.min(...g.map((x) => x.s)) + Math.max(...g.map((x) => x.s))) / 2;
+      const a = (Math.min(...g.map((x) => x.a)) + Math.max(...g.map((x) => x.a))) / 2;
+      return { at: at(s, seat, a).toArray().map((v) => round(v + 0, 3)), depthMm: round(seat - Math.min(...g.map((x) => x.h)), 2) };
+    });
+  if (!legs.length) return { measured: false, reason: 'no clip legs found' };
+  // Width at each height, from both sides, between the legs
+  const sSamples = [];
+  for (let k = 0; k < 24; k++) {
+    const s = sLo + (sHi - sLo) * (0.1 + (0.8 * k) / 23);
+    if (legs.every((l) => Math.abs(axisVec(l.at).dot(dir) - s) > 4)) sSamples.push(s);
+  }
+  const rows = [];
+  for (let h = seat + 0.05; h < hHi; h += 0.1) {
+    const his = [];
+    const los = [];
+    for (const s of sSamples) {
+      const dp = cast(at(s, h, aHi + 2), acr.clone().negate());
+      const dm = cast(at(s, h, aLo - 2), acr);
+      if (dp != null) his.push(aHi + 2 - dp);
+      if (dm != null) los.push(aLo - 2 + dm);
+    }
+    if (his.length >= sSamples.length / 2 && los.length >= sSamples.length / 2) rows.push({ h, hi: median(his), lo: median(los) });
+  }
+  const widest = Math.max(...rows.map((r) => r.hi - r.lo));
+  const railRows = rows.filter((r) => r.hi - r.lo > widest - 0.2);
+  if (!railRows.length) return { measured: false, reason: 'rail not found' };
+  // One band: the run of widest rows nearest the seat's far side (the teeth sit above it)
+  const band = [railRows[0]];
+  for (const r of railRows.slice(1)) if (r.h - band[band.length - 1].h < 0.25) band.push(r);
+  const centre = median(band.map((r) => (r.hi + r.lo) / 2));
+  return {
+    measured: true,
+    direction: dir.toArray(),
+    seatNormal: nrm.clone().negate().toArray().map((v) => v + 0),
+    seatHeightMm: round(seat, 2),
+    legs,
+    lengthSpanMm: [round(sLo, 2), round(sHi, 2)],
+    centerAcrossMm: round(centre, 2),
+    rail: {
+      heightSpanMm: [round(band[0].h - 0.05, 2), round(band[band.length - 1].h + 0.05, 2)],
+      halfWidthMm: round(median(band.map((r) => (r.hi - r.lo) / 2)), 2)
+    }
+  };
+}
+
+/**
+ * A linear motion bracket's channel (design §1): the T-shaped slot a rack's rail slides in. For each
+ * local axis as the channel's direction and each side as its open face, rays are cast along the
+ * direction through the whole part every 0.1 mm; where none hits, the channel is open there. Going
+ * in from the open face, a channel is a mouth (between the lips) narrower than the slot under it.
+ * Returns { measured: true, direction, open (out of the mouth), across, centerAcrossMm, faceMm (the
+ * outer face the beam lies on), mouth: { spanMm, halfWidthMm }, slot: { spanMm, halfWidthMm },
+ * spanMm (along the direction) } in part-local mm, heights along `open`, or { measured: false, reason }.
+ */
+export function measureChannel(part) {
+  const cast = makeRaycaster(part);
+  const STEP = 0.1;
+  let best = null;
+  for (let k = 0; k < 3; k++) {
+    const dir = signedUnit(k);
+    const [dLo, dHi] = bboxAlong(part, dir);
+    for (const ni of [0, 1, 2].filter((i) => i !== k)) {
+      const wi = 3 - k - ni;
+      const across = signedUnit(wi);
+      const [wLo, wHi] = bboxAlong(part, across);
+      const w0 = (wLo + wHi) / 2;
+      for (const sign of [1, -1]) {
+        const open = signedUnit(ni, sign);
+        const [uLo, uHi] = bboxAlong(part, open);
+        const freeAt = (u, w) => {
+          const o = dir.clone().multiplyScalar(dLo - 1).addScaledVector(open, u).addScaledVector(across, w);
+          const d = cast(o, dir);
+          return d == null || d > dHi - dLo + 2;
+        };
+        // The open half-width round the middle at each height, from the face inwards (null: open to the side)
+        const rows = [];
+        for (let u = uHi - STEP / 2; u > uLo; u -= STEP) {
+          if (!freeAt(u, w0)) break;
+          let a = 0;
+          while (w0 + a + STEP <= wHi + 0.5 && freeAt(u, w0 + a + STEP)) a += STEP;
+          let b = 0;
+          while (w0 - b - STEP >= wLo - 0.5 && freeAt(u, w0 - b - STEP)) b += STEP;
+          const bounded = w0 + a + STEP <= wHi + 0.5 && w0 - b - STEP >= wLo - 0.5;
+          rows.push({ u, half: bounded ? Math.min(a, b) + STEP / 2 : null });
+        }
+        const inside = rows.filter((r) => r.half !== null);
+        if (inside.length < 10) continue;
+        // Runs of one width (within 0.15 mm)
+        const runs = [];
+        for (const r of inside) {
+          const last = runs[runs.length - 1];
+          if (last && Math.abs(r.half - last.half) <= 0.15 && last.lo - r.u < STEP * 1.5) {
+            last.lo = r.u;
+            last.halves.push(r.half);
+          } else runs.push({ hi: r.u, lo: r.u, half: r.half, halves: [r.half] });
+        }
+        for (const run of runs) run.half = median(run.halves);
+        const long = runs.filter((r) => r.hi - r.lo >= 0.7);
+        if (long.length < 2) continue;
+        const [mouth, slot] = long;
+        if (!(slot.half > mouth.half + 0.4)) continue;
+        const face = rows.find((r) => r.half !== null).u + STEP / 2;
+        const score = (slot.hi - slot.lo) + (mouth.hi - mouth.lo);
+        if (!best || score > best.score) {
+          best = {
+            score,
+            measured: true,
+            direction: dir.toArray(),
+            open: open.toArray(),
+            across: across.toArray(),
+            centerAcrossMm: round(w0, 2),
+            faceMm: round(face, 2),
+            mouth: { spanMm: [round(mouth.lo - STEP / 2, 2), round(mouth.hi + STEP / 2, 2)], halfWidthMm: round(mouth.half, 2) },
+            slot: { spanMm: [round(slot.lo - STEP / 2, 2), round(slot.hi + STEP / 2, 2)], halfWidthMm: round(slot.half, 2) },
+            spanMm: [round(dLo, 2), round(dHi, 2)]
+          };
+        }
+      }
+    }
+  }
+  if (!best) return { measured: false, reason: 'no T-shaped channel found' };
+  const { score, ...specs } = best;
+  return specs;
+}
+
+/**
+ * Which ends of an idler pin a gear turns on (design §6): along the pin's local Z, the end runs whose
+ * cross-section has flats (1.7 to 2.4 mm out at its widest, at least 0.3 mm less across its flats;
+ * a snap ridge on a smooth end keeps its flats), at least 2 mm long and reaching the pin's tip. A connector pin's snap ends are round.
+ * Returns { measured: true, axis: [0, 0, 1], smoothSpansMm: [[lo, hi]] } or { measured: false, reason }.
+ */
+export function measureIdlerPin(part) {
+  const cast = makeRaycaster(part);
+  const { min, max } = part.bbox;
+  const R0 = 10;
+  const rows = [];
+  for (let z = min[2] + 0.05; z < max[2]; z += 0.1) {
+    const radii = [];
+    for (let k = 0; k < 36; k++) {
+      const t = (k / 36) * Math.PI * 2;
+      const d = cast(new THREE.Vector3(R0 * Math.cos(t), R0 * Math.sin(t), z), new THREE.Vector3(-Math.cos(t), -Math.sin(t), 0));
+      if (d != null) radii.push(R0 - d);
+    }
+    if (!radii.length) continue;
+    const hi = Math.max(...radii);
+    const lo = Math.min(...radii);
+    rows.push({ z, smooth: hi < 2.4 && hi > 1.7 && hi - lo >= 0.3 });
+  }
+  const runs = [];
+  for (const r of rows) {
+    const last = runs[runs.length - 1];
+    if (last && last.smooth === r.smooth) last.hi = r.z;
+    else runs.push({ smooth: r.smooth, lo: r.z, hi: r.z });
+  }
+  const spans = runs
+    .filter((r) => r.smooth && r.hi - r.lo >= 2 && (r.lo - min[2] < 0.5 || max[2] - r.hi < 0.5))
+    .map((r) => [round(r.lo - min[2] < 0.5 ? min[2] : r.lo - 0.05, 2), round(max[2] - r.hi < 0.5 ? max[2] : r.hi + 0.05, 2)]);
+  if (!spans.length) return { measured: false, reason: 'no smooth end found' };
+  return { measured: true, axis: [0, 0, 1], smoothSpansMm: spans };
+}

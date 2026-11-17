@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-11-16T18:03:23.766Z",
+  "generatedAt": "2026-11-17T06:50:05.519Z",
   "partCount": 482,
   "totalVerifiedPorts": 4242,
   "parts": {
@@ -766,6 +766,20 @@
       ],
       "originType": "centered",
       "gearSpecs": null,
+      "idlerSpecs": {
+        "measured": true,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "smoothSpansMm": [
+          [
+            0.84,
+            6.2
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -821,6 +835,20 @@
       ],
       "originType": "centered",
       "gearSpecs": null,
+      "idlerSpecs": {
+        "measured": true,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "smoothSpansMm": [
+          [
+            0.84,
+            6.2
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -955,6 +983,20 @@
       ],
       "originType": "end_shoulder",
       "gearSpecs": null,
+      "idlerSpecs": {
+        "measured": true,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "smoothSpansMm": [
+          [
+            0.89,
+            6.2
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -1010,6 +1052,20 @@
       ],
       "originType": "end_shoulder",
       "gearSpecs": null,
+      "idlerSpecs": {
+        "measured": true,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "smoothSpansMm": [
+          [
+            0.89,
+            6.2
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -1638,6 +1694,44 @@
       ],
       "originType": "end_shoulder",
       "gearSpecs": null,
+      "channelSpecs": {
+        "measured": true,
+        "direction": [
+          0,
+          0,
+          1
+        ],
+        "open": [
+          0,
+          1,
+          0
+        ],
+        "across": [
+          1,
+          0,
+          0
+        ],
+        "centerAcrossMm": 0,
+        "faceMm": 3.05,
+        "mouth": {
+          "spanMm": [
+            1.15,
+            2.25
+          ],
+          "halfWidthMm": 3.35
+        },
+        "slot": {
+          "spanMm": [
+            -1.15,
+            1.15
+          ],
+          "halfWidthMm": 4.45
+        },
+        "spanMm": [
+          -6.2,
+          6.2
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -2670,6 +2764,20 @@
       ],
       "originType": "centered",
       "gearSpecs": null,
+      "idlerSpecs": {
+        "measured": true,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "smoothSpansMm": [
+          [
+            -6.2,
+            0
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -3262,6 +3370,24 @@
       ],
       "originType": "end_shoulder",
       "gearSpecs": null,
+      "idlerSpecs": {
+        "measured": true,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "smoothSpansMm": [
+          [
+            -12.55,
+            -6.35
+          ],
+          [
+            0.85,
+            6.2
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -6923,6 +7049,50 @@
           -3.2,
           3.2
         ]
+      },
+      "clipSpecs": {
+        "measured": true,
+        "direction": [
+          1,
+          0,
+          0
+        ],
+        "seatNormal": [
+          0,
+          -1,
+          0
+        ],
+        "seatHeightMm": -3.2,
+        "legs": [
+          {
+            "at": [
+              -31.75,
+              -3.195,
+              0.075
+            ],
+            "depthMm": 6.12
+          },
+          {
+            "at": [
+              31.75,
+              -3.195,
+              0.075
+            ],
+            "depthMm": 6.12
+          }
+        ],
+        "lengthSpanMm": [
+          -38,
+          38
+        ],
+        "centerAcrossMm": 0,
+        "rail": {
+          "heightSpanMm": [
+            -1,
+            1
+          ],
+          "halfWidthMm": 4.3
+        }
       },
       "fastenerSpecs": null,
       "mountingRules": {
@@ -13630,6 +13800,44 @@
       ],
       "originType": "end_shoulder",
       "gearSpecs": null,
+      "channelSpecs": {
+        "measured": true,
+        "direction": [
+          1,
+          0,
+          0
+        ],
+        "open": [
+          0,
+          1,
+          0
+        ],
+        "across": [
+          0,
+          0,
+          1
+        ],
+        "centerAcrossMm": 0,
+        "faceMm": 3.05,
+        "mouth": {
+          "spanMm": [
+            1.15,
+            2.25
+          ],
+          "halfWidthMm": 3.35
+        },
+        "slot": {
+          "spanMm": [
+            -1.15,
+            1.15
+          ],
+          "halfWidthMm": 4.45
+        },
+        "spanMm": [
+          -12.55,
+          12.55
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",
@@ -22998,6 +23206,24 @@
       ],
       "originType": "offset",
       "gearSpecs": null,
+      "idlerSpecs": {
+        "measured": true,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "smoothSpansMm": [
+          [
+            -7,
+            0
+          ],
+          [
+            20.8,
+            27.81
+          ]
+        ]
+      },
       "fastenerSpecs": null,
       "mountingRules": {
         "massClass": "light",

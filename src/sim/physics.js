@@ -347,6 +347,35 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     const joint = world.createImpulseJoint(RAPIER.JointData.prismatic({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, vec(new THREE.Vector3(...l.direction).normalize())), anchor, rb.get(id), true);
     joint.setContactsEnabled(false);
   }
+  // Slides between bodies (openspec linear-motion-and-idler-pins, design §4): a prismatic joint along the
+  // slide, stopping at the travel the engine found each way (Rapier's limits, in metres along the axis,
+  // of b's move relative to a). Contacts between the two bodies are off, as on a free rack's slider: the
+  // limits are what stop it
+  const slideJoints = new Map(); // slide joint id -> ImpulseJoint
+  for (const j of graph.slideJoints || []) {
+    const A = rb.get(j.a);
+    const B = rb.get(j.b);
+    if (!A || !B || A === B) continue;
+    const p = { x: j.point[0] * MM, y: j.point[1] * MM, z: j.point[2] * MM };
+    const data = RAPIER.JointData.prismatic(p, p, vec(new THREE.Vector3(...j.direction).normalize()));
+    data.limitsEnabled = true;
+    data.limits = [j.limits[0] * MM, j.limits[1] * MM];
+    const joint = world.createImpulseJoint(data, A, B, true);
+    joint.setContactsEnabled(false);
+    slideJoints.set(j.id, joint);
+  }
+  // A body on a slide: where it is along it (m from where it started) and its ends
+  const slideOfBody = new Map(
+    (graph.slideJoints || []).map((j) => [j.b, { a: j.a, axis: new THREE.Vector3(...j.direction).normalize(), lo: j.limits[0] * MM, hi: j.limits[1] * MM }])
+  );
+  const slideAt = (bodyId) => {
+    const sl = slideOfBody.get(bodyId);
+    const A = rb.get(sl.a);
+    const axis = sl.axis.clone().applyQuaternion(toV3q(A.rotation()));
+    return { ...sl, axis, s: toV3(rb.get(bodyId).translation()).sub(toV3(A.translation())).dot(axis) };
+  };
+  const SLIDE_END = 0.0002; // m: a body this near the end of its slide is at that end
+  const endPush = new Map(); // rack link index -> m its gear has turned on past the end of the slide
 
   // Where each body's start axis points now
   const axisNow = (bodyId, axis) => axis.clone().applyQuaternion(rb.get(bodyId).rotation());
@@ -359,11 +388,17 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     return new THREE.Vector3(...byId.get(partId).position).multiplyScalar(MM).applyQuaternion(toV3q(body.rotation())).add(toV3(body.translation()));
   };
   /** Turns `body` about the world line `(point, axis)` by a torque impulse `tau` (N·m·s). */
-  const turnAboutLine = (body, axis, point, tau) => {
+  const turnAboutLine = (body, axis, point, tau, known = null) => {
     if (!body?.isDynamic()) return;
-    const scale = inertiaAbout(body, axis) / inertiaAbout(body, axis, point);
+    const scale = known ?? inertiaAbout(body, axis) / inertiaAbout(body, axis, point);
     body.applyTorqueImpulse(vec(axis.clone().multiplyScalar(tau * scale)), true);
   };
+  /** Whether a motor is driving the gear on body `id` (throttle on, not stopped by a press). */
+  const gearFirm = (id) =>
+    graph.motors.some((m) => {
+      if (hingeAxis.get(m.hinge).b !== id && !trains.get(m.id).some((t) => !t.rack && t.body === id)) return false;
+      return Boolean(lastThrottles.get(m.id)) && !motorState.get(m.id).blocked;
+    });
   /** Pulls each link's speeds to its ratio; `catchUp` also takes back part of the turn drifted apart. */
   function holdLinks(dt, catchUp = true) {
     for (const c of clusters) solveCluster(c, dt, catchUp);
@@ -384,27 +419,79 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       // A worm (side a) is never pushed back by its gear: the whole correction goes to the gear, so
       // the gear follows the worm and a load on the gear can't turn either (openspec right-angle-gears)
       const mass = l.oneWay ? invB : k * k * invA + invB;
-      if (mass > 0) active.push({ l, i, A, B, axisA, axisB, pointA, pointB, k, mass });
+      // A rack on a body at the end of its slide can't go further that way: there the gear meets a rack
+      // that holds still, so the gear and its train stop, and the motor stalls (openspec
+      // linear-motion-and-idler-pins)
+      const end = l.kind === 'rack' && slideOfBody.has(l.b) ? slideAt(l.b) : null;
+      if (end && end.s > end.lo + SLIDE_END && end.s < end.hi - SLIDE_END) endPush.delete(i);
+      // A gear its motor is driving keeps its speed: the motor gives what torque it takes, so the sliding
+      // body on its rack takes the whole correction (else the light gear does, the motor drives it on
+      // again, and a load on the stage leaves it behind its gear). A stopped motor holds through the
+      // ordinary coupling, by its stopping mode
+      const firm = end && gearFirm(l.a);
+      // How a torque about each gear's line turns its body (the poses don't change over the sweep)
+      const scaleA = A.isDynamic() ? inertiaAbout(A, axisA) * invA : 0;
+      const scaleB = l.kind !== 'rack' && B.isDynamic() ? inertiaAbout(B, axisB) * invB : 0;
+      if (mass > 0) active.push({ l, i, A, B, axisA, axisB, pointA, pointB, k, mass: firm && invB > 0 ? invB : mass, end, invA, firm: firm && invB > 0, scaleA, scaleB });
     });
     // Whole sweeps over every link, not each link to the end in turn: a train of gears of very
     // different weights (a light shaft into a heavy frame) only settles when they pass impulses along
     for (let pass = 0; pass < LINK_PASSES; pass++) {
       if (ratchetState.length) holdRatchets(dt, catchUp);
-      for (const { l, i, A, B, axisA, axisB, pointA, pointB, k, mass } of active) {
+      for (const { l, i, A, B, axisA, axisB, pointA, pointB, k, mass, end, invA, firm, scaleA, scaleB } of active) {
         const speedB = l.kind === 'rack' ? toV3(B.linvel()).dot(axisB) : spin(l.b, axisB);
         const error = k * spin(l.a, axisA) - speedB + (catchUp ? (DRIFT_GAIN * drift.get(i)) / dt : 0);
+        if (end) {
+          // How the gear asks the rack to move along the slide: past an end, the rack holds still
+          const along = (k * spin(l.a, axisA)) * axisB.dot(end.axis);
+          if ((end.s <= end.lo + SLIDE_END && along < 0) || (end.s >= end.hi - SLIDE_END && along > 0)) {
+            // ...and what had drifted apart is gone: the gear simply stops against it
+            if (rackOnSlide.has(i)) rackOnSlide.get(i).offset += drift.get(i);
+            // How far the gear has pushed past the end: the motor stalls on it as on a press (checkBlocked)
+            endPush.set(i, (endPush.get(i) || 0) + Math.abs(drift.get(i)));
+            drift.set(i, 0);
+            if (k * k * invA > 0) turnAboutLine(A, axisA, pointA, k * (-(k * spin(l.a, axisA)) / (k * k * invA)), scaleA);
+            continue;
+          }
+          if (Math.abs(along) > 1e-6) endPush.delete(i); // driven back off the end
+        }
         const lambda = -error / mass;
-        if (!l.oneWay) turnAboutLine(A, axisA, pointA, k * lambda);
+        if (!l.oneWay && !firm) turnAboutLine(A, axisA, pointA, k * lambda, scaleA);
         if (B.isDynamic()) {
           if (l.kind === 'rack') B.applyImpulse(vec(axisB.clone().multiplyScalar(-lambda)), true);
-          else turnAboutLine(B, axisB, pointB, -lambda);
+          else turnAboutLine(B, axisB, pointB, -lambda, scaleB);
         }
       }
     }
   }
+  // A rack on a slide (openspec linear-motion-and-idler-pins): its drift from its gear is measured from
+  // where they are, not summed from speeds, since Rapier's slide joint moves the body a little more than
+  // its speed says (it corrects its error by position) and a summed drift then never closes
+  const rackOnSlide = new Map(); // link index -> { turn (rad the gear has turned), last, offset (m) }
+  const turnAbout = (bodyId, axis) => {
+    const q = rb.get(bodyId).rotation();
+    return 2 * Math.atan2(q.x * axis.x + q.y * axis.y + q.z * axis.z, q.w);
+  };
+  graph.links.forEach((l, i) => {
+    if (l.kind === 'rack' && slideOfBody.has(l.b) && rb.get(l.a) && rb.get(l.b) && l.a !== l.b) {
+      rackOnSlide.set(i, { turn: 0, last: turnAbout(l.a, new THREE.Vector3(...l.axisA).normalize()), offset: 0 });
+    }
+  });
+  const rackDriftNow = (l, i) => {
+    const st = rackOnSlide.get(i);
+    const axis = new THREE.Vector3(...l.axisA).normalize();
+    const now = turnAbout(l.a, axis);
+    st.turn += wrapAngle(now - st.last);
+    st.last = now;
+    return l.mmPerRad * MM * st.turn - toV3(rb.get(l.b).translation()).dot(axisNow(l.b, new THREE.Vector3(...l.direction).normalize())) - st.offset;
+  };
   function trackDrift(dt) {
     graph.links.forEach((l, i) => {
       if (!rb.get(l.a) || !rb.get(l.b) || l.a === l.b) return;
+      if (rackOnSlide.has(i)) {
+        drift.set(i, rackDriftNow(l, i));
+        return;
+      }
       const axisA = axisNow(l.a, new THREE.Vector3(...l.axisA).normalize());
       const k = l.kind === 'rack' ? l.mmPerRad * MM : l.sign * l.ratio;
       const sB =
@@ -1014,6 +1101,13 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       for (let i = 0, queue = [start]; i < queue.length; i++) {
         const cur = queue[i];
         for (const l of trainLinks) {
+          // A body on a slide driven through a rack weighs on the motor as its mass at the gear's pitch
+          // radius (openspec linear-motion-and-idler-pins); it hangs on no further train
+          if (l.kind === 'rack' && l.a === cur && slideOfBody.has(l.b) && !factor.has(l.b) && rb.get(l.b)?.isDynamic()) {
+            factor.set(l.b, factor.get(cur));
+            out.push({ body: l.b, rack: Math.abs(l.mmPerRad) * MM, factor: factor.get(cur) });
+            continue;
+          }
           if (l.kind === 'rack' || (l.a !== cur && l.b !== cur)) continue;
           if (l.oneWay && l.a !== cur) continue; // a gear doesn't turn its worm
           const forward = l.a === cur;
@@ -1028,6 +1122,8 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       return [m.id, out];
     })
   );
+  /** How much a train body weighs on its motor's shaft, before its factor²: about its gear's axis, or a slide's mass at the gear. */
+  const trainInertia = (t) => (t.rack ? rb.get(t.body).mass() * t.rack * t.rack : inertiaAbout(rb.get(t.body), axisNow(t.body, t.axis), worldPointOf(t.body, t.gear)));
   // Bodies a motor turns through its shaft and gears (as rigid bodies), for the gears that may swing into mesh
   const motorTurned = new Set(graph.motors.flatMap((m) => [hingeAxis.get(m.hinge).b, ...trains.get(m.id).map((t) => t.body)]).map((id) => rb.get(id)).filter(Boolean));
   // Bodies turned directly by each motor (its shaft body and any gears or sprockets linked to it)
@@ -1151,9 +1247,12 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   for (const branches of loadBranches.values()) {
     for (const b of branches) motorHeldBodies.add(b.body);
   }
+  // A body on a slide falls along it when gravity is on (openspec linear-motion-and-idler-pins); what
+  // drives it through a rack feels its weight there
+  const slidingBodies = new Set((graph.slideJoints || []).map((j) => j.b).filter((id) => rb.get(id)?.isDynamic()));
   const unheldGravityBodies = new Set();
   for (const b of graph.bodies) {
-    if (looseSet.has(b.id) || motorHeldBodies.has(b.id) || !rb.get(b.id)?.isDynamic()) continue;
+    if (looseSet.has(b.id) || motorHeldBodies.has(b.id) || slidingBodies.has(b.id) || !rb.get(b.id)?.isDynamic()) continue;
     if ((bodyMinY.get(b.id) ?? Infinity) <= robotMinY + 0.005) continue; // passive ground wheel
     const h = graph.hinges.find((x) => x.a === b.id || x.b === b.id);
     if (!h) continue;
@@ -1163,6 +1262,10 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     if (r.length() > 0.006) unheldGravityBodies.add(b.id);
   }
   function applyGravityMode() {
+    for (const bId of slidingBodies) {
+      rb.get(bId).setGravityScale(simulateGravity ? 1 : 0, true);
+      rb.get(bId).wakeUp();
+    }
     for (const bId of ropedSet) {
       const body = rb.get(bId);
       if (!body) continue;
@@ -1290,6 +1393,8 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       for (const c of bodyColliders.get(bodyId) || []) {
         world.contactPairsWith(c, (other) => {
           if (skip.has(pairKey(c.handle, other.handle))) return;
+          // A part not joined to the robot (fallen off with gravity on) doesn't stop a motor
+          if (looseColliderHandles.has(other.handle)) return;
           if (ignore && ignore.has(other.parent()?.handle)) return;
           world.contactPair(c, other, (manifold) => {
             for (let i = 0; i < manifold.numContacts(); i++) deepest = Math.max(deepest, -manifold.contactDist(i));
@@ -1358,7 +1463,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         st.depth = Math.max(st.depth, pressDepth(m.id)); // pressing deeper than it was while stopped blocks it again
       }
       let turned = inertiaAbout(B, axis, point);
-      for (const t of trains.get(m.id)) turned += t.factor * t.factor * inertiaAbout(rb.get(t.body), axisNow(t.body, t.axis), worldPointOf(t.body, t.gear));
+      for (const t of trains.get(m.id)) turned += t.factor * t.factor * trainInertia(t);
       const inertia = 1 / (1 / inertiaAbout(A, axis, point) + 1 / turned);
       if (st.blocked) {
         if (st.wobbleAmp > 1e-4 && st.wobbleTime < WOBBLE_TIME) {
@@ -1439,6 +1544,14 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     }
   }
 
+  /** How far the gears a motor turns have pushed racks past the ends of their slides (m). */
+  function slideEndPush(motorId) {
+    if (!endPush.size) return 0;
+    const turned = new Set(driven.get(motorId));
+    let most = 0;
+    for (const [i, mm] of endPush) if (turned.has(graph.links[i].a)) most = Math.max(most, mm);
+    return most;
+  }
   /** Stops each motor whose moving parts have run into something (see pressDepth). */
   function checkBlocked(throttles, h) {
     for (const m of graph.motors) {
@@ -1449,7 +1562,17 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       // that way again
       if (dir && dir === st.loadBlockDir && !st.blocked) st.loadBlockDir = 0;
       const loads = ropeLoadsOf(m.id);
-      const depth = st.loadBlockDir && dir === -st.loadBlockDir ? pressDepth(m.id, loads) : pressDepth(m.id);
+      // Only a motor driving its rack past the end presses on it: idle, a load resting on the stop doesn't
+      if (!dir && endPush.size) for (const i of [...endPush.keys()]) if (driven.get(m.id).includes(graph.links[i].a)) endPush.delete(i);
+      // Idle and free, nothing here needs how deep its parts press: that is read when it next runs (as
+      // where it starts from), which saves going through every contact of every part it moves each step
+      if (!dir && !st.blocked && !st.clearingDir) {
+        st.depthStale = true;
+        continue;
+      }
+      const pressed = st.loadBlockDir && dir === -st.loadBlockDir ? pressDepth(m.id, loads) : pressDepth(m.id);
+      // A gear driving its rack past the end of a slide presses as hard as it has turned on past it
+      const depth = Math.max(pressed, slideEndPush(m.id));
       // Backing out ends once nothing has pressed for a while: a load pulled up against what turns it
       // (a weight wound up to its spool) bounces on and off it, and one clear step isn't out
       // (counted while it runs: held idle against what it pressed, it hasn't backed out yet)
@@ -1458,6 +1581,10 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       if (!dir || st.blocked) {
         st.depth = st.blocked || st.clearingDir ? Math.max(st.depth, depth) : depth;
         continue;
+      }
+      if (st.depthStale) {
+        st.depth = depth;
+        st.depthStale = false;
       }
       // While backing out, only pressing deeper than it ever was, for a while, blocks it again (starting
       // back, the turning part may knock into what it was against before that gets out of its way)
@@ -1496,7 +1623,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         let loadFactor = 1;
         let maxStageInertia = loadInertia;
         for (const t of trains.get(m.id)) {
-          const stageI = inertiaAbout(rb.get(t.body), axisNow(t.body, t.axis), worldPointOf(t.body, t.gear));
+          const stageI = trainInertia(t);
           loadInertia += stageI;
           if (stageI > maxStageInertia) {
             maxStageInertia = stageI;
@@ -2126,7 +2253,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     const point = h.point.clone().applyQuaternion(toV3q(A.rotation())).add(toV3(A.translation()));
     const rel = toV3(B.angvel()).sub(toV3(A.angvel())).dot(axis);
     let turned = inertiaAbout(B, axis, point);
-    for (const t of trains.get(m.id)) turned += t.factor * t.factor * inertiaAbout(rb.get(t.body), axisNow(t.body, t.axis), worldPointOf(t.body, t.gear));
+    for (const t of trains.get(m.id)) turned += t.factor * t.factor * trainInertia(t);
     const inertia = 1 / (1 / inertiaAbout(A, axis, point) + 1 / turned);
     // How far the shaft is turned against the motor's body, about the axis (rad, −π to π)
     const q = toV3q(A.rotation()).invert().multiply(toV3q(B.rotation()));

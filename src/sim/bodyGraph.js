@@ -11,7 +11,8 @@
  *
  * Returns { bodies: [{ id, parts, shaft, label }], ground, fixed: [bodyId], loose: [bodyId],
  * sliders: [bodyId], hinges: [{ id, a, b, axis, point, kind,
- * motor }], links: [{ kind, a, b, ratio, sign, axisA, axisB?, direction?, mmPerRad? }],
+ * motor }], slideJoints: [{ id, a (the brackets' body), b (the beam's), direction, point, limits: [lo, hi] mm
+ * along direction }] (openspec linear-motion-and-idler-pins), links: [{ kind, a, b, ratio, sign, axisA, axisB?, direction?, mmPerRad? }],
  * motors: [{ id, label, hinge }], still: [partId], pins: [partId], solidPins: [partId] (the pins that
  * are solid posts, standoffs, and so collide), tracks: [{ links (in order round
  * the loop, or null), linkIds, grippers: [[gripperId, linkId]], frame: bodyId, drive: { body, axis, teeth } | null }], bands: [{ id, label,
@@ -61,7 +62,7 @@ function unionFind(ids) {
 }
 
 export function buildBodyGraph(inputs) {
-  const { parts, seated, groups, meshes, chains, tracks = [], sprocketAxes = {}, bays = [], bands = [], ropes = [], ratchets = [], spurGears = [] } = inputs;
+  const { parts, seated, groups, meshes, chains, tracks = [], sprocketAxes = {}, bays = [], bands = [], ropes = [], ratchets = [], spurGears = [], clips = [], slides = [] } = inputs;
   const byId = new Map(parts.map((p) => [p.id, p]));
   const labelOf = (id) => byId.get(id)?.label || id;
   const warnings = [];
@@ -197,6 +198,18 @@ export function buildBodyGraph(inputs) {
     uf.union(brain, battery);
     addJoint(/Tire/i.test(byId.get(battery)?.name || '') ? 'tire' : 'bay', battery, brain, null, null);
   }
+  // Racks clipped onto beams are one piece with the beam (openspec linear-motion-and-idler-pins)
+  for (const [rack, beam] of clips) {
+    if (!byId.has(rack) || !byId.has(beam)) continue;
+    uf.union(beam, rack);
+    addJoint('bay', rack, beam, null, null, { clip: true });
+  }
+  // Brackets pointing different ways lock what they hold
+  for (const sl of slides) {
+    if (!sl.locked) continue;
+    uf.union(sl.brackets[0], sl.beams[0]);
+    warnings.push({ partId: sl.beams[0], text: `${labelOf(sl.beams[0])} is held by brackets that point different ways, so it can't slide.` });
+  }
   // Parts on one shaft press on their neighbours along it (a wheel on a spacer on a plate), and a
   // capped or motor shaft's cap or stop ring presses on the part it rests against
   groups.forEach((g) => {
@@ -296,6 +309,15 @@ export function buildBodyGraph(inputs) {
     const ids = [...set];
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) addHingePair(ids[i], ids[j]);
   }
+  // A rubber collar spins on its shaft inside what the shaft carries (in an omni wheel's recess, under the
+  // lock beam pinned there): it never collides with the parts of its shaft's body (openspec
+  // linear-motion-and-idler-pins: Huey's front wheels turned it into their lock beams and stalled)
+  for (const s of seated) {
+    if (s.openingKind !== 'collar_hole' || stillSet.has(s.insert) || stillSet.has(s.opening)) continue;
+    const shaftBody = uf.find(s.insert);
+    if (shaftBody === uf.find(s.opening)) continue;
+    for (const id of nodes) if (uf.find(id) === shaftBody) addHingePair(s.opening, id);
+  }
   for (const t of tracks) {
     for (const s of t.sprockets) {
       for (const id of [...t.linkIds, ...t.grippers.map(([g]) => g)]) {
@@ -303,7 +325,21 @@ export function buildBodyGraph(inputs) {
       }
     }
   }
-  const hingePairs = [...hingePairSet].map((k) => k.split('|'));
+  // Slides between bodies (openspec linear-motion-and-idler-pins, design §3): the bracket's body and the
+  // beam's, along the slide, with the travel the engine found each way. Slides between the same two
+  // bodies are one joint. The racks and beams riding through the brackets touch them by design, as
+  // racks touch the gears on them, and never collide
+  const slideJoints = [];
+  for (const sl of slides) {
+    if (sl.locked) continue;
+    const a = bodyOf(sl.brackets[0]);
+    const b = bodyOf(sl.beams[0]);
+    if (!a || !b || a === b) continue;
+    if (!slideJoints.some((j) => j.a === a && j.b === b)) {
+      slideJoints.push({ id: `sl${slideJoints.length}`, a, b, direction: sl.direction, point: sl.point, limits: sl.limits, slide: sl.id });
+    }
+    for (const k of sl.brackets) for (const id of [...sl.beams, ...sl.racks]) hingePairSet.add(k < id ? `${k}|${id}` : `${id}|${k}`);
+  }
   const motors = [];
   for (const { motor, group } of motorSockets) {
     const a = bodyOf(motor);
@@ -329,6 +365,7 @@ export function buildBodyGraph(inputs) {
 
   // Gears, racks and chains drive each other
   const links = [];
+  const slideRacks = new Map(slides.flatMap((sl) => sl.racks.map((r) => [r, sl])));
   // Gears just out of mesh: their smooth collision shells would rub and drag each other, so they are
   // kept from colliding as well as from driving (openspec play-mode)
   const nearGears = [];
@@ -352,6 +389,9 @@ export function buildBodyGraph(inputs) {
       links.push({ kind: 'gear', pair: m.kind, a, b, gears: [m.a, m.b], ratio: Math.abs(m.ratio), sign: Math.sign(m.ratio) || -1, axisA: m.axisA, axisB: m.axisB, ...(m.oneWay ? { oneWay: true } : {}) });
     } else {
       links.push({ kind: 'rack', a, b, gears: [m.a, m.b], axisA: m.axisA, direction: m.direction, mmPerRad: m.mmPerRad });
+      // A gear on a slide's rack runs along the slide's other racks too (end to end on its line)
+      const sl = slideRacks.get(m.b);
+      if (sl) for (const r of sl.racks) hingePairSet.add(m.a < r ? `${m.a}|${r}` : `${r}|${m.a}`);
     }
   }
   for (const ids of chains) {
@@ -394,25 +434,55 @@ export function buildBodyGraph(inputs) {
   // nothing (they'd fall off) and are listed. A rack joined only to its gear slides along its teeth.
   const joined = new Set();
   for (const h of hinges) joined.add(h.a).add(h.b);
+  for (const j of slideJoints) joined.add(j.a).add(j.b);
   const sliders = links.filter((l) => l.kind === 'rack' && !joined.has(l.b) && l.a !== l.b).map((l) => l.b);
   const driving = new Set(motors.map((m) => m.id));
   const motorCount = (b) => b.parts.filter((id) => driving.has(id)).length;
-  const pieces = [];
-  const reached = new Set(sliders);
-  for (const start of bodies) {
-    if (reached.has(start.id)) continue;
-    const piece = [start];
-    reached.add(start.id);
-    for (let i = 0; i < piece.length; i++) {
-      for (const h of hinges) {
-        const next = h.a === piece[i].id ? h.b : h.b === piece[i].id ? h.a : null;
-        if (next && !reached.has(next)) reached.add(next) && piece.push(bodies.find((b) => b.id === next));
+  const findPieces = () => {
+    const out = [];
+    const reached = new Set(sliders);
+    for (const start of bodies) {
+      if (reached.has(start.id)) continue;
+      const piece = [start];
+      reached.add(start.id);
+      for (let i = 0; i < piece.length; i++) {
+        for (const h of [...hinges, ...slideJoints]) {
+          const next = h.a === piece[i].id ? h.b : h.b === piece[i].id ? h.a : null;
+          if (next && !reached.has(next)) reached.add(next) && piece.push(bodies.find((b) => b.id === next));
+        }
       }
+      out.push(piece);
     }
-    pieces.push(piece);
-  }
+    return out;
+  };
+  let pieces = findPieces();
   const size = (piece) => piece.reduce((n, b) => n + b.parts.length, 0);
-  const largest = pieces.reduce((best, p) => (!best || size(p) > size(best) ? p : best), null);
+  let largest = pieces.reduce((best, p) => (!best || size(p) > size(best) ? p : best), null);
+  // A piece hanging on a rope from the rest of the robot (a carriage, even one carrying its own motor):
+  // when the parts round it let it move along one line only, it slides along it on the body it is
+  // nested in (openspec rope-and-spool, design decision 10; the engine's `guide` tries the moves). Its
+  // bodies are listed as roped, so they fall when gravity is on
+  const guidedBodies = new Set();
+  if (inputs.guide && ropes.length) {
+    for (const piece of pieces) {
+      if (piece === largest) continue;
+      const own = new Set(piece.map((b) => b.id));
+      const ropeBodies = ropes.map((r) => r.elements.map((e) => (e.instanceId ? bodyOf(e.instanceId) : null)).filter(Boolean));
+      const carrier = ropeBodies.flatMap((list) => (list.some((b) => !own.has(b)) ? list.filter((b) => own.has(b)) : []))[0];
+      if (!carrier) continue;
+      const moving = piece.flatMap((b) => b.parts);
+      const candidates = bodies.filter((b) => !own.has(b.id)).map((b) => ({ key: b.id, parts: b.parts }));
+      const g = inputs.guide(moving, candidates);
+      if (!g) continue;
+      slideJoints.push({ id: `sl${slideJoints.length}`, a: g.key, b: carrier, direction: g.direction, point: g.point, limits: g.limits, rope: true });
+      for (const b of piece) guidedBodies.add(b.id);
+    }
+    if (guidedBodies.size) {
+      for (const j of slideJoints) joined.add(j.a).add(j.b);
+      pieces = findPieces();
+      largest = pieces.reduce((best, p) => (!best || size(p) > size(best) ? p : best), null);
+    }
+  }
   const fixed = [];
   const loose = [];
   for (const piece of pieces) {
@@ -629,6 +699,7 @@ export function buildBodyGraph(inputs) {
       }
     }
   }
+  for (const id of guidedBodies) roped.push(id);
   for (const id of [...loose]) {
     if (!ropeBodyIds.has(id)) continue;
     loose.splice(loose.indexOf(id), 1);
@@ -666,7 +737,8 @@ export function buildBodyGraph(inputs) {
     roped,
     sliders,
     hinges,
-    hingePairs,
+    slideJoints,
+    hingePairs: [...hingePairSet].map((k) => k.split('|')),
     joints: joints.map((j) => ({ ...j, bodyA: bodyOf(j.a), bodyB: bodyOf(j.b) })),
     partInfo: Object.fromEntries(parts.map((p) => [p.id, { label: p.label, name: p.name, partNumber: p.partNumber, category: p.category, box: p.box, weak: Boolean(p.weak), fastener: p.fastener, motor: p.motor, chain: p.chain }])),
     bays,

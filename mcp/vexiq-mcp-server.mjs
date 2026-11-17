@@ -1021,6 +1021,10 @@ async function executeTool(name, args = {}) {
       originType: part.originType || 'centered',
       gearSpecs: part.gearSpecs || null,
       ...(part.rackSpecs ? { rackSpecs: part.rackSpecs } : {}),
+      // Linear motion parts and idler pins (openspec linear-motion-and-idler-pins)
+      ...(part.clipSpecs ? { clipSpecs: part.clipSpecs } : {}),
+      ...(part.channelSpecs ? { channelSpecs: part.channelSpecs } : {}),
+      ...(part.idlerSpecs ? { idlerSpecs: part.idlerSpecs } : {}),
       fastenerSpecs: part.fastenerSpecs || null,
       ...(part.hubSpecs ? { hubSpecs: part.hubSpecs } : {}),
       ...(copy && part.hubSpecs ? { stopping: STOPPING_MODES.includes(copy.stopping) ? copy.stopping : 'brake' } : {}),

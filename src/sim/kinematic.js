@@ -35,9 +35,19 @@ export function createKinematic(graph) {
         order.push(child);
         queue.push(child);
       }
+      // A slide (openspec linear-motion-and-idler-pins) moves b relative to a along +direction, between its limits
+      for (const j of graph.slideJoints || []) {
+        const child = j.a === cur ? j.b : j.b === cur ? j.a : null;
+        if (!child || fixed.has(child) || tree.has(child)) continue;
+        const sign = child === j.b ? 1 : -1;
+        const limits = sign > 0 ? j.limits : [-j.limits[1], -j.limits[0]];
+        tree.set(child, { parent: cur, slide: true, axis: v3(j.direction).normalize().multiplyScalar(sign), point: v3(j.point), limits });
+        order.push(child);
+        queue.push(child);
+      }
     }
   }
-  const angle = new Map(order.map((id) => [id, 0])); // radians about the tree axis
+  const angle = new Map(order.map((id) => [id, 0])); // radians about the tree axis (mm along it on a slide)
   const slide = new Map([...sliders].map((id) => [id, 0])); // mm along the rack
   // How each motor's hinge turns a body of the tree: the shaft side (b) when it turns with the motor
   // body taken as still, else the motor side (a) when it hangs off the shaft
@@ -47,7 +57,7 @@ export function createKinematic(graph) {
       const axis = v3(h.axis).normalize();
       for (const [body, sign] of [[h.b, 1], [h.a, -1]]) {
         const t = tree.get(body);
-        const along = t ? t.axis.dot(axis) : 0;
+        const along = t && !t.slide ? t.axis.dot(axis) : 0;
         if (Math.abs(along) >= ALONG) return [m.id, { child: body, sign: sign / along }];
       }
       return [m.id, { child: null, sign: 0 }];
@@ -60,7 +70,7 @@ export function createKinematic(graph) {
   /** World spin of a body about `axis` from its own hinge speed (its parent taken as still). */
   const spinAbout = (body, axis) => {
     const t = tree.get(body);
-    if (!t) return 0;
+    if (!t || t.slide) return 0;
     return (speedOf.get(body) || 0) * t.axis.dot(axis);
   };
 
@@ -94,7 +104,16 @@ export function createKinematic(graph) {
         if (l.kind === 'rack') {
           if (!forward) continue; // a rack doesn't drive its gear back in this pass
           want = l.mmPerRad * spinAbout(cur, v3(l.axisA));
-          if (!sliders.has(other)) {
+          const t = tree.get(other);
+          if (t?.slide) {
+            // A rack on a slide moves its body along the slide, stopping at either end
+            want *= v3(l.direction).normalize().dot(t.axis);
+            const at = angle.get(other);
+            if ((at <= t.limits[0] + 1e-6 && want < -SAME) || (at >= t.limits[1] - 1e-6 && want > SAME)) {
+              jam(motor);
+              continue;
+            }
+          } else if (!sliders.has(other)) {
             if (Math.abs(want) > SAME) jam(motor);
             continue;
           }
@@ -109,7 +128,7 @@ export function createKinematic(graph) {
           const ratio = forward ? l.ratio : 1 / l.ratio;
           const spinWanted = l.sign * ratio * spinAbout(cur, mine);
           const t = tree.get(other);
-          if (!t || Math.abs(t.axis.dot(theirs)) < ALONG) {
+          if (!t || t.slide || Math.abs(t.axis.dot(theirs)) < ALONG) {
             if (Math.abs(spinWanted) > SAME) jam(motor);
             continue;
           }
@@ -145,7 +164,10 @@ export function createKinematic(graph) {
       solve(throttles);
       for (const [body, speed] of speedOf) {
         if (sliders.has(body)) slide.set(body, slide.get(body) + speed * dt);
-        else if (angle.has(body)) angle.set(body, angle.get(body) + speed * dt);
+        else if (tree.get(body)?.slide) {
+          const [lo, hi] = tree.get(body).limits;
+          angle.set(body, THREE.MathUtils.clamp(angle.get(body) + speed * dt, lo, hi));
+        } else if (angle.has(body)) angle.set(body, angle.get(body) + speed * dt);
       }
     },
     /** Each body's move from where it started, as a world Matrix4: body -> Matrix4. */
@@ -157,10 +179,12 @@ export function createKinematic(graph) {
           out.set(id, new THREE.Matrix4());
           continue;
         }
-        const turn = new THREE.Matrix4()
-          .makeTranslation(t.point.x, t.point.y, t.point.z)
-          .multiply(new THREE.Matrix4().makeRotationAxis(t.axis, angle.get(id)))
-          .multiply(new THREE.Matrix4().makeTranslation(-t.point.x, -t.point.y, -t.point.z));
+        const turn = t.slide
+          ? new THREE.Matrix4().makeTranslation(t.axis.x * angle.get(id), t.axis.y * angle.get(id), t.axis.z * angle.get(id))
+          : new THREE.Matrix4()
+              .makeTranslation(t.point.x, t.point.y, t.point.z)
+              .multiply(new THREE.Matrix4().makeRotationAxis(t.axis, angle.get(id)))
+              .multiply(new THREE.Matrix4().makeTranslation(-t.point.x, -t.point.y, -t.point.z));
         out.set(id, out.get(t.parent).clone().multiply(turn));
       }
       for (const id of sliders) {

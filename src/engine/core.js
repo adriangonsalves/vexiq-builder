@@ -34,6 +34,7 @@ import { areChainNeighbours, isChainFit, isChainPart, isGripperOnLink, isLink, i
 import { applyPatches, groupParts } from '../utils/partGroups.js';
 import { CHAIN_LINK_PART_NUMBER, TREAD_LINK_PART_NUMBER, buildChainPath, chainMessage, checkSprocketsForChain, nextChainName } from '../utils/chainPath.js';
 import { sliceOutline } from '../utils/chainObstacles.js';
+import { bracketSlide, heldTravel, isClipRack, isLinearBracket, rackClip, slidesLock, upward } from '../utils/linearMotion.js';
 import { bandOverlaps } from './bandFit.js';
 import { isRoutedBand, mirroredRoute, resolveRoute, setPostCover, stringBand } from '../utils/bandRoute.js';
 import { isRoutedRope, mirroredRope, routeOf, stringRope } from '../utils/ropeRoute.js';
@@ -780,6 +781,30 @@ function findJoints(state) {
     }
   }
 
+  // An idler pin's smooth end in the centre hole of a gear, sprocket, pulley or wheel holds it, free to
+  // turn (openspec linear-motion-and-idler-pins, idler-pins): a seat marked `turns`
+  for (const f of fasteners) {
+    const spans = f.part.idlerSpecs?.measured ? f.part.idlerSpecs.smoothSpansMm : null;
+    const pinFeature = spans && featuresById.get(f.inst.instanceId).find((x) => x.kind === 'pin');
+    if (!pinFeature) continue;
+    const axis = new THREE.Vector3(0, 0, 1).transformDirection(f.mat);
+    const origin = new THREE.Vector3().setFromMatrixPosition(f.mat);
+    const box = rawWorldBoxes.get(f.inst.instanceId).clone().expandByScalar(1);
+    for (const n of nonFasteners) {
+      if (!(n.part.gearSpecs || n.part.category === 'Wheels & Treads') || !box.intersectsBox(rawWorldBoxes.get(n.inst.instanceId))) continue;
+      for (const bore of featuresById.get(n.inst.instanceId).filter((x) => x.kind === 'shaft_bore')) {
+        if (Math.abs(bore.axis.dot(axis)) < IDLER_PARALLEL) continue;
+        const off = bore.origin.clone().sub(origin);
+        if (off.addScaledVector(axis, -off.dot(axis)).length() > IDLER_LINE_MM) continue;
+        const [bLo, bHi] = [bore.start, bore.end].map((e) => e.clone().sub(origin).dot(axis)).sort((x, y) => x - y);
+        const overlapMm = Math.max(...spans.map(([lo, hi]) => Math.min(hi, bHi) - Math.max(lo, bLo)));
+        if (overlapMm < IDLER_MIN_DEPTH_MM) continue;
+        seatedPairs.push({ insertOwner: f.inst.instanceId, openingOwner: n.inst.instanceId, insert: pinFeature, opening: bore, overlapMm, turns: true });
+        break;
+      }
+    }
+  }
+
   // What each fastener is seated in; integral pegs (e.g. corner connector pegs) join parts directly
   const seatedIn = new Map(fasteners.map((f) => [f.inst.instanceId, new Map()])); // fastener -> partId -> [ports]
   const directJoints = []; // [holderId, otherId] from integral pegs and parts held on parts
@@ -896,6 +921,40 @@ function findJoints(state) {
     pegJointsByKey.get(key).pegs += 1;
   }
   const pegJoints = [...pegJointsByKey.values()];
+
+  // Racks clipped onto beams are fixed to them, as a pin would fix them; a beam whose rack rides in a
+  // linear motion bracket's channel is held by it, free to slide (openspec linear-motion-and-idler-pins)
+  const clips = [];
+  const slides = [];
+  const racks = nonFasteners.filter((n) => isClipRack(n.part));
+  for (const r of racks) {
+    const box = rawWorldBoxes.get(r.inst.instanceId).clone().expandByScalar(1);
+    for (const b of nonFasteners) {
+      if (b === r || !box.intersectsBox(rawWorldBoxes.get(b.inst.instanceId))) continue;
+      const clip = rackClip(r.part, r.mat, r.inst.instanceId, b.part, b.mat, featuresById.get(b.inst.instanceId), b.inst.instanceId);
+      if (!clip) continue;
+      clips.push(clip);
+      fastenerCountByPartInstance.set(r.inst.instanceId, (fastenerCountByPartInstance.get(r.inst.instanceId) || 0) + 1);
+      fastenerCountByPartInstance.set(b.inst.instanceId, (fastenerCountByPartInstance.get(b.inst.instanceId) || 0) + 1);
+      link(r.inst.instanceId, b.inst.instanceId);
+      directJoints.push([r.inst.instanceId, b.inst.instanceId]);
+      break;
+    }
+  }
+  if (clips.length) {
+    const nfById = new Map(nonFasteners.map((n) => [n.inst.instanceId, n]));
+    for (const k of nonFasteners.filter((n) => isLinearBracket(n.part))) {
+      for (const clip of clips) {
+        const r = nfById.get(clip.rack);
+        const slide = bracketSlide(k.part, k.mat, k.inst.instanceId, r.part, r.mat, clip);
+        if (!slide) continue;
+        slides.push(slide);
+        if (slides.some((x) => x !== slide && x.bracket === slide.bracket && x.beam === slide.beam)) continue;
+        for (const id of [slide.bracket, slide.beam]) fastenerCountByPartInstance.set(id, (fastenerCountByPartInstance.get(id) || 0) + 1);
+        link(slide.bracket, slide.beam);
+      }
+    }
+  }
 
   // A battery in its brain's bay is held by the bay's latch: joined to the brain and fully mounted
   const batteryBays = [];
@@ -1071,7 +1130,9 @@ function findJoints(state) {
     chainJoins,
     placedGears,
     meshedGearPairs,
-    nearMeshPairs
+    nearMeshPairs,
+    clips,
+    slides
   };
 }
 
@@ -1344,7 +1405,9 @@ export function playInputs(state, { braceTolerance = true } = {}) {
     axis: vec(p.insert.axis),
     point: vec(p.opening.origin),
     overlapMm: Math.round((p.overlapMm ?? 5.5) * 100) / 100,
-    out: outOf(p.insert, p.opening)
+    out: outOf(p.insert, p.opening),
+    // An idler pin's smooth end in a gear's centre: the gear turns on it (openspec linear-motion-and-idler-pins)
+    ...(p.turns ? { turns: true } : {})
   }));
   // Diagonal braces across non-Pythagorean pitch triangles (e.g. Flop's 1x18 beams at 6.5x2.5 = 6.964P
   // vs 7P) flex a pin by ~0.53 mm inside the hole; in play mode count parallel overlapping pins within 0.75 mm as seated.
@@ -1428,7 +1491,10 @@ export function playInputs(state, { braceTolerance = true } = {}) {
     for (const o of toothed) {
       if (o === g || (o.kind === 'gear' && o.instanceId < g.instanceId)) continue;
       if (o.kind !== 'gear' && o.kind !== 'rack') continue; // 90° partners are linked above
-      if (!meshRelation(g, o)) {
+      // A gear over a rack's end tooth drives it: half a tooth past the rack's end still meshes
+      // (openspec linear-motion-and-idler-pins: Huey's lift gears sit 0.4 mm past their racks)
+      const pastEnd = o.kind === 'rack' ? { ...o, lengthSpan: [o.lengthSpan[0] - o.toothSpacingMm / 2, o.lengthSpan[1] + o.toothSpacingMm / 2] } : o;
+      if (!meshRelation(g, pastEnd)) {
         // Gears side by side, a little too near or far to mesh, are reported
         if (o.kind !== 'gear' || Math.abs(g.axis.dot(o.axis)) < 0.999) continue;
         const d = new THREE.Vector3().subVectors(o.center, g.center);
@@ -1525,7 +1591,15 @@ export function playInputs(state, { braceTolerance = true } = {}) {
       toothDir: vec(g.toothDir),
       faceSpan: [Math.round((g.faceSpan[0] - g.center.dot(g.axis)) * 1000) / 1000, Math.round((g.faceSpan[1] - g.center.dot(g.axis)) * 1000) / 1000]
     }));
-  return { parts, seated, groups, meshes, chains, tracks, sprocketAxes, bays, bands: playBands(found.visible), ropes: playRopes(found.visible), ratchets: playRatchets(found), spurGears };
+  // Racks clipped onto beams (rigid), and slides between assemblies with their travel (openspec
+  // linear-motion-and-idler-pins): [rackId, beamId] and [{ id, brackets, beams, racks, direction,
+  // point, limits: [lo, hi] (mm along direction from where it sits), locked }]
+  const clips = found.clips.map((c) => [c.rack, c.beam]);
+  const slides = slideGroups(found).map((g) => ({ id: g.id, brackets: g.brackets, beams: g.beams, racks: g.racks, direction: g.direction, point: g.point, limits: g.limits || [0, 0], locked: g.locked }));
+  // A body hanging on ropes between rails slides along them (openspec rope-and-spool, design decision 10):
+  // the body graph asks once its pieces are found
+  const guide = (moving, candidates) => ropeGuide(found, moving, candidates);
+  return { parts, seated, groups, meshes, chains, tracks, sprocketAxes, bays, bands: playBands(found.visible), ropes: playRopes(found.visible), ratchets: playRatchets(found), spurGears, clips, slides, guide };
 }
 
 /**
@@ -1772,6 +1846,286 @@ function settleSpread(plan, state, input, { log = null, progress = null } = {}) 
  * [{ ratchetId, ratchet, pawlId, pawl, holds, freeSign, freeAxis, freeDirection, wrongWay,
  * pivotCount, locked, pressed }].
  */
+const SLIDE_STEP_MM = 1; // the travel search steps this far, then halves down to SLIDE_FINE_MM
+const SLIDE_FINE_MM = 0.25;
+
+/**
+ * Stepping parts along a line until they meet others (openspec linear-motion-and-idler-pins, rope-and-spool
+ * decision 10): `moving` and `holder` are instance ids, `dir` a world unit vector, `skip(a, b)` pairs left
+ * out (they touch by design). Meeting is the audit's rule (tight fits aren't meetings); pairs already
+ * overlapping where they sit are left out and listed in `startOverlaps`. `search(sign, limit)` gives
+ * { mm (the last clear spot, to SLIDE_FINE_MM), by: [labels] | null } along sign·dir, at most `limit`.
+ * `turnBlocked(axis, deg, about)` says whether turning the moving parts by deg about the world line
+ * through `about` along `axis` makes one meet a holder part.
+ */
+function travelSearch(found, moving, holder, dir, skip = () => false) {
+  const instById = found.instById || (found.instById = new Map(found.visible.map((i) => [i.instanceId, i])));
+  const solid = (id) => {
+    const inst = instById.get(id);
+    return inst && !isRoutedRope(inst) && !isRoutedBand(inst) && partOf(inst);
+  };
+  const boxOf = (id) => {
+    const inst = instById.get(id);
+    return getPartCollisionBvh(partOf(inst)).localBox.clone().applyMatrix4(buildWorldMatrix(inst.position, inst.rotation));
+  };
+  const movers = moving.filter(solid).map((id) => ({ id, inst: instById.get(id), box: boxOf(id) }));
+  const others = holder.filter(solid).map((id) => ({ id, inst: instById.get(id), box: boxOf(id) }));
+  const hitAt = (a, b, t) => {
+    const moved = { ...a.inst, position: a.inst.position.map((v, k) => v + dir.getComponent(k) * t) };
+    const col = checkCandidateCollision(moved, [b.inst]);
+    return col.isIntersecting;
+  };
+  const startOverlaps = [];
+  const pairs = [];
+  for (const a of movers) {
+    for (const b of others) {
+      if (skip(a.id, b.id)) continue;
+      // The run of t (each way) where a's box moved by t·dir meets b's box
+      let lo = -Infinity;
+      let hi = Infinity;
+      for (let k = 0; k < 3; k++) {
+        const d = dir.getComponent(k);
+        const [aMin, aMax, bMin, bMax] = [a.box.min.getComponent(k), a.box.max.getComponent(k), b.box.min.getComponent(k), b.box.max.getComponent(k)];
+        if (Math.abs(d) < 1e-9) {
+          if (aMax < bMin || aMin > bMax) lo = Infinity;
+          continue;
+        }
+        const t1 = (bMin - aMax) / d;
+        const t2 = (bMax - aMin) / d;
+        lo = Math.max(lo, Math.min(t1, t2));
+        hi = Math.min(hi, Math.max(t1, t2));
+      }
+      if (lo > hi) continue;
+      if (lo <= 0 && hi >= 0 && hitAt(a, b, 0)) {
+        startOverlaps.push([a.id, b.id]);
+        continue;
+      }
+      pairs.push({ a, b, lo, hi });
+    }
+  }
+  const search = (sign, limit) => {
+    const live = pairs.filter((p) => (sign > 0 ? p.hi > 0 && p.lo < limit : p.lo < 0 && -p.hi < limit));
+    const meets = (t) => live.find((p) => sign * t >= p.lo - 1e-9 && sign * t <= p.hi + 1e-9 && hitAt(p.a, p.b, sign * t));
+    for (let t = SLIDE_STEP_MM; t <= limit + SLIDE_STEP_MM - 1e-9; t += SLIDE_STEP_MM) {
+      const at = Math.min(t, limit);
+      const hit = meets(at);
+      if (!hit) {
+        if (at >= limit) break;
+        continue;
+      }
+      // Halve back to the last clear spot
+      let clear = at - SLIDE_STEP_MM;
+      let blocked = at;
+      let who = hit;
+      while (blocked - clear > SLIDE_FINE_MM + 1e-9) {
+        const mid = (clear + blocked) / 2;
+        const h2 = meets(mid);
+        if (h2) {
+          blocked = mid;
+          who = h2;
+        } else clear = mid;
+      }
+      return { mm: Math.max(0, clear), by: [found.labelOf(who.a.id), found.labelOf(who.b.id)] };
+    }
+    return { mm: limit, by: null };
+  };
+  const turnBlocked = (axis, deg, about) => {
+    const turn = new THREE.Matrix4()
+      .makeTranslation(about.x, about.y, about.z)
+      .multiply(new THREE.Matrix4().makeRotationAxis(axis, THREE.MathUtils.degToRad(deg)))
+      .multiply(new THREE.Matrix4().makeTranslation(-about.x, -about.y, -about.z));
+    const overlapping = new Set(startOverlaps.map(([a, b]) => `${a}|${b}`));
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    for (const a of movers) {
+      const m = turn.clone().multiply(buildWorldMatrix(a.inst.position, a.inst.rotation));
+      m.decompose(pos, quat, scale);
+      const moved = { ...a.inst, position: pos.toArray(), rotation: quaternionToEulerDeg(quat) };
+      const box = a.box.clone().applyMatrix4(turn);
+      for (const b of others) {
+        if (skip(a.id, b.id) || overlapping.has(`${a.id}|${b.id}`) || !box.intersectsBox(b.box)) continue;
+        if (checkCandidateCollision(moved, [b.inst]).isIntersecting) return true;
+      }
+    }
+    return false;
+  };
+  return { search, startOverlaps, turnBlocked, movers };
+}
+
+/**
+ * One line of travel for a body hanging on ropes (openspec rope-and-spool, design decision 10): the
+ * parts `moving` tried against each candidate neighbour in turn (`candidates`: [{ key, parts }], parts
+ * nested with it first). Along each axis of the neighbour's largest part, ±GUIDE_TEST_MM; when exactly
+ * one axis is clear at least one way (a carriage may sit at one end of its rails), the other two are
+ * blocked both ways, and turning ±GUIDE_TURN_DEG about every axis is blocked, it is a carriage on
+ * that neighbour: { key, direction (world, pointing up when it can), point, limits: [lo, hi] mm along
+ * direction from where it sits (stepped until a part meets one of the neighbour's, at most
+ * GUIDE_CAP_MM), stops }. Else null (it hangs and swings on its ropes).
+ */
+const GUIDE_TEST_MM = 3;
+const GUIDE_TURN_DEG = 3;
+const GUIDE_CAP_MM = 400;
+function ropeGuide(found, moving, candidates) {
+  const instById = found.instById || (found.instById = new Map(found.visible.map((i) => [i.instanceId, i])));
+  const worldBox = (ids) => {
+    const box = new THREE.Box3();
+    for (const id of ids) {
+      const inst = instById.get(id);
+      const part = inst && !isRoutedRope(inst) && !isRoutedBand(inst) && partOf(inst);
+      if (part) box.union(getPartCollisionBvh(part).localBox.clone().applyMatrix4(buildWorldMatrix(inst.position, inst.rotation)));
+    }
+    return box;
+  };
+  const mine = worldBox(moving);
+  if (mine.isEmpty()) return null;
+  const overlap = (box) => {
+    const i = mine.clone().intersect(box);
+    return i.isEmpty() ? 0 : (i.max.x - i.min.x) * (i.max.y - i.min.y) * (i.max.z - i.min.z);
+  };
+  const ranked = candidates
+    .map((c) => ({ ...c, overlap: overlap(worldBox(c.parts)) }))
+    .filter((c) => c.overlap > 0)
+    .sort((a, b) => b.overlap - a.overlap);
+  const centre = mine.getCenter(new THREE.Vector3());
+  for (const c of ranked) {
+    const solid = c.parts.map((id) => instById.get(id)).filter((i) => i && !isRoutedRope(i) && !isRoutedBand(i) && partOf(i));
+    if (!solid.length) continue;
+    const size = (i) => partOf(i).bbox.size.reduce((a, b) => a * b, 1);
+    const big = solid.reduce((a, b) => (size(b) > size(a) ? b : a));
+    const m = buildWorldMatrix(big.position, big.rotation);
+    const axes = [0, 1, 2].map((k) => new THREE.Vector3().setFromMatrixColumn(m, k).normalize());
+    // An axis it can move along at least one way (it may sit at one end of its travel); along the
+    // others it is held both ways
+    const clear = [];
+    let held = 0;
+    let any = null;
+    for (const axis of axes) {
+      const t = travelSearch(found, moving, c.parts, axis);
+      any = t;
+      const [fwd, back] = [t.search(1, GUIDE_TEST_MM).mm, t.search(-1, GUIDE_TEST_MM).mm];
+      if (fwd >= GUIDE_TEST_MM || back >= GUIDE_TEST_MM) clear.push(axis);
+      else held += 1;
+    }
+    if (clear.length !== 1 || held !== 2) continue;
+    if (!axes.every((axis) => any.turnBlocked(axis, GUIDE_TURN_DEG, centre) && any.turnBlocked(axis, -GUIDE_TURN_DEG, centre))) continue;
+    const direction = upward(clear[0].toArray());
+    const dir = new THREE.Vector3(...direction);
+    const t = travelSearch(found, moving, c.parts, dir);
+    const [up, down] = [t.search(1, GUIDE_CAP_MM), t.search(-1, GUIDE_CAP_MM)];
+    const round2 = (x) => Math.round(x * 100) / 100;
+    return { key: c.key, direction, point: centre.toArray(), limits: [-round2(down.mm), round2(up.mm)], stops: { forward: up.by, back: down.by } };
+  }
+  return null;
+}
+
+/**
+ * Linear motion slides (openspec linear-motion-and-idler-pins, design §3): the beams held in brackets,
+ * gathered by the two assemblies they join (the parts joined to the beam, and to the bracket, by pins,
+ * shafts, pegs, clips and bays, not by slides). Brackets on the same two assemblies pointing different
+ * ways lock them (`locked`). Each slide's travel each way, from where it sits: stepping the moving side
+ * along the slide until one of its parts first meets one of the holder's by the audit's rule (tight fits
+ * aren't meetings), or until no bracket holds a rack any more, at most the beam's length. The racks and
+ * beams on the slide's line against its brackets, and racks against gears, are left out (they touch by
+ * design), as are pairs already overlapping where they sit (listed in `overlapsAtStart`).
+ * Worked out once per findJoints result. [{ id, moving, holder, movingName, holderName, brackets, beams,
+ * racks, direction (world, pointing up when it can), point, locked, travelMm: { forward, back },
+ * limits: [-back, forward], stops: { forward, back }, overlapsAtStart }]
+ */
+function slideGroups(found) {
+  if (found.slideGroupsCache) return found.slideGroupsCache;
+  const out = [];
+  found.slideGroupsCache = out;
+  if (!found.slides.length) return out;
+  const ids = found.visible.map((i) => i.instanceId);
+  const parent = new Map(ids.map((id) => [id, id]));
+  const find = (id) => {
+    while (parent.get(id) !== id) id = parent.get(id);
+    return id;
+  };
+  const join = (a, b) => parent.has(a) && parent.has(b) && parent.set(find(a), find(b));
+  for (const [f, ports] of found.seatedIn) for (const partId of ports.keys()) join(f, partId);
+  for (const [a, others] of found.fastenerIn) for (const b of others.keys()) join(a, b);
+  for (const [a, b] of found.directJoints) join(a, b);
+  for (const b of found.batteryBays) join(b.batteryId, b.brainId);
+  const byKey = new Map();
+  for (const s of found.slides) {
+    const [m, h] = [find(s.beam), find(s.bracket)];
+    if (m === h) continue; // pinned together elsewhere: nothing slides
+    const key = `${m}|${h}`;
+    if (!byKey.has(key)) byKey.set(key, { m, h, list: [] });
+    byKey.get(key).list.push(s);
+  }
+  const instById = new Map(found.visible.map((i) => [i.instanceId, i]));
+  const groupName = (id) => instById.get(id)?.groupName || found.labelOf(id);
+  for (const { m, h, list } of byKey.values()) {
+    const direction = upward(list[0].direction);
+    const dir = new THREE.Vector3(...direction);
+    const locked = slidesLock(list.map((s) => s.direction));
+    const moving = ids.filter((id) => find(id) === m);
+    const holder = ids.filter((id) => find(id) === h);
+    const brackets = [...new Set(list.map((s) => s.bracket))];
+    const beams = [...new Set(list.map((s) => s.beam))];
+    const racks = [...new Set(found.clips.filter((c) => beams.includes(c.beam)).map((c) => c.rack))];
+    const entry = {
+      id: `s${out.length}`,
+      moving,
+      holder,
+      movingName: groupName(beams[0]),
+      holderName: groupName(brackets[0]),
+      brackets,
+      beams,
+      racks,
+      direction,
+      point: list[0].point,
+      locked
+    };
+    out.push(entry);
+    if (locked) continue;
+    // How far some bracket still holds a rack of the slide, each way, and the beam's length
+    const spanAlong = (id, lo, hi) => {
+      const t = new THREE.Vector3(...instById.get(id).position).dot(dir);
+      return { span: [t + lo, t + hi] };
+    };
+    const kOf = (id, v) => Math.abs(new THREE.Vector3(...v).transformDirection(buildWorldMatrix(instById.get(id).position, instById.get(id).rotation)).dot(dir));
+    // Per beam, every bracket on it against every rack on it; held while either beam is
+    const held = [];
+    for (const beam of beams) {
+      const on = list.filter((s) => s.beam === beam);
+      const bracketSpans = [...new Set(on.map((s) => s.bracket))].map((id) => {
+        const ch = partOf(instById.get(id)).channelSpecs;
+        return spanAlong(id, ...ch.spanMm.map((x) => x * kOf(id, ch.direction)).sort((a, b) => a - b));
+      });
+      const rackSpans = found.clips.filter((c) => c.beam === beam).map((c) => spanAlong(c.rack, ...partOf(instById.get(c.rack)).clipSpecs.lengthSpanMm));
+      const run = heldTravel(bracketSpans, rackSpans);
+      if (run) held.push(run);
+    }
+    const lengthOf = (id) => {
+      const b = partOf(instById.get(id)).bbox;
+      return Math.max(...b.size);
+    };
+    const cap = Math.max(...beams.map(lengthOf));
+    const heldHi = Math.min(cap, Math.max(...held.map((r) => r[1])));
+    const heldLo = Math.min(cap, Math.max(...held.map((r) => -r[0])));
+    // Pairs that may meet: world boxes overlapping somewhere along the way
+    const skipPair = new Set();
+    const pairKey = (a, b) => `${a}|${b}`;
+    for (const k of brackets) for (const id of [...racks, ...beams]) skipPair.add(pairKey(id, k));
+    const gears = holder.filter((id) => partOf(instById.get(id))?.gearSpecs);
+    for (const r of racks) for (const g of gears) skipPair.add(pairKey(r, g));
+    const { search, startOverlaps } = travelSearch(found, moving, holder, dir, (a, b) => skipPair.has(pairKey(a, b)));
+    const up = search(1, heldHi);
+    const down = search(-1, heldLo);
+    const round2 = (x) => Math.round(x * 100) / 100;
+    entry.travelMm = { forward: round2(up.mm), back: round2(down.mm) };
+    entry.limits = [-entry.travelMm.back, entry.travelMm.forward];
+    const stop = (r, heldEdge) => (r.by ? { meets: r.by } : r.mm >= cap - 1e-6 ? { end: 'beam length' } : { end: 'rack leaves the brackets', heldMm: round2(heldEdge) });
+    entry.stops = { forward: stop(up, heldHi), back: stop(down, heldLo) };
+    entry.overlapsAtStart = startOverlaps.map(([a, b]) => [found.labelOf(a), found.labelOf(b)]);
+  }
+  return out;
+}
+
 function auditRatchets(found) {
   const { visible, seatedPairs, seatedIn, fastenerIn, fasteners } = found;
   const ratchetInsts = visible.filter((i) => isRatchet(partOf(i)));
@@ -2117,6 +2471,23 @@ export function auditAssembly(state) {
   const ropes = auditRopes(state, found);
   const ropeProblems = ropes.filter((r) => r.tooShortMm || r.loosePocket || r.through.length);
 
+  // Linear motion slides (openspec linear-motion-and-idler-pins): each with its travel each way;
+  // brackets pointing different ways lock what they hold, a problem
+  const slides = slideGroups(found).map((g) => ({
+    id: g.id,
+    moving: { name: g.movingName, partCount: g.moving.length },
+    holder: { name: g.holderName, partCount: g.holder.length },
+    brackets: g.brackets.map(found.labelOf),
+    bracketIds: g.brackets,
+    beams: g.beams.map(found.labelOf),
+    beamIds: g.beams,
+    racks: g.racks.map(found.labelOf),
+    direction: g.direction,
+    locked: g.locked,
+    ...(g.locked ? {} : { travelMm: g.travelMm, stops: g.stops, overlapsAtStart: g.overlapsAtStart })
+  }));
+  const lockedSlides = slides.filter((x) => x.locked);
+
   // Ratchets and pawls: a pawl facing the wrong way, held by two or more pins, or by none is a problem
   const ratchets = auditRatchets(found);
   const ratchetProblems = ratchets.filter((r) => r.wrongWay || r.locked || r.pivotCount === 0);
@@ -2126,6 +2497,7 @@ export function auditAssembly(state) {
     isMechanicallySound:
       collisions.length === 0 &&
       ratchetProblems.length === 0 &&
+      lockedSlides.length === 0 &&
       ropeProblems.length === 0 &&
       tiltedMotors.length === 0 &&
       floatingFasteners.length === 0 &&
@@ -2160,6 +2532,9 @@ export function auditAssembly(state) {
     batteryBays,
     // Pawls in ratchets' teeth, which way each ratchet turns, and pawls that won't work
     ratchets,
+    // Racks clipped onto beams, and beams sliding in linear motion brackets with their travel
+    clips: found.clips.map((c) => ({ rack: found.labelOf(c.rack), beam: found.labelOf(c.beam), rackId: c.rack, beamId: c.beam })),
+    slides,
     // Routed ropes, each with what's wrong with it (nothing, for most)
     ropes,
     // Chains or tracks that bend away from any sprocket: their links are counted unsecured
@@ -2264,6 +2639,11 @@ function ropeThroughParts(rope, line, others) {
 
 // In Play, a pin a little off a hole's line (a diagonal brace) only counts as in it this deep
 const BRACE_MIN_OVERLAP_MM = 1;
+// An idler pin's smooth end in a centre hole (openspec linear-motion-and-idler-pins): lined up as pins
+// in holes are (2°, 0.25 mm) and at least this far in
+const IDLER_PARALLEL = Math.cos(THREE.MathUtils.degToRad(2));
+const IDLER_LINE_MM = 0.25;
+const IDLER_MIN_DEPTH_MM = 2;
 
 // A Smart Motor tilted further than this off the shaft in its socket is listed by the audit
 const MOTOR_TILT_AUDIT_DEG = 0.2;

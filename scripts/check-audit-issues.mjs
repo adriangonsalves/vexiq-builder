@@ -72,5 +72,21 @@ check('real build: sound exactly when there are no problems', real.isMechanicall
   check('  a squared motor is not listed', auditAssembly({ instances: squared }).tiltedMotorCount === 0);
 }
 
+
+{
+  // Linear motion slides (openspec linear-motion-and-idler-pins): a note with the travel, or a problem when locked
+  const slideAudit = {
+    slides: [
+      { moving: { name: 'Middle Stage' }, holder: { name: 'Holder' }, direction: [0, 1, 0], travelMm: { forward: 196.9, back: 0.5 }, brackets: ['K1', 'K2'], beams: ['Beam A'], beamIds: ['ba'] },
+      { moving: { name: 'Arm' }, holder: { name: 'Base' }, direction: [1, 0, 0], travelMm: { forward: 40, back: 10 }, brackets: ['K3'], beams: ['Beam B'], beamIds: ['bb'] },
+      { moving: { name: 'Sled' }, holder: { name: 'Frame' }, direction: [0, 1, 0], locked: true, brackets: ['K4', 'K5'], beams: ['Beam C'], beamIds: ['bc'] }
+    ]
+  };
+  const [up, flat, lock] = auditIssues(slideAudit);
+  check('a vertical slide is a note with its travel up and down', up.kind === 'slide' && up.level === 'note' && up.title === 'Middle Stage slides on Holder: 197 mm up, 1 mm down' && up.detail === 'Held by 2 linear motion brackets.' && up.parts[0].instanceId === 'ba', JSON.stringify(up));
+  check('  a level one gives its travel each way along it', flat.title === 'Arm slides on Base: 40 mm one way, 10 mm the other along it' && flat.detail === 'Held by 1 linear motion bracket.', flat.title);
+  check('brackets pointing different ways are a problem naming the beam and brackets', lock.kind === 'slide-locked' && lock.level === 'problem' && lock.title.startsWith('Beam C is held by brackets that point different ways') && lock.detail.includes('K4, K5') && problemCount([up, flat, lock]) === 1, JSON.stringify(lock));
+}
+
 console.log(failures === 0 ? '\nAll audit issue checks passed.' : `\n${failures} audit issue check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

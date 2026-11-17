@@ -8,7 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { CLAWBOT_BRAIN, CLAWBOT_PIECES, STARTERS, STARTER_SECTIONS, matchesClawbotRules, starterById } from '../src/starters.js';
 import { groupsOf, worldBoxOf } from '../src/utils/partGroups.js';
-import { auditAssembly } from '../mcp/assembly-engine.mjs';
+import { auditAssembly, partOf } from '../mcp/assembly-engine.mjs';
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let failures = 0;
@@ -35,6 +35,10 @@ check('Robots: Speedbot 2.0, BaseBot, Clawbot, Flop, Huey', names('robots') === 
   check("Huey: two lift ropes, their ends and spots naming the starter's own parts", ropes.length === 2 && refs.length >= 8 && refs.every((id) => ids.has(id)), JSON.stringify(refs.filter((id) => !ids.has(id))));
   const audit = auditAssembly({ instances: huey });
   check('Huey: each rope is held at both ends and passes through no part', audit.ropes.length === 2 && audit.ropes.every((r) => !r.through.length && !r.loosePocket && !r.tooShortMm && r.slackMm > 10), JSON.stringify(audit.ropes.map((r) => [r.through, r.slackMm])));
+  // Linear motion and idler pins (openspec linear-motion-and-idler-pins)
+  const unsecured = new Set(audit.unsecuredParts.map((u) => u.instanceId));
+  const racksAndIdlers = huey.filter((i) => ['1x6 Continuous Linear Motion Rack Gear', '36 Tooth Gear', '48 Tooth Gear'].includes(partOf(i)?.name) && i.groupName !== 'Claw Mount');
+  check(`Huey: its racks and idler gears are held (${racksAndIdlers.length} of them, none unsecured), and the Middle Stage slides on the Holder by one slide`, racksAndIdlers.length >= 8 && racksAndIdlers.every((i) => !unsecured.has(i.instanceId)) && audit.slides.length === 1 && audit.slides[0].moving.name === 'Elevator Middle Stage' && !audit.slides[0].locked, JSON.stringify({ unsecured: racksAndIdlers.filter((i) => unsecured.has(i.instanceId)).map((i) => i.label), slides: audit.slides.length }));
 }
 check('Assemblies: Sample starter, Ratchet winch, Rope winch, Rope lift, Simple drivetrain, Simple arm, Simple claw', names('assemblies') === 'Sample starter, Ratchet winch, Rope winch, Rope lift, Simple drivetrain, Simple arm, Simple claw', names('assemblies'));
 check('headings: Robots then Assemblies', STARTER_SECTIONS.map((s) => s.name).join() === 'Robots,Assemblies');

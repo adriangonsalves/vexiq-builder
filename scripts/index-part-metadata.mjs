@@ -27,7 +27,13 @@ import {
   measureSprocket,
   measureSpool,
   measurePulleyGroove,
-  SPOOL_PATTERN
+  SPOOL_PATTERN,
+  CONTINUOUS_RACK_PATTERN,
+  IDLER_PIN_PATTERN,
+  LINEAR_BRACKET_PATTERN,
+  measureChannel,
+  measureClipSeat,
+  measureIdlerPin
 } from './measure-part-geometry.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -722,6 +728,26 @@ function measureShapes(part, ports, gearSpecs, fastenerSpecs, cylinders, unmeasu
 }
 
 /**
+ * Linear motion parts and idler pins (openspec linear-motion-and-idler-pins, design §1 and §6): the
+ * continuous rack's clip seat (`clipSpecs`), each linear motion bracket's channel (`channelSpecs`)
+ * and each idler pin's smooth ends (`idlerSpecs`), measured from the models. A part that should have
+ * one and can't be measured is added to `unmeasured` (and `measured` lists the ones that were).
+ */
+function measureLinearMotion(part, rackSpecs, unmeasured, measured) {
+  const out = {};
+  const take = (key, kind, m) => {
+    if (m.measured) {
+      out[key] = m;
+      measured.push(`${part.name}: ${kind}`);
+    } else unmeasured.push(`${part.name}: ${m.reason}`);
+  };
+  if (CONTINUOUS_RACK_PATTERN.test(part.name)) take('clipSpecs', 'clip seat', measureClipSeat(part, rackSpecs));
+  if (LINEAR_BRACKET_PATTERN.test(part.name)) take('channelSpecs', 'channel', measureChannel(part));
+  if (IDLER_PIN_PATTERN.test(part.name)) take('idlerSpecs', 'smooth end', measureIdlerPin(part));
+  return out;
+}
+
+/**
  * A spool's square bore (openspec rope-and-spool, design §4): measured from its mesh, it replaces the
  * hole the cylinder search finds (the 2x Wide Spool's blind round hole; the 1x has none). Returns
  * the spool's sizes for `spoolSpecs`, or null for any other part.
@@ -1116,6 +1142,7 @@ async function main() {
   const metadataById = {};
   let totalVerifiedPorts = 0;
   const unmeasured = [];
+  const linearMeasured = [];
   // Today's ports, before this run replaces them: their ids live on as aliases (assignStableIds)
   const oldPortsById = new Map(catalog.map((part) => [part.id, structuredClone(part.ports || [])]));
   const lostIds = [];
@@ -1409,6 +1436,8 @@ async function main() {
     // 8. Spools and ropes (openspec rope-and-spool)
     const spoolSpecs = addSpoolBore(part, ports, unmeasured);
     const ropeSpecs = fixRopePorts(part, ports);
+    // 9. Linear motion parts and idler pins (openspec linear-motion-and-idler-pins)
+    const { clipSpecs, channelSpecs, idlerSpecs } = measureLinearMotion(part, rackSpecs, unmeasured, linearMeasured);
     // Facts for every point, then ids from where each point is, keeping today's ids as aliases
     describePorts(part, ports, fastenerSpecs, partBvh);
     assignStableIds(part, ports, oldPortsById.get(part.id) || [], lostIds);
@@ -1443,6 +1472,9 @@ async function main() {
       ...(ratchetSpecs ? { ratchetSpecs } : {}),
       ...(spoolSpecs ? { spoolSpecs } : {}),
       ...(ropeSpecs ? { ropeSpecs } : {}),
+      ...(clipSpecs ? { clipSpecs } : {}),
+      ...(channelSpecs ? { channelSpecs } : {}),
+      ...(idlerSpecs ? { idlerSpecs } : {}),
       ...(CHAIN_SPECS[part.partNumber] ? { chainSpecs: CHAIN_SPECS[part.partNumber] } : {}),
       fastenerSpecs,
       ...(hubSpecs ? { hubSpecs } : {}),
@@ -1464,6 +1496,10 @@ async function main() {
     else delete part.spoolSpecs;
     if (ropeSpecs) part.ropeSpecs = ropeSpecs;
     else delete part.ropeSpecs;
+    for (const [key, value] of Object.entries({ clipSpecs, channelSpecs, idlerSpecs })) {
+      if (value) part[key] = value;
+      else delete part[key];
+    }
     if (CHAIN_SPECS[part.partNumber]) part.chainSpecs = CHAIN_SPECS[part.partNumber];
     else delete part.chainSpecs;
     part.fastenerSpecs = fastenerSpecs;
@@ -1494,6 +1530,10 @@ async function main() {
     console.log(`${lostIds.length} port id(s) of the last index have no point now:`);
     for (const l of lostIds) console.log(`  ${l}`);
     process.exitCode = 1;
+  }
+  if (linearMeasured.length) {
+    console.log(`Measured ${linearMeasured.length} linear motion part(s) and idler pin(s):`);
+    for (const m of linearMeasured) console.log(`  ${m}`);
   }
   if (unmeasured.length) {
     console.log(`Couldn't measure ${unmeasured.length} part(s); they won't be turned to mesh or fit:`);

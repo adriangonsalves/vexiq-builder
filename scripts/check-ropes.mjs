@@ -581,6 +581,7 @@ if (pr.ok) {
   check('Rope lift starter: sound (the weight hanging on the rope is not an island)', audit.isMechanicallySound && audit.disconnectedIslands.length === 0, JSON.stringify({ islands: audit.disconnectedIslands, ropes: audit.ropes }));
   const g = buildBodyGraph(playInputs({ instances }));
   check('Play: the weight is held by its rope, not listed as loose', g.roped.length === 1 && g.loose.length === 0 && !g.warnings.length, JSON.stringify({ roped: g.roped, loose: g.loose, w: g.warnings }));
+  check('  Hook on a rope: nothing round it holds it to one line, so it hangs free (no slide), as a hook does', !(g.slideJoints || []).length, JSON.stringify(g.slideJoints));
   const byIdL = new Map(instances.map((i) => [i.instanceId, i]));
   const phys = await createPhysics(g, instances, { points: (pid) => getPartRawGeometry(partOf(byIdL.get(pid))).attributes.position.array }, { simulateGravity: true });
   const motor = g.motors[0].id;

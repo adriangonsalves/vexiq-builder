@@ -83,6 +83,20 @@ export function auditIssues(audit) {
     if (r.loosePocket) add('rope-pocket', 'problem', `${r.label}'s end isn't held`, `It is in the pocket of ${r.spool}, but no shaft goes through that spool to hold it.`, [part(r)]);
     if (r.through?.length) add('rope-through', 'problem', `${r.label} passes through ${r.through.join(', ')}`, 'Route it round that part, or over a pulley or post beside it.', [part(r)]);
   }
+  // Linear motion slides (openspec linear-motion-and-idler-pins): brackets pointing different ways
+  // lock what they hold; a working slide is a note with how far it travels
+  for (const sl of audit.slides || []) {
+    const parts = (sl.beamIds || []).map((id, k) => ({ instanceId: id, label: sl.beams[k] }));
+    if (sl.locked) {
+      add('slide-locked', 'problem', `${sl.beams[0]} is held by brackets that point different ways, so it can't slide.`, `Its brackets (${sl.brackets.join(', ')}) don't all run the same way. Line them up, or take out the ones that point another way.`, parts);
+    } else if (sl.travelMm) {
+      const d = sl.direction || [0, 0, 0];
+      const vertical = Math.abs(d[1]) > 0.9;
+      const [fwd, back] = [Math.round(sl.travelMm.forward), Math.round(sl.travelMm.back)];
+      const ways = vertical ? (d[1] > 0 ? `${fwd} mm up, ${back} mm down` : `${back} mm up, ${fwd} mm down`) : `${fwd} mm one way, ${back} mm the other along it`;
+      add('slide', 'note', `${sl.moving.name} slides on ${sl.holder.name}: ${ways}`, `Held by ${sl.brackets.length} linear motion bracket${sl.brackets.length === 1 ? '' : 's'}.`, parts);
+    }
+  }
   for (const p of audit.singlePinPivotParts || []) {
     add('single-pin', 'note', `${p.label} is held by one pin`, 'It can pivot on that pin. Add a second pin if it should stay fixed.', [part(p)]);
   }
