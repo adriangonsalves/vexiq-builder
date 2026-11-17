@@ -24,7 +24,7 @@ async function main(argv) {
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.json'), 'utf8'));
   const frames = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'cad-frames.json'), 'utf8')).frames;
   const byNumber = new Map(catalog.map((p) => [p.partNumber, p]));
-  const walked = walkAssembly(project, { isLibraryPart: (n) => byNumber.has(n) });
+  const walked = walkAssembly(project, { isLibraryPart: (n) => byNumber.has(n) || Boolean(frames[n]?.library) });
   const converted = convertParts(walked, { catalog, frames });
   const meshDir = await projectArchive(typeof source === 'string' && !fs.existsSync(source) ? source : SWISH);
   const decode = await dracoDecoder({ faces: true });

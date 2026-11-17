@@ -145,11 +145,11 @@ async function main(argv) {
   const projectId = project.id || projectIdFrom(source);
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.json'), 'utf8'));
   const libraryNumbers = new Set(catalog.map((p) => p.partNumber));
-  const walked = walkAssembly(project, { isLibraryPart: (n) => libraryNumbers.has(n) });
   const meshDir = await projectArchive(source);
   const decode = await dracoDecoder();
   const table = JSON.parse(fs.readFileSync(FRAMES_PATH, 'utf8'));
   const frames = table.frames;
+  const walked = walkAssembly(project, { isLibraryPart: (n) => libraryNumbers.has(n) || Boolean(frames[n]?.library) });
   const scale = walked.scaleFactor;
 
   const written = [];

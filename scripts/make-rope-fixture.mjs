@@ -23,7 +23,7 @@ async function make(robot, saved) {
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'catalog.json'), 'utf8'));
   const frames = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'cad-frames.json'), 'utf8')).frames;
   const numbers = new Set(catalog.map((p) => p.partNumber));
-  const walked = walkAssembly(project, { isLibraryPart: (n) => numbers.has(n) });
+  const walked = walkAssembly(project, { isLibraryPart: (n) => numbers.has(n) || Boolean(frames[n]?.library) });
   const converted = convertParts(walked, { catalog, frames, projectId: project.id || null });
   const ropes = await importRopes(project, walked, converted, { source, keepPoints: true });
   // The import's ids (`import-<k>`) stay, so the ropes' routes name the fixture's parts

@@ -109,6 +109,17 @@ const audit = auditAssembly({ instances });
   check('Unknown part: placed by the box-centre rule and listed as unchecked', unknown.items.length === 1 && unknown.unchecked.includes('228-2500-120'), JSON.stringify(unknown.unchecked));
 }
 
+// --- A part VEX draws as an assembly (the omni wheel: a hub and its rollers) stays one part --------------
+{
+  const leaf = (id, name) => ({ rootReference: { id, name, childVersionId: id, transform: '1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1' }, children: null });
+  const wheel = { rootReference: { id: 'w', name: 'Drive-1/228-2536-000-3', childVersionId: 'w', transform: '1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1' }, children: [leaf('r1', 'Drive-1/228-2536-000-3/228-2536-002-1'), leaf('r2', 'Drive-1/228-2536-000-3/228-2536-003-1')] };
+  const project = { assemblyStructure: { scaleFactor: 1, rootVersions: { w: { versionComponentName: '228-2536-000' }, r1: { versionComponentName: '228-2536-002' }, r2: { versionComponentName: '228-2536-003' } }, children: [wheel] }, orderedSteps: [], steps: {} };
+  const numbers = new Set(catalog.map((p) => p.partNumber));
+  const asImport = walkAssembly(project, { isLibraryPart: (n) => numbers.has(n) || Boolean(frames[n]?.library) });
+  const conv3 = convertParts(asImport, { catalog, frames });
+  check('Omni wheel drawn as a hub and rollers: placed as one wheel, its rollers not walked into', asImport.parts.length === 1 && conv3.items.length === 1 && /Omni/.test(catalog.find((p) => p.id === conv3.items[0].partQuery)?.name || '') && conv3.leftOut.length === 0, JSON.stringify({ walked: asImport.parts.map((p) => p.cadPartNumber), leftOut: conv3.leftOut.length }));
+}
+
 // --- A robot whose CAD keeps a part in another frame ---------------------------------------------------
 {
   const table = { '228-2500-065': { rule: 'centre', source: 'pins', checkedOn: 'flop', projects: { huey: { rule: 'origin', turn: [0, 180, 180], offsetMm: [0, 0, -12.7], source: 'mesh' } } } };

@@ -118,6 +118,8 @@ export function walkAssembly(project, { poses = 'cad', isLibraryPart = null } = 
     const kids = node.children || [];
     // A kit's subassembly (Swish's "228-7980 VEX IQ Catapult Arm") carries a part number but is made of
     // library parts: walked into when the library doesn't have its number
+    // (the callers also count a number the frame table maps to a library part, as the omni wheel's
+    // 228-2536-000 is: VEX draws that wheel as a hub and 24 rollers, which must stay one part)
     const kit = kids.length && isLibraryPart && !isLibraryPart(basePartNumber(comp));
     if ((PART_NUMBER.test(comp) && !comp.startsWith('228-9136-000-') && !kit) || !kids.length) {
       out.push({ cadPartNumber: comp, path: r.name, top: top || r.name, hidden: Boolean(r.hidden) || hiddenBySteps, hiddenBySteps, matrix: m });
@@ -855,7 +857,7 @@ async function main(argv) {
   const lift = value('--lift');
   const { looksTheSame } = await import('../mcp/assembly-engine.mjs');
   const libraryNumbers = new Set(catalog.map((p) => p.partNumber));
-  const walked = walkAssembly(project, { isLibraryPart: (n) => libraryNumbers.has(n) });
+  const walked = walkAssembly(project, { isLibraryPart: (n) => libraryNumbers.has(n) || Boolean(frames[n]?.library) });
   const converted = convertParts(walked, { catalog, frames, liftMm: lift === null ? null : Number(lift), looksTheSame, projectId: project.id || null });
   converted.bentSheets = await bendImportedSheets(converted.items);
   converted.bands = await importBands(project, walked, converted, { source });

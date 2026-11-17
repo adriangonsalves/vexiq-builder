@@ -31,7 +31,7 @@ check('Robots: Speedbot 2.0, BaseBot, Clawbot, Flop, Huey', names('robots') === 
   const ids = new Set(huey.map((i) => i.instanceId));
   const ropes = huey.filter((i) => i.shape?.kind === 'rope');
   const refs = ropes.flatMap((r) => [...r.shape.ends.filter(Boolean), ...(r.shape.via || [])].map((x) => x.instanceId));
-  check('Huey: 486 parts in four groups (Drive, Elevator Holder, Elevator Middle Stage, Claw Mount)', huey.length === 486 && [...new Set(huey.map((i) => i.groupName))].sort().join() === 'Claw Mount,Drive,Elevator Holder,Elevator Middle Stage', `${huey.length} parts, ${[...new Set(huey.map((i) => i.groupName))].join()}`);
+  check('Huey: 490 parts in four groups (Drive, Elevator Holder, Elevator Middle Stage, Claw Mount)', huey.length === 490 && [...new Set(huey.map((i) => i.groupName))].sort().join() === 'Claw Mount,Drive,Elevator Holder,Elevator Middle Stage', `${huey.length} parts, ${[...new Set(huey.map((i) => i.groupName))].join()}`);
   check("Huey: two lift ropes, their ends and spots naming the starter's own parts", ropes.length === 2 && refs.length >= 8 && refs.every((id) => ids.has(id)), JSON.stringify(refs.filter((id) => !ids.has(id))));
   const audit = auditAssembly({ instances: huey });
   check('Huey: each rope is held at both ends and passes through no part', audit.ropes.length === 2 && audit.ropes.every((r) => !r.through.length && !r.loosePocket && !r.tooShortMm && r.slackMm > 10), JSON.stringify(audit.ropes.map((r) => [r.through, r.slackMm])));
