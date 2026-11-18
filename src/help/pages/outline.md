@@ -4,7 +4,7 @@ group: basics
 order: 7
 summary: Find, hide, lock and group parts in the Outline, and see what Properties shows.
 icon: layers
-keywords: outline, list, parts, search, folder, group, hide, lock, rename, locate, properties, checkbox, name, motor group, motors, same, opposite
+keywords: outline, list, parts, search, folder, group, hide, lock, rename, locate, properties, checkbox, name, motor group, motors, same, opposite, filter, electronics, hidden, locked, colour, select shown
 answers:
 tags: outline, properties, select, group, hide, lock, name, search, motor
 devOnly: false
@@ -23,6 +23,11 @@ The Outline lists every part in your build. Properties shows the part you picked
 
 ## Searching the list
 The search box looks at a part's label, its catalog name and its number. The title shows how many rows match out of all the parts. {{Press `Esc` or the small cross to clear it.|Tap the small cross to clear it.}} Searching only changes the list. Your picks and your build stay as they are.
+
+## Filters and Select shown
+Under the search box are four filters. **Electronics** shows only motors, brains, batteries and sensors. **Locked** shows only locked parts and **Hidden** only hidden ones. **Colour** shows only parts of the colour you pick. You can turn on more than one, and use them with the search. A folder lists only the parts that match. **Select shown** picks every part the list shows, one by one, not whole groups. **Clear filters** turns them all off. Filters only change the list.
+
+A search looks at a part's label, its catalog name and its number. Some parts are named after the part they hold, like "Left Motor Pin". So searching "motor" also finds those pins and the motor shafts. Turn on Electronics to see just the motors.
 
 ## Folders, hide and lock
 A group is a folder. Tap its arrow to open or close it. Its number is how many parts it holds. Picking the folder picks the whole group. Picking a row inside picks just that part. The eye and padlock on a folder act on every part inside. A dash means only some parts are hidden or locked. A hidden part stays in your build but is not drawn. A locked part can't be moved.

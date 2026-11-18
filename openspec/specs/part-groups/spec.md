@@ -32,7 +32,7 @@ Each group SHALL show in the Assembly Outliner as one folder row, listed before 
 - **THEN** all 14 parts are hidden, and one undo shows them again
 
 ### Requirement: Selecting a group
-A plain click, Shift+click or Select-mode click on any part of a group in the 3D view SHALL select or deselect the whole group, all its parts together; Shift+Alt+click SHALL add or remove just the clicked part. Clicking a folder row in the Outliner SHALL select the whole group. Clicking a part's row inside an open folder SHALL select just that part, which can then be edited on its own with every single-part tool. Select Connected SHALL select whole groups when any of their parts is reached.
+A plain click, Shift+click or Select-mode click on any part of a group in the 3D view SHALL select or deselect the whole group, all its parts together; Shift+Alt+click, and a single Ctrl+click (Cmd+click on macOS), SHALL add or remove just the clicked part. Clicking a folder row in the Outliner SHALL select the whole group. Clicking a part's row inside an open folder SHALL select just that part, which can then be edited on its own with every single-part tool. Select Connected SHALL select whole groups when any of their parts is reached.
 
 #### Scenario: Click a grouped part
 - **WHEN** the user clicks a wheel that belongs to "Left Drive"
@@ -41,6 +41,10 @@ A plain click, Shift+click or Select-mode click on any part of a group in the 3D
 #### Scenario: Edit one part inside
 - **WHEN** the user opens "Left Drive" and clicks the row "Rubber Shaft Collar #2"
 - **THEN** only that collar is selected and can be moved on its own
+
+#### Scenario: Ctrl/Cmd+click one grouped part
+- **WHEN** nothing is selected and the user Cmd+clicks the motor that belongs to "Left Drive"
+- **THEN** only that motor is selected, and no other part of "Left Drive" is highlighted
 
 ### Requirement: A group moves and turns as one
 When a group, or several loose parts, is selected, the Move arrows and the rotate rings SHALL be shown at the centre of the selected parts' combined bounding box, and dragging them SHALL move or turn every selected part together, keeping their places relative to one another. The snap settings SHALL apply to the move and turn of the whole set. The Inspector SHALL show the centre's position in mm and pitch, which can be typed and nudged with the nudge buttons, and the quick 90° turn buttons SHALL turn the set about that centre. Parts in the moving set SHALL NOT count as overlapping one another; if the set ends up overlapping a part outside it, the parts it overlaps SHALL be marked as overlapping, as for a single part. Hole snap, flush stopping at contact, the mate arrows, double-click mating and hole picking SHALL NOT act on a set of parts. A set with any locked or hidden part SHALL show no Move arrows or rings and SHALL say "Part is locked" or "Some parts are hidden" when the user tries to move it. Each drag, typed value or nudge run SHALL be one history step covering every part that moved, labeled with the group's name (for example "Move Left Drive") or the part count ("Move 5 parts").

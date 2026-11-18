@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, ArrowRight, Check, ChevronDown, ChevronRight, Cog, Copy, Eye, EyeOff, Folder, FolderMinus, Layers, LocateFixed, Lock, Minus, Palette, Pencil, Search, Trash2, Unlock, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Check, ChevronDown, ChevronRight, Cog, Copy, Cpu, Eye, EyeOff, Folder, FolderMinus, Layers, LocateFixed, Lock, Minus, Palette, Pencil, Search, Trash2, Unlock, X } from 'lucide-react';
+import { NO_FILTERS, colorsInBuild, filterRows as filterOutlineRows, filtersOn, partPasses, shownIds } from '../utils/outlineFilter.js';
 
 const LOCATE_PINNED_KEY = 'vexiq.outlinerLocatePinned';
 const SELECTED_OPEN_KEY = 'vexiq.outlinerSelectedOpen';
@@ -100,38 +101,33 @@ export default function AssemblyOutliner({
     return [...folders, ...parts];
   }, [instances, groups, selectedIds]);
 
-  // Search: a part row stays when its label, catalog name or part number contains the text; a folder
-  // stays when its own name does (then all its parts show) or when any of its listed parts do
+  // Search and filter chips (openspec outline-filters-and-one-part-pick, src/utils/outlineFilter.js): a
+  // part row stays when it passes every chip on and its label, catalog name or part number contains the
+  // text; with only a search, a folder whose name matches keeps all its parts. Only the list changes.
   const q = query.trim().toLowerCase();
-  const partMatches = (inst) => {
-    if (!q) return true;
-    const meta = catalogMap?.get(inst.partId);
-    return (
-      inst.label.toLowerCase().includes(q) ||
-      !!meta && (meta.name.toLowerCase().includes(q) || meta.partNumber.toLowerCase().includes(q))
-    );
-  };
-  const filterRows = (list) => {
-    if (!q) return list;
-    const out = [];
-    let folderOpen = null; // { named, ids } of the folder whose parts follow
-    for (const row of list) {
-      if (row.kind === 'folder') {
-        const named = row.group.name.toLowerCase().includes(q);
-        const anyPart = row.listed.some((id) => partMatches(byId.get(id)));
-        folderOpen = { named };
-        if (named || anyPart) out.push(row);
-      } else if (row.depth > 0) {
-        if (folderOpen?.named || partMatches(row.inst)) out.push(row);
-      } else {
-        folderOpen = null;
-        if (partMatches(row.inst)) out.push(row);
-      }
-    }
-    return out;
-  };
-  const rows = useMemo(() => filterRows(allRows), [allRows, q, catalogMap]); // eslint-disable-line react-hooks/exhaustive-deps
-  const shownCount = q ? instances.filter(partMatches).length : instances.length;
+  const [filters, setFilters] = useState(NO_FILTERS);
+  const chipsOn = filtersOn(filters);
+  const narrowing = Boolean(q) || chipsOn;
+  const metaOf = (inst) => catalogMap?.get(inst?.partId);
+  const partMatches = (inst) => Boolean(inst) && partPasses(inst, metaOf(inst), query, filters);
+  const rows = useMemo(
+    () => filterOutlineRows(allRows, { query, filters, metaOf, byId }),
+    [allRows, query, filters, catalogMap, byId] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const shownCount = narrowing ? instances.filter(partMatches).length : instances.length;
+  const toggleChip = (key) => setFilters((f) => ({ ...f, [key]: !f[key] }));
+  const buildColors = useMemo(() => colorsInBuild(instances), [instances]);
+  const [chipColorOpen, setChipColorOpen] = useState(false);
+  const chipColorRef = useRef(null);
+  useEffect(() => {
+    if (!chipColorOpen) return undefined;
+    const onDown = (e) => {
+      if (!chipColorRef.current?.contains(e.target)) setChipColorOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [chipColorOpen]);
+
 
 
   const rowIds = (row) => (row.kind === 'folder' ? row.group.ids : [row.inst.instanceId]);
@@ -291,7 +287,10 @@ export default function AssemblyOutliner({
     const group = inst.groupId ? groups.get(inst.groupId) : null;
     // A wholly selected group is shown by its folder; a part picked out of a group by its row in the opened folder
     const wholeGroup = group && group.ids.every((gid) => selectedSet.has(gid));
-    if (q && !partMatches(inst) && !(group && group.name.toLowerCase().includes(q))) setQuery('');
+    if (narrowing && !partMatches(inst) && !(!chipsOn && group && group.name.toLowerCase().includes(q))) {
+      setQuery('');
+      setFilters(NO_FILTERS);
+    }
     if (group && !wholeGroup && !openFolders.has(group.id)) setOpenFolders((prev) => new Set(prev).add(group.id));
     locateIdRef.current = wholeGroup && !openFolders.has(group.id) ? `folder:${group.id}` : id;
     setLocateTick((t) => t + 1);
@@ -396,7 +395,7 @@ export default function AssemblyOutliner({
         <div className="panel-title-row">
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Layers size={14} />
-            Assembly Outliner ({q ? `${shownCount} / ${instances.length}` : instances.length})
+            Assembly Outliner ({narrowing ? `${shownCount} / ${instances.length}` : instances.length})
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button
@@ -439,6 +438,87 @@ export default function AssemblyOutliner({
             {query && (
               <button type="button" className="clear-search-btn" onClick={() => setQuery('')} aria-label="Clear search">
                 <X size={14} />
+              </button>
+            )}
+          </div>
+        )}
+        {instances.length > 0 && (
+          <div className="outline-filters-wrap" ref={chipColorRef}>
+          <div className="outline-filters" role="group" aria-label="Filter the list" data-help="outline-filters">
+            <button type="button" className={`outline-chip ${filters.electronics ? 'on' : ''}`} aria-pressed={filters.electronics} title="Show only motors, brains, batteries, sensors and other electronics" onClick={() => toggleChip('electronics')}>
+              <Cpu size={12} />
+              Electronics
+            </button>
+            <button type="button" className={`outline-chip ${filters.locked ? 'on' : ''}`} aria-pressed={filters.locked} title="Show only locked parts" onClick={() => toggleChip('locked')}>
+              <Lock size={12} />
+              Locked
+            </button>
+            <button type="button" className={`outline-chip ${filters.hidden ? 'on' : ''}`} aria-pressed={filters.hidden} title="Show only hidden parts" onClick={() => toggleChip('hidden')}>
+              <EyeOff size={12} />
+              Hidden
+            </button>
+              <button
+                type="button"
+                className={`outline-chip ${filters.color ? 'on' : ''}`}
+                aria-pressed={Boolean(filters.color)}
+                aria-expanded={chipColorOpen}
+                title="Show only parts of one colour"
+                onClick={() => setChipColorOpen((o) => !o)}
+              >
+                {filters.color ? <span className="picked-color-dot" style={{ background: filters.color }} /> : <Palette size={12} />}
+                Colour
+              </button>
+          </div>
+              {chipColorOpen && (
+            <div className="picked-color-menu outline-color-menu" role="menu" aria-label="Show only parts of this colour">
+              <div className="color-swatches">
+                {buildColors.map(({ color, count }) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`color-swatch-btn ${filters.color === color ? 'active' : ''}`}
+                    style={{ backgroundColor: color }}
+                    title={`${count} ${count === 1 ? 'part' : 'parts'}`}
+                    aria-label={`Colour ${color}, ${count} ${count === 1 ? 'part' : 'parts'}`}
+                    onClick={() => {
+                      setFilters((f) => ({ ...f, color }));
+                      setChipColorOpen(false);
+                    }}
+                  />
+                ))}
+              </div>
+              {filters.color && (
+                <button
+                  type="button"
+                  className="link-btn"
+                  style={{ marginTop: 6 }}
+                  onClick={() => {
+                    setFilters((f) => ({ ...f, color: null }));
+                    setChipColorOpen(false);
+                  }}
+                >
+                  Any colour
+                </button>
+              )}
+            </div>
+          )}
+          </div>
+        )}
+        {narrowing && (
+          <div className="outline-filter-actions">
+            <button
+              type="button"
+              className="btn btn-outline"
+              data-help="outline-select-shown"
+              disabled={shownCount === 0}
+              title="Select every part the list shows"
+              onClick={() => onSelectIds(shownIds(rows, openFolders))}
+            >
+              Select shown ({shownCount})
+            </button>
+            {chipsOn && (
+              <button type="button" className="link-btn" onClick={() => setFilters(NO_FILTERS)}>
+                Clear filters
               </button>
             )}
           </div>
@@ -590,7 +670,9 @@ export default function AssemblyOutliner({
                 <Folder size={13} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
                 <span className="instance-row-name" title={group.name}>
                   {group.name}
-                  <span className="folder-count">{picked > 0 && !isSelected ? `${picked} of ${members.length} selected` : members.length}</span>
+                  <span className="folder-count">
+                    {picked > 0 && !isSelected ? `${picked} of ${members.length} selected` : row.listed.length < members.length ? `${row.listed.length} of ${members.length} shown` : members.length}
+                  </span>
                 </span>
                 {flagButtons(members, (field, value) => onSetGroupFlag(group, field, value), 'Group')}
               </div>
@@ -624,7 +706,7 @@ export default function AssemblyOutliner({
           );
         })}
 
-        {instances.length > 0 && rows.length === 0 && <div className="empty-state">No parts match "{query.trim()}".</div>}
+        {instances.length > 0 && rows.length === 0 && <div className="empty-state">{q ? `No parts match "${query.trim()}"${chipsOn ? ' with these filters' : ''}.` : 'No parts match these filters.'}</div>}
         {instances.length === 0 && (
           <div className="empty-state">Click any part in the left library to place it into the 3D workspace.</div>
         )}

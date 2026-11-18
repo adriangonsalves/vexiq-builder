@@ -427,6 +427,55 @@
   "name": "Motor groups"
  },
  {
+  "feature": "Outliner, filters → Electronics",
+  "kind": "panel",
+  "page": "outline",
+  "section": "filters-and-select-shown",
+  "name": "Electronics"
+ },
+ {
+  "feature": "Outliner, filters → Locked",
+  "kind": "panel",
+  "page": "outline",
+  "section": "filters-and-select-shown",
+  "name": "Locked"
+ },
+ {
+  "feature": "Outliner, filters → Hidden",
+  "kind": "panel",
+  "page": "outline",
+  "section": "filters-and-select-shown",
+  "name": "Hidden"
+ },
+ {
+  "feature": "Outliner, filters → Colour",
+  "kind": "panel",
+  "page": "outline",
+  "section": "filters-and-select-shown",
+  "name": "Colour"
+ },
+ {
+  "feature": "Outliner, filters → Select shown",
+  "kind": "panel",
+  "page": "outline",
+  "section": "filters-and-select-shown",
+  "name": "Select shown"
+ },
+ {
+  "feature": "Outliner, filters → Clear filters",
+  "kind": "panel",
+  "page": "outline",
+  "section": "filters-and-select-shown",
+  "name": "Clear filters"
+ },
+ {
+  "feature": "3D view → Ctrl/Cmd+click (one part of a group)",
+  "kind": "toolbar",
+  "page": "selecting",
+  "section": "picking-one-part-of-a-group",
+  "name": "Ctrl"
+ },
+ {
   "feature": "Outliner, motor group → Same / Opposite",
   "kind": "panel",
   "page": "outline",

@@ -36,7 +36,7 @@ On a computer and a tablet it runs down the right edge, under the view cube. On 
 - **Grow selection** [[Grow selection]]: add the parts joined to this one. {{`Shift` + wheel|}}
 - [[Duplicate]] [[Duplicate]]: copy it. {{`D`|}}
 - [[Delete]] [[Delete]]: remove it. Undo brings it back. {{`Del`|}}
-- **One part of a group** [[One part of a group]]: pick a single part inside a group. {{`Shift` + `Alt` + click|}}
+- **One part of a group** [[One part of a group]]: pick a single part inside a group. {{`Ctrl` + click (`Cmd` + click on a Mac) or `Shift` + `Alt` + click does the same.|}}
 - **Rope between these** [[Rope between these]]: with a spool, pin, standoff or shaft and one more selected, run a rope between the two.
 
 ## Buttons for one part

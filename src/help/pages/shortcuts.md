@@ -26,7 +26,7 @@ Each line shows the key or mouse move, then what it does. Touch users get the sa
 ## Selecting
 - {{Click a part|Tap a part}}: select it. A grouped part selects its whole group.
 - {{`Shift` + click|Tap **Add to selection**, then tap parts}}: add a part or take it out.
-- {{`Shift` + `Alt` + click|Tap **One part of a group**, then tap}}: pick one part inside a group.
+- {{`Ctrl` + click (`Cmd` + click on a Mac), or `Shift` + `Alt` + click|Tap **One part of a group**, then tap}}: pick one part inside a group.
 - {{`Shift` + wheel|Tap **Grow selection**}}: grow or shrink the selection by joints.
 - {{`B`|Choose **Select → Box select**}}: box select on or off.
 - {{`C`|Choose **Select → Select Connected**}}: select what is joined to the part.

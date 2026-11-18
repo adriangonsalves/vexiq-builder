@@ -6248,6 +6248,29 @@ export default function Viewport3D({
       if (pendingSelectTimer) clearTimeout(pendingSelectTimer);
       pendingSelectTimer = null;
     };
+    // Ctrl+click (Cmd+click on a Mac, where Ctrl+click is a right-click) adds or removes just the part
+    // clicked, never its group (openspec outline-filters-and-one-part-pick). It waits one double-click
+    // interval, since a Ctrl/Cmd+double-click inserts a copy and its first click mustn't change the
+    // selection (the copy preview copies the selected part).
+    const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.userAgentData?.platform || navigator.platform || '');
+    const onePartKey = (e) => (IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey) && !e.shiftKey && !e.altKey;
+    let lastOnePartClick = null; // { at, x, y }: a second press close by is a double-click, which picks nothing
+    const pickOnePartSoon = (e) => {
+      cancelPendingSelect();
+      const now = performance.now();
+      const second = lastOnePartClick && now - lastOnePartClick.at <= DOUBLE_CLICK_WINDOW_MS && Math.hypot(e.clientX - lastOnePartClick.x, e.clientY - lastOnePartClick.y) <= 6;
+      if (second) {
+        lastOnePartClick = null;
+        return;
+      }
+      lastOnePartClick = { at: now, x: e.clientX, y: e.clientY };
+      const front = pickPartsAt(e)[0];
+      if (!front) return;
+      pendingSelectTimer = setTimeout(() => {
+        pendingSelectTimer = null;
+        onSelectRef.current(front, { additive: true, exact: true });
+      }, DOUBLE_CLICK_WINDOW_MS);
+    };
 
     // Copy preview: Ctrl/Cmd+double-click is read from two presses, since on macOS Ctrl+click comes
     // as a right-click and may never make a dblclick
@@ -6264,9 +6287,11 @@ export default function Viewport3D({
         Math.hypot(e.clientX - lastCopyClick.x, e.clientY - lastCopyClick.y) <= 6;
       if (!second) {
         lastCopyClick = { at: now, x: e.clientX, y: e.clientY };
+        if (e.button === 0 && onePartKey(e)) pickOnePartSoon(e);
         return;
       }
       lastCopyClick = null;
+      cancelPendingSelect(); // the second click of a copy double-click: the first picks nothing
       const rect = inputEl.getBoundingClientRect();
       updatePickHover(e.clientX - rect.left, e.clientY - rect.top);
       copyInsert();
@@ -6464,6 +6489,12 @@ export default function Viewport3D({
         if (front) select(front, { additive: true, exact: e.altKey || exact });
         return;
       }
+      // Ctrl/Cmd+click: just this part, added or removed; empty space leaves the selection
+      if (onePartKey(e)) {
+        pickOnePartSoon(e);
+        return;
+      }
+      if (e.ctrlKey || e.metaKey) return; // Ctrl+click on a Mac (a right-click): picks nothing
       // Wait for a possible double-click before selecting: on the selected part behind another, on
       // a brain the selected battery fits (the double-click slides it in), on a ratchet with a pawl
       // selected (the double-click sets the pawl), or on any part of a selected
@@ -6561,6 +6592,7 @@ export default function Viewport3D({
     const GIZMO_CENTER_AXES = new Set(['XYZ', 'XYZE']);
     const handleDoubleClick = (e) => {
       if (performance.now() - lastCubeClickAt < 600) return; // clicks on the view cube
+      if (e.ctrlKey || e.metaKey) cancelPendingSelect(); // a Ctrl/Cmd+double-click picks nothing (copies go in)
       // Copy-insert works on one part: with several selected, say so. A plain double-click on a part of
       // the set mates the whole set (group-snapping)
       const multi = selectedIdsRef.current;

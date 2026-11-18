@@ -4,7 +4,7 @@ group: basics
 order: 6
 summary: Pick one part or many, and tie parts together as a group.
 icon: hand
-keywords: select, selection, shift, box, group, ungroup, connected, all, folder, set
+keywords: select, selection, shift, box, group, ungroup, connected, all, folder, set, ctrl, cmd, one part
 answers: select-mode, box-select, grow-selection, one-of-group, group-selected, several-parts
 tags: select, group, move, copy, mirror, touch, shortcut
 devOnly: false
@@ -38,7 +38,10 @@ Choose **Select → Box select** [[Select → Box select]] {{or press `B`|}}, th
 **Grow selection** [[Grow selection]] on the context bar adds the parts joined to the selection, one layer at a time. {{`Shift` + wheel does the same, and turning back removes a layer.|Drag the wheel to add or remove layers, then tap the tick.}} [[Pins only]] follows only pins and shafts.
 
 ## Groups
-Group {{(`G`)|}} makes a folder in the Outline named Group 1, Group 2 and so on. Clicking any part of a group selects the whole group. **One part of a group** [[One part of a group]] picks a single part. {{`Shift` + `Alt` + click does the same.|}} Ungroup {{(`Shift` + `G`)|}} breaks it up.
+Group {{(`G`)|}} makes a folder in the Outline named Group 1, Group 2 and so on. Clicking any part of a group selects the whole group. Ungroup {{(`Shift` + `G`)|}} breaks it up.
+
+## Picking one part of a group
+{{Hold `Ctrl` (`Cmd` on a Mac) and click a part. Just that part is added to the selection, not its group. Click it again the same way to take it out. `Shift` + `Alt` + click does the same.|Tap **One part of a group** [[One part of a group]], then tap a part. Just that part is picked, not its group.}} In the Outline, open the group's folder and pick the part's row.
 
 ## Working on a set
 A group or a selection of several parts moves and turns as one, and keeps its parts in place. Use [[Duplicate]] and [[Delete]] on the context bar to copy or remove the whole set. Hide and lock buttons for the set are at the top of the Outline's Selected list. A set with a locked or hidden part shows no arrows.
