@@ -19,7 +19,7 @@ export const BAR_TIPS = {
   markHole: ['Mark a hole', 'Tap the hole or pin end the next part goes in', 'Alt + click'],
   join: ['Manual Join', 'Pick the hole the part goes into', 'Double-click the part'],
   autoJoin: ['Auto Join', "Push the part into what it's lined up with", 'Double-click the part'],
-  stampCopies: ['Stamp copies', 'Put a copy of this part in each hole you pick', 'Ctrl/Cmd + double-click'],
+  stampCopies: ['Stamp copies', 'Put a copy of this part in each hole you pick', 'Shift + Ctrl/Cmd + click'],
   worldArrows: ['World arrows', 'Arrows follow the room, not the part', 'Hold Alt'],
   freeMove: ['Free move', 'Stop parts jumping onto holes', 'Hold Alt while dragging'],
   turnStep: ['Turn step', 'How far each turn step goes', null],
@@ -36,7 +36,7 @@ export const BAR_TIPS = {
 };
 export const COMMIT_TIPS = {
   fits: ['Put it in', 'Put the part in at the fit shown', 'Click the lit hole'],
-  stamp: ['Put a copy in', 'Insert a copy at the fit shown and keep going', 'Ctrl/Cmd + double-click'],
+  stamp: ['Put a copy in', 'Insert a copy at the fit shown and keep going', 'Shift + Ctrl/Cmd + click'],
   bendFits: ['Keep', 'Keep this bend', 'Enter'],
   ring: ['Done', 'Finish turning with this ring', 'Esc'],
   layers: ['Done', 'Keep this selection', null],

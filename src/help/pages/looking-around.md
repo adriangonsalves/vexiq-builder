@@ -13,7 +13,7 @@ Turn, slide and zoom the 3D view to see your build from any side.
 
 1. {{Drag with the left button to turn the view. Drag with the right button to slide it. Scroll to zoom.|Drag with one finger to turn the view. Drag with two fingers to slide it. Pinch to zoom.}}
    ![A beam in the 3D view, seen from an angle](shot:looking-around-view)
-2. {{Click|Tap}} **Focus** [[Focus]] (1) to fit the selected part, or everything, in view. {{Or press `F`.|}}
+2. {{Click|Tap}} **Focus** [[Focus]] (1) to fit the selected parts, or everything, in view. {{Or press `F`.|}}
    ![The toolbar with Focus marked](shot:looking-around-focus)
 3. {{Click|Tap}} a face of the view cube (1) to look from that side.
    ![The view cube in the corner of the 3D view](shot:looking-around-cube)
@@ -38,4 +38,4 @@ The menu holds Perspective or Orthographic, Single, 4-View or Stereo, and the Gr
 {{Right-click the view cube to open it. In Stereo, the cube is hidden, so use **View** [[View]] in the toolbar instead.|Tap **View** [[View]] in the toolbar. It is always there on tablets and phones.}}
 
 ## More about Focus
-Focus frames the selected part. With nothing selected, it frames the whole build. In 4-View, it also frames the three small views again.
+Focus turns the view about the middle of the selected parts and comes in until they fill it. This works for one part, a group or several parts. With nothing selected, it frames the whole build. In 4-View, it also frames the three small views again.

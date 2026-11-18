@@ -17,7 +17,7 @@ The selection SHALL be a set of parts, possibly empty, with one of them, the one
 - **THEN** the added part is gone and only the other part stays selected
 
 ### Requirement: Shift+click in the 3D view
-In the 3D view, a click with Shift held on a part SHALL add it to the selection, or remove it if it is already selected; a Shift+click on empty space SHALL leave the selection as it is. A plain click SHALL keep its current behavior: it replaces the selection with the clicked part, and a click on empty space clears the selection. A single Ctrl+click (Cmd+click on macOS, where Ctrl+click is a right-click) on a part SHALL add or remove just that part, never its whole group, as Shift+Alt+click does; a Ctrl/Cmd+click on empty space SHALL leave the selection as it is. Ctrl/Cmd+click SHALL NOT be used for selecting in any other way. A Ctrl/Cmd+double-click SHALL keep inserting a copy as before, and its first click SHALL NOT change the selection; the selection change of a single Ctrl/Cmd+click SHALL therefore wait until a double-click can no longer follow.
+In the 3D view, a click with Shift held on a part SHALL add it to the selection, or remove it if it is already selected; a Shift+click on empty space SHALL leave the selection as it is. A plain click SHALL keep its current behavior: it replaces the selection with the clicked part, and a click on empty space clears the selection. A single Ctrl+click (Cmd+click on macOS, where Ctrl+click is a right-click) on a part SHALL add or remove just that part, never its whole group, as Shift+Alt+click does; a Ctrl/Cmd+click on empty space SHALL leave the selection as it is. Ctrl/Cmd+click SHALL NOT be used for selecting in any other way. Holding Ctrl or Cmd alone SHALL NOT start the copy preview (that takes Shift+Ctrl/Cmd, see copy-insert), so the selection SHALL change straight away on the click.
 
 #### Scenario: Add with Shift
 - **WHEN** a beam is selected and the user Shift+clicks a pin
@@ -39,9 +39,20 @@ In the 3D view, a click with Shift held on a part SHALL add it to the selection,
 - **WHEN** the whole group "Claw" is selected and the user Ctrl+clicks one of its beams
 - **THEN** every part of "Claw" but that beam stays selected
 
-#### Scenario: Ctrl/Cmd+double-click still copies
-- **WHEN** a pin is selected and the user holds Cmd and double-clicks a lit free hole on a beam
-- **THEN** a copy of the pin goes in the hole, and the beam is not added to the selection
+#### Scenario: Cmd+click doesn't copy
+- **WHEN** a pin is selected and the user Cmd+clicks a beam with a free hole under the pointer
+- **THEN** the beam is added to the selection, no copy preview shows and no copy goes in
+
+### Requirement: Focus frames the selection
+Focus (`F` or the Focus button) SHALL turn the camera about the middle of the box round the selected parts (one part, a group or several parts) and move in or out so they fill the view: the ball round that box SHALL just fit the narrower of the view's height and width, with a small margin, keeping the view direction. With nothing selected it SHALL frame the whole build the same way.
+
+#### Scenario: Focus on two motors
+- **WHEN** the two drive motors on opposite sides of a robot are selected and the user presses `F`
+- **THEN** the camera turns about the point midway between them and both motors fill the view
+
+#### Scenario: Focus on one pin
+- **WHEN** a single pin is selected and the user presses `F`
+- **THEN** the pin fills the view
 
 ### Requirement: Selecting in the Outliner
 In the Assembly Outliner, a plain click on a row SHALL select only that row's part or group. Ctrl+click, or Cmd+click on macOS, SHALL add or remove that row. While Select mode is on, every row SHALL have a checkbox, and a plain click on a row or its checkbox SHALL add or remove its part (a folder's: its whole group, shown mixed when only some of its parts are selected) without changing the rest of the selection; with Select mode off the checkboxes SHALL NOT be shown. Shift+click SHALL add every row between the primary part's row and the clicked row, in the order the list shows: a group folder in the range brings in its whole group, and a part's row inside an open folder counts as its folder, so Shift+click selects several groups. Shift+Alt+click SHALL instead add every single part between the primary part and the clicked part, inside one group or across groups (a closed folder's parts counting where the folder is). Clicking a part's row inside a group folder SHALL select just that part, not the whole group.

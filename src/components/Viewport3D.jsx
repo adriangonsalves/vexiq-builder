@@ -1497,6 +1497,7 @@ export default function Viewport3D({
   onRegisterControls,
   onInteractionChange,
   onPointerToolEnd,
+  onStampStart,
   transformMode,
   snapPitchFactor,
   rotationSnapDeg,
@@ -1779,7 +1780,7 @@ export default function Viewport3D({
   onToggleRotateRequestRef.current = onToggleRotateRequest;
 
   // The context bar (openspec context-toolbar): 'target' stands in for Alt over holes, 'stamp' for
-  // Ctrl/Cmd (the copy preview); `exactPick` for the Alt of Shift+Alt+click (one part of a group)
+  // Shift+Ctrl/Cmd (the copy preview); `exactPick` for the Alt of Shift+Alt+click (one part of a group)
   const pointerToolRef = useRef(pointerTool);
   pointerToolRef.current = pointerTool;
   const exactPickRef = useRef(exactPick);
@@ -1790,6 +1791,8 @@ export default function Viewport3D({
   onInteractionChangeRef.current = onInteractionChange;
   const onPointerToolEndRef = useRef(onPointerToolEnd);
   onPointerToolEndRef.current = onPointerToolEnd;
+  const onStampStartRef = useRef(onStampStart);
+  onStampStartRef.current = onStampStart;
   /** Holes light for a target: Mark a hole is armed, or Bend sheet by holes is picking (Alt does it too). */
   const targetToolOn = () => pointerToolRef.current === 'target' || holePickingRef.current;
   const stampOn = () => pointerToolRef.current === 'stamp';
@@ -2721,7 +2724,7 @@ export default function Viewport3D({
       fits: 'wheel or R for other fits',
       cancel: 'Esc to cancel',
       arrow: ', or click the arrow to stack along the lined-up holes',
-      copy: (stamp) => (stamp ? 'Click to insert a copy, wheel for other fits' : 'Ctrl/Cmd+double-click to insert a copy, wheel for other fits'),
+      copy: (stamp) => (stamp ? 'Click to insert a copy, wheel for other fits' : 'Shift+Ctrl/Cmd+click to insert a copy and keep stamping, wheel for other fits'),
       moveIt: 'move it where it goes (it pulls onto lined-up holes)',
       firstFits: ''
     },
@@ -3499,7 +3502,7 @@ export default function Viewport3D({
     return pose;
   };
 
-  /** Ctrl/Cmd+double-click in the copy preview: add a copy seated in the lit hole, or say why not. */
+  /** Shift+Ctrl/Cmd+click (or a click with Stamp copies on) in the copy preview: add a copy seated in the lit hole, or say why not. */
   const copyInsert = () => {
     const pick = pickModeRef.current;
     if (pick?.kind !== 'copy' || !pick.hovered) return;
@@ -3522,6 +3525,7 @@ export default function Viewport3D({
     if (pick.hovered.opening.kind !== 'shaft') pick.hovered = { ...pick.hovered, taken: true };
     pick.fits = [];
     renderPick();
+    return true;
   };
 
   /**
@@ -6249,52 +6253,25 @@ export default function Viewport3D({
       pendingSelectTimer = null;
     };
     // Ctrl+click (Cmd+click on a Mac, where Ctrl+click is a right-click) adds or removes just the part
-    // clicked, never its group (openspec outline-filters-and-one-part-pick). It waits one double-click
-    // interval, since a Ctrl/Cmd+double-click inserts a copy and its first click mustn't change the
-    // selection (the copy preview copies the selected part).
+    // clicked, never its group (openspec outline-filters-and-one-part-pick)
     const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.userAgentData?.platform || navigator.platform || '');
     const onePartKey = (e) => (IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey) && !e.shiftKey && !e.altKey;
-    let lastOnePartClick = null; // { at, x, y }: a second press close by is a double-click, which picks nothing
-    const pickOnePartSoon = (e) => {
+    const pickOnePart = (e) => {
       cancelPendingSelect();
-      const now = performance.now();
-      const second = lastOnePartClick && now - lastOnePartClick.at <= DOUBLE_CLICK_WINDOW_MS && Math.hypot(e.clientX - lastOnePartClick.x, e.clientY - lastOnePartClick.y) <= 6;
-      if (second) {
-        lastOnePartClick = null;
-        return;
-      }
-      lastOnePartClick = { at: now, x: e.clientX, y: e.clientY };
       const front = pickPartsAt(e)[0];
-      if (!front) return;
-      pendingSelectTimer = setTimeout(() => {
-        pendingSelectTimer = null;
-        onSelectRef.current(front, { additive: true, exact: true });
-      }, DOUBLE_CLICK_WINDOW_MS);
+      if (front) onSelectRef.current(front, { additive: true, exact: true });
     };
+    /** Shift+Ctrl/Cmd holds the copy preview (the Stamp copies button does too). */
+    const copyKeysHeld = (e) => (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey;
 
-    // Copy preview: Ctrl/Cmd+double-click is read from two presses, since on macOS Ctrl+click comes
-    // as a right-click and may never make a dblclick
-    let lastCopyClick = null; // { at, x, y }
+    // Copy preview: Shift+Ctrl/Cmd+click on a lit free hole inserts a copy and turns Stamp copies on,
+    // so plain clicks go on inserting copies until it is switched off (Esc, the bar's cross)
     const handleCopyPointerUp = (e, moved) => {
-      if (moved || transform.dragging || wasDraggingRef.current) {
-        lastCopyClick = null;
-        return;
-      }
-      const now = performance.now();
-      const second =
-        lastCopyClick &&
-        now - lastCopyClick.at <= DOUBLE_CLICK_WINDOW_MS &&
-        Math.hypot(e.clientX - lastCopyClick.x, e.clientY - lastCopyClick.y) <= 6;
-      if (!second) {
-        lastCopyClick = { at: now, x: e.clientX, y: e.clientY };
-        if (e.button === 0 && onePartKey(e)) pickOnePartSoon(e);
-        return;
-      }
-      lastCopyClick = null;
-      cancelPendingSelect(); // the second click of a copy double-click: the first picks nothing
+      if (moved || transform.dragging || wasDraggingRef.current || e.button !== 0) return;
+      cancelPendingSelect();
       const rect = inputEl.getBoundingClientRect();
       updatePickHover(e.clientX - rect.left, e.clientY - rect.top);
-      copyInsert();
+      if (copyInsert() && !stampOn()) onStampStartRef.current?.();
     };
 
     /**
@@ -6383,8 +6360,8 @@ export default function Viewport3D({
           return;
         }
       }
-      // A click with Ctrl/Cmd in the copy preview never selects or toggles Move/Rotate
-      if (pickModeRef.current?.kind === 'copy' && (e.ctrlKey || e.metaKey) && (e.button === 0 || e.button === 2)) {
+      // A click with Shift+Ctrl/Cmd in the copy preview never selects or toggles Move/Rotate
+      if (pickModeRef.current?.kind === 'copy' && copyKeysHeld(e) && (e.button === 0 || e.button === 2)) {
         handleCopyPointerUp(e, Math.hypot(dx, dy) > 5);
         return;
       }
@@ -6491,7 +6468,7 @@ export default function Viewport3D({
       }
       // Ctrl/Cmd+click: just this part, added or removed; empty space leaves the selection
       if (onePartKey(e)) {
-        pickOnePartSoon(e);
+        pickOnePart(e);
         return;
       }
       if (e.ctrlKey || e.metaKey) return; // Ctrl+click on a Mac (a right-click): picks nothing
@@ -6531,11 +6508,11 @@ export default function Viewport3D({
         return;
       }
       copyPointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      // The copy preview follows Ctrl/Cmd (a missed keyup ends it here) and steps aside for a drag
+      // The copy preview follows Shift+Ctrl/Cmd (a missed keyup ends it here) and steps aside for a drag
       const modifier = e.ctrlKey || e.metaKey;
-      const copyKey = modifier || stampOn(); // Stamp copies on the bar holds the preview on
+      const copyKey = copyKeysHeld(e) || stampOn(); // Stamp copies on the bar holds the preview on
       if (pickModeRef.current?.kind === 'copy' && (!copyKey || transform.dragging)) endPick();
-      else if (!pickModeRef.current && copyKey && !e.shiftKey && !transform.dragging) startCopy(); // Shift+Ctrl is for the wheel
+      else if (!pickModeRef.current && copyKey && !transform.dragging) startCopy();
       // Alt (not Shift+Alt, which selects one part of a group) lights the target under the cursor
       // (Bend sheet by holes and Mark a hole light them without Alt)
       const altLights = (e.altKey || targetToolOn()) && !e.shiftKey && !modifier && e.buttons === 0;
@@ -6592,15 +6569,9 @@ export default function Viewport3D({
     const GIZMO_CENTER_AXES = new Set(['XYZ', 'XYZE']);
     const handleDoubleClick = (e) => {
       if (performance.now() - lastCubeClickAt < 600) return; // clicks on the view cube
-      if (e.ctrlKey || e.metaKey) cancelPendingSelect(); // a Ctrl/Cmd+double-click picks nothing (copies go in)
-      // Copy-insert works on one part: with several selected, say so. A plain double-click on a part of
-      // the set mates the whole set (group-snapping)
+      // A plain double-click on a part of the set mates the whole set (group-snapping)
       const multi = selectedIdsRef.current;
-      if (multi.length > 1 && (e.ctrlKey || e.metaKey) && !pickModeRef.current && !transform.dragging) {
-        if (pickPartsAt(e).some((id) => multi.includes(id))) onMateFeedbackRef.current?.('Copies are inserted one part at a time: select a single part.', true);
-        return;
-      }
-      if (e.ctrlKey || e.metaKey || stampOn()) return; // Ctrl/Cmd+double-click inserts a copy, never mates
+      if (e.ctrlKey || e.metaKey || stampOn()) return; // Ctrl/Cmd clicks pick parts and insert copies, never mate
       if (pickModeRef.current) return; // picking: single clicks insert
       if (transform.dragging) return;
       if (wasDraggingRef.current && dragMovedRef.current) return;
@@ -6684,8 +6655,9 @@ export default function Viewport3D({
     // App's deselect handler. Esc in an angle field is handled by the field itself.
     const handleKeyDownCapture = (e) => {
       if (document.querySelector('dialog[open]')) return; // Settings or Audit is open: its keys
-      if ((e.key === 'Control' || e.key === 'Meta') && !e.repeat && !e.shiftKey && !pickModeRef.current && copyPointerRef.current) {
+      if (['Control', 'Meta', 'Shift'].includes(e.key) && !e.repeat && copyKeysHeld(e) && !pickModeRef.current && copyPointerRef.current) {
         if (startCopy()) updatePickHover(copyPointerRef.current.x, copyPointerRef.current.y);
+        else if (selectedIdsRef.current.length > 1) onMateFeedbackRef.current?.('Copies are inserted one part at a time: select a single part.', true);
       }
       if (e.key === 'Alt' && !e.repeat && !e.shiftKey && !e.ctrlKey && !e.metaKey && copyPointerRef.current) {
         if (startAltHover()) updateAltHover(copyPointerRef.current.x, copyPointerRef.current.y);
@@ -6746,7 +6718,8 @@ export default function Viewport3D({
       // last layer off (towards); never zooms. Some mice report Shift+wheel as deltaX. With Ctrl/Cmd
       // too, only parts joined by a pin, shaft or peg in a hole count (a copy preview steps aside).
       const pinnedOnly = e.ctrlKey || e.metaKey;
-      if (pinnedOnly && e.shiftKey && pickModeRef.current?.kind === 'copy' && !stampOn()) endPick();
+      // (Shift+Ctrl/Cmd also holds the copy preview: over a lit hole the wheel steps its fits instead)
+      if (pinnedOnly && e.shiftKey && pickModeRef.current?.kind === 'copy' && !pickModeRef.current.hovered && !stampOn()) endPick();
       if (e.shiftKey && selectedIdsRef.current.length > 0 && !pickModeRef.current && selectedRingRef.current < 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -6792,9 +6765,9 @@ export default function Viewport3D({
       for (let i = 0; i < Math.abs(notches); i += 1) stepSession(Math.sign(notches));
     };
 
-    // Letting go of Ctrl/Cmd, or leaving the window, ends the copy preview
+    // Letting go of Shift or Ctrl/Cmd, or leaving the window, ends the copy preview
     const handleKeyUp = (e) => {
-      if (pickModeRef.current?.kind === 'copy' && !e.ctrlKey && !e.metaKey && !stampOn()) endPick();
+      if (pickModeRef.current?.kind === 'copy' && !copyKeysHeld(e) && !stampOn()) endPick();
       if ((e.key === 'Alt' || !e.altKey) && !targetToolOn()) endAltHover();
     };
     const handleWindowBlur = () => {
@@ -8214,9 +8187,11 @@ export default function Viewport3D({
     const partsRoot = partGroupRef.current;
     if (!camera || !orbit || !partsRoot) return;
 
+    // The selected parts (one part, a group or a set) or, with nothing selected, the whole build
     const box = new THREE.Box3();
-    if (selectedId && meshMapRef.current.has(selectedId)) {
-      box.setFromObject(meshMapRef.current.get(selectedId));
+    const selectedGroups = selectedIdsRef.current.map((id) => meshMapRef.current.get(id)).filter(Boolean);
+    if (selectedGroups.length > 0) {
+      for (const group of selectedGroups) box.expandByObject(group);
     } else if (partsRoot.children.length > 0) {
       // A part whose model is still loading counts by its catalog box (a starter or an added build
       // framed straight away), so the view takes in every part
@@ -8233,13 +8208,18 @@ export default function Viewport3D({
     }
 
     if (!box.isEmpty()) {
+      // Turn about the middle of the parts and come close enough that they fill the view: the ball
+      // round them just fits the narrower of the view's height and width, with a small margin
       const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z, 40);
+      const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 8);
+      const persp = perspCameraRef.current;
+      const halfV = THREE.MathUtils.degToRad(persp.fov / 2);
+      const halfH = Math.atan(Math.tan(halfV) * persp.aspect);
+      const distance = (radius * 1.08) / Math.sin(Math.min(halfV, halfH));
       const dir = camera.position.clone().sub(orbit.target).normalize();
       orbit.target.copy(center);
-      camera.position.copy(center).addScaledVector(dir, maxDim * 2.1);
-      if (camera.isOrthographicCamera) setOrthoViewDistance(camera, maxDim * 2.1);
+      camera.position.copy(center).addScaledVector(dir, distance);
+      if (camera.isOrthographicCamera) setOrthoViewDistance(camera, distance);
       orbit.update();
       for (const view of miniViewsRef.current) view.auto = true; // the small views frame everything again
     } else {

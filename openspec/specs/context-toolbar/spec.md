@@ -176,7 +176,7 @@ Tapping Join SHALL do what double-clicking the selected part does: put it into t
 - **THEN** the pin is shown seated in the marked hole and the bar turns into the wheel bar for its fits
 
 ### Requirement: Stamp copies
-Tapping Stamp copies SHALL turn it on. While it is on the view SHALL behave as it does with Ctrl or Cmd held (see copy-insert): the hole near the pointer is lit, a see-through copy is shown at the best fit, and the fits can be stepped through. With a mouse, one click on a lit hole that isn't taken SHALL insert a copy there, as Ctrl/Cmd+double-click does; on a touch screen a copy is inserted as "Touch taps show the fit before placing" says. Clicks and taps SHALL NOT change the selection while it is on. It SHALL stay on after a copy is inserted, so more can be stamped, and SHALL turn off when it is tapped again, on `Esc`, when the selection changes, or when Explode or Play mode is turned on. Holding Ctrl or Cmd and double-clicking SHALL keep working as before.
+Tapping Stamp copies SHALL turn it on. While it is on the view SHALL behave as it does with Shift+Ctrl or Shift+Cmd held (see copy-insert): the hole near the pointer is lit, a see-through copy is shown at the best fit, and the fits can be stepped through. With a mouse, one click on a lit hole that isn't taken SHALL insert a copy there, as Shift+Ctrl/Cmd+click does; on a touch screen a copy is inserted as "Touch taps show the fit before placing" says. Clicks and taps SHALL NOT change the selection while it is on. It SHALL stay on after a copy is inserted, so more can be stamped, and SHALL turn off when it is tapped again, on `Esc`, when the selection changes, or when Explode or Play mode is turned on. A Shift+Ctrl/Cmd+click that inserts a copy SHALL turn it on.
 
 #### Scenario: Stamp three pins with a mouse
 - **WHEN** a 0x2 Connector Pin is selected, the user clicks Stamp copies and then clicks three free beam holes in turn
@@ -348,7 +348,7 @@ Resting the mouse on a button for about half a second, or moving keyboard focus 
 
 #### Scenario: Hover shows the shortcut
 - **WHEN** the user rests the mouse on Stamp copies
-- **THEN** a tip shows "Stamp copies", a line saying it puts a copy of the part in each hole clicked, and "Ctrl/Cmd + double-click"
+- **THEN** a tip shows "Stamp copies", a line saying it puts a copy of the part in each hole clicked, and "Shift + Ctrl/Cmd + click"
 
 #### Scenario: Press and hold
 - **WHEN** the user presses and holds Mark a hole on a tablet for a second and lifts

@@ -40,7 +40,7 @@ On a computer and a tablet it runs down the right edge, under the view cube. On 
 - **Rope between these** [[Rope between these]]: with a spool, pin, standoff or shaft and one more selected, run a rope between the two.
 
 ## Buttons for one part
-- **Stamp copies** [[Stamp copies]]: put a copy in each hole you pick. {{`Ctrl`/`Cmd` + double-click|}}
+- **Stamp copies** [[Stamp copies]]: put a copy in each hole you pick. {{`Shift` + `Ctrl`/`Cmd` + click|}}
 - **World arrows** [[World arrows]]: arrows follow the room. {{Hold `Alt`|}}
 - **Free move** [[Free move]]: stop parts jumping onto holes. {{Hold `Alt` while dragging|}}
 - **Turn step** [[Turn step]]: how far each turn goes (Rotate only).

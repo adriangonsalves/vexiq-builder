@@ -2877,11 +2877,11 @@
   "name": "Alt + click"
  },
  {
-  "feature": "Ctrl/Cmd+double-click",
+  "feature": "Shift+Ctrl/Cmd+click",
   "kind": "shortcut",
   "page": "shortcuts",
   "section": "joining",
-  "name": "Ctrl + double-click"
+  "name": "Shift + Ctrl + click"
  },
  {
   "feature": "Hold Alt",
@@ -3098,7 +3098,7 @@
   "kind": "gesture",
   "page": "copying",
   "section": "",
-  "name": "Hold Ctrl"
+  "name": "Hold Shift + Ctrl"
  },
  {
   "feature": "Double-click a choice (apply)",

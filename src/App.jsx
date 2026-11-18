@@ -3219,7 +3219,7 @@ export default function App() {
   const barOn = {
     addToSelection: selectMode || shiftOnly,
     markHole: pointerTool === 'target' || (altOnly && !heldKeys.mod),
-    stampCopies: pointerTool === 'stamp' || (heldKeys.mod && !heldKeys.shift && !heldKeys.alt),
+    stampCopies: pointerTool === 'stamp' || (heldKeys.mod && heldKeys.shift && !heldKeys.alt),
     worldArrows: worldAxes || altOnly,
     freeMove: freeMove || altOnly,
     growSelection: Boolean(growLayers) || shiftOnly,
@@ -3855,6 +3855,7 @@ export default function App() {
             exactPick={exactPick && !locked}
             onExactPickUsed={() => setExactPick(false)}
             onPointerToolEnd={() => setPointerTool('select')}
+            onStampStart={() => setPointerTool('stamp')}
             onRegisterControls={handleRegisterControls}
             onInteractionChange={setInteraction}
             onInsertCopy={locked ? noop : handleInsertCopy}
@@ -4036,8 +4037,8 @@ export default function App() {
                 <span title="The Move arrows and rotate rings follow the selected part's own axes; hold Alt for the world's axes. Dragging snaps a pin or shaft onto a nearby hole's line; with Alt held it doesn't">
                   <kbd className="kbd">Alt</kbd> World axes, no hole snap
                 </span>
-                <span title="With a part that has pins selected, hold Ctrl/Cmd to light the holes a copy would fill; double-click a hole to insert a copy">
-                  <kbd className="kbd">Ctrl/Cmd</kbd> + double-click: insert a copy
+                <span title="With a part that has pins selected, hold Shift+Ctrl/Cmd to light the holes a copy would fill; click a hole to insert a copy and keep stamping">
+                  <kbd className="kbd">Shift+Ctrl/Cmd</kbd> + click: stamp copies
                 </span>
                 <span>
                   <kbd className="kbd">E</kbd> Rotate

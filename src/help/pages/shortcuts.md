@@ -17,7 +17,7 @@ Each line shows the key or mouse move, then what it does. Touch users get the sa
 - {{`P`|Choose **View**}}: switch between Perspective and Orthographic.
 - {{`1` `2` `3`|Tap a face of the view cube}}: look from the front, top or side.
 - {{`Shift` + `1` `2` `3`|Double-tap a face of the view cube}}: look from the opposite side.
-- {{`F`|Tap **Focus**}}: frame the selected part, or the whole build.
+- {{`F`|Tap **Focus**}}: frame the selected parts so they fill the view, or the whole build.
 - {{Drag empty space|Drag with one finger}}: turn the view.
 - {{Right-drag|Drag with two fingers}}: slide the view.
 - {{Mouse wheel|Pinch with two fingers}}: zoom.
@@ -48,7 +48,7 @@ Each line shows the key or mouse move, then what it does. Touch users get the sa
 - {{`Alt` + click a hole|Tap **Mark a hole**, then tap the hole}}: pick the hole the next part goes into.
 - {{`R` and `Shift` + `R`, or the wheel|Tap [[Next]] and [[Previous]]}}: step through the fits.
 - {{Click a lit hole|Tap the hole, then the tick}}: put the part in the fit shown.
-- {{`Ctrl` + double-click a hole|Tap **Stamp copies**}}: insert a copy there. `Cmd` works on a Mac.
+- {{`Shift` + `Ctrl` + click a hole|Tap **Stamp copies**}}: insert a copy there and keep stamping. `Cmd` works on a Mac.
 - {{`Enter`|Tap the tick}}: keep a shown bend.
 - {{`Esc`|Tap [[Cancel]]}}: stop picking holes or hide the arrows.
 
