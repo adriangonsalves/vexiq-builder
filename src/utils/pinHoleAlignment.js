@@ -323,7 +323,11 @@ function openingSpans(lo, hi, through, depth) {
 export const PASS_PROBE_RAYS = 24;
 export const PASS_TOLERANCE_MM = 0.05; // a section must be this much wider than the hole to block it
 export const PASS_MAX_LATERAL_MM = 1.0; // further off the hole's line, the collision meshes catch it
-const PASS_SECTIONS = 5; // depths probed inside each opening
+// A section this close to a face of the opening is a tight fit, not an overlap (VEX CAD seats a
+// motor shaft's stop ring ~0.2 mm into a beam hole)
+export const PASS_FACE_MARGIN_MM = 0.3;
+const PASS_SECTIONS = 5; // depths probed inside each opening, at least
+const PASS_SECTION_STEP_MM = 0.5; // and no further apart than this, so a recess at the face is seen
 const PROFILE_STEP_MM = 0.2; // spacing of the shaft width samples
 const PROFILE_PROBE_START_MM = 6; // inward rays start this far from the shaft's axis
 
@@ -333,10 +337,14 @@ const PROFILE_PROBE_START_MM = 6; // inward rays start this far from the shaft's
  * reach (a square bore passes up to its corners), and the opening passes what its narrowest
  * section does. `raycast(originArr, dirArr)` returns the distance to the visible surface, or null.
  * Rubber shaft collars are left out: they are made to grip a shaft tighter than its width.
- * Returns Map(featureId -> pass radius in mm).
+ * Returns Map(featureId -> pass radius in mm), with `.sections`: Map(featureId -> [{ t, r }]), the
+ * pass radius at each depth probed (t from the feature origin along its axis). A gear's or beam's
+ * recess round the bore at its face takes a motor shaft's stop ring or a shaft's cap, though the
+ * bore further in doesn't.
  */
 export function measureOpeningPassRadii(partMeta, raycast) {
   const radii = new Map();
+  radii.sections = new Map();
   if (COLLAR_NAME_PATTERN.test(partMeta?.name || '')) return radii;
   for (const f of getLocalFeatures(partMeta)) {
     if (OPENINGS_BY_INSERT[f.kind] || f.kind === 'collar_hole') continue;
@@ -345,8 +353,10 @@ export function measureOpeningPassRadii(partMeta, raycast) {
     const t0 = dot3(f.origin, f.axis);
     const inset = Math.min(0.3, (f.tMax - f.tMin) / 4);
     let pass = Infinity;
-    for (let i = 0; i < PASS_SECTIONS; i++) {
-      const t = f.tMin + inset + ((f.tMax - f.tMin - 2 * inset) * i) / (PASS_SECTIONS - 1);
+    const sections = [];
+    const count = Math.max(PASS_SECTIONS, Math.ceil((f.tMax - f.tMin - 2 * inset) / PASS_SECTION_STEP_MM) + 1);
+    for (let i = 0; i < count; i++) {
+      const t = f.tMin + inset + ((f.tMax - f.tMin - 2 * inset) * i) / (count - 1);
       const center = new THREE.Vector3(...f.origin).addScaledVector(axis, t - t0);
       let widest = 0;
       for (let k = 0; k < PASS_PROBE_RAYS; k++) {
@@ -355,9 +365,15 @@ export function measureOpeningPassRadii(partMeta, raycast) {
         const d = raycast(center.toArray(), dir.toArray());
         widest = Math.max(widest, d == null ? Infinity : d);
       }
-      if (widest > 0 && Number.isFinite(widest)) pass = Math.min(pass, widest);
+      if (widest > 0 && Number.isFinite(widest)) {
+        pass = Math.min(pass, widest);
+        sections.push({ t: t - t0, r: widest });
+      }
     }
-    if (Number.isFinite(pass)) radii.set(f.featureId, pass);
+    if (Number.isFinite(pass)) {
+      radii.set(f.featureId, pass);
+      radii.sections.set(f.featureId, sections);
+    }
   }
   return radii;
 }
@@ -418,10 +434,20 @@ export function findTooWideInserts(featuresA, featuresB) {
       const lateral = Math.sqrt(Math.max(0, _v.lengthSq() - along * along));
       if (lateral > PASS_MAX_LATERAL_MM) continue;
       const [oMin, oMax] = projectRange(opening.start, opening.end, insert.origin, insert.axis);
+      // The opening's own width at the depth of each shaft section (its narrowest, when not measured by depth)
+      const facing = insert.axis.dot(opening.axis);
+      const passAt = (t) => {
+        const sections = opening.passSections;
+        if (!sections?.length) return opening.passRadius;
+        const depth = (t - along) * facing; // along the opening's axis from its origin
+        let nearest = sections[0];
+        for (const sec of sections) if (Math.abs(sec.t - depth) < Math.abs(nearest.t - depth)) nearest = sec;
+        return nearest.r;
+      };
       const blocked = insert.profile.find(
-        (s) => s.t > oMin + 0.1 && s.t < oMax - 0.1 && s.r + lateral > opening.passRadius + PASS_TOLERANCE_MM
+        (s) => s.t > oMin + PASS_FACE_MARGIN_MM && s.t < oMax - PASS_FACE_MARGIN_MM && s.r + lateral > passAt(s.t) + PASS_TOLERANCE_MM
       );
-      if (blocked) hits.push({ insert, opening, widthMm: blocked.r, passMm: opening.passRadius });
+      if (blocked) hits.push({ insert, opening, widthMm: blocked.r, passMm: passAt(blocked.t) });
     }
   }
   return hits;
@@ -555,6 +581,7 @@ export function collectWorldFeatures(partMeta, matrixWorld, instanceId, measured
         ...(flatDir ? { flatDir } : {}),
         ...(profiles?.has(f.featureId) ? { profile: profiles.get(f.featureId) } : {}),
         ...(passRadii?.has(f.featureId) ? { passRadius: passRadii.get(f.featureId) } : {}),
+        ...(passRadii?.sections?.has(f.featureId) ? { passSections: passRadii.sections.get(f.featureId) } : {}),
         ...(f.kind === 'pin'
           ? { freeAtStart: pinEnds?.get(f.featureId)?.lo ?? true, freeAtEnd: pinEnds?.get(f.featureId)?.hi ?? true }
           : {})
