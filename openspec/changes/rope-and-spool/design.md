@@ -201,6 +201,32 @@ See proposal.md for why. What exists today, and what was measured for this chang
 
 13. **Ratchet winch starter.** `make-ratchet-template.mjs` writes the starter's rope with `ends: [spool pocket, null]`, four turns wound and the rest hanging, and names the starter's own instance ids (the fault in follow-up "The Ratchet winch starter's belts point at parts it doesn't have" is not repeated for the rope).
 
+14. **Play: the rope is solved with the gears it turns (amendment, 2026-11-18).**
+
+    *What was found on Swish (task 7.13 and three user reports):* each step solved the gear and ratchet cluster first, then put the rope's pull on the spool (`pullRopes`, `onGeared`), then moved everything. So within the step the gears never carried the rope's pull: the spool ran ahead of the gear it meshes with and the cluster recorded that as slip, up to 229 mm (about two turns of the gear's teeth), then took it back at `DRIFT_GAIN` a step, like a spring. That spring is behind three things seen in the app:
+    - winding slowly, the arm came down in bursts: the spool spun at about 1,000 rpm for a few frames each 0.3–0.5 s, the arm dropped 5–7° at once, and the rope wound about six times faster than the motor turned;
+    - wound into the arm's stop until the motors stalled, the recorded slip was so large that taking it back wedged the spool, the gear on the swinging arm, the arm and the motor shaft (their angles didn't change for 4 s, with the motors coasting), and reversing at 5% never let go. Two motors in a group wind about twice as hard as one (about 100 N on the rope, against 48 N), so with one motor it crept free after about 4 s and with two it never did;
+    - parts on the arm shook, since the light ones were knocked about by these jolts.
+
+    *Tried and not kept:*
+    - solving the cluster again after the ropes pull, before `world.step`, and taking slip back by at most half a tooth: slip fell to under 1 mm and every check passed, but at 5–20% throttle the winch stopped winding, because the rope's pull is found as if the spool won't give (decision 8, "as built") and all of it then pushed back through the gears jams them when the motors push gently;
+    - the teeth as two one-sided contacts tilted 20° (the pressure angle) toward pushing the gears apart: no change while the slip was the cause;
+    - friction on every free hinge: the gear that should spin on once it swings out of mesh stopped, and the pawl was slowed (4 checks failed).
+
+    *Decision:* a rope whose spool (or any of whose bodies) is in a gear cluster is solved inside that cluster's solve, as one more one-sided row: its value is the rate the rope's path grows (step 6 of decision 8, as a function of the cluster's coordinates plus the bodies outside it), its target `−(β·max(C, 0) + carried stretch) / h`, and `λ ≥ 0` is the rope's pull times the step. The bodies outside the cluster on that rope (the arm) take part through their give, as in step 7, so the row's `K` is the cluster's part plus `w` of the outside bodies, and the pull found is applied to them after the solve. Such a rope is then left out of `pullRopes` for that step. The slip taken back is limited to half a tooth. Ropes on no cluster are solved as before.
+
+    *Why:* the rope, the teeth, the ratchet and the mesh stops all push on the same few bodies; solved apart, each undoes part of the others every step, and which one wins depends on the throttle. In one projected Gauss–Seidel solve they settle together, whatever the number of motors or the speed.
+
+    *Checks:* on a small rig, not Swish: a motor (and two motors in a group) on a shaft with a gear, a plate swinging on that shaft carrying a second gear and a ratchet with a pawl, a spool gear on the frame, a rope from the spool to an arm held up by a band against a stop ("Spool keeps pace with its motor", "Wound into a stop, then released"). Then the Swish starter, and every `check-play-mode`, `check-ropes`, `check-ratchet-pawl` and `check-bands` case.
+
+15. **Play: free-turning hardware is held still (amendment, 2026-11-18).**
+
+    A moving body made only of hardware (part ids matching shaft, collar, spacer, standoff, pin, washer, bushing, and none of gear, sprocket, pulley, wheel, hub, ratchet, pawl, spool, rack, tread, link) that no link, mesh, ratchet, rope, band, motor, slider or loose/roped list uses is held to one body it is hinged to: a fixed one if any, else the one with the most parts. That hinge becomes a fixed joint in Rapier; its other hinges stay. On Swish this holds 34 bodies: collars, washers and spacers on their shafts, the two standoffs on the arm, and the arm's two pivot axles to the chassis (the arm still pivots on them). With the motors stopped, nothing on Swish moves over a second, where before the arm's pivot axles shook through about 7,000° a second and the arm and its parts rocked 40°.
+    
+    It waits for decision 14: tried first, it changed whether Swish fired (locking either half of those bodies fired, all of them didn't), because the release worked only by chance.
+    
+    *Alternative considered:* friction on every free hinge (a steady 0.001 N·m plus speed drag). Rejected: it stops a gear that should spin on after swinging out of mesh, and slows the pawl; a light axle knocked by contacts kept moving anyway.
+
 ## Building it: what to reuse, in what order
 
 This section is for whoever builds the change. Read the specs first; this says how.

@@ -34,7 +34,9 @@ In Play mode, a spool holding a rope end SHALL wind the rope as it turns against
 - a spool with no turns on it SHALL start winding whichever way it turns first, and a spool paying out past its last turn SHALL start winding the other way;
 - the rope's pull SHALL turn the spool back with a torque of the pull times the radius the rope leaves the drum at, so whatever drives or holds the spool carries that load;
 - winding SHALL stop when the rope can get no shorter (the part on its far end, or a part carrying a pulley, has met something it can't pass), and the motor driving it SHALL stall as against any block;
-- a drum wound in Play past the turns it holds SHALL keep winding, drawn full to the flange, and Play mode SHALL list "… is over full".
+- a drum wound in Play past the turns it holds SHALL keep winding, drawn full to the flange, and Play mode SHALL list "… is over full";
+- a spool turned through gears SHALL turn only as fast as its gears let it, in the same step the rope pulls: the gears and whatever drives them carry the rope's pull at once, so the spool SHALL NOT run ahead of its gears and then be pulled back, and a steady motor SHALL wind at a steady speed. This SHALL hold for any number of motors driving the gears, at any throttle, and with the gears fixed or on a part that swings them into mesh;
+- teeth that have slipped SHALL slip back by no more than half a tooth: teeth that slipped further mesh in the nearest gap.
 
 The turns on the spool SHALL be shown as coils on the drum, updated as it winds. Leaving Play mode SHALL put the turns back as they were in the build.
 
@@ -51,6 +53,14 @@ The turns on the spool SHALL be shown as coils on the drum, updated as it winds.
 #### Scenario: Winch gear on a swinging arm under load
 - **WHEN** a spool is turned through a gear on a swinging arm that the motor swings into mesh (Swish's winch), and the rope pulls as hard as a stalled Smart Motor can wind
 - **THEN** the gears stay in mesh and the spool turns only as fast as the gears allow; the spool spins freely only once the arm has swung the gear out
+
+#### Scenario: Spool keeps pace with its motor
+- **WHEN** a motor at 5% throttle winds a spool through a gear on a swinging arm, against a rope pulling a hinged arm held up by rubber bands
+- **THEN** the spool turns at the motor's speed times the gear ratio within 5%, measured over each second, the rope's turns go up at that rate, the teeth have slipped less than half a tooth, and the arm comes down without a jump bigger than its travel in 0.1 s at that speed
+
+#### Scenario: Wound into a stop, then released
+- **WHEN** that winch, driven by one motor and again by two motors in a motor group, winds until the arm meets its stop and keeps winding until the motors stall, then runs in reverse at 5% throttle
+- **THEN** within 1 s the gear on the swinging arm leaves mesh, the spool turns freely and the bands swing the arm up, with one motor and with two
 
 #### Scenario: Slack spool at rest
 - **WHEN** a spool holds a slack rope and nothing turns it
@@ -139,3 +149,14 @@ In Play mode, each rope with a route SHALL be redrawn every frame from its route
 #### Scenario: Leave Play
 - **WHEN** the user leaves Play mode after winding five turns onto a spool
 - **THEN** the rope and its coils are as they were before Play, and the build has no new history step
+
+### Requirement: Free-turning hardware holds still
+In Play mode, a moving part made only of hardware (a free axle, a rubber collar, a spacer, a washer, a standoff or a pin) whose turning nothing uses (no gear, sprocket, pulley, wheel, chain, rope, band, ratchet or motor on it) SHALL be held to the part it hangs on, the one that holds still if there is one, else the biggest. An axle a part pivots on SHALL stay a pivot: only one of its joints is held. Nothing else in the build SHALL move differently because of it.
+
+#### Scenario: Collars and standoffs at rest
+- **WHEN** a build with a rubber collar on a free axle, an arm pivoting on a free axle, and standoffs pinned to the arm enters Play mode and nothing is driven
+- **THEN** after 3 s none of them turns more than 1° in a second, and the arm still swings on its axle when pushed
+
+#### Scenario: Swish still fires
+- **WHEN** Hero Bot Swish winds, holds and fires as in "Swish winds, holds and fires", with its free hardware held
+- **THEN** it fires as before, and its collars, standoffs and pivot axles don't spin
