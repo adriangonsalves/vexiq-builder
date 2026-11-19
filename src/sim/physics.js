@@ -1899,7 +1899,14 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   }
 
   /** Puts the robot back together where it was built: broken joints mended, split pieces rejoined. */
+  let impactWorker = null;
+  let impactJobSeq = 0;
+  let pendingImpact = null; // { jobId, result, failed }
+  let awaitingImpact = false;
   function resetDrop() {
+    impactJobSeq += 1;
+    pendingImpact = null;
+    awaitingImpact = false;
     dropState.active = false;
     dropState.impacted = false;
     dropState.peakFallSpeed = 0;
@@ -2150,16 +2157,76 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     }
   }
 
-  /** The impact at first floor contact: which joints let go, then the pieces they held split off. */
-  function evaluateImpact() {
-    const deltaOf = (partId) => {
-      const body = rb.get(bodyOfPart.get(partId));
-      if (!body) return new THREE.Matrix4();
-      const t = body.translation();
-      return new THREE.Matrix4().compose(new THREE.Vector3(t.x / MM, t.y / MM, t.z / MM), toV3q(body.rotation()), new THREE.Vector3(1, 1, 1));
+  /** Packs the impact spring model into plain arrays for the background worker. */
+  function serializeImpactModel(model) {
+    return {
+      floorY: model.floorY,
+      nodes: model.nodes.map((n) => ({ m: n.m, I: [...n.I.elements], part: n.part })),
+      conns: model.conns.map((c) => ({
+        a: c.a,
+        b: c.b,
+        rA: [c.rA.x, c.rA.y, c.rA.z],
+        rB: [c.rB.x, c.rB.y, c.rB.z],
+        n: [c.n.x, c.n.y, c.n.z],
+        e1: [c.e1.x, c.e1.y, c.e1.z],
+        e2: [c.e2.x, c.e2.y, c.e2.z],
+        k: c.k,
+        kind: c.kind,
+        friction: c.friction,
+        joint: c.joint
+      })),
+      gears: model.gears.map((g) => ({
+        a: g.a,
+        b: g.b,
+        k: g.k,
+        ratio: g.ratio,
+        axisA: [g.axisA.x, g.axisA.y, g.axisA.z],
+        axisB: [g.axisB.x, g.axisB.y, g.axisB.z]
+      })),
+      contacts: model.contacts.map((ct) => ({
+        node: ct.node,
+        k: ct.k,
+        r: [ct.r.x, ct.r.y, ct.r.z],
+        y0: ct.y0,
+        part: ct.part
+      }))
     };
-    const model = buildImpactModel({ graph, instances, deltaOf, pointsOf: (id) => (noShape.has(id) ? null : shapes.points(id)) });
-    impact = solveImpact(model, { speed: Math.sqrt(2 * GRAVITY * dropState.heightM) });
+  }
+
+  /** Starts the spring-network impact solve in a Web Worker as soon as Drop is clicked, so it
+   * finishes during freefall instead of freezing the main thread at floor contact. */
+  function startImpactPreSolve(poses, heightM) {
+    if (typeof Worker === 'undefined') return;
+    try {
+      if (!impactWorker) {
+        impactWorker = new Worker(new URL('./impactWorker.js', import.meta.url), { type: 'module' });
+        impactWorker.onmessage = ({ data }) => {
+          if (!pendingImpact || data?.jobId !== pendingImpact.jobId) return;
+          if (data.error) pendingImpact.failed = true;
+          else pendingImpact.result = data.result;
+        };
+        impactWorker.onerror = () => {
+          if (pendingImpact) pendingImpact.failed = true;
+        };
+      }
+      const deltaOf = (partId) => {
+        const pose = poses.get(bodyOfPart.get(partId));
+        if (!pose) return new THREE.Matrix4();
+        return new THREE.Matrix4().compose(new THREE.Vector3(pose.t.x / MM, pose.t.y / MM, pose.t.z / MM), pose.q, new THREE.Vector3(1, 1, 1));
+      };
+      const model = buildImpactModel({ graph, instances, deltaOf, pointsOf: (id) => (noShape.has(id) ? null : shapes.points(id)) });
+      const jobId = ++impactJobSeq;
+      pendingImpact = { jobId, result: null, failed: false };
+      impactWorker.postMessage({ jobId, model: serializeImpactModel(model), speed: Math.sqrt(2 * GRAVITY * heightM) });
+    } catch {
+      impactWorker = null;
+      pendingImpact = null;
+    }
+  }
+
+  /** Applies a finished impact solve: sets post-impact velocities and splits off broken pieces. */
+  function applyImpact(result) {
+    impact = result;
     for (const b of impact.broken) brokenJoints.add(b.jointId);
     robotMotion = pieceMotion(graph.bodies.flatMap((b) => b.parts));
     // The robot leaves the floor as the impact left it: its bounce, the way it rocks, an arm swinging on
@@ -2172,6 +2239,18 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       body.setAngvel(vec(motion.w), true);
     }
     if (impact.broken.length) splitAfterImpact();
+  }
+
+  /** The impact at first floor contact: which joints let go, then the pieces they held split off. */
+  function evaluateImpact() {
+    const deltaOf = (partId) => {
+      const body = rb.get(bodyOfPart.get(partId));
+      if (!body) return new THREE.Matrix4();
+      const t = body.translation();
+      return new THREE.Matrix4().compose(new THREE.Vector3(t.x / MM, t.y / MM, t.z / MM), toV3q(body.rotation()), new THREE.Vector3(1, 1, 1));
+    };
+    const model = buildImpactModel({ graph, instances, deltaOf, pointsOf: (id) => (noShape.has(id) ? null : shapes.points(id)) });
+    applyImpact(solveImpact(model, { speed: Math.sqrt(2 * GRAVITY * dropState.heightM) }));
   }
 
   function stepDrop(dt) {
@@ -2187,8 +2266,17 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       });
     });
     if (!hit) return;
-    dropState.impacted = true;
-    evaluateImpact();
+    if (pendingImpact?.result) {
+      dropState.impacted = true;
+      applyImpact(pendingImpact.result);
+    } else if (pendingImpact && !pendingImpact.failed) {
+      // Very short drop where floor contact arrived before the background worker finished:
+      // hold here without blocking the main thread until the worker posts the result.
+      awaitingImpact = true;
+    } else {
+      dropState.impacted = true;
+      evaluateImpact();
+    }
   }
 
   /** Turns the whole robot about its centre of mass so `landing` faces down, its lowest point `height` (m) above the floor. */
@@ -2672,6 +2760,20 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   let dropTimeScale = 1;
   return {
     step(dt, throttles) {
+      if (awaitingImpact) {
+        if (pendingImpact?.result) {
+          awaitingImpact = false;
+          dropState.impacted = true;
+          applyImpact(pendingImpact.result);
+        } else if (!pendingImpact || pendingImpact.failed) {
+          awaitingImpact = false;
+          dropState.impacted = true;
+          evaluateImpact();
+        } else {
+          carry = 0;
+          return;
+        }
+      }
       // A drop is stepped finer, and can be played slower than real time
       const h = dropState.active ? DROP_STEP : STEP;
       if (world.timestep !== h) world.timestep = h;
@@ -2704,6 +2806,10 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         world.step(events, hooks);
         feltOverStep(h);
         stepDrop(h);
+        if (awaitingImpact) {
+          carry = 0;
+          break;
+        }
         checkBlocked(throttles, h);
         trackDrift(h);
         if (ratchetState.length) trackRatchets(h);
@@ -2771,6 +2877,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         body.setAngvel({ x: 0, y: 0, z: 0 }, true);
         body.wakeUp();
       }
+      startImpactPreSolve(poses, h);
       return this.dropReport();
     },
     resetDrop,
@@ -2912,6 +3019,8 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       return out;
     },
     dispose() {
+      impactWorker?.terminate();
+      impactWorker = null;
       events.free();
       world.free();
     }
