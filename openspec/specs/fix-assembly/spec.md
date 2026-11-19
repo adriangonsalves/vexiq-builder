@@ -111,3 +111,18 @@ When a shaft is put into a gear, or a gear is put on, the gear train it belongs 
 #### Scenario: Loose on this beam
 - **WHEN** a 24 Tooth Gear and a 36 Tooth Gear are laid out on a staggered 2x20 Beam's nearest holes for them (32.39 mm apart, the ideal being 31.75 mm)
 - **THEN** they are counted as meshed, 0.64 mm loose
+
+### Requirement: Tight-tolerance overlap clearance
+When Fix assembly finds no tilted motor shaft to square, no blocks to line up, and no gear train to lay out, if the selected part (or an unlocked pin, standoff, or connector colliding with it) is overlapping another part, Fix assembly SHALL search for the smallest single-axis shift of at most 1.0 mm on that unlocked pin, standoff, or connector that eliminates all collisions (`!isIntersecting`) while keeping every currently seated joint on that part seated. When a clear pose is found, the part SHALL move there in one history step, overlap flags on it and the parts it previously collided with SHALL be refreshed, and the message SHALL name the moved part and shift distance. A locked part SHALL NOT move.
+
+#### Scenario: Diagonal brace pin split between two beams
+- **WHEN** a 1x1 Connector Pin joins a diagonal brace beam and a vertical beam whose holes are 0.9 mm apart so the pin overlaps one beam, and the user chooses Fix assembly on either the pin or the beam
+- **THEN** the pin shifts by at most 0.5 mm to split the mismatch evenly so both beams become tight fits with no collision, and both parts' overlap flags clear
+
+#### Scenario: Grazing pin backed off a gear
+- **WHEN** a 0x3 Connector Pin seated in stacked plates grazes an adjacent gear by 0.25 mm, and the user chooses Fix assembly on either the pin or the gear
+- **THEN** the pin backs off 0.25 mm to clear the gear while staying seated in its plates
+
+#### Scenario: Locked part isn't nudged
+- **WHEN** the overlapping pin or connector is locked
+- **THEN** nothing moves

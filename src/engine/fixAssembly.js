@@ -700,17 +700,105 @@ export function fixAssembly(state, { instanceId } = {}) {
   // onto holes and meshed; beams and motors stay)
   const selected = (state.instances || []).find((i) => i.instanceId === instanceId);
   const laid = selected && selected.visible !== false && partOf(selected) ? trainLayout(state, instanceId) : null;
-  if (!laid) return result;
-  const byPatch = new Map(laid.patches.map((p) => [p.instanceId, p]));
-  return {
-    ok: true,
-    record: true,
-    stepLabel: `Fix assembly: laid out the gear train of ${selected.label}`,
-    message: `${laid.message}.`,
-    moved: laid.moved,
-    pairs: 0,
-    state: { ...state, instances: state.instances.map((i) => (byPatch.has(i.instanceId) ? { ...i, ...byPatch.get(i.instanceId) } : i)), updatedAt: new Date().toISOString() }
+  if (laid) {
+    const byPatch = new Map(laid.patches.map((p) => [p.instanceId, p]));
+    return {
+      ok: true,
+      record: true,
+      stepLabel: `Fix assembly: laid out the gear train of ${selected.label}`,
+      message: `${laid.message}.`,
+      moved: laid.moved,
+      pairs: 0,
+      state: { ...state, instances: state.instances.map((i) => (byPatch.has(i.instanceId) ? { ...i, ...byPatch.get(i.instanceId) } : i)), updatedAt: new Date().toISOString() }
+    };
+  }
+  const cleared = selected && selected.visible !== false && partOf(selected) ? clearTightOverlap(state, instanceId) : null;
+  return cleared || result;
+}
+
+const NUDGE_CATEGORIES = new Set(['Pins & Standoffs', 'Connectors & Brackets']);
+const NUDGE_STEPS_MM = Array.from({ length: 20 }, (_, i) => Number(((i + 1) * 0.05).toFixed(2)));
+
+/**
+ * Last-resort tight-tolerance overlap clearance: when a pin, standoff, or connector overlaps by a
+ * small CAD/brace mismatch (<= 1 mm), find the smallest shift that clears all collisions.
+ */
+function clearTightOverlap(state, instanceId) {
+  const instances = state.instances || [];
+  const byId = new Map(instances.map((i) => [i.instanceId, i]));
+  const selected = byId.get(instanceId);
+  if (!selected || selected.visible === false) return null;
+  const selCol = checkCandidateCollision(selected, instances);
+  if (!selCol.isIntersecting) return null;
+
+  const isNudgeable = (inst) => {
+    if (!inst || inst.visible === false || inst.locked) return false;
+    const p = partOf(inst);
+    return Boolean(p && NUDGE_CATEGORIES.has(p.category));
   };
+  const candidates = [];
+  if (isNudgeable(selected)) candidates.push(selected);
+  for (const hit of selCol.collidingWith) {
+    const other = byId.get(hit.instanceId);
+    if (isNudgeable(other) && !candidates.includes(other)) candidates.push(other);
+  }
+  if (!candidates.length) return null;
+
+  for (const cand of candidates) {
+    const others = instances.filter((i) => i.instanceId !== cand.instanceId && i.visible !== false);
+    const colBefore = cand === selected ? selCol : checkCandidateCollision(cand, others);
+    if (!colBefore.isIntersecting) continue;
+
+    // Search world axes + part-local axes (deduplicated), smallest distance first
+    const axes = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
+    const m = buildWorldMatrix(cand.position, cand.rotation);
+    for (let k = 0; k < 3; k++) {
+      const a = new THREE.Vector3().setFromMatrixColumn(m, k).normalize();
+      if (!axes.some((x) => Math.abs(x.dot(a)) > 0.999)) axes.push(a);
+    }
+
+    let best = null;
+    for (const d of NUDGE_STEPS_MM) {
+      for (const axis of axes) {
+        for (const sign of [1, -1]) {
+          const pos = [
+            Number((cand.position[0] + axis.x * sign * d).toFixed(3)),
+            Number((cand.position[1] + axis.y * sign * d).toFixed(3)),
+            Number((cand.position[2] + axis.z * sign * d).toFixed(3))
+          ];
+          const moved = { ...cand, position: pos };
+          if (checkCandidateCollision(moved, others).isIntersecting) continue;
+          best = { d, pos };
+          break;
+        }
+        if (best) break;
+      }
+      if (best) break;
+    }
+    if (!best) continue;
+
+    const prevHitIds = new Set(colBefore.collidingWith.map((c) => c.instanceId));
+    const nextList = instances.map((i) =>
+      i.instanceId === cand.instanceId
+        ? { ...i, position: best.pos, isIntersecting: false, lastValidPosition: [...best.pos], lastValidRotation: [...i.rotation] }
+        : i
+    );
+    const refreshed = nextList.map((i) => {
+      if (!prevHitIds.has(i.instanceId)) return i;
+      const { isIntersecting } = checkCandidateCollision(i, nextList);
+      return { ...i, isIntersecting, ...(isIntersecting ? {} : { lastValidPosition: [...i.position], lastValidRotation: [...i.rotation] }) };
+    });
+    return {
+      ok: true,
+      record: true,
+      stepLabel: `Fix assembly: cleared overlap on ${cand.label}`,
+      message: `Nudged ${cand.label} ${best.d.toFixed(2)} mm to clear overlap.`,
+      moved: [cand.instanceId],
+      pairs: 0,
+      state: { ...state, instances: refreshed, updatedAt: new Date().toISOString() }
+    };
+  }
+  return null;
 }
 
 function fixWithMotors(state, { instanceId } = {}) {
