@@ -479,6 +479,14 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       if (hingeAxis.get(m.hinge).b !== id && !trains.get(m.id).some((t) => !t.rack && t.body === id)) return false;
       return Boolean(lastThrottles.get(m.id)) && !motorState.get(m.id).blocked;
     });
+  // Frame body a rack slides against (its slide parent, or the chassis for a free rack)
+  const rackFrameId = (l) => (l.kind !== 'rack' ? null : slideOfBody.get(l.b)?.a || (sliders.has(l.b) ? graph.fixed.find((f) => !sliders.has(f)) || graph.fixed[0] : null));
+  const rackRelSpeed = (B, F, axisB) => {
+    if (!F || !F.isDynamic()) return toV3(B.linvel()).dot(axisB);
+    const vF = toV3(F.linvel()).add(toV3(F.angvel()).cross(toV3(B.worldCom()).sub(toV3(F.worldCom()))));
+    return toV3(B.linvel()).sub(vF).dot(axisB);
+  };
+
   /** Pulls each link's speeds to its ratio; `catchUp` also takes back part of the turn drifted apart. */
   function holdLinks(dt, catchUp = true) {
     for (const c of clusters) solveCluster(c, dt, catchUp);
@@ -488,14 +496,16 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       const A = rb.get(l.a);
       const B = rb.get(l.b);
       if (!A || !B || A === B || (!A.isDynamic() && !B.isDynamic())) return;
+      const frameId = rackFrameId(l);
+      const F = frameId ? rb.get(frameId) : null;
       const axisA = axisNow(l.a, new THREE.Vector3(...l.axisA).normalize());
       const k = l.kind === 'rack' ? l.mmPerRad * MM : l.sign * l.ratio;
-      const axisB = l.kind === 'rack' ? axisNow(l.b, new THREE.Vector3(...l.direction).normalize()) : axisNow(l.b, new THREE.Vector3(...l.axisB).normalize());
+      const axisB = l.kind === 'rack' ? axisNow(frameId || l.b, new THREE.Vector3(...l.direction).normalize()) : axisNow(l.b, new THREE.Vector3(...l.axisB).normalize());
       const pointA = worldPointOf(l.a, l.gears[0]);
       const pointB = l.kind === 'rack' ? null : worldPointOf(l.b, l.gears[1]);
       // Each gear's body turns about its gear's axis (its shaft), so weigh it about that line
       const invA = 1 / inertiaAbout(A, axisA, pointA);
-      const invB = l.kind === 'rack' ? B.invMass() : 1 / inertiaAbout(B, axisB, pointB);
+      const invB = l.kind === 'rack' ? B.invMass() + (F?.isDynamic() ? F.invMass() : 0) : 1 / inertiaAbout(B, axisB, pointB);
       // A worm (side a) is never pushed back by its gear: the whole correction goes to the gear, so
       // the gear follows the worm and a load on the gear can't turn either (openspec right-angle-gears)
       const mass = l.oneWay ? invB : k * k * invA + invB;
@@ -512,25 +522,26 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       // How a torque about each gear's line turns its body (the poses don't change over the sweep)
       const scaleA = A.isDynamic() ? inertiaAbout(A, axisA) * invA : 0;
       const scaleB = l.kind !== 'rack' && B.isDynamic() ? inertiaAbout(B, axisB) * invB : 0;
-      if (mass > 0) active.push({ l, i, A, B, axisA, axisB, pointA, pointB, k, mass: firm && invB > 0 ? invB : mass, end, invA, firm: firm && invB > 0, scaleA, scaleB });
+      if (mass > 0) active.push({ l, i, A, B, F, frameId, axisA, axisB, pointA, pointB, k, mass: firm && invB > 0 ? invB : mass, end, invA, firm: firm && invB > 0, scaleA, scaleB });
     });
     // Whole sweeps over every link, not each link to the end in turn: a train of gears of very
     // different weights (a light shaft into a heavy frame) only settles when they pass impulses along
     for (let pass = 0; pass < LINK_PASSES; pass++) {
       if (ratchetState.length) holdRatchets(dt, catchUp);
-      for (const { l, i, A, B, axisA, axisB, pointA, pointB, k, mass, end, invA, firm, scaleA, scaleB } of active) {
-        const speedB = l.kind === 'rack' ? toV3(B.linvel()).dot(axisB) : spin(l.b, axisB);
-        const error = k * spin(l.a, axisA) - speedB + (catchUp ? (DRIFT_GAIN * drift.get(i)) / dt : 0);
+      for (const { l, i, A, B, F, frameId, axisA, axisB, pointA, pointB, k, mass, end, invA, firm, scaleA, scaleB } of active) {
+        const spinA = spin(l.a, axisA) - (F?.isDynamic() ? spin(frameId, axisA) : 0);
+        const speedB = l.kind === 'rack' ? rackRelSpeed(B, F, axisB) : spin(l.b, axisB);
+        const error = k * spinA - speedB + (catchUp ? (DRIFT_GAIN * drift.get(i)) / dt : 0);
         if (end) {
           // How the gear asks the rack to move along the slide: past an end, the rack holds still
-          const along = (k * spin(l.a, axisA)) * axisB.dot(end.axis);
+          const along = (k * spinA) * axisB.dot(end.axis);
           if ((end.s <= end.lo + SLIDE_END && along < 0) || (end.s >= end.hi - SLIDE_END && along > 0)) {
             // ...and what had drifted apart is gone: the gear simply stops against it
             if (rackOnSlide.has(i)) rackOnSlide.get(i).offset += drift.get(i);
             // How far the gear has pushed past the end: the motor stalls on it as on a press (checkBlocked)
             endPush.set(i, (endPush.get(i) || 0) + Math.abs(drift.get(i)));
             drift.set(i, 0);
-            if (k * k * invA > 0) turnAboutLine(A, axisA, pointA, k * (-(k * spin(l.a, axisA)) / (k * k * invA)), scaleA);
+            if (k * k * invA > 0) turnAboutLine(A, axisA, pointA, k * (-(k * spinA) / (k * k * invA)), scaleA);
             continue;
           }
           if (Math.abs(along) > 1e-6) endPush.delete(i); // driven back off the end
@@ -538,8 +549,10 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         const lambda = -error / mass;
         if (!l.oneWay && !firm) turnAboutLine(A, axisA, pointA, k * lambda, scaleA);
         if (B.isDynamic()) {
-          if (l.kind === 'rack') B.applyImpulse(vec(axisB.clone().multiplyScalar(-lambda)), true);
-          else turnAboutLine(B, axisB, pointB, -lambda, scaleB);
+          if (l.kind === 'rack') {
+            B.applyImpulse(vec(axisB.clone().multiplyScalar(-lambda)), true);
+            if (F?.isDynamic()) F.applyImpulse(vec(axisB.clone().multiplyScalar(lambda)), true);
+          } else turnAboutLine(B, axisB, pointB, -lambda, scaleB);
         }
       }
     }
@@ -548,22 +561,26 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   // where they are, not summed from speeds, since Rapier's slide joint moves the body a little more than
   // its speed says (it corrects its error by position) and a summed drift then never closes
   const rackOnSlide = new Map(); // link index -> { turn (rad the gear has turned), last, offset (m) }
-  const turnAbout = (bodyId, axis) => {
-    const q = rb.get(bodyId).rotation();
+  const turnAboutIn = (bodyId, frameId, axis) => {
+    const qB = toV3q(rb.get(bodyId).rotation());
+    const q = frameId ? toV3q(rb.get(frameId).rotation()).invert().multiply(qB) : qB;
     return 2 * Math.atan2(q.x * axis.x + q.y * axis.y + q.z * axis.z, q.w);
   };
   graph.links.forEach((l, i) => {
     if (l.kind === 'rack' && slideOfBody.has(l.b) && rb.get(l.a) && rb.get(l.b) && l.a !== l.b) {
-      rackOnSlide.set(i, { turn: 0, last: turnAbout(l.a, new THREE.Vector3(...l.axisA).normalize()), offset: 0 });
+      rackOnSlide.set(i, { turn: 0, last: turnAboutIn(l.a, slideOfBody.get(l.b).a, new THREE.Vector3(...l.axisA).normalize()), offset: 0 });
     }
   });
   const rackDriftNow = (l, i) => {
     const st = rackOnSlide.get(i);
+    const frameId = slideOfBody.get(l.b).a;
+    const F = rb.get(frameId);
     const axis = new THREE.Vector3(...l.axisA).normalize();
-    const now = turnAbout(l.a, axis);
+    const now = turnAboutIn(l.a, frameId, axis);
     st.turn += wrapAngle(now - st.last);
     st.last = now;
-    return l.mmPerRad * MM * st.turn - toV3(rb.get(l.b).translation()).dot(axisNow(l.b, new THREE.Vector3(...l.direction).normalize())) - st.offset;
+    const relT = toV3(rb.get(l.b).translation()).sub(toV3(F.translation()));
+    return l.mmPerRad * MM * st.turn - relT.dot(axisNow(frameId, new THREE.Vector3(...l.direction).normalize())) - st.offset;
   };
   function trackDrift(dt) {
     graph.links.forEach((l, i) => {
@@ -572,13 +589,16 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         drift.set(i, rackDriftNow(l, i));
         return;
       }
+      const frameId = rackFrameId(l);
+      const F = frameId ? rb.get(frameId) : null;
       const axisA = axisNow(l.a, new THREE.Vector3(...l.axisA).normalize());
       const k = l.kind === 'rack' ? l.mmPerRad * MM : l.sign * l.ratio;
+      const spinA = spin(l.a, axisA) - (F?.isDynamic() ? spin(frameId, axisA) : 0);
       const sB =
         l.kind === 'rack'
-          ? toV3(rb.get(l.b).linvel()).dot(axisNow(l.b, new THREE.Vector3(...l.direction).normalize()))
+          ? rackRelSpeed(rb.get(l.b), F, axisNow(frameId || l.b, new THREE.Vector3(...l.direction).normalize()))
           : spin(l.b, axisNow(l.b, new THREE.Vector3(...l.axisB).normalize()));
-      drift.set(i, drift.get(i) + (k * spin(l.a, axisA) - sB) * dt);
+      drift.set(i, drift.get(i) + (k * spinA - sB) * dt);
     });
   }
 
@@ -1959,6 +1979,9 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       body.setBodyType(isFixed ? RAPIER.RigidBodyType.Fixed : RAPIER.RigidBodyType.Dynamic, true);
     }
     world.timestep = STEP;
+    for (const i of drift.keys()) drift.set(i, 0);
+    endPush.clear();
+    for (const st of rackOnSlide.values()) Object.assign(st, { turn: 0, last: 0, offset: 0 });
     applyGravityMode();
   }
 

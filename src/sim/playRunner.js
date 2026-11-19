@@ -241,7 +241,10 @@ export function createPlayRunner(graph, instances, engine) {
       return engine.dropReport?.() || null;
     },
     frame(meshMap, now = performance.now()) {
-      const dt = last === null ? 0 : Math.min(MAX_DT, (now - last) / 1000);
+      const droppingNow = Boolean(engine.dropReport?.()?.active);
+      // During a drop (1000 Hz substeps), cap dt to one 60 Hz frame so heavy builds stay fluid
+      // in smooth slow motion instead of spiraling up to 40-substep (~200 ms) stalls
+      const dt = last === null ? 0 : Math.min(droppingNow ? 1 / 60 : MAX_DT, (now - last) / 1000);
       last = now;
       if (dt > 0) engine.step(dt, throttles);
       const deltas = engine.deltas();
