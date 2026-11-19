@@ -29,10 +29,14 @@ export const BAND_STIFFNESS = {
 
 const DEFAULT_STIFFNESS = assumed(0.03, 'N/mm', 'A band or belt not listed above');
 
-/** A band's pull in newtons at `lengthMm` round its route (0 when slack). */
-export function bandPullN(partNumber, freeMm, lengthMm) {
+/** Viscoelastic damping time constant (c = k * tau): silicone hysteresis and rubbing on posts/edges. */
+export const BAND_DAMPING_S = assumed(0.08, 's', 'Band internal damping and rubbing friction (T = max(0, k * (stretch + tau * rate)))');
+
+/** A band's pull in newtons at `lengthMm` round its route (0 when slack), with optional stretch rate (mm/s). */
+export function bandPullN(partNumber, freeMm, lengthMm, rateMmPerS = 0) {
+  if (lengthMm <= freeMm) return 0;
   const k = (BAND_STIFFNESS[partNumber] || DEFAULT_STIFFNESS).value;
-  return lengthMm > freeMm ? k * (lengthMm - freeMm) : 0;
+  return Math.max(0, k * (lengthMm - freeMm + BAND_DAMPING_S.value * rateMmPerS));
 }
 
 /** 'slack' | 'snug' | 'tight' | 'too far' for a stretch ratio. */

@@ -2208,8 +2208,10 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   }
 
   // Bands (openspec rubber-bands): each pulls the bodies holding its spots along its path, harder the
-  // more it stretches (an assumed stiffness). A band whose spots are all on one body pulls on nothing.
+  // more it stretches (an assumed stiffness), with viscoelastic damping proportional to stretch rate.
+  // A band whose spots are all on one body pulls on nothing.
   const pullingBands = (graph.bands || []).filter((b) => b.pulls);
+  const bandLastLen = new Map();
   function pullBands(h) {
     for (const b of pullingBands) {
       const els = b.elements.map((e, i) => {
@@ -2223,7 +2225,10 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       });
       const path = solveBandPath(els, { thickMm: b.thickMm, widthMm: b.widthMm, maxRounds: 40, tolMm: 0.02 });
       if (!path) continue;
-      const T = bandPullN(b.partNumber, b.freeMm, path.lengthMm);
+      const prevLen = bandLastLen.get(b.id);
+      const rateMmPerS = prevLen !== undefined ? (path.lengthMm - prevLen) / h : 0;
+      bandLastLen.set(b.id, path.lengthMm);
+      const T = bandPullN(b.partNumber, b.freeMm, path.lengthMm, rateMmPerS);
       if (T <= 0) continue;
       const c = path.contacts.map((x) => ({ a: new THREE.Vector3(...x.a), b: new THREE.Vector3(...x.b) }));
       const n = c.length;
