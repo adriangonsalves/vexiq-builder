@@ -226,6 +226,77 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     return makers.get(key)?.() || null;
   };
 
+  // Free-turning hardware (openspec rope-and-spool, design decision 15): a dynamic body made only
+  // of passive hardware (shafts, collars, spacers, standoffs, pins, washers, bushings — and no
+  // gear/sprocket/pulley/wheel/hub/ratchet/pawl/spool/rack/tread/link) that no link, mesh, ratchet,
+  // rope, band, motor, slider or loose/roped list uses, and whose hinges all lie on one line, is
+  // held still to one body it is hinged to (a fixed one if any, else the one with the most parts).
+  // When held to a fixed body, it is made a fixed rigid body directly so heavy arms hinged through
+  // a light pivot axle (e.g. a 5 g shaft between chassis and arm) don't stretch the joint under load.
+  const HARDWARE_RE = /\b(shaft|collar|spacer|standoff|pin|washer|bushing)\b/i;
+  const WORKING_RE = /\b(gear|sprocket|pulley|wheel|hub|ratchet|pawl|spool|rack|tread|link)\b/i;
+  const heldHardware = (() => {
+    const baseFixed = (id) => fixed.has(id) && !sliders.has(id) && !looseSet.has(id) && !ropedSet.has(id);
+    const used = new Set([...looseSet, ...ropedSet, ...sliders]);
+    for (const l of graph.links || []) used.add(l.a).add(l.b);
+    for (const m of graph.maybeMeshes || []) {
+      used.add(m.a).add(m.b);
+      for (const h of m.holders || []) if (h) used.add(h);
+    }
+    for (const r of graph.ratchets || []) used.add(r.ratchetBody).add(r.holderBody).add(r.pawlBody);
+    for (const b of graph.bands || []) for (const id of b.bodies || []) if (id) used.add(id);
+    for (const r of graph.ropes || []) {
+      for (const id of r.bodies || []) if (id) used.add(id);
+      if (r.spool?.body) used.add(r.spool.body);
+    }
+    for (const j of graph.slideJoints || []) used.add(j.a).add(j.b);
+    for (const m of graph.motors || []) {
+      const h = graph.hinges.find((x) => x.id === m.hinge);
+      if (h) used.add(h.a).add(h.b);
+    }
+    const bodySize = new Map(graph.bodies.map((b) => [b.id, b.parts.length]));
+    const isHardwareOnly = (b) =>
+      b.parts.length > 0 &&
+      b.parts.every((id) => {
+        const name = graph.partInfo?.[id]?.name || byId.get(id)?.label || '';
+        return HARDWARE_RE.test(name) && !WORKING_RE.test(name);
+      });
+    const rotating = new Set();
+    for (const l of graph.links || []) rotating.add(l.a).add(l.b);
+    for (const m of graph.maybeMeshes || []) rotating.add(m.a).add(m.b);
+    for (const r of graph.ratchets || []) rotating.add(r.ratchetBody);
+    for (const m of graph.motors || []) {
+      const h = graph.hinges.find((x) => x.id === m.hinge);
+      if (h) rotating.add(h.b);
+    }
+    const fixedBodies = new Set();
+    const fixedHinges = new Set();
+    for (const b of graph.bodies) {
+      if (baseFixed(b.id) || used.has(b.id) || !isHardwareOnly(b)) continue;
+      const hs = graph.hinges.filter((h) => h.a === b.id || h.b === b.id);
+      if (!hs.length || !hs.every((h) => sameLine(hs[0], h))) continue;
+      let best = null;
+      let bestFixed = false;
+      let bestSize = -1;
+      for (const h of hs) {
+        const other = h.a === b.id ? h.b : h.a;
+        const otherFixed = baseFixed(other);
+        if (!otherFixed && rotating.has(other)) continue;
+        const sz = bodySize.get(other) || 0;
+        if (!best || (otherFixed && !bestFixed) || (otherFixed === bestFixed && sz > bestSize)) {
+          best = h;
+          bestFixed = otherFixed;
+          bestSize = sz;
+        }
+      }
+      if (best) {
+        fixedHinges.add(best.id);
+        if (bestFixed && hs.some((h) => !baseFixed(h.a === b.id ? h.b : h.a))) fixedBodies.add(b.id);
+      }
+    }
+    return { fixedBodies, fixedHinges };
+  })();
+
   /**
    * Bodies and their parts' shapes in a new world. `probe` is a world thrown away after one step,
    * which measures what touches at the start.
@@ -259,15 +330,18 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         shaped += 1;
       }
       // Rapier needs mass to move a body, and goes unsteady when a washer of a few hundredths of a gram
-      // hangs on a frame: every moving body weighs at least MIN_MASS, spread round its centre
+      // hangs on a frame: every moving body weighs at least MIN_MASS, spread round its centre.
+      // A hardware body held to the fixed frame (e.g. a pivot axle) carries heavy moving arms, so
+      // give it structural mass (0.2 kg) so its fixed joint doesn't stretch under high mass ratios.
       if (!isFixed) {
         body.recomputeMassPropertiesFromColliders();
-        if (body.mass() < MIN_MASS) {
+        const minM = heldHardware.fixedBodies.has(b.id) ? 0.2 : MIN_MASS;
+        if (body.mass() < minM) {
           const at = b.parts.map((id) => byId.get(id)).filter(Boolean);
           const centre = shaped
             ? toV3(body.worldCom())
             : at.reduce((sum, i) => sum.add(new THREE.Vector3(...i.position)), new THREE.Vector3()).multiplyScalar(MM / Math.max(1, at.length));
-          const extra = MIN_MASS - body.mass();
+          const extra = minM - body.mass();
           const spread = extra * MIN_RADIUS * MIN_RADIUS;
           body.setAdditionalMassProperties(extra, vec(centre), { x: spread, y: spread, z: spread }, { x: 0, y: 0, z: 0, w: 1 }, true);
         }
@@ -332,70 +406,6 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     filterIntersectionPair: () => true
   };
 
-  // Free-turning hardware (openspec rope-and-spool, design decision 15): a dynamic body made only
-  // of passive hardware (shafts, collars, spacers, standoffs, pins, washers, bushings — and no
-  // gear/sprocket/pulley/wheel/hub/ratchet/pawl/spool/rack/tread/link) that no link, mesh, ratchet,
-  // rope, band, motor, slider or loose/roped list uses, and whose hinges all lie on one line, is
-  // held still to one body it is hinged to (a fixed one if any, else the one with the most parts).
-  const HARDWARE_RE = /\b(shaft|collar|spacer|standoff|pin|washer|bushing)\b/i;
-  const WORKING_RE = /\b(gear|sprocket|pulley|wheel|hub|ratchet|pawl|spool|rack|tread|link)\b/i;
-  const heldHardwareHinges = (() => {
-    const used = new Set([...looseSet, ...ropedSet, ...sliders]);
-    for (const l of graph.links || []) used.add(l.a).add(l.b);
-    for (const m of graph.maybeMeshes || []) {
-      used.add(m.a).add(m.b);
-      for (const h of m.holders || []) if (h) used.add(h);
-    }
-    for (const r of graph.ratchets || []) used.add(r.ratchetBody).add(r.holderBody).add(r.pawlBody);
-    for (const b of graph.bands || []) for (const id of b.bodies || []) if (id) used.add(id);
-    for (const r of graph.ropes || []) {
-      for (const id of r.bodies || []) if (id) used.add(id);
-      if (r.spool?.body) used.add(r.spool.body);
-    }
-    for (const j of graph.slideJoints || []) used.add(j.a).add(j.b);
-    for (const m of graph.motors || []) {
-      const h = graph.hinges.find((x) => x.id === m.hinge);
-      if (h) used.add(h.a).add(h.b);
-    }
-    const bodySize = new Map(graph.bodies.map((b) => [b.id, b.parts.length]));
-    const isHardwareOnly = (b) =>
-      b.parts.length > 0 &&
-      b.parts.every((id) => {
-        const name = graph.partInfo?.[id]?.name || byId.get(id)?.label || '';
-        return HARDWARE_RE.test(name) && !WORKING_RE.test(name);
-      });
-    const rotating = new Set();
-    for (const l of graph.links || []) rotating.add(l.a).add(l.b);
-    for (const m of graph.maybeMeshes || []) rotating.add(m.a).add(m.b);
-    for (const r of graph.ratchets || []) rotating.add(r.ratchetBody);
-    for (const m of graph.motors || []) {
-      const h = graph.hinges.find((x) => x.id === m.hinge);
-      if (h) rotating.add(h.b);
-    }
-    const out = new Set();
-    for (const b of graph.bodies) {
-      if (!rb.get(b.id)?.isDynamic() || used.has(b.id) || !isHardwareOnly(b)) continue;
-      const hs = graph.hinges.filter((h) => h.a === b.id || h.b === b.id);
-      if (!hs.length || !hs.every((h) => sameLine(hs[0], h))) continue;
-      let best = null;
-      let bestFixed = false;
-      let bestSize = -1;
-      for (const h of hs) {
-        const other = h.a === b.id ? h.b : h.a;
-        const otherFixed = !rb.get(other)?.isDynamic();
-        if (!otherFixed && rotating.has(other)) continue;
-        const sz = bodySize.get(other) || 0;
-        if (!best || (otherFixed && !bestFixed) || (otherFixed === bestFixed && sz > bestSize)) {
-          best = h;
-          bestFixed = otherFixed;
-          bestSize = sz;
-        }
-      }
-      if (best) out.add(best.id);
-    }
-    return out;
-  })();
-
   // Hinges: only the parts on the hinge line are in skip, so the rest of two hinged bodies still collide
   const hingeAxis = new Map(); // hinge id -> { a, b, axis (Vector3, in a's start frame), point (m) }
   const hingeJoints = new Map(); // hinge id -> ImpulseJoint
@@ -403,7 +413,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   for (const h of graph.hinges) {
     const p = { x: h.point[0] * MM, y: h.point[1] * MM, z: h.point[2] * MM };
     const axis = new THREE.Vector3(...h.axis).normalize();
-    const data = heldHardwareHinges.has(h.id) ? RAPIER.JointData.fixed(p, ID_Q, p, ID_Q) : RAPIER.JointData.revolute(p, p, vec(axis));
+    const data = heldHardware.fixedHinges.has(h.id) ? RAPIER.JointData.fixed(p, ID_Q, p, ID_Q) : RAPIER.JointData.revolute(p, p, vec(axis));
     const joint = world.createImpulseJoint(data, rb.get(h.a), rb.get(h.b), true);
     hingeJoints.set(h.id, joint);
     hingeAxis.set(h.id, { a: h.a, b: h.b, axis, point: new THREE.Vector3(p.x, p.y, p.z) });
