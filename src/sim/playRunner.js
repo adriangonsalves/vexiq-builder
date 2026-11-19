@@ -55,6 +55,7 @@ function trackState(track, byId) {
     dir,
     start,
     phase: 0,
+    lastAngle: null,
     grippers: track.grippers.map(([g, link]) => ({ id: g, link, rel: start.get(link).m.clone().invert().multiply(start.get(g).m) }))
   };
 }
@@ -260,10 +261,23 @@ export function createPlayRunner(graph, instances, engine) {
       for (const t of dropping ? allTracks : tracks) {
         const frameDelta = deltas.get(t.track.frame) || new THREE.Matrix4();
         if (t.order) {
-          // Links per radian of the sprocket's turn against its frame: one link a tooth
+          // Links per radian of the sprocket's actual turn against its frame (from pose deltas,
+          // so residual post-step velocities like Hold-mode gravity cancel-out never creep the chain)
           const d = t.track.drive;
-          const turn = engine.spin(d.body, d.axis) - engine.spin(t.track.frame, d.axis);
-          t.phase += t.dir * turn * dt * (d.teeth / (2 * Math.PI));
+          const driveDelta = deltas.get(d.body);
+          if (driveDelta) {
+            const qFrame = new THREE.Quaternion().setFromRotationMatrix(frameDelta);
+            const qDrive = new THREE.Quaternion().setFromRotationMatrix(driveDelta);
+            const qRel = qFrame.invert().multiply(qDrive);
+            const [ax, ay, az] = d.axis;
+            const angle = 2 * Math.atan2(qRel.x * ax + qRel.y * ay + qRel.z * az, qRel.w);
+            if (t.lastAngle !== null) {
+              let da = angle - t.lastAngle;
+              da -= Math.round(da / (2 * Math.PI)) * 2 * Math.PI;
+              t.phase += t.dir * da * (d.teeth / (2 * Math.PI));
+            }
+            t.lastAngle = angle;
+          }
         }
         const n = t.order?.length || 0;
         const place = (id, matrix) => {

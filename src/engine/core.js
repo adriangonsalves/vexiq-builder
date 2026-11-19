@@ -1989,6 +1989,7 @@ function ropeGuide(found, moving, candidates) {
     .filter((c) => c.overlap > 0)
     .sort((a, b) => b.overlap - a.overlap);
   const centre = mine.getCenter(new THREE.Vector3());
+  let best = null;
   for (const c of ranked) {
     const solid = c.parts.map((id) => instById.get(id)).filter((i) => i && !isRoutedRope(i) && !isRoutedBand(i) && partOf(i));
     if (!solid.length) continue;
@@ -1997,27 +1998,36 @@ function ropeGuide(found, moving, candidates) {
     const m = buildWorldMatrix(big.position, big.rotation);
     const axes = [0, 1, 2].map((k) => new THREE.Vector3().setFromMatrixColumn(m, k).normalize());
     // An axis it can move along at least one way (it may sit at one end of its travel); along the
-    // others it is held both ways
+    // others it is held both ways. When multiple bodies enclose the moving piece (e.g. an inner
+    // elevator stage and the outer chassis), pick the one holding it with the least lateral play.
     const clear = [];
     let held = 0;
+    let heldPlay = 0;
     let any = null;
     for (const axis of axes) {
       const t = travelSearch(found, moving, c.parts, axis);
       any = t;
       const [fwd, back] = [t.search(1, GUIDE_TEST_MM).mm, t.search(-1, GUIDE_TEST_MM).mm];
       if (fwd >= GUIDE_TEST_MM || back >= GUIDE_TEST_MM) clear.push(axis);
-      else held += 1;
+      else {
+        held += 1;
+        heldPlay += fwd + back;
+      }
     }
     if (clear.length !== 1 || held !== 2) continue;
     if (!axes.every((axis) => any.turnBlocked(axis, GUIDE_TURN_DEG, centre) && any.turnBlocked(axis, -GUIDE_TURN_DEG, centre))) continue;
+    if (best && heldPlay >= best.heldPlay - 1e-3) continue;
     const direction = upward(clear[0].toArray());
     const dir = new THREE.Vector3(...direction);
     const t = travelSearch(found, moving, c.parts, dir);
     const [up, down] = [t.search(1, GUIDE_CAP_MM), t.search(-1, GUIDE_CAP_MM)];
     const round2 = (x) => Math.round(x * 100) / 100;
-    return { key: c.key, direction, point: centre.toArray(), limits: [-round2(down.mm), round2(up.mm)], stops: { forward: up.by, back: down.by } };
+    best = {
+      heldPlay,
+      result: { key: c.key, direction, point: centre.toArray(), limits: [-round2(down.mm), round2(up.mm)], stops: { forward: up.by, back: down.by } }
+    };
   }
-  return null;
+  return best?.result || null;
 }
 
 /**

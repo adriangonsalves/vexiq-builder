@@ -1286,10 +1286,17 @@ async function main() {
           verifiedType === 'pin_hole'
             ? `hole_${holeCounter++}`
             : `bore_${boreCounter++}`;
-        const span =
+        let span =
           verifiedType === 'pin_hole' && g.maxT - g.minT < 0.01
             ? measureHoleWallSpan(rawRaycast(), g.perpOrigin, g.axis, g.minT, part.bbox) || [g.minT, g.maxT]
             : [g.minT, g.maxT];
+        if (verifiedType === 'pin_hole' && !isThrough && (holeOriginT < span[0] - 0.5 || holeOriginT > span[1] + 0.5)) {
+          const out = Math.abs(holeOriginT - g.boxMaxT) < Math.abs(holeOriginT - g.boxMinT) ? 1 : -1;
+          const { depth, walled } = pinDepthFrom(g, holeOriginT, out, refPinBvh, partBvh);
+          if (depth >= 2.5 && walled) {
+            span = [holeOriginT - out * depth, holeOriginT].sort((a, b) => a - b).map((t) => Number(t.toFixed(3)));
+          }
+        }
         ports.push({
           portId: id,
           type: verifiedType,
@@ -1335,16 +1342,18 @@ async function main() {
       }
     }
 
-    // 2. Check center shaft bore [0, 0, cZ] on Gears, Wheels, Pulleys, Collars, Spacers if not already found
+    // 2. Check center shaft bore [0, 0, cZ] on Gears, Wheels, Pulleys, Collars, Spacers, and Lock Beams if not already found
+    const isLockBeam = /\block beam\b/i.test(part.name);
     if (
       part.category === 'Gears, Sprockets & Pulleys' ||
       part.category === 'Wheels & Treads' ||
-      part.category === 'Shafts, Spacers & Collars'
+      part.category === 'Shafts, Spacers & Collars' ||
+      isLockBeam
     ) {
-      // Wheels turn about their thinnest side: Z for nearly all, Y for the 2nd gen omni wheel
+      // Wheels and Lock Beams turn about their thinnest side: Z for nearly all, Y for the 2nd gen omni wheel and 2x2 Center Offset Round Lock Beam
       const size = part.bbox.size;
       const yThinnest = size[1] < size[2] - 1 && size[1] < size[0] - 1;
-      const a = part.category === 'Wheels & Treads' && yThinnest ? 1 : 2;
+      const a = (part.category === 'Wheels & Treads' || isLockBeam) && yThinnest ? 1 : 2;
       const axis = [0, 0, 0];
       axis[a] = 1;
       const hasCenterBore = ports.some((p) => Math.hypot(...p.origin.filter((_, i) => i !== a)) < 1.5);
