@@ -979,7 +979,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     }
     // A row is a linear function of the bodies' motion: (twist of body b) -> number. As a function of u:
     // value = g·u + e. `terms`: [{ body, w, v, at }] meaning w·ω_b + v·(velocity of b at point `at`)
-    const rowOf = (terms) => {
+    const rowOf = (terms, velAt = velocityAt) => {
       const g = new Array(n).fill(0);
       let e = 0;
       for (const t of terms) {
@@ -990,7 +990,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
           const B = rb.get(t.body);
           if (!B) continue;
           const w = toV3(B.angvel());
-          e += (t.w ? t.w.dot(w) : 0) + (t.v ? t.v.dot(velocityAt(B, t.at)) : 0);
+          e += (t.w ? t.w.dot(w) : 0) + (t.v ? t.v.dot(velAt(B, t.at)) : 0);
           continue;
         }
         e += value(ext[b]);
@@ -1015,11 +1015,28 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       const key = [st.m.a, st.m.b].sort().join('|');
       if (pairsDone.has(key)) continue;
       pairsDone.add(key);
-      const teeth = rowOf([
+      const halfTooth = (Math.PI * st.m.radii[0] * MM) / st.m.teeth[0];
+      const slip = THREE.MathUtils.clamp(st.slip, -halfTooth, halfTooth);
+      const slipTarget = catchUp ? -(DRIFT_GAIN * slip) / dt : 0;
+      // Two one-sided tooth flanks: kinematic speed matching is purely tangential (g), while the
+      // applied tooth impulse (gf) is tilted by the pressure angle so load pushes the gears apart
+      const tanA = Math.tan(THREE.MathUtils.degToRad(28));
+      const tRow = rowOf([
         { body: st.m.a, v: f.t.clone(), at: f.P },
         { body: st.m.b, v: f.t.clone().negate(), at: f.P }
       ]);
-      rows.push({ ...teeth, kind: 'teeth', target: catchUp ? -(DRIFT_GAIN * st.slip) / dt : 0, lo: -Infinity, hi: Infinity });
+      const f1 = f.t.clone().addScaledVector(f.n, -tanA);
+      const f2 = f.t.clone().negate().addScaledVector(f.n, -tanA);
+      const gf1 = rowOf([
+        { body: st.m.a, v: f1, at: f.P },
+        { body: st.m.b, v: f1.clone().negate(), at: f.P }
+      ]).g;
+      const gf2 = rowOf([
+        { body: st.m.a, v: f2, at: f.P },
+        { body: st.m.b, v: f2.clone().negate(), at: f.P }
+      ]).g;
+      rows.push({ g: tRow.g, gf: gf1, e: tRow.e, kind: 'teeth', target: slipTarget, lo: 0, hi: Infinity });
+      rows.push({ g: tRow.g.map((x) => -x), gf: gf2, e: -tRow.e, kind: 'teeth', target: -slipTarget, lo: 0, hi: Infinity });
     }
     // Ratchets whose ratchet or holder is in this cluster
     for (const st of ratchetState) {
@@ -1036,18 +1053,67 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         if (st.dragLeft > 0) rows.push({ ...w, kind: 'drag', st, target: 0, lo: -st.dragLeft, hi: 0 });
       }
     }
+    // Ropes touching this cluster (openspec rope-and-spool, design decision 14): solved with the
+    // gears and ratchet in one PGS pass, with outside bodies participating through their give `now.w`
+    if (catchUp && pullingRopes.length) {
+      ropeStepH = dt;
+      const held = heldByMotors();
+      for (const rope of pullingRopes) {
+        if (clusterRopesDone.has(rope.id) || !rope.bodies.some((id) => index.has(id))) continue;
+        clusterRopesDone.add(rope.id);
+        const rst = ropeState.get(rope.id);
+        const now = ropeNow(rope, rst, { skipBodies: index });
+        if (!now) continue;
+        const terms = [];
+        for (let i = 0; i < now.pts.length; i++) {
+          const id = rope.bodies[i];
+          const body = id ? rb.get(id) : null;
+          if (!body || !body.isDynamic() || held.has(id)) continue;
+          if (i > 0) terms.push({ body: id, v: now.runs[i - 1].clone().negate(), at: now.pts[i].a });
+          if (i < now.pts.length - 1) terms.push({ body: id, v: now.runs[i].clone(), at: now.pts[i].b });
+        }
+        const row = rowOf(terms, ropeVelocityAt);
+        const stretch0 = -(row.g.reduce((sum, x, j) => sum + x * u[j], 0) + row.e);
+        if (now.C + Math.max(0, stretch0) * dt < -ROPE_PULL.slackMm * MM) {
+          rst.T = 0;
+          rst.bias = 0;
+          rst.expectC = null;
+          continue;
+        }
+        if (rst.expectC !== null) {
+          const push = ropeContactPush(now);
+          const prevPush = rst.push;
+          const nextPush = push === null ? null : prevPush === null ? push : prevPush + 0.2 * (push - prevPush);
+          const pressed = push !== null && !(prevPush !== null && nextPush < prevPush * 0.9995);
+          rst.push = nextPush;
+          if (pressed) rst.bias *= 0.5;
+          else rst.bias += ROPE_PULL.biasGain * ((now.C - rst.expectC) / dt - rst.bias);
+        }
+        rows.push({
+          ...row,
+          kind: 'rope',
+          rope,
+          rst,
+          now,
+          wOut: now.w,
+          target: rst.bias + (now.C > 0 ? ROPE_PULL.beta * now.C : now.C) / dt,
+          lo: 0,
+          hi: ROPE_PULL.maxN * dt
+        });
+      }
+    }
     if (!rows.length) return;
     // Projected Gauss–Seidel on the reduced system
     const Wg = (g) => W.map((row) => row.reduce((sum, x, j) => sum + x * g[j], 0));
     for (const r of rows) {
-      r.Wg = Wg(r.g);
-      r.K = r.g.reduce((sum, x, j) => sum + x * r.Wg[j], 0);
+      r.Wg = Wg(r.gf || r.g);
+      r.K = r.g.reduce((sum, x, j) => sum + x * r.Wg[j], 0) + (r.wOut || 0);
       r.lambda = 0;
     }
     for (let pass = 0; pass < CLUSTER_PASSES; pass++) {
       for (const r of rows) {
         if (!(r.K > 1e-12)) continue;
-        const value = r.g.reduce((sum, x, j) => sum + x * u[j], 0) + r.e;
+        const value = r.g.reduce((sum, x, j) => sum + x * u[j], 0) + r.e + (r.wOut || 0) * r.lambda;
         let next = r.lambda + (r.target - value) / r.K;
         next = Math.min(r.hi, Math.max(r.lo, next));
         const d = next - r.lambda;
@@ -1056,7 +1122,16 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         for (let j = 0; j < n; j++) u[j] += r.Wg[j] * d;
       }
     }
-    for (const r of rows) if (r.kind === 'drag') r.st.dragLeft = Math.max(0, r.st.dragLeft + r.lambda);
+    for (const r of rows) {
+      if (r.kind === 'drag') r.st.dragLeft = Math.max(0, r.st.dragLeft + r.lambda);
+      else if (r.kind === 'rope') {
+        r.rst.T = r.lambda / dt;
+        pullImpulse(r.now, r.lambda);
+        const shortenFinal = r.g.reduce((sum, x, j) => sum + x * u[j], 0) + r.e + (r.wOut || 0) * r.lambda;
+        r.rst.expectC = r.now.C - shortenFinal * dt;
+        clusterRopesLive.push([r.rope, r.rst, r.now]);
+      }
+    }
     // Write the bodies' motion back from the solved coordinates
     for (let b = 0; b < n; b++) {
       if (!bodies[b].isDynamic()) continue;
@@ -1422,8 +1497,12 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       const axis = axisNow(h.a, h.axis);
       const point = h.point.clone().applyQuaternion(toV3q(A.rotation())).add(toV3(A.translation()));
       st.rel = relNow.get(m.id);
+      const qRel = toV3q(A.rotation()).invert().multiply(toV3q(B.rotation()));
+      const angle = 2 * Math.atan2(new THREE.Vector3(qRel.x, qRel.y, qRel.z).dot(h.axis.clone().normalize()), qRel.w);
+      const moved = st.prevAngle !== undefined ? wrapAngle(angle - st.prevAngle) / dt : st.rel;
+      st.prevAngle = angle;
       // A blocked shaft jitters: the speed shown and the stall check use it smoothed
-      st.smooth += (st.rel - st.smooth) * Math.min(1, dt / SPEED_SMOOTHING);
+      st.smooth += (moved - st.smooth) * Math.min(1, dt / SPEED_SMOOTHING);
       const throttle = throttles.get(m.id) || 0;
       const dir = Math.sign(throttle);
       const tauGrav = simulateGravity ? calcGravityTorque(m.id) : 0;
@@ -1504,15 +1583,20 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       st.holdSat = false;
       st.ropeTorque = 0;
       const off = target - st.rel;
+      const offMoved = target - moved;
       const steer = (inertia * off) / MOTOR_RESPONSE;
       // The push only builds while the torque isn't already at the limit that way
-      const atLimit = Math.abs(steer + st.push) >= STALL_TORQUE && Math.sign(steer + st.push) === Math.sign(off);
+      const atLimit = Math.abs(steer + st.push) >= STALL_TORQUE && Math.sign(steer + st.push) === Math.sign(offMoved);
       // It builds at least as fast as it would reach stall torque in PUSH_RISE at a whole free speed off:
       // scaled by inertia alone, a very light shaft (a ratchet with its pawl dragging) took seconds to find
       // the torque for a small steady load. Each step it grows by no more than would close the gap in that
       // step, so a light shaft starting up doesn't overshoot
-      const pushRate = Math.max(inertia / MOTOR_RESPONSE, STALL_TORQUE / MOTOR_FREE_RAD_S) / PUSH_RISE;
-      const grow = Math.sign(off) * Math.min(pushRate * Math.abs(off) * dt, (inertia * Math.abs(off)) / dt);
+      st.stuckFor = Math.abs(moved) < 0.1 * Math.abs(target) ? (st.stuckFor || 0) + dt : 0;
+      const stuck = st.stuckFor >= 0.05;
+      const speedScale = stuck ? Math.max(Math.abs(target), 0.05 * MOTOR_FREE_RAD_S) : MOTOR_FREE_RAD_S;
+      const pushRate = Math.max(inertia / MOTOR_RESPONSE, STALL_TORQUE / speedScale) / PUSH_RISE;
+      const stepCap = stuck ? Infinity : (inertia * Math.abs(offMoved)) / dt;
+      const grow = Math.sign(offMoved) * Math.min(pushRate * Math.abs(offMoved) * dt, stepCap);
       if (!atLimit) st.push = THREE.MathUtils.clamp(st.push + grow, -STALL_TORQUE, STALL_TORQUE);
       // The push starts again from nothing when the throttle changes way (started, reversed). Otherwise
       // it builds either way to keep the shaft at its speed, up to stall torque, so it brakes a load
@@ -2088,6 +2172,8 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   // spot feels T along both runs leaving it, at the points they leave it. A spool winds the rope as
   // it turns, and the pull turns it back.
   const pullingRopes = (graph.ropes || []).filter((r) => r.pulls);
+  const clusterRopesDone = new Set();
+  const clusterRopesLive = [];
   const ropeState = new Map(
     (graph.ropes || []).map((r) => [r.id, { T: 0, bias: 0, expectC: null, anchor: null, push: null, turns: r.spool?.turns ?? 0, winding: r.spool?.winding ?? 1, phi: null, slackMm: 0, pathMm: 0, overFull: false, turnsArr: [...r.turns] }])
   );
@@ -2159,7 +2245,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     }
     return out;
   }
-  function ropeNow(r, st) {
+  function ropeNow(r, st, { skipBodies = null } = {}) {
     let { els, path } = ropePathNow(r, st);
     if (!path) return null;
     // Winding (decision 9): the leaving point's angle in the spool's own frame
@@ -2244,6 +2330,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         if (i < n - 1) onHeld.push([id, runs[i].clone(), pts[i].b]);
       }
       if (!body || !body.isDynamic() || held.has(id)) continue;
+      if (skipBodies?.has(id)) continue;
       if (geared.has(id)) {
         if (i > 0) onGeared.push([body, runs[i - 1].clone().negate(), pts[i].a]);
         if (i < n - 1) onGeared.push([body, runs[i].clone(), pts[i].b]);
@@ -2280,7 +2367,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       }
       return rate;
     };
-    return { path, C, per, w, stretchRate, onHeld, onGeared };
+    return { path, C, per, w, stretchRate, onHeld, onGeared, pts, runs };
   }
   /** The motor's hinge now: its two bodies, axis, a point on it, the shaft's speed against the motor's
    * body, and the inertia a turn about it moves (gear trains included). */
@@ -2418,6 +2505,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     ropeStepH = h;
     const live = [];
     for (const r of pullingRopes) {
+      if (clusterRopesDone.has(r.id)) continue;
       const st = ropeState.get(r.id);
       const now = ropeNow(r, st);
       if (!now) continue;
@@ -2459,7 +2547,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
     for (const [, st, now] of live) st.expectC = now.C + now.stretchRate() * h;
     // The pull on spools turned through gears, once it is known
     for (const [, st, now] of live) for (const [body, f, at] of now.onGeared) body.applyImpulseAtPoint(vec(f.clone().multiplyScalar(st.T * h)), vec(at), true);
-    ropeTorqueOnMotors(live);
+    ropeTorqueOnMotors([...live, ...clusterRopesLive]);
   }
   /** Ropes that don't pull (a free end, all on one body) still wind as their spool turns. */
   function windIdleRopes() {
@@ -2500,6 +2588,8 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
           if (w < push.speed) spinAboutLine(body, push.axis, push.point, push.speed - w);
         }
         stopMotors(h);
+        clusterRopesDone.clear();
+        clusterRopesLive.length = 0;
         holdLinks(h);
         if (pullingBands.length) pullBands(h);
         if (pullingRopes.length) pullRopes(h);
