@@ -303,6 +303,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
    */
   function buildWorld(probe) {
     const w = new RAPIER.World({ x: 0, y: probe ? 0 : -GRAVITY, z: 0 });
+    if (!probe) w.integrationParameters.switchToSmallStepsPgsSolverWithoutWarmstart();
     w.timestep = STEP;
     const bodies = new Map(); // body id -> RigidBody
     const partOfCollider = new Map(); // collider handle -> instance id
@@ -1150,7 +1151,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         }
         const row = rowOf(terms, ropeVelocityAt);
         const stretch0 = -(row.g.reduce((sum, x, j) => sum + x * u[j], 0) + row.e);
-        if (now.C + Math.max(0, stretch0) * dt < -ROPE_PULL.slackMm * MM) {
+        if (now.C + Math.max(0, stretch0 + rst.bias) * dt < -ROPE_PULL.slackMm * MM) {
           rst.T = 0;
           rst.bias = 0;
           rst.expectC = null;
@@ -2211,7 +2212,6 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
   // more it stretches (an assumed stiffness), with viscoelastic damping proportional to stretch rate.
   // A band whose spots are all on one body pulls on nothing.
   const pullingBands = (graph.bands || []).filter((b) => b.pulls);
-  const bandLastLen = new Map();
   function pullBands(h) {
     for (const b of pullingBands) {
       const els = b.elements.map((e, i) => {
@@ -2225,13 +2225,10 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       });
       const path = solveBandPath(els, { thickMm: b.thickMm, widthMm: b.widthMm, maxRounds: 40, tolMm: 0.02 });
       if (!path) continue;
-      const prevLen = bandLastLen.get(b.id);
-      const rateMmPerS = prevLen !== undefined ? (path.lengthMm - prevLen) / h : 0;
-      bandLastLen.set(b.id, path.lengthMm);
-      const T = bandPullN(b.partNumber, b.freeMm, path.lengthMm, rateMmPerS);
-      if (T <= 0) continue;
       const c = path.contacts.map((x) => ({ a: new THREE.Vector3(...x.a), b: new THREE.Vector3(...x.b) }));
       const n = c.length;
+      const pullsOn = [];
+      let rateMPerS = 0;
       for (let i = 0; i < n; i++) {
         const body = rb.get(b.bodies[i]);
         if (!body?.isDynamic()) continue;
@@ -2242,6 +2239,13 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
         if (toNext.lengthSq() > 1e-9) f.add(toNext.normalize());
         if (f.lengthSq() < 1e-12) continue;
         const at = c[i].a.clone().add(c[i].b).multiplyScalar(0.5 * MM);
+        const vAt = toV3(body.linvel()).add(toV3(body.angvel()).cross(at.clone().sub(toV3(body.worldCom()))));
+        rateMPerS -= vAt.dot(f);
+        pullsOn.push({ body, f, at });
+      }
+      const T = bandPullN(b.partNumber, b.freeMm, path.lengthMm, rateMPerS / MM);
+      if (T <= 0) continue;
+      for (const { body, f, at } of pullsOn) {
         body.applyImpulseAtPoint(vec(f.multiplyScalar(T * h)), { x: at.x, y: at.y, z: at.z }, true);
       }
     }
@@ -2591,7 +2595,7 @@ export async function createPhysics(graph, instances, shapes, options = {}) {
       const now = ropeNow(r, st);
       if (!now) continue;
       // Clearly slack, even at the end of this step: no pull
-      if (now.w <= 0 || now.C + Math.max(0, now.stretchRate()) * h < -ROPE_PULL.slackMm * MM) {
+      if (now.w <= 0 || now.C + Math.max(0, now.stretchRate() + st.bias) * h < -ROPE_PULL.slackMm * MM) {
         st.T = 0;
         st.bias = 0;
         st.expectC = null;

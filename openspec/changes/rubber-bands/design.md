@@ -130,6 +130,8 @@ See proposal.md for why. What exists today:
 
    *Alternative considered:* Rapier spring joints between body pairs. Rejected: a band touching three or more bodies, or wrapping a post, can't be one spring.
 
+   *As built (2026-11-18):* `bandPullN` in `src/sim/bandStrength.js` adds viscoelastic damping (`BAND_DAMPING_S = 0.02 s`, `T = max(0, k × (L − L0 + τ × dL/dt))`) to model silicone hysteresis and rubbing on posts/edges, and `pullBands` in `src/sim/physics.js` computes `dL/dt` directly from instantaneous contact-point velocities (`−Σ v · f`) with no 1-step lag, damping post-fire rebound without making catapult launches sluggish.
+
 9. **MCP:**
    - Features are written as `post:<portId>`, `groove`, `rim`, `gap:<k>`, `gaphook:<k>`, `edge:<portId>` and `hook`.
    - `place_band` calls the same engine action as the app.
