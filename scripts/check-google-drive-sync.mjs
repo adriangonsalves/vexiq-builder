@@ -19,7 +19,7 @@ import {
 } from '../src/drive/driveLock.js';
 import { driveButtonState } from '../src/drive/driveButton.js';
 import { DriveError, buildFileContent, createDriveClient, isConnectionError } from '../src/drive/driveClient.js';
-import { createDriveSession } from '../src/drive/driveSession.js';
+import { createDriveSession, folderAppProps, folderMetaFromProps, resolveDriveFolderMeta } from '../src/drive/driveSession.js';
 
 let failures = 0;
 const check = (label, ok, detail = '') => {
@@ -857,6 +857,39 @@ section('Drive session (driveSession.js): two students on one file');
     V.pick = { id, name: 'TeamBot.vexiq.json' };
     await V.run(V.session.openFromDrive());
     check('shared as Viewer → Read-only tag, no lock written', V.label() === 'Read-only' && V.state().button.tag && !drive.files.get(id).appProperties.lockHolderId);
+  }
+
+  // Drive folder metadata (openspec library-folders-and-select)
+  {
+    const folders = new Map([
+      ['f-child', { id: 'f-child', name: 'Drivetrains', parents: ['f-parent'] }],
+      ['f-parent', { id: 'f-parent', name: '2026', parents: [] }]
+    ]);
+    const mockClient = {
+      getFolderInfo: async (id) => folders.get(id) ?? null
+    };
+    const chosen = await resolveDriveFolderMeta(mockClient, { folder: { id: 'f-child', name: 'Drivetrains' } });
+    check('chosen folder resolves folderName and parentFolderName when readable', chosen.folderId === 'f-child' && chosen.folderName === 'Drivetrains' && chosen.parentFolderName === '2026', JSON.stringify(chosen));
+
+    const props = folderAppProps(chosen);
+    check('folderAppProps writes vexiqFolderId, vexiqFolderName, vexiqParentFolderName', props.vexiqFolderId === 'f-child' && props.vexiqFolderName === 'Drivetrains' && props.vexiqParentFolderName === '2026', JSON.stringify(props));
+
+    // Teammate opening file when drive.file blocks folder lookup still gets folderName from appProperties
+    const blockedClient = { getFolderInfo: async () => null };
+    const fromTeammate = await resolveDriveFolderMeta(blockedClient, { meta: { parents: ['f-child'], appProperties: props } });
+    check('teammate opening file sees folderName + parentFolderName from appProperties when folder lookup is blocked', fromTeammate.folderId === 'f-child' && fromTeammate.folderName === 'Drivetrains' && fromTeammate.parentFolderName === '2026', JSON.stringify(fromTeammate));
+
+    // Moved file: parents[0] differs from vexiqFolderId, so stale appProperties are ignored
+    const moved = await resolveDriveFolderMeta(blockedClient, { meta: { parents: ['f-other'], appProperties: props } });
+    check('moved file ignores stale appProperties when parent folder id changed', moved.folderId === 'f-other' && moved.folderName === null && moved.parentFolderName === null, JSON.stringify(moved));
+
+    // My Drive save
+    const myDrive = await resolveDriveFolderMeta(blockedClient, { savedInMyDrive: true });
+    check('My Drive save records folderId=my-drive and folderName=My Drive', myDrive.folderId === 'my-drive' && myDrive.folderName === 'My Drive' && myDrive.parentFolderName === null);
+
+    // Synchronous folderMetaFromProps matches
+    const syncProps = folderMetaFromProps({ parents: ['f-child'], appProperties: props });
+    check('folderMetaFromProps extracts matching appProperties synchronously', syncProps.folderName === 'Drivetrains' && syncProps.parentFolderName === '2026');
   }
 }
 

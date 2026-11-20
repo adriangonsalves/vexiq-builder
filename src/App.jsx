@@ -75,6 +75,7 @@ import { STARTERS, starterById } from './starters.js';
 import {
   copyName,
   deleteBuild,
+  deleteBuilds,
   exportFileName,
   fileBuildName,
   findBuildByDriveFile,
@@ -84,7 +85,10 @@ import {
   newBuildId,
   nextBuildName,
   putBuild,
+  renameLocalFolder,
+  setBuildsFolder,
   starterBuildName,
+  starterSaveAction,
   uniqueName
 } from './utils/buildLibrary.js';
 import FileMenu, { BuildNameField } from './components/FileMenu.jsx';
@@ -678,11 +682,19 @@ export default function App() {
         setCurrentBuildNow({ ...cb, name: used, drive });
         return used;
       },
-      openDriveBuild: async ({ fileId, fileName, name, content, meta }) => {
-        if (currentBuildRef.current?.drive?.fileId === fileId) return { reused: true };
+      openDriveBuild: async ({ fileId, fileName, name, content, meta, folderMeta }) => {
+        if (currentBuildRef.current?.drive?.fileId === fileId) {
+          if (folderMeta && (folderMeta.folderId || folderMeta.folderName)) {
+            setCurrentBuildNow({ ...currentBuildRef.current, drive: { ...currentBuildRef.current.drive, ...folderMeta } });
+          }
+          return { reused: true };
+        }
         const known = libraryAvailable() ? await findBuildByDriveFile(fileId).catch(() => null) : null;
         if (known) {
-          await switchToBuild(known, { leaveCheck: false });
+          const updatedKnown = folderMeta && (folderMeta.folderId || folderMeta.folderName)
+            ? { ...known, drive: { ...known.drive, ...folderMeta } }
+            : known;
+          await switchToBuild(updatedKnown, { leaveCheck: false });
           setLibraryOpen(false);
           return { reused: true };
         }
@@ -690,7 +702,13 @@ export default function App() {
         const hist = loadHistory(content?.history, parts, { source: 'app', label: 'External change' });
         const used = uniqueName(await buildNames(), name);
         await switchToBuild(
-          { id: newBuildId(), name: used, instances: parts, history: hist, drive: { fileId, fileName, lastSyncedRev: hist.rev, lastSyncedName: used, lastSyncedHeadRevisionId: meta.headRevisionId } },
+          {
+            id: newBuildId(),
+            name: used,
+            instances: parts,
+            history: hist,
+            drive: { fileId, fileName, lastSyncedRev: hist.rev, lastSyncedName: used, lastSyncedHeadRevisionId: meta.headRevisionId, ...(folderMeta || {}) }
+          },
           { leaveCheck: false }
         );
         setLibraryOpen(false);
@@ -778,7 +796,13 @@ export default function App() {
     // Another tab or the assistant switched or renamed the current build
     if (state.build?.id && (state.build.id !== currentBuildRef.current?.id || state.build.name !== currentBuildRef.current?.name)) {
       lastPostedBuildIdRef.current = state.build.id;
-      setCurrentBuild({ id: state.build.id, name: state.build.name, ...(state.build.drive ? { drive: state.build.drive } : {}) });
+      setCurrentBuild({
+        id: state.build.id,
+        name: state.build.name,
+        ...(state.build.drive ? { drive: state.build.drive } : {}),
+        ...(state.build.starter ? { starter: state.build.starter } : {}),
+        ...(state.build.unsaved ? { unsaved: true } : {})
+      });
     }
     if (isHistory(state.history)) {
       const history = loadHistory(state.history, state.instances);
@@ -975,6 +999,10 @@ export default function App() {
       setCurrentBuild({ id: savedBuild.id, name: savedBuild.name, ...(drive ? { drive } : {}) });
       return;
     }
+    if (savedBuild?.unsaved && savedBuild?.starter) {
+      setCurrentBuild({ id: savedBuild.id || newBuildId(), name: savedBuild.name || savedBuild.starter.name, starter: savedBuild.starter, unsaved: true });
+      return;
+    }
     const name = savedBuild?.name && !names.includes(savedBuild.name) ? savedBuild.name : nextBuildName(names);
     setCurrentBuild({ id: savedBuild?.id || newBuildId(), name });
   };
@@ -1005,15 +1033,17 @@ export default function App() {
     }
   }, []);
 
-  /** Writes the current build to the library now (no-op without a library or a build). */
+  /** Writes the current build to the library now (no-op without a library, a build, or on an unedited starter). */
   const saveCurrentBuildNow = useCallback(async () => {
     clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = null;
     const data = latestForSaveRef.current;
     if (!data?.build || !libraryAvailable()) return;
+    if (starterSaveAction(data.build, data.history) !== 'save') return;
     try {
       const existing = await getBuild(data.build.id);
       const thumbnail = document.visibilityState === 'hidden' ? existing?.thumbnail ?? null : (await makeThumbnail()) ?? existing?.thumbnail ?? null;
+      const folder = !data.build.drive?.fileId ? (existing?.folder ?? data.build.folder ?? null) : null;
       await putBuild({
         id: data.build.id,
         name: data.build.name,
@@ -1024,6 +1054,7 @@ export default function App() {
         instances: data.instances,
         history: data.history,
         viewport: data.viewport,
+        ...(folder ? { folder } : {}),
         ...(data.build.drive ? { drive: data.build.drive } : {})
       });
     } catch (err) {
@@ -1031,9 +1062,50 @@ export default function App() {
     }
   }, [makeThumbnail]);
 
-  // Builds save themselves about a second after each change
+  // Builds save themselves about a second after each change; starters only save once edited (openspec starter-save-on-edit)
   useEffect(() => {
     if (catalog.length === 0 || !currentBuild) return;
+    const action = starterSaveAction(currentBuild, history);
+    if (action === 'skip') {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+      latestForSaveRef.current = null;
+      return;
+    }
+    if (action === 'promote') {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+      const buildId = currentBuild.id;
+      const starterInfo = currentBuild.starter;
+      if (starterInfo.explicit) {
+        setCurrentBuildNow({ ...currentBuild, unsaved: false });
+        return;
+      }
+      let cancelled = false;
+      (libraryAvailable() ? listBuilds().catch(() => []) : Promise.resolve([])).then((list) => {
+        if (cancelled) return;
+        const cur = currentBuildRef.current;
+        if (!cur || cur.id !== buildId || !cur.unsaved) return;
+        const name = starterBuildName(list.map((b) => b.name), starterInfo.name);
+        setCurrentBuildNow({ ...cur, name, unsaved: false });
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (action === 'demote') {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+      latestForSaveRef.current = null;
+      const demotedId = currentBuild.id;
+      setCurrentBuildNow({ ...currentBuild, name: currentBuild.starter.name, unsaved: true });
+      if (libraryAvailable()) {
+        deleteBuild(demotedId)
+          .then(() => listBuilds().then(setLibraryBuilds))
+          .catch(() => {});
+      }
+      return;
+    }
     latestForSaveRef.current = {
       build: currentBuild,
       instances,
@@ -1138,7 +1210,17 @@ export default function App() {
           version: '1.0',
           ...(switching ? {} : { baseHistoryRev: base.baseRev }),
           ...(sendHistory ? { history } : {}),
-          ...(currentBuild ? { build: currentBuild } : {}),
+          ...(currentBuild
+            ? {
+                build: {
+                  id: currentBuild.id,
+                  name: currentBuild.name,
+                  ...(currentBuild.drive?.fileId ? { drive: currentBuild.drive } : {}),
+                  ...(currentBuild.starter ? { starter: currentBuild.starter } : {}),
+                  ...(currentBuild.unsaved ? { unsaved: true } : {})
+                }
+              }
+            : {}),
           selectedId: primaryId,
           selectedIds,
           viewport: {
@@ -2442,14 +2524,17 @@ export default function App() {
       return [];
     }
   };
-  /** Every build name in use: the library's and the open build's. */
-  const buildNames = async () => [...(await refreshLibrary()).map((b) => b.name), currentBuildRef.current?.name].filter(Boolean);
+  /** Every build name in use: the library's and the open build's (unless it is an unsaved starter). */
+  const buildNames = async () => [
+    ...(await refreshLibrary()).map((b) => b.name),
+    currentBuildRef.current?.unsaved ? null : currentBuildRef.current?.name
+  ].filter(Boolean);
 
   /**
    * Makes `record` the current build: the open one is saved first (unless it is being deleted), then
    * its parts, history and view settings come in, and the bridge, other tabs and the assistant follow.
    */
-  const switchToBuild = async ({ id, name, instances: parts, history: hist, viewport, drive }, { saveCurrent = true, leaveCheck = saveCurrent } = {}) => {
+  const switchToBuild = async ({ id, name, instances: parts, history: hist, viewport, drive, starter, unsaved }, { saveCurrent = true, leaveCheck = saveCurrent } = {}) => {
     // Leaving a Drive build with unsaved Drive changes asks first (openspec google-drive-sync)
     if (leaveCheck && !(await googleDrive.session.leaveBuild())) return false;
     if (saveCurrent) {
@@ -2475,7 +2560,13 @@ export default function App() {
       if (viewport.showConnectors !== undefined) setShowConnectors(viewport.showConnectors);
       applyViewOptions(viewport);
     }
-    const next = { id, name, ...(drive?.fileId ? { drive } : {}) };
+    const next = {
+      id,
+      name,
+      ...(drive?.fileId ? { drive } : {}),
+      ...(starter ? { starter } : {}),
+      ...(unsaved ? { unsaved: true } : {})
+    };
     currentBuildRef.current = next;
     setCurrentBuild(next);
     setFocusTrigger((c) => c + 1);
@@ -2525,9 +2616,16 @@ export default function App() {
       parts,
       open: async () => {
         const history = recordStep(createHistory([]), [], parts, { source: 'app', label: `Add ${starter.name}` }).history;
-        const name = starterBuildName(await buildNames(), starter.name);
-        if (!(await switchToBuild({ id: newBuildId(), name, instances: parts, history }))) return;
-        setActionFeedback({ message: `Started ${name}`, isError: false });
+        const ok = await switchToBuild({
+          id: newBuildId(),
+          name: starter.name,
+          instances: parts,
+          history,
+          starter: { name: starter.name, initialHeadId: history.headId, explicit: false },
+          unsaved: true
+        });
+        if (!ok) return;
+        setActionFeedback({ message: `Opened ${starter.name}`, isError: false });
       }
     });
   };
@@ -2550,7 +2648,8 @@ export default function App() {
 
   const handleRenameBuild = async (id, name) => {
     if (id === currentBuildRef.current?.id) {
-      setCurrentBuild({ ...currentBuildRef.current, name });
+      const cur = currentBuildRef.current;
+      setCurrentBuildNow({ ...cur, name, ...(cur.starter ? { starter: { ...cur.starter, explicit: true } } : {}) });
     } else {
       const record = await getBuild(id).catch(() => null);
       if (record) await putBuild({ ...record, name });
@@ -2592,6 +2691,62 @@ export default function App() {
       }
     }
     setActionFeedback({ message: `Deleted ${name}`, isError: false });
+  };
+
+  /** Deletes multiple selected builds from this browser after one confirmation. */
+  const handleBulkDeleteBuilds = async (ids) => {
+    const unique = [...new Set(ids || [])].filter(Boolean);
+    if (!unique.length) return false;
+    const count = unique.length;
+    const label = count === 1 ? (libraryBuilds.find((b) => b.id === unique[0])?.name || 'this build') : `${count} builds`;
+    if (!window.confirm(`Delete ${label}? This can't be undone.`)) return false;
+    const includesCurrent = unique.includes(currentBuildRef.current?.id);
+    if (includesCurrent) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+      latestForSaveRef.current = null;
+    }
+    if (libraryAvailable()) await deleteBuilds(unique).catch(() => {});
+    const remaining = await refreshLibrary();
+    if (includesCurrent) {
+      const next = remaining[0] ? await getBuild(remaining[0].id).catch(() => null) : null;
+      if (next) await switchToBuild(next, { saveCurrent: false });
+      else {
+        await switchToBuild(
+          { id: newBuildId(), name: nextBuildName(remaining.map((b) => b.name)), instances: [], history: createHistory([]) },
+          { saveCurrent: false }
+        );
+      }
+    }
+    setActionFeedback({ message: `Deleted ${label}`, isError: false });
+    return true;
+  };
+
+  /** Groups local builds into a single-level folder (or ungroups when folderName is null). */
+  const handleMoveBuildsToFolder = async (ids, folderName) => {
+    if (!libraryAvailable()) return;
+    await setBuildsFolder(ids, folderName).catch(() => {});
+    await refreshLibrary();
+    setActionFeedback({
+      message: folderName ? `Moved ${ids.length} build${ids.length === 1 ? '' : 's'} to "${folderName}"` : `Removed ${ids.length} build${ids.length === 1 ? '' : 's'} from folder`,
+      isError: false
+    });
+  };
+
+  /** Renames a local folder across all builds in it. */
+  const handleRenameLocalFolder = async (oldName, newName) => {
+    if (!libraryAvailable()) return;
+    await renameLocalFolder(oldName, newName).catch(() => {});
+    await refreshLibrary();
+    setActionFeedback({ message: `Renamed folder to "${newName}"`, isError: false });
+  };
+
+  /** Removes a local folder while keeping all of its builds ungrouped. */
+  const handleRemoveLocalFolder = async (folderName) => {
+    if (!libraryAvailable()) return;
+    await renameLocalFolder(folderName, null).catch(() => {});
+    await refreshLibrary();
+    setActionFeedback({ message: `Removed folder "${folderName}" (builds kept)`, isError: false });
   };
 
   /** Open from computer…: the file becomes a new build in the library, named after the file. */
@@ -3358,7 +3513,11 @@ export default function App() {
         <div className="brand">
           <span className="brand-badge">VEX IQ</span>
           <span className="brand-title">3D Robot Modeler</span>
-          <BuildNameField name={currentBuild?.name} readOnly={googleDrive.readOnlyViewer} onRename={(name) => currentBuild && setCurrentBuild({ ...currentBuild, name })} />
+          <BuildNameField
+            name={currentBuild?.name}
+            readOnly={googleDrive.readOnlyViewer}
+            onRename={(name) => currentBuild && setCurrentBuildNow({ ...currentBuild, name, ...(currentBuild.starter ? { starter: { ...currentBuild.starter, explicit: true } } : {}) })}
+          />
           <DriveButton drive={googleDrive} />
           <span
             style={{
@@ -5134,6 +5293,10 @@ export default function App() {
         onRename={handleRenameBuild}
         onDuplicate={handleDuplicateBuild}
         onDelete={handleDeleteBuild}
+        onBulkDelete={handleBulkDeleteBuilds}
+        onMoveToFolder={handleMoveBuildsToFolder}
+        onRenameFolder={handleRenameLocalFolder}
+        onRemoveFolder={handleRemoveLocalFolder}
         onOpenFile={handleOpenFile}
         onHelp={() => openHelpAt('saving')}
         onOpenFromDrive={googleDrive.configured ? () => googleDrive.session.openFromDrive() : null}

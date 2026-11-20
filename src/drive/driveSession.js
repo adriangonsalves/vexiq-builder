@@ -36,6 +36,70 @@ export const COPY_IN_MY_DRIVE = "Saved in your My Drive. Move it into your team'
 /** `<Name>.vexiq.json`, with characters Drive file names can't hold replaced. */
 const driveFileName = (name) => `${String(name || 'Build').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'Build'}.vexiq.json`;
 const baseName = (fileName) => String(fileName || '').replace(/\.vexiq\.json$|\.json$/i, '') || 'Build';
+const trimProp = (value, max = 80) => {
+  const s = String(value ?? '').trim();
+  return s ? s.slice(0, max) : null;
+};
+
+/** Short folder metadata written into Drive appProperties so teammates see the folder name under drive.file. */
+export function folderAppProps({ folderId, folderName, parentFolderName } = {}) {
+  const props = {};
+  const id = trimProp(folderId, 80);
+  const name = trimProp(folderName, 80);
+  const parent = trimProp(parentFolderName, 80);
+  if (id) props.vexiqFolderId = id;
+  if (name) props.vexiqFolderName = name;
+  if (parent) props.vexiqParentFolderName = parent;
+  return props;
+}
+
+/** Synchronous folder metadata read from `meta.parents` and matching `appProperties`. */
+export function folderMetaFromProps(meta) {
+  const parentId = meta?.parents?.[0] ?? null;
+  const props = meta?.appProperties || {};
+  const propsMatch = Boolean(props.vexiqFolderName) && (!parentId || !props.vexiqFolderId || props.vexiqFolderId === parentId);
+  const folderId = parentId || (props.vexiqFolderId === 'my-drive' ? 'my-drive' : null);
+  let folderName = propsMatch ? trimProp(props.vexiqFolderName) : null;
+  if (!folderName && folderId === 'my-drive') folderName = 'My Drive';
+  const parentFolderName = propsMatch ? trimProp(props.vexiqParentFolderName) : null;
+  return { folderId, folderName, parentFolderName };
+}
+
+/**
+ * Best-effort Drive folder metadata lookup under `drive.file` (openspec library-folders-and-select).
+ * Never fails the save/open/reconnect flow when Drive blocks access to unpicked parent folders.
+ */
+export async function resolveDriveFolderMeta(client, { folder = null, meta = null, savedInMyDrive = false } = {}) {
+  const safeFolderInfo = async (id) => {
+    if (!id || typeof client?.getFolderInfo !== 'function') return null;
+    try {
+      return await client.getFolderInfo(id);
+    } catch {
+      return null;
+    }
+  };
+  if (savedInMyDrive) return { folderId: 'my-drive', folderName: 'My Drive', parentFolderName: null };
+  if (folder?.id) {
+    const info = await safeFolderInfo(folder.id);
+    const parentId = info?.parents?.[0] ?? null;
+    const parentInfo = parentId ? await safeFolderInfo(parentId) : null;
+    return {
+      folderId: folder.id,
+      folderName: trimProp(folder.name) || trimProp(info?.name) || null,
+      parentFolderName: trimProp(parentInfo?.name) || null
+    };
+  }
+  const base = folderMetaFromProps(meta);
+  const parentId = meta?.parents?.[0] ?? null;
+  const info = parentId ? await safeFolderInfo(parentId) : null;
+  const grandParentId = info?.parents?.[0] ?? null;
+  const grandParentInfo = grandParentId ? await safeFolderInfo(grandParentId) : null;
+  return {
+    folderId: base.folderId,
+    folderName: trimProp(info?.name) || base.folderName,
+    parentFolderName: trimProp(grandParentInfo?.name) || base.parentFolderName
+  };
+}
 
 /**
  * @param {object} o
@@ -254,10 +318,29 @@ export function createDriveSession({ client, auth, host, clientId, timers = glob
   // --- the reconcile used by Reconnect and by reopening a known file ------------------------------
   async function reconcile() {
     const meta = await client.getFileMeta(s.fileId);
+    const immediateFolder = folderMetaFromProps(meta);
+    if (immediateFolder.folderId || immediateFolder.folderName) setDrive(immediateFolder);
     const outcome = reconnectOutcome({ meta, clientId, lastSyncedHeadRevisionId: drive()?.lastSyncedHeadRevisionId, dirty: dirtyNow(), now: now() });
-    if (outcome === 'edit') return takeLock();
-    if (outcome === 'readonly') return enterReadonly(meta);
+    const fileIdNow = s.fileId;
+    const refreshFolder = () => {
+      resolveDriveFolderMeta(client, { meta })
+        .then((fm) => {
+          if (s.fileId === fileIdNow && (fm.folderName || fm.parentFolderName)) setDrive(fm);
+        })
+        .catch(() => {});
+    };
+    if (outcome === 'edit') {
+      const ok = await takeLock();
+      refreshFolder();
+      return ok;
+    }
+    if (outcome === 'readonly') {
+      await enterReadonly(meta);
+      refreshFolder();
+      return true;
+    }
     set({ meta, mode: 'disconnected', banner: null, prompt: { type: 'conflict', reason: lockState(meta.appProperties, clientId, now()).byOther ? 'locked-by-other' : 'changed' } });
+    refreshFolder();
     return true;
   }
 
@@ -420,11 +503,22 @@ export function createDriveSession({ client, auth, host, clientId, timers = glob
           name: driveFileName(copyName),
           content: buildFileContent({ name: copyName, instances: b.instances, history: b.history, now: now() }),
           parents,
-          appProperties: buildLockProps({ clientId, name: myName, now: now() })
+          appProperties: {
+            ...buildLockProps({ clientId, name: myName, now: now() }),
+            ...folderAppProps(parents?.length ? drive() : { folderId: 'my-drive', folderName: 'My Drive' })
+          }
         });
+        const folderMeta = await resolveDriveFolderMeta(client, {
+          folder: inFolder && drive()?.folderId && drive()?.folderId !== 'my-drive' ? { id: drive().folderId, name: drive().folderName } : null,
+          meta,
+          savedInMyDrive: !inFolder || !parents?.length
+        });
+        if (parents?.length && !inFolder) {
+          client.patchAppProperties(meta.id, folderAppProps(folderMeta)).catch(() => {});
+        }
         const linkedName = await host.linkAsNewFile({
           name: copyName,
-          drive: { fileId: meta.id, fileName: meta.name, lastSyncedRev: b.history?.rev, lastSyncedHeadRevisionId: meta.headRevisionId }
+          drive: { fileId: meta.id, fileName: meta.name, lastSyncedRev: b.history?.rev, lastSyncedHeadRevisionId: meta.headRevisionId, ...folderMeta }
         });
         setDrive({ lastSyncedName: linkedName ?? copyName });
         set({ fileId: meta.id, prompt: null });
@@ -502,15 +596,21 @@ export function createDriveSession({ client, auth, host, clientId, timers = glob
         const leaving = s.fileId && s.fileId !== picked.id && s.mode === 'edit' ? s.fileId : null;
         const meta = await client.getFileMeta(picked.id);
         const content = await client.downloadBuildFile(picked.id);
+        const immediateFolder = folderMetaFromProps(meta);
         if (leaving) {
           stopTimers();
           await client.releaseLock(leaving).catch(() => {});
         }
-        const { reused } = await host.openDriveBuild({ fileId: picked.id, fileName: meta.name, name: baseName(meta.name), content, meta });
+        const { reused } = await host.openDriveBuild({ fileId: picked.id, fileName: meta.name, name: baseName(meta.name), content, meta, folderMeta: immediateFolder });
         stopTimers();
         set({ fileId: picked.id, mode: 'disconnected', meta, prompt: null, banner: null, pending: null, connected: true });
-        if (reused) return reconcile();
-        return takeLock();
+        const ok = reused ? await reconcile() : await takeLock();
+        resolveDriveFolderMeta(client, { meta })
+          .then((fm) => {
+            if (s.fileId === picked.id && (fm.folderName || fm.parentFolderName)) setDrive(fm);
+          })
+          .catch(() => {});
+        return ok;
       });
     },
 
@@ -566,15 +666,36 @@ export function createDriveSession({ client, auth, host, clientId, timers = glob
   /** Creates the open build's Drive file in `folder` ({ id, name }) or My Drive, links it and locks it. */
   async function createNewFile(folder) {
     const b = build();
+    const initialFolderMeta = folder
+      ? { folderId: folder.id, folderName: trimProp(folder.name), parentFolderName: null }
+      : { folderId: 'my-drive', folderName: 'My Drive', parentFolderName: null };
     const { meta, inFolder } = await client.createBuildFile({
       name: driveFileName(b.name),
       content: contentNow(),
       parents: folder ? [folder.id] : undefined,
-      appProperties: buildLockProps({ clientId, name: myName, now: now() })
+      appProperties: {
+        ...buildLockProps({ clientId, name: myName, now: now() }),
+        ...folderAppProps(initialFolderMeta)
+      }
     });
-    host.setDrive({ fileId: meta.id, fileName: meta.name, lastSyncedRev: b.history?.rev, lastSyncedName: b.name, lastSyncedHeadRevisionId: meta.headRevisionId });
+    const folderMeta = folder && inFolder ? initialFolderMeta : { folderId: 'my-drive', folderName: 'My Drive', parentFolderName: null };
+    if (folder && !inFolder) {
+      client.patchAppProperties(meta.id, folderAppProps(folderMeta)).catch(() => {});
+    }
+    host.setDrive({ fileId: meta.id, fileName: meta.name, lastSyncedRev: b.history?.rev, lastSyncedName: b.name, lastSyncedHeadRevisionId: meta.headRevisionId, ...folderMeta });
     set({ fileId: meta.id, prompt: null, banner: null, pending: null });
     enterEdit(meta);
+    if (folder && inFolder) {
+      // Best-effort lookup for the chosen folder's parent folder name (for duplicate-name disambiguation)
+      resolveDriveFolderMeta(client, { folder })
+        .then((fm) => {
+          if (s.fileId === meta.id && fm.parentFolderName) {
+            setDrive(fm);
+            client.patchAppProperties(meta.id, folderAppProps(fm)).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
     if (folder && inFolder) {
       writeLastFolder(folder, storage);
       host.notify(`Saved ${meta.name} in ${folder.name}`, false);

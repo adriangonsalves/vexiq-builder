@@ -36,6 +36,8 @@ Then save builds straight into it: **Choose a folder…** lists folders shared w
 
 Each teammate opens it once with [[Open from Google Drive…]]. They choose **Shared with me**, open the folder, and pick the file. A teammate shared as **Viewer** can only look.
 
+In **File → Load…**, Drive builds show a **Drive** badge and appear under their Drive folder. If two folders share a name, the parent folder name shows beside it.
+
 ## When a teammate is editing
 The build opens read-only. The [[Drive button]] (1) says who is editing.
 You can look around, use **Explode** (2) and **Play** (3), but you can't change it.

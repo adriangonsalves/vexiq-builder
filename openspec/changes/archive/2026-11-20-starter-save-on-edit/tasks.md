@@ -1,0 +1,16 @@
+## 1. Pure Starter-Save State Helpers
+
+- [x] 1.1 Add pure starter-state helper(s) in `src/utils/buildLibrary.js` (e.g., `isStarterAtInitialState(build, history)` and `starterSaveAction(build, history)` returning `'skip' | 'promote' | 'demote' | 'save'`) covering initial unsaved state, first-edit promotion, explicit rename/Drive lock-in, and undo-to-initial demotion; verify with new unit assertions in `scripts/check-build-library.mjs` (`node scripts/check-build-library.mjs` exits 0).
+
+## 2. App Integration (`src/App.jsx`)
+
+- [x] 2.1 Update `handleStarterBuild` and `switchToBuild` in `src/App.jsx` so opening a starter by itself sets `currentBuild` with `{ id, name: starter.name, starter: { name: starter.name, initialHeadId: history.headId, explicit: false }, unsaved: true }` without pre-numbering its name or writing to IndexedDB, while keeping the "Open by itself / Add to this build" prompt in `offerOpenOrAdd`; verify by opening a starter with an empty or populated workspace and checking IndexedDB has no new entry after 2 s.
+- [x] 2.2 Gate `saveCurrentBuildNow` and the autosave `useEffect` in `src/App.jsx` on `starterSaveAction(currentBuild, history)` so unedited starters are never written to IndexedDB (including on tab hide, reload, or switching away), and verify that Play mode, Drop test, Explode, and camera/view changes do not trigger a library save.
+- [x] 2.3 Implement automatic promotion on first real edit (including "Add to this build" and MCP/assistant edits), explicit rename (`handleRenameBuild` setting `starter.explicit = true`), or Google Drive link, computing a unique library name via `starterBuildName` (excluding the unsaved starter's own placeholder name) and clearing `unsaved`; verify that editing a starter creates a single saved entry (`Huey`, then `Huey 2` if `Huey` exists).
+- [x] 2.4 Implement demotion on Undo back to `initialHeadId` (when `!starter.explicit && !drive?.fileId`): cancel pending autosave, remove any auto-created entry via `deleteBuild(build.id)`, refresh the library list, restore the plain starter name, and set `unsaved: true` (while preserving redo so Redo re-promotes); verify that edit → wait for autosave → Undo removes the entry from `File → Load…`, whereas rename → edit → Undo keeps it.
+- [x] 2.5 Ensure `File → Delete this build…` and `buildNames()` handle an unsaved starter cleanly (deleting an unsaved starter switches to the most recent saved build or a new empty build without failing, and `buildNames()` does not count an unsaved starter against itself); verify both flows in the app.
+
+## 3. Help & Verification
+
+- [x] 3.1 Update `src/help/pages/saving.md` (and `src/help/coverage.json` if needed) to note that opening a starter only saves a project in the library once you change it (and undoing all changes removes the auto-saved copy); verify with `node scripts/check-help.mjs`, `node scripts/check-help-tags.mjs`, and `node scripts/check-help-context.mjs`.
+- [x] 3.2 Run `node scripts/check-build-library.mjs`, `npm run build`, and verify end-to-end in the live app (open starter without editing → not in library; open second starter → Open/Add prompt still appears; edit starter → appears in library; Undo to initial state → removed from library; rename starter + edit + Undo → stays in library).

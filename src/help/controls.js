@@ -65,7 +65,8 @@ const CONTROLS = {
   'Go to end of step': { find: at('go-to-end-of-step'), hint: 'It shows under the timeline when you slide to the middle of a step.' },
 
   // Your builds window (File, then Your builds)
-  Open: { find: at('build-open'), hint: 'Select File, then Your builds, to see Open beside each build.' },
+  Open: { find: at('build-open'), hint: 'Select File, then Load…, and click a build picture to open it.' },
+  'Select builds': { find: at('library-select'), hint: 'Select File, then Load…, to see Select at the top of the window.' },
   Rename: { find: at('build-rename'), hint: 'Select File, then Your builds, to see Rename beside each build.' },
   'Open from computer…': { find: at('library-open-from-computer'), hint: 'Select File, then Your builds, to see Open from computer… at the top of the window.' },
   'Open by itself': { find: at('open-by-itself'), hint: 'Open a starter or a saved build while your build has parts. The question that pops up has this button.' },

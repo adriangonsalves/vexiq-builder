@@ -97,6 +97,16 @@ export function createDriveClient({ getToken, transport = fetchTransport, sleep 
   const json = { 'Content-Type': 'application/json' };
 
   const getFileMeta = (fileId) => call('GET', fileUrl(fileId));
+  /** Best-effort folder name/parent lookup under drive.file; returns null on 403/404. */
+  async function getFolderInfo(folderId) {
+    if (!folderId) return null;
+    try {
+      return await call('GET', fileUrl(folderId, `fields=${encodeURIComponent('id,name,parents')}`));
+    } catch (err) {
+      if (err instanceof DriveError && (err.kind === 'not-found' || err.kind === 'forbidden')) return null;
+      throw err;
+    }
+  }
   const downloadBuildFile = async (fileId) => parseBuildFile(await call('GET', fileUrl(fileId, 'alt=media'), { raw: true }));
   const patchAppProperties = (fileId, appProperties) =>
     call('PATCH', fileUrl(fileId), { headers: json, body: JSON.stringify({ appProperties }) });
@@ -191,6 +201,7 @@ export function createDriveClient({ getToken, transport = fetchTransport, sleep 
 
   return {
     getFileMeta,
+    getFolderInfo,
     downloadBuildFile,
     patchAppProperties,
     createBuildFile,

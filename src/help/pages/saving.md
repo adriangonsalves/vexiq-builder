@@ -17,7 +17,7 @@ Your builds save themselves, so there is no Save button. Use **File** to start, 
    ![The File menu with New marked](shot:saving-new)
 3. Open **File** (1) and choose **Load…** [[File → Load…]] (2) to see your builds.
    ![The File menu with Load… marked](shot:saving-load)
-4. {{Click|Tap}} [[Open]] (1) on the build you want.
+4. {{Click|Tap}} a build's picture (1) to open it.
    ![The builds window with Open marked](shot:saving-open)
 5. Open **File** (1) and choose **Export** (2) to download a copy.
    ![The File menu with Export marked](shot:saving-export)
@@ -30,14 +30,16 @@ Your builds save themselves, so there is no Save button. Use **File** to start, 
 Clearing the browser's data, or using a different browser or computer, loses your builds. Export downloads the build as a file. To bring it back, choose **File → Load…**, then [[Open from computer…]], and pick the file. Then choose [[Open by itself]] to open it as a new build.
 
 ## What Load… can do
-Each build shows a picture, its name, when it changed and how many parts it has. The one you are in says "Open now".
-- [[Open]] switches to that build, or adds it to yours (see below). Double-clicking it works too.
+Each build shows a picture, its name, when it changed and how many parts it has. The one you are in says "Open now". Builds saved on Google Drive show a **Drive** badge and are grouped under their Drive folder.
+- {{Click|Tap}} a build's picture [[Open]] to open it, or add it to yours (see below).
+- [[Select builds]] lets you pick several builds (or **Select all**) to group into folders or delete together.
+- **Duplicates** groups identical builds together so you can select and remove extra copies quickly.
 - [[Rename]] (the pencil) lets you type a new name.
 - [[Duplicate]] (two squares) makes a copy, named with "copy" at the end.
 - [[Delete]] (the bin) asks first, then removes it.
 - [[Open from computer…]] opens a build file, or adds it to yours.
 
-You can also rename from the build's name at the top.
+When two folders share the same name, the parent folder name appears in brackets. You can also rename from the build's name at the top.
 
 ## Open by itself, or add to this build
 When your build has parts, opening a starter, a saved build or a file asks first.
@@ -64,7 +66,7 @@ Choose [[File → Delete this build…]] to remove the build you are in. It asks
 ![The File menu with Delete this build… marked](shot:saving-delete)
 
 ## The starters
-Choose [[File → Starter]] to start a new build from a ready-made one, or to add one to your build. Your open build stays saved. The list has two parts: **Robots** are whole robots, and **Assemblies** are pieces of a robot.
+Choose [[File → Starter]] to open a ready-made build, or to add one to your build. Your open build stays saved. A starter is only saved in your builds list once you change it or rename it. Undoing all your changes removes that copy again. The list has two parts: **Robots** are whole robots, and **Assemblies** are pieces of a robot.
 ![The Starter list open in the File menu](shot:saving-starters)
 
 ## The robot starters

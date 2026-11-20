@@ -3073,11 +3073,18 @@
   "name": "Double-click a slider"
  },
  {
-  "feature": "Double-click a build card (open)",
+  "feature": "Click a build picture (open)",
   "kind": "gesture",
   "page": "saving",
   "section": "what-load-can-do",
-  "name": "Double-clicking it"
+  "name": "build's picture"
+ },
+ {
+  "feature": "Multi-select builds (folders and bulk delete)",
+  "kind": "control",
+  "page": "saving",
+  "section": "what-load-can-do",
+  "name": "Select builds"
  },
  {
   "feature": "Drag a part from the library into the view",
